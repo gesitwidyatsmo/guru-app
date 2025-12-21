@@ -1,0 +1,4320 @@
+<!doctype html>
+<html lang="id">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manajemen Guru</title>
+    <script src="/_sdk/data_sdk.js"></script>
+    <script src="/_sdk/element_sdk.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      html {
+        height: 100%;
+      }
+
+      .stat-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      }
+
+      .menu-card {
+        transition: all 0.2s;
+        cursor: pointer;
+      }
+
+      .menu-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        overflow-y: auto;
+      }
+
+      .modal.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 24px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 2000;
+        animation: slideIn 0.3s ease-out;
+      }
+
+      @keyframes slideIn {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      .loading {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+    </style>
+    <style>
+      @view-transition {
+        navigation: auto;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app" class="min-h-full"><!-- Header -->
+      <header id="header" class="shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <h1 id="app-title" class="font-bold"></h1>
+          <p id="welcome-text" class="mt-1"></p>
+        </div>
+      </header>
+      <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"><!-- Home View -->
+        <div id="home-view"><!-- Statistics Section -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="stat-card rounded-lg shadow-md p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium mb-1">Total Siswa</p>
+                  <p id="total-siswa" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="text-4xl">
+                  👨‍🎓
+                </div>
+              </div>
+            </div>
+            <div class="stat-card rounded-lg shadow-md p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium mb-1">Total Mapel</p>
+                  <p id="total-mapel" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="text-4xl">
+                  📚
+                </div>
+              </div>
+            </div>
+            <div class="stat-card rounded-lg shadow-md p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium mb-1">Total Kelas</p>
+                  <p id="total-kelas" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="text-4xl">
+                  🏫
+                </div>
+              </div>
+            </div>
+          </div><!-- Menu Grid -->
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('mapel')">
+              <div class="text-4xl mb-3">
+                📚
+              </div>
+              <p class="font-semibold">Mapel</p>
+            </div>
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('kelas')">
+              <div class="text-4xl mb-3">
+                🏫
+              </div>
+              <p class="font-semibold">Kelas</p>
+            </div>
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('jadwal')">
+              <div class="text-4xl mb-3">
+                📅
+              </div>
+              <p class="font-semibold">Jadwal</p>
+            </div>
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('siswa')">
+              <div class="text-4xl mb-3">
+                👨‍🎓
+              </div>
+              <p class="font-semibold">Siswa</p>
+            </div>
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('jurnal')">
+              <div class="text-4xl mb-3">
+                📝
+              </div>
+              <p class="font-semibold">Jurnal</p>
+            </div>
+            <div class="menu-card rounded-lg shadow-md p-6 text-center" onclick="showView('grup')">
+              <div class="text-4xl mb-3">
+                👥
+              </div>
+              <p class="font-semibold">Grup</p>
+            </div>
+          </div><!-- Today's Schedule -->
+          <div class="rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-bold mb-4">📅 Jadwal Hari Ini</h2>
+            <div id="today-schedule" class="space-y-3"></div>
+          </div>
+        </div><!-- Detail Views -->
+        <div id="mapel-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📚 Mata Pelajaran</h2><button onclick="openModal('mapel')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="mapel-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+        <div id="kelas-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">🏫 Kelas</h2><button onclick="openModal('kelas')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="kelas-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+        <div id="jadwal-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📅 Jadwal</h2><button onclick="openModal('jadwal')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="jadwal-list" class="space-y-3"></div>
+        </div>
+        <div id="siswa-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">👨‍🎓 Siswa</h2><button onclick="openModal('siswa')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="siswa-list" class="space-y-3"></div>
+        </div>
+        <div id="jurnal-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📝 Jurnal</h2><button onclick="openModal('jurnal')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="jurnal-list" class="space-y-3"></div>
+        </div>
+        <div id="grup-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('home')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">👥 Grup</h2><button onclick="openModal('grup')"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah</button>
+          </div>
+          <div id="grup-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div><!-- Absensi View -->
+        <div id="absensi-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetail()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📋 Catat Absensi</h2>
+            <div></div>
+          </div><!-- Info Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text" id="absensi-kelas"
+                  readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <select id="absensi-mapel"
+                  onchange="checkExistingAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+                  <option value="">Pilih Mata Pelajaran</option>
+                </select>
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Tanggal</label> <input type="date" id="absensi-tanggal"
+                  onchange="checkExistingAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+              </div>
+            </div>
+          </div><!-- Statistics Section (shown when viewing existing absensi) -->
+          <div id="absensi-stats" class="hidden mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="rounded-lg shadow-md p-4" style="background-color: #10b981; color: white;">
+                <div class="text-center">
+                  <p class="text-sm font-medium mb-1">Hadir</p>
+                  <p id="stat-hadir" class="text-2xl font-bold">0</p>
+                  <p id="stat-hadir-persen" class="text-xs mt-1">0%</p>
+                </div>
+              </div>
+              <div class="rounded-lg shadow-md p-4" style="background-color: #f59e0b; color: white;">
+                <div class="text-center">
+                  <p class="text-sm font-medium mb-1">Izin</p>
+                  <p id="stat-izin" class="text-2xl font-bold">0</p>
+                  <p id="stat-izin-persen" class="text-xs mt-1">0%</p>
+                </div>
+              </div>
+              <div class="rounded-lg shadow-md p-4" style="background-color: #3b82f6; color: white;">
+                <div class="text-center">
+                  <p class="text-sm font-medium mb-1">Sakit</p>
+                  <p id="stat-sakit" class="text-2xl font-bold">0</p>
+                  <p id="stat-sakit-persen" class="text-xs mt-1">0%</p>
+                </div>
+              </div>
+              <div class="rounded-lg shadow-md p-4" style="background-color: #ef4444; color: white;">
+                <div class="text-center">
+                  <p class="text-sm font-medium mb-1">Alfa</p>
+                  <p id="stat-alfa" class="text-2xl font-bold">0</p>
+                  <p id="stat-alfa-persen" class="text-xs mt-1">0%</p>
+                </div>
+              </div>
+            </div>
+          </div><!-- Existing Absensi List (shown when viewing) -->
+          <div id="absensi-list-view" class="hidden">
+            <div class="rounded-lg shadow-md p-6">
+              <h3 class="text-lg font-semibold mb-4">Daftar Absensi Siswa</h3>
+              <div id="absensi-siswa-list" class="space-y-2"></div>
+            </div>
+          </div><!-- Absensi Table (shown when creating new) -->
+          <div id="absensi-table-view" class="hidden">
+            <div class="rounded-lg shadow-md overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead id="absensi-table-header"><!-- Header will be dynamically generated -->
+                  </thead>
+                  <tbody id="absensi-table-body">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="mt-6 flex justify-end"><button onclick="simpanAbsensi()"
+                class="px-8 py-3 rounded-lg font-medium">💾 Simpan Absensi</button>
+            </div>
+          </div>
+        </div><!-- Manajemen Status View -->
+        <div id="manajemen-status-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToAbsensi()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali ke Absensi</button>
+            <h2 class="text-2xl font-bold">⚙️ Manajemen Status Absensi</h2><button onclick="openTambahStatus()"
+              class="px-6 py-2 rounded-lg font-medium">+ Tambah Status</button>
+          </div><!-- Info Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="text-center">
+              <h3 class="text-lg font-semibold mb-2">Kelola Status Absensi</h3>
+              <p class="text-sm text-gray-600">Anda dapat menambah, mengedit, atau menghapus status absensi sesuai
+                kebutuhan sekolah</p>
+            </div>
+          </div><!-- Status List -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="status-list">
+            <!-- Default statuses will be rendered here -->
+          </div>
+        </div><!-- Riwayat Penilaian View -->
+        <div id="riwayat-penilaian-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetailFromRiwayat()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📈 Riwayat Penilaian</h2>
+            <div></div>
+          </div><!-- Filter Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text"
+                  id="riwayat-penilaian-kelas" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <select
+                  id="riwayat-penilaian-mapel" onchange="loadRiwayatPenilaian()"
+                  class="w-full px-3 py-2 border rounded-lg">
+                  <option value="">Semua Mata Pelajaran</option>
+                </select>
+              </div>
+            </div>
+          </div><!-- Carousel Bulan Tahun -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="flex items-center justify-between"><button onclick="previousMonth()"
+                class="p-2 rounded-lg hover:bg-gray-100" title="Bulan Sebelumnya"> ← </button>
+              <div class="text-center">
+                <h3 id="current-month-year" class="text-xl font-bold"></h3>
+                <p class="text-sm text-gray-600">Geser untuk melihat bulan lain</p>
+              </div><button onclick="nextMonth()" class="p-2 rounded-lg hover:bg-gray-100" title="Bulan Berikutnya"> →
+              </button>
+            </div>
+          </div><!-- Content Container -->
+          <div id="riwayat-penilaian-content"><!-- Content will be loaded here -->
+          </div>
+        </div><!-- Detail Penilaian View -->
+        <div id="detail-penilaian-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToRiwayatPenilaian()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali ke Riwayat</button>
+            <h2 class="text-2xl font-bold">📊 Detail Penilaian</h2>
+            <div></div>
+          </div><!-- Info Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div><label class="block text-sm font-medium mb-1">Judul Penilaian</label> <input type="text"
+                  id="detail-judul" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text" id="detail-kelas"
+                  readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <input type="text"
+                  id="detail-mapel" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Tanggal</label> <input type="text" id="detail-tanggal"
+                  readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+            </div>
+          </div><!-- Statistics Section -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="rounded-lg shadow-md p-4 bg-green-500 text-white">
+              <div class="text-center">
+                <p class="text-sm font-medium mb-1">Rata-rata</p>
+                <p id="stat-rata-rata" class="text-2xl font-bold">0</p>
+              </div>
+            </div>
+            <div class="rounded-lg shadow-md p-4 bg-blue-500 text-white">
+              <div class="text-center">
+                <p class="text-sm font-medium mb-1">Tertinggi</p>
+                <p id="stat-tertinggi" class="text-2xl font-bold">0</p>
+              </div>
+            </div>
+            <div class="rounded-lg shadow-md p-4 bg-orange-500 text-white">
+              <div class="text-center">
+                <p class="text-sm font-medium mb-1">Terendah</p>
+                <p id="stat-terendah" class="text-2xl font-bold">0</p>
+              </div>
+            </div>
+            <div class="rounded-lg shadow-md p-4 bg-purple-500 text-white">
+              <div class="text-center">
+                <p class="text-sm font-medium mb-1">Tuntas</p>
+                <p id="stat-tuntas" class="text-2xl font-bold">0</p>
+                <p id="stat-tuntas-persen" class="text-xs mt-1">0%</p>
+              </div>
+            </div>
+            <div class="rounded-lg shadow-md p-4 bg-red-500 text-white">
+              <div class="text-center">
+                <p class="text-sm font-medium mb-1">Belum Tuntas</p>
+                <p id="stat-belum-tuntas" class="text-2xl font-bold">0</p>
+                <p id="stat-belum-tuntas-persen" class="text-xs mt-1">0%</p>
+              </div>
+            </div>
+          </div><!-- Daftar Nilai Siswa -->
+          <div class="rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold mb-4">Daftar Nilai Siswa</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b">
+                    <th class="px-4 py-3 text-left">No</th>
+                    <th class="px-4 py-3 text-left">Nama Siswa</th>
+                    <th class="px-4 py-3 text-center">Nilai</th>
+                    <th class="px-4 py-3 text-center">Status</th>
+                    <th class="px-4 py-3 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="detail-nilai-list"><!-- Nilai list will be rendered here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- Pengaturan KKM View -->
+        <div id="pengaturan-kkm-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetailFromKKM()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">⚙️ Pengaturan KKM</h2>
+            <div></div>
+          </div><!-- Info Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="text-center">
+              <h3 class="text-lg font-semibold mb-2">Kriteria Ketuntasan Minimal (KKM)</h3>
+              <p class="text-sm text-gray-600">Atur nilai minimum untuk menentukan ketuntasan siswa per mata pelajaran
+                dan kelas</p>
+            </div>
+          </div><!-- Tab Navigation -->
+          <div class="mb-6">
+            <div class="flex border-b border-gray-200"><button id="tab-mapel" onclick="switchKKMTab('mapel')"
+                class="px-6 py-3 font-medium border-b-2 border-blue-500 text-blue-600"> 📚 KKM per Mata Pelajaran
+              </button> <button id="tab-kelas" onclick="switchKKMTab('kelas')"
+                class="px-6 py-3 font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800"> 🏫 KKM
+                per Kelas &amp; Mapel </button>
+            </div>
+          </div><!-- KKM per Mata Pelajaran Tab -->
+          <div id="kkm-mapel-tab" class="tab-content">
+            <div class="rounded-lg shadow-md p-6 mb-6">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Daftar KKM Mata Pelajaran</h3><button onclick="openTambahKKM()"
+                  class="px-4 py-2 rounded-lg font-medium bg-blue-500 text-white hover:bg-blue-600"> + Tambah KKM Mapel
+                </button>
+              </div>
+              <div id="kkm-list" class="space-y-3"><!-- KKM list will be rendered here -->
+              </div>
+            </div>
+          </div><!-- KKM per Kelas & Mapel Tab -->
+          <div id="kkm-kelas-tab" class="tab-content hidden">
+            <div class="rounded-lg shadow-md p-6 mb-6">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Daftar KKM per Kelas &amp; Mata Pelajaran</h3><button
+                  onclick="openTambahKKMKelas()"
+                  class="px-4 py-2 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600"> + Tambah KKM
+                  Kelas </button>
+              </div>
+              <div id="kkm-kelas-list" class="space-y-3"><!-- KKM kelas list will be rendered here -->
+              </div>
+            </div>
+          </div><!-- Default KKM Setting -->
+          <div class="rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold mb-4">KKM Default</h3>
+            <div class="flex items-center gap-4"><label class="text-sm font-medium">Nilai KKM untuk yang belum diatur
+                khusus:</label> <input type="number" id="default-kkm" min="0" max="100" value="75"
+                class="w-20 px-3 py-2 border rounded-lg text-center"> <button onclick="saveDefaultKKM()"
+                class="px-4 py-2 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600"> 💾 Simpan </button>
+            </div>
+            <p class="text-xs text-gray-600 mt-2"><strong>Prioritas KKM:</strong><br>
+              1. KKM per Kelas &amp; Mapel (paling spesifik)<br>
+              2. KKM per Mata Pelajaran<br>
+              3. KKM Default (75)</p>
+          </div>
+        </div><!-- Laporan Absensi View -->
+        <div id="laporan-absensi-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetailFromLaporan()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📄 Laporan Absensi</h2>
+            <div></div>
+          </div><!-- Filter Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div><label class="block text-sm font-medium mb-1">Tanggal Mulai</label> <input type="date"
+                  id="laporan-tanggal-mulai" class="w-full px-3 py-2 border rounded-lg">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Tanggal Akhir</label> <input type="date"
+                  id="laporan-tanggal-akhir" class="w-full px-3 py-2 border rounded-lg">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text" id="laporan-kelas"
+                  readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <select id="laporan-mapel"
+                  onchange="loadLaporanAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+                  <option value="">Semua Mata Pelajaran</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-4 flex justify-end"><button onclick="loadLaporanAbsensi()"
+                class="px-6 py-2 rounded-lg font-medium">🔍 Tampilkan Laporan</button>
+            </div>
+          </div><!-- Display Options -->
+          <div id="laporan-display-options" class="hidden rounded-lg shadow-md p-4 mb-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4"><span class="text-sm font-medium">Tampilkan sebagai:</span>
+                <div class="flex items-center gap-2"><button id="btn-jumlah" onclick="setDisplayMode('jumlah')"
+                    class="px-4 py-2 rounded-lg font-medium border-2 border-blue-500 bg-blue-500 text-white"> 📊 Jumlah
+                  </button> <button id="btn-persentase" onclick="setDisplayMode('persentase')"
+                    class="px-4 py-2 rounded-lg font-medium border-2 border-gray-300 text-gray-600"> 📈 Persentase
+                  </button>
+                </div>
+              </div><button onclick="exportToExcel()"
+                class="px-4 py-2 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600"> 📊 Export Excel
+              </button>
+            </div>
+          </div><!-- Table Container -->
+          <div class="rounded-lg shadow-md p-6">
+            <div id="laporan-table-container"><!-- Table will be rendered here -->
+            </div>
+          </div>
+        </div><!-- Riwayat Absensi View -->
+        <div id="riwayat-absensi-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetailFromRiwayat()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📅 Riwayat Absensi</h2>
+            <div></div>
+          </div><!-- Filter Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text" id="riwayat-kelas"
+                  readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Bulan</label> <select id="riwayat-bulan"
+                  onchange="loadRiwayatAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+                  <option value="1">Januari</option>
+                  <option value="2">Februari</option>
+                  <option value="3">Maret</option>
+                  <option value="4">April</option>
+                  <option value="5">Mei</option>
+                  <option value="6">Juni</option>
+                  <option value="7">Juli</option>
+                  <option value="8">Agustus</option>
+                  <option value="9">September</option>
+                  <option value="10">Oktober</option>
+                  <option value="11">November</option>
+                  <option value="12">Desember</option>
+                </select>
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Tahun</label> <select id="riwayat-tahun"
+                  onchange="loadRiwayatAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+                  <option value="2024">2024</option>
+                  <option value="2025">2025</option>
+                  <option value="2026">2026</option>
+                </select>
+              </div>
+              <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <select id="riwayat-mapel"
+                  onchange="loadRiwayatAbsensi()" class="w-full px-3 py-2 border rounded-lg">
+                  <option value="">Semua Mata Pelajaran</option>
+                </select>
+              </div>
+            </div>
+          </div><!-- Table Container -->
+          <div class="rounded-lg shadow-md p-6">
+            <div id="riwayat-table-container"><!-- Table will be rendered here -->
+            </div>
+          </div>
+        </div><!-- Penilaian View -->
+        <div id="penilaian-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="backToKelasDetail()"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali</button>
+            <h2 class="text-2xl font-bold">📊 Buat Penilaian</h2>
+            <div></div>
+          </div><!-- Form Section -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <div class="space-y-4">
+              <div><label class="block text-sm font-medium mb-1">Judul Penilaian</label> <input type="text"
+                  id="penilaian-judul" placeholder="Contoh: Ulangan Harian 1, UTS, Tugas Kelompok"
+                  class="w-full px-3 py-2 border rounded-lg">
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div><label class="block text-sm font-medium mb-1">Kelas</label> <input type="text" id="penilaian-kelas"
+                    readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+                </div>
+                <div><label class="block text-sm font-medium mb-1">Mata Pelajaran</label> <select id="penilaian-mapel"
+                    class="w-full px-3 py-2 border rounded-lg">
+                    <option value="">Pilih Mata Pelajaran</option>
+                  </select>
+                </div>
+                <div><label class="block text-sm font-medium mb-1">Tanggal</label> <input type="date"
+                    id="penilaian-tanggal" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+              </div>
+            </div>
+          </div><!-- Daftar Siswa dan Nilai -->
+          <div class="rounded-lg shadow-md p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4">Daftar Siswa</h3>
+            <div class="space-y-3" id="penilaian-siswa-list"></div>
+          </div><!-- Action Buttons -->
+          <div class="flex gap-4"><button onclick="resetPenilaian()" class="flex-1 px-6 py-3 rounded-lg font-medium">🔄
+              Reset</button> <button onclick="simpanPenilaian()" class="flex-1 px-6 py-3 rounded-lg font-medium">💾
+              Simpan</button>
+          </div>
+        </div><!-- Kelas Detail View -->
+        <div id="kelas-detail-view" class="hidden">
+          <div class="flex justify-between items-center mb-6"><button onclick="showView('kelas')"
+              class="px-4 py-2 rounded-lg font-medium">← Kembali ke Kelas</button>
+            <div class="text-center">
+              <h2 id="kelas-detail-title" class="text-2xl font-bold">🏫</h2>
+              <p id="kelas-siswa-count" class="text-sm mt-1"></p>
+            </div>
+            <div></div>
+          </div><!-- Menu Grid -->
+          <div class="mb-8">
+            <h3 class="text-lg font-semibold mb-4">Menu</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="openAbsensiModal()">
+                <div class="text-3xl mb-2">
+                  📋
+                </div>
+                <p class="text-sm font-medium">Catat Absensi</p>
+              </div>
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="openPenilaian()">
+                <div class="text-3xl mb-2">
+                  📊
+                </div>
+                <p class="text-sm font-medium">Buat Penilaian</p>
+              </div>
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="openJurnalKelas()">
+                <div class="text-3xl mb-2">
+                  📝
+                </div>
+                <p class="text-sm font-medium">Buat Jurnal</p>
+              </div>
+            </div>
+          </div><!-- Riwayat -->
+          <div class="mb-8">
+            <h3 class="text-lg font-semibold mb-4">Riwayat</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="showRiwayatAbsensi()">
+                <div class="text-3xl mb-2">
+                  📅
+                </div>
+                <p class="text-sm font-medium">Riwayat Absensi</p>
+              </div>
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="showRiwayatPenilaian()">
+                <div class="text-3xl mb-2">
+                  📈
+                </div>
+                <p class="text-sm font-medium">Riwayat Penilaian</p>
+              </div>
+            </div>
+          </div><!-- Laporan -->
+          <div class="mb-8">
+            <h3 class="text-lg font-semibold mb-4">Laporan</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="showLaporanAbsensi()">
+                <div class="text-3xl mb-2">
+                  📄
+                </div>
+                <p class="text-sm font-medium">Laporan Absensi</p>
+              </div>
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="showLaporanPenilaian()">
+                <div class="text-3xl mb-2">
+                  📑
+                </div>
+                <p class="text-sm font-medium">Laporan Penilaian</p>
+              </div>
+            </div>
+          </div><!-- Pengaturan -->
+          <div class="mb-8">
+            <h3 class="text-lg font-semibold mb-4">Pengaturan</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="menu-card rounded-lg shadow-md p-4 text-center" onclick="showPengaturanKKM()">
+                <div class="text-3xl mb-2">
+                  ⚙️
+                </div>
+                <p class="text-sm font-medium">Pengaturan KKM</p>
+              </div>
+            </div>
+          </div><!-- Siswa -->
+          <div class="mb-8">
+            <h3 class="text-lg font-semibold mb-4">Siswa di Kelas Ini</h3>
+            <div id="kelas-siswa-list" class="space-y-3"></div>
+          </div><!-- Actions -->
+          <div class="flex gap-4"><button onclick="editKelasDetail()" class="flex-1 px-6 py-3 rounded-lg font-medium">✏️
+              Edit Kelas</button> <button onclick="deleteKelasDetail()"
+              class="flex-1 px-6 py-3 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700">🗑️ Hapus
+              Kelas</button>
+          </div>
+        </div>
+      </main>
+    </div><!-- Modal -->
+    <div id="modal" class="modal">
+      <div class="rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 id="modal-title" class="text-xl font-bold mb-4"></h3>
+        <form id="modal-form" onsubmit="handleSubmit(event)">
+          <div id="form-fields" class="space-y-4"></div>
+          <div class="flex gap-3 mt-6"><button type="button" onclick="closeModal()"
+              class="flex-1 px-4 py-2 rounded-lg font-medium">Batal</button> <button type="submit" id="submit-btn"
+              class="flex-1 px-4 py-2 rounded-lg font-medium">Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script>
+      let allData = [];
+      let currentView = 'home';
+      let currentType = '';
+      let currentKelasId = null;
+      let editingItem = null;
+      let absensiData = {};
+      let absensiNotes = {};
+      let customStatuses = []; // Store custom status absensi
+      let currentCarouselDate = new Date(); // For month carousel navigation
+      let currentPenilaianId = null; // For detail penilaian view
+      let defaultKKM = 75; // Default KKM value
+      let kkmSettings = {}; // Store KKM per mapel
+      let kkmKelasSettings = {}; // Store KKM per kelas & mapel
+      let currentKKMTab = 'mapel'; // Current KKM tab
+      let defaultStatuses = [
+        { code: 'H', label: 'Hadir', color: '#10b981', isDefault: true },
+        { code: 'I', label: 'Izin', color: '#f59e0b', isDefault: true },
+        { code: 'S', label: 'Sakit', color: '#3b82f6', isDefault: true },
+        { code: 'A', label: 'Alfa', color: '#ef4444', isDefault: true }
+      ];
+
+      const defaultConfig = {
+        background_color: "#f0f4f8",
+        surface_color: "#ffffff",
+        text_color: "#1e293b",
+        primary_color: "#3b82f6",
+        secondary_color: "#64748b",
+        font_family: "Segoe UI",
+        font_size: 16,
+        app_title: "Manajemen Guru",
+        welcome_text: "Selamat datang di aplikasi manajemen guru"
+      };
+
+      const dataHandler = {
+        onDataChanged(data) {
+          allData = data;
+          // Update custom statuses from database
+          customStatuses = data.filter(d => d.type === 'status_absensi').map(s => ({
+            code: s.code,
+            label: s.label,
+            color: s.color,
+            isDefault: false
+          }));
+
+          // Update KKM settings from database
+          const kkmData = data.filter(d => d.type === 'kkm_setting');
+          kkmSettings = {};
+          kkmKelasSettings = {};
+
+          kkmData.forEach(k => {
+            if (k.mapel === 'default') {
+              defaultKKM = parseInt(k.nilai);
+            } else if (k.kelas) {
+              // KKM per kelas & mapel
+              const key = `${k.kelas}_${k.mapel}`;
+              kkmKelasSettings[key] = parseInt(k.nilai);
+            } else {
+              // KKM per mapel saja
+              kkmSettings[k.mapel] = parseInt(k.nilai);
+            }
+          });
+
+          updateStatistics();
+          renderCurrentView();
+        }
+      };
+
+      async function onConfigChange(config) {
+        const customFont = config.font_family || defaultConfig.font_family;
+        const baseFontStack = 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+        const baseSize = config.font_size || defaultConfig.font_size;
+        const bgColor = config.background_color || defaultConfig.background_color;
+        const surfaceColor = config.surface_color || defaultConfig.surface_color;
+        const textColor = config.text_color || defaultConfig.text_color;
+        const primaryColor = config.primary_color || defaultConfig.primary_color;
+        const secondaryColor = config.secondary_color || defaultConfig.secondary_color;
+
+        document.body.style.fontFamily = `${customFont}, ${baseFontStack}`;
+        document.body.style.backgroundColor = bgColor;
+        document.body.style.color = textColor;
+
+        document.getElementById('app-title').textContent = config.app_title || defaultConfig.app_title;
+        document.getElementById('app-title').style.fontSize = `${baseSize * 1.75}px`;
+        document.getElementById('app-title').style.color = textColor;
+
+        document.getElementById('welcome-text').textContent = config.welcome_text || defaultConfig.welcome_text;
+        document.getElementById('welcome-text').style.fontSize = `${baseSize * 0.875}px`;
+        document.getElementById('welcome-text').style.color = secondaryColor;
+
+        document.getElementById('header').style.backgroundColor = surfaceColor;
+
+        const statCards = document.querySelectorAll('.stat-card');
+        statCards.forEach(card => {
+          card.style.backgroundColor = surfaceColor;
+          card.style.color = textColor;
+        });
+
+        const menuCards = document.querySelectorAll('.menu-card');
+        menuCards.forEach(card => {
+          card.style.backgroundColor = surfaceColor;
+          card.style.color = textColor;
+        });
+
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => {
+          if (btn.textContent.includes('Tambah') || btn.textContent === 'Simpan') {
+            btn.style.backgroundColor = primaryColor;
+            btn.style.color = '#ffffff';
+          } else {
+            btn.style.backgroundColor = surfaceColor;
+            btn.style.color = textColor;
+            btn.style.border = `1px solid ${secondaryColor}`;
+          }
+          btn.style.fontSize = `${baseSize * 0.875}px`;
+        });
+
+        const modal = document.querySelector('.modal > div');
+        if (modal) {
+          modal.style.backgroundColor = surfaceColor;
+          modal.style.color = textColor;
+        }
+      }
+
+      async function init() {
+        const initResult = await window.dataSdk.init(dataHandler);
+        if (!initResult.isOk) {
+          showToast('Gagal menginisialisasi aplikasi', 'error');
+          return;
+        }
+
+        if (window.elementSdk) {
+          await window.elementSdk.init({
+            defaultConfig,
+            onConfigChange,
+            mapToCapabilities: (config) => ({
+              recolorables: [
+                {
+                  get: () => config.background_color || defaultConfig.background_color,
+                  set: (value) => {
+                    config.background_color = value;
+                    window.elementSdk.setConfig({ background_color: value });
+                  }
+                },
+                {
+                  get: () => config.surface_color || defaultConfig.surface_color,
+                  set: (value) => {
+                    config.surface_color = value;
+                    window.elementSdk.setConfig({ surface_color: value });
+                  }
+                },
+                {
+                  get: () => config.text_color || defaultConfig.text_color,
+                  set: (value) => {
+                    config.text_color = value;
+                    window.elementSdk.setConfig({ text_color: value });
+                  }
+                },
+                {
+                  get: () => config.primary_color || defaultConfig.primary_color,
+                  set: (value) => {
+                    config.primary_color = value;
+                    window.elementSdk.setConfig({ primary_color: value });
+                  }
+                },
+                {
+                  get: () => config.secondary_color || defaultConfig.secondary_color,
+                  set: (value) => {
+                    config.secondary_color = value;
+                    window.elementSdk.setConfig({ secondary_color: value });
+                  }
+                }
+              ],
+              borderables: [],
+              fontEditable: {
+                get: () => config.font_family || defaultConfig.font_family,
+                set: (value) => {
+                  config.font_family = value;
+                  window.elementSdk.setConfig({ font_family: value });
+                }
+              },
+              fontSizeable: {
+                get: () => config.font_size || defaultConfig.font_size,
+                set: (value) => {
+                  config.font_size = value;
+                  window.elementSdk.setConfig({ font_size: value });
+                }
+              }
+            }),
+            mapToEditPanelValues: (config) => new Map([
+              ["app_title", config.app_title || defaultConfig.app_title],
+              ["welcome_text", config.welcome_text || defaultConfig.welcome_text]
+            ])
+          });
+
+          window.elementSdk.config.app_title = window.elementSdk.config.app_title || defaultConfig.app_title;
+          window.elementSdk.config.welcome_text = window.elementSdk.config.welcome_text || defaultConfig.welcome_text;
+
+          await onConfigChange(window.elementSdk.config);
+        } else {
+          await onConfigChange(defaultConfig);
+        }
+      }
+
+      function updateStatistics() {
+        const siswa = allData.filter(d => d.type === 'siswa').length;
+        const mapel = allData.filter(d => d.type === 'mapel').length;
+        const kelas = allData.filter(d => d.type === 'kelas').length;
+
+        document.getElementById('total-siswa').textContent = siswa;
+        document.getElementById('total-mapel').textContent = mapel;
+        document.getElementById('total-kelas').textContent = kelas;
+
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const today = days[new Date().getDay()];
+        const todaySchedule = allData.filter(d => d.type === 'jadwal' && d.hari === today);
+
+        const scheduleContainer = document.getElementById('today-schedule');
+        if (todaySchedule.length === 0) {
+          scheduleContainer.innerHTML = '<p class="text-center py-4">Tidak ada jadwal hari ini</p>';
+        } else {
+          scheduleContainer.innerHTML = todaySchedule.map(s => `
+          <div class="p-4 rounded-lg border">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-semibold">${s.mapel}</p>
+                <p class="text-sm mt-1">${s.kelas} • Jam ke-${s.jamKe} (${s.jamMulai} - ${s.jamSelesai})</p>
+                <p class="text-sm">Ruangan: ${s.ruangan}</p>
+              </div>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function showView(view) {
+        currentView = view;
+        const views = ['home', 'mapel', 'kelas', 'jadwal', 'siswa', 'jurnal', 'grup', 'kelas-detail', 'absensi', 'penilaian', 'manajemen-status', 'riwayat-absensi', 'riwayat-penilaian', 'detail-penilaian', 'laporan-absensi', 'pengaturan-kkm'];
+        views.forEach(v => {
+          const viewElement = document.getElementById(`${v}-view`);
+          if (viewElement) {
+            viewElement.classList.toggle('hidden', v !== view);
+          }
+        });
+        renderCurrentView();
+      }
+
+      function showKelasDetail(kelasId) {
+        currentKelasId = kelasId;
+        const kelas = allData.find(d => d.__backendId === kelasId);
+        if (!kelas) return;
+
+        document.getElementById('kelas-detail-title').textContent = `🏫 ${kelas.nama}`;
+
+        // Render siswa di kelas ini
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas.nama);
+        document.getElementById('kelas-siswa-count').textContent = `${siswaKelas.length} Siswa`;
+
+        const siswaContainer = document.getElementById('kelas-siswa-list');
+        if (siswaKelas.length === 0) {
+          siswaContainer.innerHTML = '<p class="text-center py-4">Belum ada siswa di kelas ini</p>';
+        } else {
+          siswaContainer.innerHTML = siswaKelas.map(s => `
+          <div class="p-4 rounded-lg shadow-md">
+            <p class="font-semibold">👨‍🎓 ${s.nama}</p>
+          </div>
+        `).join('');
+        }
+
+        showView('kelas-detail');
+      }
+
+      function editMapel(mapelId) {
+        const mapel = allData.find(d => d.__backendId === mapelId);
+        if (!mapel) return;
+
+        editingItem = mapel;
+        currentType = 'mapel';
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Edit Mata Pelajaran';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Nama Mata Pelajaran</label>
+          <input type="text" name="nama" value="${mapel.nama}" required class="w-full px-3 py-2 border rounded-lg">
+        </div>
+      `;
+
+        modal.classList.add('active');
+      }
+
+      function editKelasDetail() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        editingItem = kelas;
+        currentType = 'kelas';
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Edit Kelas';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Nama Kelas</label>
+          <input type="text" name="nama" value="${kelas.nama}" required class="w-full px-3 py-2 border rounded-lg">
+        </div>
+      `;
+
+        modal.classList.add('active');
+      }
+
+      async function deleteKelasDetail() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus kelas ${kelas.nama}?</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDelete('${currentKelasId}')" class="px-3 py-1 bg-red-600 rounded">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      // Absensi functions
+      function openAbsensiModal() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas.nama);
+        if (siswaKelas.length === 0) {
+          showToast('Belum ada siswa di kelas ini', 'error');
+          return;
+        }
+
+        // Show modal to select mapel
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        if (mapelOptions.length === 0) {
+          showToast('Tambahkan mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Pilih Data Absensi';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Kelas</label>
+          <input type="text" value="${kelas.nama}" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <select id="modal-mapel" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Mata Pelajaran</option>
+            ${mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Tanggal</label>
+          <input type="date" id="modal-tanggal" value="${new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-lg">
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = function (e) {
+          e.preventDefault();
+          const mapel = document.getElementById('modal-mapel').value;
+          const tanggal = document.getElementById('modal-tanggal').value;
+          closeModal();
+          showAbsensiPage(kelas.nama, mapel, tanggal);
+        };
+
+        modal.classList.add('active');
+      }
+
+      function openCatatAbsensi() {
+        openAbsensiModal();
+      }
+
+      function showAbsensiPage(kelasNama, mapel, tanggal) {
+        document.getElementById('absensi-kelas').value = kelasNama;
+        document.getElementById('absensi-mapel').value = mapel;
+
+        // Set max date to today
+        const today = new Date().toISOString().split('T')[0];
+        const tanggalInput = document.getElementById('absensi-tanggal');
+        tanggalInput.value = tanggal;
+        tanggalInput.max = today;
+
+        // Populate mapel dropdown
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        const mapelSelect = document.getElementById('absensi-mapel');
+        mapelSelect.innerHTML = `<option value="">Pilih Mata Pelajaran</option>` +
+          mapelOptions.map(opt => `<option value="${opt}" ${opt === mapel ? 'selected' : ''}>${opt}</option>`).join('');
+
+        showView('absensi');
+        checkExistingAbsensi();
+      }
+
+      function checkExistingAbsensi() {
+        const kelas = document.getElementById('absensi-kelas').value;
+        const mapel = document.getElementById('absensi-mapel').value;
+        const tanggal = document.getElementById('absensi-tanggal').value;
+
+        if (!mapel || !tanggal) {
+          document.getElementById('absensi-stats').classList.add('hidden');
+          document.getElementById('absensi-list-view').classList.add('hidden');
+          document.getElementById('absensi-table-view').classList.add('hidden');
+          return;
+        }
+
+        // Check if absensi already exists
+        const existingAbsensi = allData.find(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas &&
+          d.mapel === mapel &&
+          d.tanggal === tanggal
+        );
+
+        if (existingAbsensi) {
+          // Show existing absensi with statistics
+          showExistingAbsensi(existingAbsensi);
+        } else {
+          // Show form to create new absensi
+          showNewAbsensiForm(kelas);
+        }
+      }
+
+      function showExistingAbsensi(absensiRecord) {
+        document.getElementById('absensi-table-view').classList.add('hidden');
+        document.getElementById('absensi-stats').classList.remove('hidden');
+        document.getElementById('absensi-list-view').classList.remove('hidden');
+
+        const data = JSON.parse(absensiRecord.data);
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === absensiRecord.kelas);
+        const allStatuses = getAllStatuses();
+
+        // Calculate statistics for all statuses
+        const statusCounts = {};
+        allStatuses.forEach(status => {
+          statusCounts[status.code] = 0;
+        });
+
+        Object.values(data).forEach(status => {
+          if (statusCounts.hasOwnProperty(status)) {
+            statusCounts[status]++;
+          }
+        });
+
+        const total = siswaKelas.length;
+
+        // Update statistics display (only show first 4 for layout)
+        const displayStatuses = allStatuses.slice(0, 4);
+        if (displayStatuses[0]) {
+          document.getElementById('stat-hadir').textContent = statusCounts[displayStatuses[0].code] || 0;
+          document.getElementById('stat-hadir-persen').textContent = `${Math.round(((statusCounts[displayStatuses[0].code] || 0) / total) * 100)}%`;
+        }
+        if (displayStatuses[1]) {
+          document.getElementById('stat-izin').textContent = statusCounts[displayStatuses[1].code] || 0;
+          document.getElementById('stat-izin-persen').textContent = `${Math.round(((statusCounts[displayStatuses[1].code] || 0) / total) * 100)}%`;
+        }
+        if (displayStatuses[2]) {
+          document.getElementById('stat-sakit').textContent = statusCounts[displayStatuses[2].code] || 0;
+          document.getElementById('stat-sakit-persen').textContent = `${Math.round(((statusCounts[displayStatuses[2].code] || 0) / total) * 100)}%`;
+        }
+        if (displayStatuses[3]) {
+          document.getElementById('stat-alfa').textContent = statusCounts[displayStatuses[3].code] || 0;
+          document.getElementById('stat-alfa-persen').textContent = `${Math.round(((statusCounts[displayStatuses[3].code] || 0) / total) * 100)}%`;
+        }
+
+        // Create status info map
+        const statusInfoMap = {};
+        allStatuses.forEach(status => {
+          statusInfoMap[status.code] = { bg: status.color, text: status.label };
+        });
+
+        const listContainer = document.getElementById('absensi-siswa-list');
+        listContainer.innerHTML = siswaKelas.map((s, idx) => {
+          const status = data[s.__backendId] || 'H';
+          const statusInfo = statusInfoMap[status] || { bg: '#10b981', text: 'Hadir' };
+          const catatan = JSON.parse(absensiRecord.catatan || '{}')[s.__backendId] || '';
+          return `
+          <div class="flex items-center justify-between p-3 rounded-lg border hover:shadow-md transition-shadow">
+            <div class="flex items-center gap-3">
+              <span class="font-medium">${idx + 1}.</span>
+              <div>
+                <span class="font-semibold">${s.nama}</span>
+                ${catatan ? `<div class="text-xs text-gray-600 mt-1">📝 ${catatan}</div>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 rounded-full text-white text-sm font-medium" style="background-color: ${statusInfo.bg};">
+                ${status} - ${statusInfo.text}
+              </span>
+              <button onclick="editAbsensiSiswa('${absensiRecord.__backendId}', '${s.__backendId}', '${s.nama}', '${status}')" class="p-1 text-blue-500 hover:text-blue-700" title="Edit Status">✏️</button>
+              <button onclick="editCatatanSiswa('${absensiRecord.__backendId}', '${s.__backendId}', '${s.nama}', '${catatan.replace(/'/g, "&#39;")}')" class="p-1 text-green-500 hover:text-green-700" title="Edit Catatan">📝</button>
+            </div>
+          </div>
+        `;
+        }).join('');
+      }
+
+      function renderAbsensiTableHeader() {
+        const allStatuses = getAllStatuses();
+        const thead = document.getElementById('absensi-table-header');
+
+        thead.innerHTML = `
+        <tr class="border-b">
+          <th class="px-4 py-3 text-left">
+            <div class="font-semibold mb-2">Nama Siswa</div>
+            <div class="text-xs font-normal">Tandai Semua:</div>
+          </th>
+          ${allStatuses.map(status => `
+            <th class="px-4 py-3 text-center">
+              <div class="font-semibold mb-2">${status.label}</div>
+              <button onclick="markAll('${status.code}')" 
+                class="w-10 h-10 rounded-full font-bold text-white" 
+                style="background-color: ${status.color};"
+                title="Tandai semua ${status.label}">
+                ${status.code}
+              </button>
+            </th>
+          `).join('')}
+          <th class="px-4 py-3 text-center">
+            <div class="font-semibold mb-2">Edit & Catatan</div>
+            <div class="flex justify-center gap-2">
+              <button onclick="openManajemenStatus()" class="px-2 py-1 text-xs rounded bg-purple-500 text-white hover:bg-purple-600" title="Kelola Status Absensi">⚙️</button>
+              <button onclick="openBulkNotes()" class="px-2 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600" title="Catatan Massal">📝</button>
+            </div>
+          </th>
+        </tr>
+      `;
+      }
+
+      function showNewAbsensiForm(kelasNama) {
+        document.getElementById('absensi-stats').classList.add('hidden');
+        document.getElementById('absensi-list-view').classList.add('hidden');
+        document.getElementById('absensi-table-view').classList.remove('hidden');
+
+        // Render dynamic header first
+        renderAbsensiTableHeader();
+
+        // Get siswa and render table
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelasNama);
+        absensiData = {};
+        absensiNotes = {}; // Initialize notes storage
+
+        // Get all available statuses (default + custom)
+        const allStatuses = getAllStatuses();
+
+        const tbody = document.getElementById('absensi-table-body');
+        tbody.innerHTML = siswaKelas.map((s, idx) => {
+          absensiData[s.__backendId] = 'H'; // Default hadir
+          absensiNotes[s.__backendId] = ''; // Default empty note
+          return `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="px-4 py-3">
+              <div>
+                ${idx + 1}. ${s.nama}
+                <div id="note-preview-${s.__backendId}" class="text-xs text-gray-600 mt-1 hidden"></div>
+              </div>
+            </td>
+            ${allStatuses.map(status => `
+              <td class="px-4 py-3 text-center">
+                <button onclick="setAbsensi('${s.__backendId}', '${status.code}')" 
+                  id="btn-${s.__backendId}-${status.code}" 
+                  class="w-10 h-10 rounded-full font-bold ${status.code === 'H' ? 'text-white' : 'border-2'}" 
+                  style="${status.code === 'H' ? `background-color: ${status.color};` : `border-color: ${status.color}; color: ${status.color};`}"
+                  title="${status.label}">
+                  ${status.code}
+                </button>
+              </td>
+            `).join('')}
+            <td class="px-4 py-3 text-center">
+              <div class="flex justify-center gap-2">
+                <button onclick="clearSiswaStatus('${s.__backendId}')" class="p-1 text-gray-500 hover:text-gray-700" title="Hapus Status">🗑️</button>
+                <button onclick="editCatatanSiswaNew('${s.__backendId}', '${s.nama}')" class="p-1 text-green-500 hover:text-green-700" title="Tambah Catatan">📝</button>
+              </div>
+            </td>
+          </tr>
+        `;
+        }).join('');
+      }
+
+      function editAbsensiSiswa(absensiId, siswaId, namaSiswa, currentStatus) {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit Absensi: ${namaSiswa}`;
+
+        // Get all available statuses (default + custom)
+        const allStatuses = getAllStatuses();
+
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-3">Pilih Status Absensi</label>
+          <div class="grid grid-cols-2 gap-3">
+            ${allStatuses.map(status => `
+              <button type="button" onclick="selectStatus('${status.code}')" id="status-${status.code}" 
+                class="p-4 rounded-lg border-2 font-semibold transition-all ${currentStatus === status.code ? 'text-white' : ''}"
+                style="${currentStatus === status.code ? `background-color: ${status.color}; border-color: ${status.color};` : `border-color: ${status.color}; color: ${status.color};`}">
+                <div class="text-lg font-bold mb-1">${status.code}</div>
+                <div class="text-sm">${status.label}</div>
+              </button>
+            `).join('')}
+          </div>
+          <input type="hidden" id="selected-status" value="${currentStatus}">
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          const newStatus = document.getElementById('selected-status').value;
+          await updateAbsensiStatus(absensiId, siswaId, newStatus);
+          closeModal();
+        };
+
+        modal.classList.add('active');
+      }
+
+      function selectStatus(status) {
+        document.getElementById('selected-status').value = status;
+
+        const allStatuses = getAllStatuses();
+
+        allStatuses.forEach(s => {
+          const btn = document.getElementById(`status-${s.code}`);
+          if (btn) {
+            if (s.code === status) {
+              btn.style.backgroundColor = s.color;
+              btn.style.borderColor = s.color;
+              btn.style.color = 'white';
+            } else {
+              btn.style.backgroundColor = 'transparent';
+              btn.style.borderColor = s.color;
+              btn.style.color = s.color;
+            }
+          }
+        });
+      }
+
+      async function updateAbsensiStatus(absensiId, siswaId, newStatus) {
+        const absensiRecord = allData.find(d => d.__backendId === absensiId);
+        if (!absensiRecord) return;
+
+        const data = JSON.parse(absensiRecord.data);
+        data[siswaId] = newStatus;
+
+        const updatedRecord = {
+          ...absensiRecord,
+          data: JSON.stringify(data)
+        };
+
+        const result = await window.dataSdk.update(updatedRecord);
+        if (result.isOk) {
+          showToast('Status absensi berhasil diubah', 'success');
+          // Refresh the absensi view immediately
+          checkExistingAbsensi();
+        } else {
+          showToast('Gagal mengubah status absensi', 'error');
+        }
+      }
+
+      function setAbsensi(siswaId, status) {
+        absensiData[siswaId] = status;
+
+        // Update button styles for all available statuses
+        const allStatuses = getAllStatuses();
+
+        allStatuses.forEach(s => {
+          const btn = document.getElementById(`btn-${siswaId}-${s.code}`);
+          if (btn) {
+            if (s.code === status) {
+              btn.style.backgroundColor = s.color;
+              btn.style.color = 'white';
+              btn.style.borderColor = s.color;
+              btn.classList.remove('border-2');
+            } else {
+              btn.style.backgroundColor = 'transparent';
+              btn.style.color = s.color;
+              btn.style.borderColor = s.color;
+              btn.classList.add('border-2');
+            }
+          }
+        });
+      }
+
+      function markAll(status) {
+        Object.keys(absensiData).forEach(siswaId => {
+          setAbsensi(siswaId, status);
+        });
+      }
+
+      async function simpanAbsensi() {
+        const kelas = document.getElementById('absensi-kelas').value;
+        const mapel = document.getElementById('absensi-mapel').value;
+        const tanggal = document.getElementById('absensi-tanggal').value;
+
+        if (!mapel) {
+          showToast('Pilih mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai', 'error');
+          return;
+        }
+
+        const absensiRecord = {
+          id: Date.now().toString(),
+          type: 'absensi',
+          kelas: kelas,
+          mapel: mapel,
+          tanggal: tanggal,
+          data: JSON.stringify(absensiData),
+          catatan: JSON.stringify(absensiNotes),
+          createdAt: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(absensiRecord);
+
+        if (result.isOk) {
+          showToast('Absensi berhasil disimpan', 'success');
+          showKelasDetail(currentKelasId);
+        } else {
+          showToast('Gagal menyimpan absensi', 'error');
+        }
+      }
+
+      function backToKelasDetail() {
+        showKelasDetail(currentKelasId);
+      }
+
+      // New functions for enhanced absensi features
+      function clearAllStatus() {
+        Object.keys(absensiData).forEach(siswaId => {
+          absensiData[siswaId] = 'H'; // Reset to default
+          setAbsensi(siswaId, 'H');
+        });
+        showToast('Semua status direset ke Hadir', 'info');
+      }
+
+      // Manajemen Status Functions
+      function openManajemenStatus() {
+        showView('manajemen-status');
+        renderStatusList();
+      }
+
+      function backToAbsensi() {
+        showView('absensi');
+        // Refresh absensi form to show updated statuses
+        const kelas = document.getElementById('absensi-kelas').value;
+        const mapel = document.getElementById('absensi-mapel').value;
+        const tanggal = document.getElementById('absensi-tanggal').value;
+
+        if (kelas && mapel && tanggal) {
+          checkExistingAbsensi();
+        }
+      }
+
+      function getAllStatuses() {
+        return [...defaultStatuses, ...customStatuses];
+      }
+
+      function renderStatusList() {
+        const allStatuses = getAllStatuses();
+        const container = document.getElementById('status-list');
+
+        container.innerHTML = allStatuses.map(status => `
+        <div class="rounded-lg shadow-md p-4 border-2" style="border-color: ${status.color};">
+          <div class="text-center mb-3">
+            <div class="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-white font-bold text-xl mb-2" style="background-color: ${status.color};">
+              ${status.code}
+            </div>
+            <h4 class="font-semibold">${status.label}</h4>
+            <p class="text-xs text-gray-600 mt-1">${status.isDefault ? 'Status Default' : 'Status Custom'}</p>
+          </div>
+          <div class="flex gap-2">
+            ${!status.isDefault ? `
+              <button onclick="editStatus('${status.code}')" class="flex-1 px-3 py-2 text-xs rounded bg-blue-500 text-white hover:bg-blue-600">
+                ✏️ Edit
+              </button>
+              <button onclick="deleteStatus('${status.code}')" class="flex-1 px-3 py-2 text-xs rounded bg-red-500 text-white hover:bg-red-600">
+                🗑️ Hapus
+              </button>
+            ` : `
+              <button onclick="editStatus('${status.code}')" class="w-full px-3 py-2 text-xs rounded bg-blue-500 text-white hover:bg-blue-600">
+                ✏️ Edit Label/Warna
+              </button>
+            `}
+          </div>
+        </div>
+      `).join('');
+      }
+
+      function openTambahStatus() {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Tambah Status Absensi';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Kode Status</label>
+          <input type="text" id="status-code" maxlength="2" placeholder="Contoh: B, T, L" class="w-full px-3 py-2 border rounded-lg uppercase" style="text-transform: uppercase;">
+          <p class="text-xs text-gray-600 mt-1">Maksimal 2 karakter, akan otomatis huruf besar</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Nama Status</label>
+          <input type="text" id="status-label" placeholder="Contoh: Boyong, Terlambat, Libur" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Warna</label>
+          <div class="grid grid-cols-4 gap-2 mb-2">
+            <button type="button" onclick="selectColor('#10b981')" class="w-full h-10 rounded" style="background-color: #10b981;" title="Hijau"></button>
+            <button type="button" onclick="selectColor('#f59e0b')" class="w-full h-10 rounded" style="background-color: #f59e0b;" title="Kuning"></button>
+            <button type="button" onclick="selectColor('#3b82f6')" class="w-full h-10 rounded" style="background-color: #3b82f6;" title="Biru"></button>
+            <button type="button" onclick="selectColor('#ef4444')" class="w-full h-10 rounded" style="background-color: #ef4444;" title="Merah"></button>
+            <button type="button" onclick="selectColor('#8b5cf6')" class="w-full h-10 rounded" style="background-color: #8b5cf6;" title="Ungu"></button>
+            <button type="button" onclick="selectColor('#f97316')" class="w-full h-10 rounded" style="background-color: #f97316;" title="Orange"></button>
+            <button type="button" onclick="selectColor('#06b6d4')" class="w-full h-10 rounded" style="background-color: #06b6d4;" title="Cyan"></button>
+            <button type="button" onclick="selectColor('#84cc16')" class="w-full h-10 rounded" style="background-color: #84cc16;" title="Lime"></button>
+          </div>
+          <input type="color" id="status-color" value="#8b5cf6" class="w-full h-10 border rounded-lg">
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await tambahStatus();
+        };
+
+        modal.classList.add('active');
+      }
+
+      function selectColor(color) {
+        document.getElementById('status-color').value = color;
+      }
+
+      async function tambahStatus() {
+        const code = document.getElementById('status-code').value.trim().toUpperCase();
+        const label = document.getElementById('status-label').value.trim();
+        const color = document.getElementById('status-color').value;
+
+        if (!code || !label) {
+          showToast('Kode dan nama status harus diisi', 'error');
+          return;
+        }
+
+        if (code.length > 2) {
+          showToast('Kode status maksimal 2 karakter', 'error');
+          return;
+        }
+
+        // Check if code already exists
+        const allStatuses = getAllStatuses();
+        if (allStatuses.find(s => s.code === code)) {
+          showToast('Kode status sudah digunakan', 'error');
+          return;
+        }
+
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai', 'error');
+          return;
+        }
+
+        const statusData = {
+          id: Date.now().toString(),
+          type: 'status_absensi',
+          code: code,
+          label: label,
+          color: color,
+          isDefault: false,
+          createdAt: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(statusData);
+
+        if (result.isOk) {
+          showToast('Status absensi berhasil ditambahkan', 'success');
+          closeModal();
+          renderStatusList();
+        } else {
+          showToast('Gagal menambahkan status absensi', 'error');
+        }
+      }
+
+      function editStatus(code) {
+        const allStatuses = getAllStatuses();
+        const status = allStatuses.find(s => s.code === code);
+        if (!status) return;
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit Status: ${status.label}`;
+        formFields.innerHTML = `
+        ${!status.isDefault ? `
+          <div>
+            <label class="block text-sm font-medium mb-1">Kode Status</label>
+            <input type="text" id="edit-status-code" value="${status.code}" maxlength="2" class="w-full px-3 py-2 border rounded-lg uppercase" style="text-transform: uppercase;">
+          </div>
+        ` : `
+          <div>
+            <label class="block text-sm font-medium mb-1">Kode Status</label>
+            <input type="text" value="${status.code}" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-100">
+            <p class="text-xs text-gray-600 mt-1">Kode status default tidak dapat diubah</p>
+          </div>
+        `}
+        <div>
+          <label class="block text-sm font-medium mb-1">Nama Status</label>
+          <input type="text" id="edit-status-label" value="${status.label}" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Warna</label>
+          <div class="grid grid-cols-4 gap-2 mb-2">
+            <button type="button" onclick="selectColor('#10b981')" class="w-full h-10 rounded" style="background-color: #10b981;"></button>
+            <button type="button" onclick="selectColor('#f59e0b')" class="w-full h-10 rounded" style="background-color: #f59e0b;"></button>
+            <button type="button" onclick="selectColor('#3b82f6')" class="w-full h-10 rounded" style="background-color: #3b82f6;"></button>
+            <button type="button" onclick="selectColor('#ef4444')" class="w-full h-10 rounded" style="background-color: #ef4444;"></button>
+            <button type="button" onclick="selectColor('#8b5cf6')" class="w-full h-10 rounded" style="background-color: #8b5cf6;"></button>
+            <button type="button" onclick="selectColor('#f97316')" class="w-full h-10 rounded" style="background-color: #f97316;"></button>
+            <button type="button" onclick="selectColor('#06b6d4')" class="w-full h-10 rounded" style="background-color: #06b6d4;"></button>
+            <button type="button" onclick="selectColor('#84cc16')" class="w-full h-10 rounded" style="background-color: #84cc16;"></button>
+          </div>
+          <input type="color" id="edit-status-color" value="${status.color}" class="w-full h-10 border rounded-lg">
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await updateStatus(status);
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function updateStatus(originalStatus) {
+        const newCode = originalStatus.isDefault ? originalStatus.code : document.getElementById('edit-status-code').value.trim().toUpperCase();
+        const newLabel = document.getElementById('edit-status-label').value.trim();
+        const newColor = document.getElementById('edit-status-color').value;
+
+        if (!newLabel) {
+          showToast('Nama status harus diisi', 'error');
+          return;
+        }
+
+        if (!originalStatus.isDefault) {
+          if (!newCode || newCode.length > 2) {
+            showToast('Kode status harus diisi dan maksimal 2 karakter', 'error');
+            return;
+          }
+
+          // Check if new code conflicts with existing codes (except current)
+          const allStatuses = getAllStatuses();
+          if (newCode !== originalStatus.code && allStatuses.find(s => s.code === newCode)) {
+            showToast('Kode status sudah digunakan', 'error');
+            return;
+          }
+        }
+
+        if (originalStatus.isDefault) {
+          // Update default status in memory
+          const defaultIndex = defaultStatuses.findIndex(s => s.code === originalStatus.code);
+          if (defaultIndex !== -1) {
+            defaultStatuses[defaultIndex] = {
+              ...defaultStatuses[defaultIndex],
+              label: newLabel,
+              color: newColor
+            };
+          }
+          showToast('Status default berhasil diperbarui', 'success');
+          closeModal();
+          renderStatusList();
+        } else {
+          // Update custom status in database
+          const statusRecord = allData.find(d => d.type === 'status_absensi' && d.code === originalStatus.code);
+          if (statusRecord) {
+            const updatedRecord = {
+              ...statusRecord,
+              code: newCode,
+              label: newLabel,
+              color: newColor
+            };
+
+            const result = await window.dataSdk.update(updatedRecord);
+
+            if (result.isOk) {
+              showToast('Status absensi berhasil diperbarui', 'success');
+              closeModal();
+              renderStatusList();
+            } else {
+              showToast('Gagal memperbarui status absensi', 'error');
+            }
+          }
+        }
+      }
+
+      async function deleteStatus(code) {
+        const status = customStatuses.find(s => s.code === code);
+        if (!status) {
+          showToast('Status tidak ditemukan', 'error');
+          return;
+        }
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus status "${status.label}"?</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDeleteStatus('${code}')" class="px-3 py-1 bg-red-600 rounded">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      async function confirmDeleteStatus(code) {
+        const statusRecord = allData.find(d => d.type === 'status_absensi' && d.code === code);
+        if (!statusRecord) return;
+
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+
+        const result = await window.dataSdk.delete(statusRecord);
+        if (result.isOk) {
+          showToast('Status absensi berhasil dihapus', 'success');
+          renderStatusList();
+        } else {
+          showToast('Gagal menghapus status absensi', 'error');
+        }
+      }
+
+      function clearSiswaStatus(siswaId) {
+        absensiData[siswaId] = 'H'; // Reset to default
+        setAbsensi(siswaId, 'H');
+        showToast('Status direset ke Hadir', 'info');
+      }
+
+      function openBulkNotes() {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Catatan Massal';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Catatan untuk Semua Siswa</label>
+          <textarea id="bulk-note" placeholder="Masukkan catatan yang akan diterapkan ke semua siswa..." class="w-full px-3 py-2 border rounded-lg" rows="3"></textarea>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          Catatan ini akan diterapkan ke semua siswa. Catatan individual yang sudah ada akan ditimpa.
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = function (e) {
+          e.preventDefault();
+          const bulkNote = document.getElementById('bulk-note').value.trim();
+          if (bulkNote) {
+            Object.keys(absensiNotes).forEach(siswaId => {
+              absensiNotes[siswaId] = bulkNote;
+              updateNotePreview(siswaId, bulkNote);
+            });
+            showToast('Catatan massal berhasil diterapkan', 'success');
+          }
+          closeModal();
+        };
+
+        modal.classList.add('active');
+      }
+
+      function editCatatanSiswaNew(siswaId, namaSiswa) {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Catatan: ${namaSiswa}`;
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Catatan Absensi</label>
+          <textarea id="siswa-note" placeholder="Masukkan catatan untuk siswa ini..." class="w-full px-3 py-2 border rounded-lg" rows="3">${absensiNotes[siswaId] || ''}</textarea>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          Contoh: Terlambat 15 menit, Sakit demam, Izin keperluan keluarga, dll.
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = function (e) {
+          e.preventDefault();
+          const note = document.getElementById('siswa-note').value.trim();
+          absensiNotes[siswaId] = note;
+          updateNotePreview(siswaId, note);
+          showToast('Catatan berhasil disimpan', 'success');
+          closeModal();
+        };
+
+        modal.classList.add('active');
+      }
+
+      function editCatatanSiswa(absensiId, siswaId, namaSiswa, currentNote) {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit Catatan: ${namaSiswa}`;
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Catatan Absensi</label>
+          <textarea id="edit-siswa-note" placeholder="Masukkan catatan untuk siswa ini..." class="w-full px-3 py-2 border rounded-lg" rows="3">${currentNote}</textarea>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          Contoh: Terlambat 15 menit, Sakit demam, Izin keperluan keluarga, dll.
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          const newNote = document.getElementById('edit-siswa-note').value.trim();
+          await updateAbsensiNote(absensiId, siswaId, newNote);
+          closeModal();
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function updateAbsensiNote(absensiId, siswaId, newNote) {
+        const absensiRecord = allData.find(d => d.__backendId === absensiId);
+        if (!absensiRecord) return;
+
+        const catatan = JSON.parse(absensiRecord.catatan || '{}');
+        catatan[siswaId] = newNote;
+
+        const updatedRecord = {
+          ...absensiRecord,
+          catatan: JSON.stringify(catatan)
+        };
+
+        const result = await window.dataSdk.update(updatedRecord);
+        if (result.isOk) {
+          showToast('Catatan berhasil diubah', 'success');
+          checkExistingAbsensi();
+        } else {
+          showToast('Gagal mengubah catatan', 'error');
+        }
+      }
+
+      function updateNotePreview(siswaId, note) {
+        const preview = document.getElementById(`note-preview-${siswaId}`);
+        if (preview) {
+          if (note) {
+            preview.textContent = `📝 ${note}`;
+            preview.classList.remove('hidden');
+          } else {
+            preview.classList.add('hidden');
+          }
+        }
+      }
+
+      function openPenilaian() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas.nama);
+        if (siswaKelas.length === 0) {
+          showToast('Belum ada siswa di kelas ini', 'error');
+          return;
+        }
+
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        if (mapelOptions.length === 0) {
+          showToast('Tambahkan mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        showPenilaianPage(kelas.nama);
+      }
+
+      function showPenilaianPage(kelasNama) {
+        document.getElementById('penilaian-kelas').value = kelasNama;
+        document.getElementById('penilaian-tanggal').value = new Date().toISOString().split('T')[0];
+
+        // Populate mapel dropdown
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        const mapelSelect = document.getElementById('penilaian-mapel');
+        mapelSelect.innerHTML = `<option value="">Pilih Mata Pelajaran</option>` +
+          mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
+        // Render siswa list
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelasNama);
+        const siswaContainer = document.getElementById('penilaian-siswa-list');
+
+        siswaContainer.innerHTML = siswaKelas.map((s, idx) => `
+        <div class="flex items-center justify-between p-3 rounded-lg border">
+          <div class="flex items-center gap-3">
+            <span class="font-medium">${idx + 1}.</span>
+            <span class="font-semibold">${s.nama}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" 
+              id="nilai-${s.__backendId}" 
+              min="0" 
+              max="100" 
+              placeholder="0-100"
+              class="w-20 px-3 py-2 border rounded-lg text-center">
+          </div>
+        </div>
+      `).join('');
+
+        showView('penilaian');
+      }
+
+      function resetPenilaian() {
+        document.getElementById('penilaian-judul').value = '';
+        document.getElementById('penilaian-mapel').value = '';
+        document.getElementById('penilaian-tanggal').value = new Date().toISOString().split('T')[0];
+
+        // Reset all nilai inputs
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === document.getElementById('penilaian-kelas').value);
+        siswaKelas.forEach(s => {
+          const input = document.getElementById(`nilai-${s.__backendId}`);
+          if (input) input.value = '';
+        });
+
+        showToast('Form penilaian telah direset', 'info');
+      }
+
+      async function simpanPenilaian() {
+        const judul = document.getElementById('penilaian-judul').value.trim();
+        const kelas = document.getElementById('penilaian-kelas').value;
+        const mapel = document.getElementById('penilaian-mapel').value;
+        const tanggal = document.getElementById('penilaian-tanggal').value;
+
+        if (!judul) {
+          showToast('Judul penilaian harus diisi', 'error');
+          return;
+        }
+
+        if (!mapel) {
+          showToast('Pilih mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        if (!tanggal) {
+          showToast('Pilih tanggal terlebih dahulu', 'error');
+          return;
+        }
+
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai', 'error');
+          return;
+        }
+
+        // Collect nilai data
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas);
+        const nilaiData = {};
+        let hasNilai = false;
+
+        siswaKelas.forEach(s => {
+          const input = document.getElementById(`nilai-${s.__backendId}`);
+          if (input && input.value !== '') {
+            nilaiData[s.__backendId] = parseInt(input.value);
+            hasNilai = true;
+          }
+        });
+
+        if (!hasNilai) {
+          showToast('Masukkan minimal satu nilai siswa', 'error');
+          return;
+        }
+
+        const penilaianRecord = {
+          id: Date.now().toString(),
+          type: 'penilaian',
+          judul: judul,
+          kelas: kelas,
+          mapel: mapel,
+          tanggal: tanggal,
+          data: JSON.stringify(nilaiData),
+          createdAt: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(penilaianRecord);
+
+        if (result.isOk) {
+          showToast('Penilaian berhasil disimpan', 'success');
+          // Reset form after successful save
+          resetPenilaian();
+          showKelasDetail(currentKelasId);
+        } else {
+          showToast('Gagal menyimpan penilaian', 'error');
+        }
+      }
+
+      function setupJurnalForm() {
+        // Add event listeners for dynamic updates
+        const kelasSelect = document.querySelector('select[name="kelas"]');
+        const tanggalSelect = document.querySelector('select[name="tanggal"]');
+        const mapelSelect = document.querySelector('select[name="mapel"]');
+
+        if (kelasSelect) {
+          kelasSelect.addEventListener('change', function () {
+            updateTanggalAbsensiOptions();
+            updateJurnalFields();
+          });
+        }
+        if (tanggalSelect) {
+          tanggalSelect.addEventListener('change', updateJurnalFields);
+        }
+        if (mapelSelect) {
+          mapelSelect.addEventListener('change', function () {
+            updateTanggalAbsensiOptions();
+            updateJurnalFields();
+          });
+        }
+      }
+
+      function updateTanggalAbsensiOptions() {
+        const kelasSelect = document.querySelector('select[name="kelas"]');
+        const mapelSelect = document.querySelector('select[name="mapel"]');
+        const tanggalSelect = document.querySelector('select[name="tanggal"]');
+
+        if (!kelasSelect || !mapelSelect || !tanggalSelect) return;
+
+        const kelas = kelasSelect.value;
+        const mapel = mapelSelect.value;
+
+        if (!kelas || !mapel) {
+          tanggalSelect.innerHTML = '<option value="">Pilih Tanggal</option>';
+          return;
+        }
+
+        // Get absensi records for this kelas and mapel
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas &&
+          d.mapel === mapel
+        );
+
+        // Sort by date
+        const sortedRecords = absensiRecords.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        tanggalSelect.innerHTML = '<option value="">Pilih Tanggal</option>';
+        if (sortedRecords.length === 0) {
+          tanggalSelect.innerHTML += '<option value="" disabled>Belum ada data absensi</option>';
+        } else {
+          sortedRecords.forEach((record, index) => {
+            const date = new Date(record.tanggal);
+            const formattedDate = date.toLocaleDateString('id-ID', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            tanggalSelect.innerHTML += `<option value="${record.tanggal}">${formattedDate} (Pertemuan ${index + 1})</option>`;
+          });
+        }
+      }
+
+      function updateJurnalFields() {
+        const kelas = document.querySelector('select[name="kelas"]')?.value;
+        const tanggal = document.querySelector('select[name="tanggal"]')?.value;
+        const mapel = document.querySelector('select[name="mapel"]')?.value;
+
+        // Update jam ke options based on jadwal and selected date
+        if (kelas && mapel && tanggal) {
+          updateJamKeOptions(kelas, mapel, tanggal);
+          updatePertemuanKe(kelas, mapel, tanggal);
+          updateSiswaAbsen(kelas, mapel, tanggal);
+        } else {
+          // Clear jam ke options if not all fields are selected
+          const jamKeSelect = document.querySelector('select[name="jamKe"]');
+          if (jamKeSelect) {
+            jamKeSelect.innerHTML = '<option value="">Pilih Jam Ke</option>';
+          }
+
+          // Clear other fields
+          const pertemuanInput = document.querySelector('input[name="pertemuanKe"]');
+          const siswaAbsenTextarea = document.querySelector('textarea[name="siswaAbsen"]');
+          if (pertemuanInput) {
+            pertemuanInput.value = '';
+            pertemuanInput.placeholder = 'Pertemuan Ke';
+          }
+          if (siswaAbsenTextarea) {
+            siswaAbsenTextarea.value = '';
+            siswaAbsenTextarea.placeholder = 'Peserta Didik yang Tidak Hadir';
+          }
+        }
+      }
+
+      function updateJamKeOptions(kelas, mapel, tanggal) {
+        const jamKeSelect = document.querySelector('select[name="jamKe"]');
+        if (!jamKeSelect || !kelas || !mapel || !tanggal) return;
+
+        // Get day name from selected date
+        const selectedDate = new Date(tanggal);
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const dayName = days[selectedDate.getDay()];
+
+        // Get jadwal for this kelas, mapel, and day
+        const jadwalOptions = allData.filter(d =>
+          d.type === 'jadwal' &&
+          d.kelas === kelas &&
+          d.mapel === mapel &&
+          d.hari === dayName
+        );
+
+        jamKeSelect.innerHTML = '<option value="">Pilih Jam Ke</option>';
+        if (jadwalOptions.length === 0) {
+          jamKeSelect.innerHTML += '<option value="" disabled>Tidak ada jadwal untuk hari ini</option>';
+        } else {
+          jadwalOptions.forEach(jadwal => {
+            jamKeSelect.innerHTML += `<option value="${jadwal.jamKe}">Jam ke-${jadwal.jamKe} (${jadwal.jamMulai} - ${jadwal.jamSelesai})</option>`;
+          });
+        }
+      }
+
+      function updatePertemuanKe(kelas, mapel, tanggal) {
+        const pertemuanInput = document.querySelector('input[name="pertemuanKe"]');
+        if (!pertemuanInput) return;
+
+        // Get all absensi records for this kelas and mapel
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas &&
+          d.mapel === mapel
+        );
+
+        // Sort by date
+        const sortedRecords = absensiRecords.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        // Find the position of current date in sorted records
+        const currentDateIndex = sortedRecords.findIndex(record => record.tanggal === tanggal);
+
+        if (currentDateIndex !== -1) {
+          // Date exists in absensi records, use its position + 1
+          pertemuanInput.value = currentDateIndex + 1;
+        } else {
+          // Date doesn't exist, show message
+          pertemuanInput.value = '';
+          pertemuanInput.placeholder = 'Belum ada data absensi';
+        }
+      }
+
+      function updateSiswaAbsen(kelas, mapel, tanggal) {
+        const siswaAbsenTextarea = document.querySelector('textarea[name="siswaAbsen"]');
+        if (!siswaAbsenTextarea) return;
+
+        // Find absensi record for this exact date
+        const absensiRecord = allData.find(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas &&
+          d.mapel === mapel &&
+          d.tanggal === tanggal
+        );
+
+        if (!absensiRecord) {
+          siswaAbsenTextarea.value = 'Belum ada data absensi untuk tanggal ini';
+          return;
+        }
+
+        const absensiData = JSON.parse(absensiRecord.data);
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas);
+        const allStatuses = getAllStatuses();
+
+        // Get students who are not present (not 'H')
+        const siswaAbsen = [];
+        siswaKelas.forEach(siswa => {
+          const status = absensiData[siswa.__backendId];
+          if (status && status !== 'H') {
+            const statusInfo = allStatuses.find(s => s.code === status);
+            const statusLabel = statusInfo ? statusInfo.label : status;
+            siswaAbsen.push(`${siswa.nama} (${status} - ${statusLabel})`);
+          }
+        });
+
+        if (siswaAbsen.length === 0) {
+          siswaAbsenTextarea.value = 'Semua siswa hadir';
+        } else {
+          siswaAbsenTextarea.value = siswaAbsen.join('\n');
+        }
+      }
+
+      function openJurnalKelas() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas.nama);
+        if (siswaKelas.length === 0) {
+          showToast('Belum ada siswa di kelas ini', 'error');
+          return;
+        }
+
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        if (mapelOptions.length === 0) {
+          showToast('Tambahkan mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        // Check if there are any absensi records for this class
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas.nama
+        );
+
+        if (absensiRecords.length === 0) {
+          showToast('Belum ada data absensi untuk kelas ini. Catat absensi terlebih dahulu.', 'error');
+          return;
+        }
+
+        // Open jurnal modal with pre-filled kelas
+        openJurnalModal(kelas.nama);
+      }
+
+      function openJurnalModal(kelasNama = '') {
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai. Hapus beberapa data terlebih dahulu.', 'error');
+          return;
+        }
+
+        currentType = 'jurnal';
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Tambah Jurnal';
+
+        // Get available options from data
+        const kelasOptions = allData.filter(d => d.type === 'kelas').map(k => k.nama);
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Kelas</label>
+          <select name="kelas" required class="w-full px-3 py-2 border rounded-lg" onchange="updateTanggalAbsensiOptions()">
+            <option value="">Pilih Kelas</option>
+            ${kelasOptions.map(opt => `<option value="${opt}" ${opt === kelasNama ? 'selected' : ''}>${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <select name="mapel" required class="w-full px-3 py-2 border rounded-lg" onchange="updateTanggalAbsensiOptions()">
+            <option value="">Pilih Mata Pelajaran</option>
+            ${mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Tanggal (Berdasarkan Data Absensi)</label>
+          <select name="tanggal" required class="w-full px-3 py-2 border rounded-lg" onchange="updateJurnalFields()">
+            <option value="">Pilih Tanggal</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Jam Ke</label>
+          <select name="jamKe" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Jam Ke</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Pertemuan Ke</label>
+          <input type="number" name="pertemuanKe" readonly placeholder="Pertemuan Ke" class="w-full px-3 py-2 border rounded-lg bg-gray-50">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Kompetensi Dasar/Materi Pembelajaran</label>
+          <textarea name="kompetensiDasar" required placeholder="Masukkan materi pembelajaran..." class="w-full px-3 py-2 border rounded-lg" rows="3"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Peserta Didik yang Tidak Hadir</label>
+          <textarea name="siswaAbsen" readonly placeholder="Peserta Didik yang Tidak Hadir" class="w-full px-3 py-2 border rounded-lg bg-gray-50" rows="3"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Catatan Peserta Didik</label>
+          <textarea name="catatanSiswa" placeholder="Catatan tambahan..." class="w-full px-3 py-2 border rounded-lg" rows="2"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Ketuntasan Materi</label>
+          <select name="ketuntasanMateri" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Ketuntasan</option>
+            <option value="Tuntas">Tuntas</option>
+            <option value="Belum Tuntas">Belum Tuntas</option>
+            <option value="Perlu Remedial">Perlu Remedial</option>
+          </select>
+        </div>
+      `;
+
+        // Initialize the form
+        setupJurnalForm();
+        if (kelasNama) {
+          updateTanggalAbsensiOptions();
+        }
+
+        modal.classList.add('active');
+      }
+
+      function showRiwayatAbsensi() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        // Check if there are any absensi records for this class
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas.nama
+        );
+
+        if (absensiRecords.length === 0) {
+          showToast('Belum ada data absensi untuk kelas ini', 'error');
+          return;
+        }
+
+        showRiwayatAbsensiPage(kelas.nama);
+      }
+
+      function showRiwayatAbsensiPage(kelasNama) {
+        // Use the standard showView function to properly hide all other views
+        showView('riwayat-absensi');
+
+        // Set initial values
+        document.getElementById('riwayat-kelas').value = kelasNama;
+
+        // Set current month and year
+        const now = new Date();
+        document.getElementById('riwayat-bulan').value = now.getMonth() + 1;
+        document.getElementById('riwayat-tahun').value = now.getFullYear();
+
+        // Populate mapel dropdown
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelasNama
+        );
+
+        const mapelSet = new Set(absensiRecords.map(r => r.mapel));
+        const mapelOptions = Array.from(mapelSet);
+
+        const mapelSelect = document.getElementById('riwayat-mapel');
+        mapelSelect.innerHTML = `<option value="">Semua Mata Pelajaran</option>` +
+          mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
+        // Load initial data
+        loadRiwayatAbsensi();
+      }
+
+      function loadRiwayatAbsensi() {
+        const kelas = document.getElementById('riwayat-kelas').value;
+        const bulan = parseInt(document.getElementById('riwayat-bulan').value);
+        const tahun = parseInt(document.getElementById('riwayat-tahun').value);
+        const mapel = document.getElementById('riwayat-mapel').value;
+
+        if (!kelas || !bulan || !tahun) return;
+
+        // Filter absensi records by period and mapel
+        let filteredRecords = allData.filter(d => {
+          if (d.type !== 'absensi' || d.kelas !== kelas) return false;
+
+          const recordDate = new Date(d.tanggal);
+          const recordMonth = recordDate.getMonth() + 1;
+          const recordYear = recordDate.getFullYear();
+
+          if (recordMonth !== bulan || recordYear !== tahun) return false;
+
+          if (mapel && d.mapel !== mapel) return false;
+
+          return true;
+        });
+
+        // Sort by date
+        filteredRecords.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        // Get siswa for this class
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas);
+
+        if (siswaKelas.length === 0) {
+          document.getElementById('riwayat-table-container').innerHTML = '<p class="text-center py-8">Belum ada siswa di kelas ini</p>';
+          return;
+        }
+
+        if (filteredRecords.length === 0) {
+          document.getElementById('riwayat-table-container').innerHTML = '<p class="text-center py-8">Tidak ada data absensi untuk periode ini</p>';
+          return;
+        }
+
+        renderRiwayatTable(siswaKelas, filteredRecords);
+      }
+
+      function renderRiwayatTable(siswaKelas, absensiRecords) {
+        const allStatuses = getAllStatuses();
+
+        // Create status info map
+        const statusInfoMap = {};
+        allStatuses.forEach(status => {
+          statusInfoMap[status.code] = { color: status.color, label: status.label };
+        });
+
+        // Calculate statistics for each student
+        const studentStats = {};
+        siswaKelas.forEach(siswa => {
+          studentStats[siswa.__backendId] = {};
+          allStatuses.forEach(status => {
+            studentStats[siswa.__backendId][status.code] = 0;
+          });
+        });
+
+        // Process each absensi record
+        absensiRecords.forEach(record => {
+          const absensiData = JSON.parse(record.data);
+          Object.keys(absensiData).forEach(siswaId => {
+            const status = absensiData[siswaId];
+            if (studentStats[siswaId] && studentStats[siswaId].hasOwnProperty(status)) {
+              studentStats[siswaId][status]++;
+            }
+          });
+        });
+
+        // Create table HTML
+        const tableContainer = document.getElementById('riwayat-table-container');
+
+        tableContainer.innerHTML = `
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse border border-gray-300">
+            <thead>
+              <tr class="bg-gray-100">
+                <th class="border border-gray-300 px-4 py-3 text-left font-semibold">No</th>
+                <th class="border border-gray-300 px-4 py-3 text-left font-semibold">Nama Siswa</th>
+                ${absensiRecords.map(record => {
+          const date = new Date(record.tanggal);
+          const dayName = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'][date.getDay()];
+          return `<th class="border border-gray-300 px-2 py-3 text-center font-semibold min-w-16">
+                    <div class="text-xs">${dayName}</div>
+                    <div class="text-sm">${date.getDate()}/${date.getMonth() + 1}</div>
+                    <div class="text-xs text-gray-600">${record.mapel}</div>
+                  </th>`;
+        }).join('')}
+                ${allStatuses.map(status => `
+                  <th class="border border-gray-300 px-3 py-3 text-center font-semibold" style="background-color: ${status.color}20;">
+                    <div class="text-xs">${status.label}</div>
+                    <div class="font-bold" style="color: ${status.color};">${status.code}</div>
+                  </th>
+                `).join('')}
+                <th class="border border-gray-300 px-4 py-3 text-center font-semibold bg-blue-50">
+                  <div class="text-xs">Total</div>
+                  <div class="text-sm">Kehadiran</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              ${siswaKelas.map((siswa, index) => {
+          const totalKehadiran = absensiRecords.length;
+          const totalHadir = studentStats[siswa.__backendId]['H'] || 0;
+          const persentaseKehadiran = totalKehadiran > 0 ? Math.round((totalHadir / totalKehadiran) * 100) : 0;
+
+          return `
+                  <tr class="hover:bg-gray-50">
+                    <td class="border border-gray-300 px-4 py-3 text-center font-medium">${index + 1}</td>
+                    <td class="border border-gray-300 px-4 py-3 font-semibold">${siswa.nama}</td>
+                    ${absensiRecords.map(record => {
+            const absensiData = JSON.parse(record.data);
+            const status = absensiData[siswa.__backendId] || 'H';
+            const statusInfo = statusInfoMap[status] || { color: '#10b981', label: 'Hadir' };
+            return `<td class="border border-gray-300 px-2 py-3 text-center">
+                        <span class="inline-block w-8 h-8 rounded-full text-white text-sm font-bold leading-8" 
+                              style="background-color: ${statusInfo.color};" 
+                              title="${statusInfo.label}">
+                          ${status}
+                        </span>
+                      </td>`;
+          }).join('')}
+                    ${allStatuses.map(status => {
+            const count = studentStats[siswa.__backendId][status.code] || 0;
+            return `<td class="border border-gray-300 px-3 py-3 text-center font-bold" style="color: ${status.color};">
+                        ${count}
+                      </td>`;
+          }).join('')}
+                    <td class="border border-gray-300 px-4 py-3 text-center font-bold ${persentaseKehadiran >= 75 ? 'text-green-600' : persentaseKehadiran >= 50 ? 'text-yellow-600' : 'text-red-600'}">
+                      ${totalHadir}/${totalKehadiran}
+                      <div class="text-xs">(${persentaseKehadiran}%)</div>
+                    </td>
+                  </tr>
+                `;
+        }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          ${allStatuses.map(status => {
+          const totalCount = Object.values(studentStats).reduce((sum, stats) => sum + (stats[status.code] || 0), 0);
+          const totalPossible = siswaKelas.length * absensiRecords.length;
+          const percentage = totalPossible > 0 ? Math.round((totalCount / totalPossible) * 100) : 0;
+
+          return `
+              <div class="rounded-lg shadow-md p-4" style="background-color: ${status.color}; color: white;">
+                <div class="text-center">
+                  <p class="text-sm font-medium mb-1">Total ${status.label}</p>
+                  <p class="text-2xl font-bold">${totalCount}</p>
+                  <p class="text-xs mt-1">${percentage}%</p>
+                </div>
+              </div>
+            `;
+        }).join('')}
+        </div>
+      `;
+      }
+
+      function backToKelasDetailFromRiwayat() {
+        showKelasDetail(currentKelasId);
+      }
+
+      function showRiwayatPenilaian() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        // Check if there are any penilaian records for this class
+        const penilaianRecords = allData.filter(d =>
+          d.type === 'penilaian' &&
+          d.kelas === kelas.nama
+        );
+
+        if (penilaianRecords.length === 0) {
+          showToast('Belum ada data penilaian untuk kelas ini', 'error');
+          return;
+        }
+
+        showRiwayatPenilaianPage(kelas.nama);
+      }
+
+      function showRiwayatPenilaianPage(kelasNama) {
+        showView('riwayat-penilaian');
+
+        // Set initial values
+        document.getElementById('riwayat-penilaian-kelas').value = kelasNama;
+
+        // Reset carousel to current month
+        currentCarouselDate = new Date();
+        updateCarouselDisplay();
+
+        // Populate mapel dropdown
+        const penilaianRecords = allData.filter(d =>
+          d.type === 'penilaian' &&
+          d.kelas === kelasNama
+        );
+
+        const mapelSet = new Set(penilaianRecords.map(r => r.mapel));
+        const mapelOptions = Array.from(mapelSet);
+
+        const mapelSelect = document.getElementById('riwayat-penilaian-mapel');
+        mapelSelect.innerHTML = `<option value="">Semua Mata Pelajaran</option>` +
+          mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
+        // Load initial data
+        loadRiwayatPenilaian();
+      }
+
+      function updateCarouselDisplay() {
+        const monthNames = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+
+        const currentMonthYear = document.getElementById('current-month-year');
+        currentMonthYear.textContent = `${monthNames[currentCarouselDate.getMonth()]} ${currentCarouselDate.getFullYear()}`;
+
+
+      }
+
+      function previousMonth() {
+        currentCarouselDate.setMonth(currentCarouselDate.getMonth() - 1);
+        updateCarouselDisplay();
+        loadRiwayatPenilaian();
+      }
+
+      function nextMonth() {
+        currentCarouselDate.setMonth(currentCarouselDate.getMonth() + 1);
+        updateCarouselDisplay();
+        loadRiwayatPenilaian();
+      }
+
+      function loadRiwayatPenilaian() {
+        const kelas = document.getElementById('riwayat-penilaian-kelas').value;
+        const mapel = document.getElementById('riwayat-penilaian-mapel').value;
+        const bulan = currentCarouselDate.getMonth() + 1;
+        const tahun = currentCarouselDate.getFullYear();
+
+        if (!kelas) return;
+
+        // Filter penilaian records by period and mapel
+        let filteredRecords = allData.filter(d => {
+          if (d.type !== 'penilaian' || d.kelas !== kelas) return false;
+
+          const recordDate = new Date(d.tanggal);
+          const recordMonth = recordDate.getMonth() + 1;
+          const recordYear = recordDate.getFullYear();
+
+          if (recordMonth !== bulan || recordYear !== tahun) return false;
+
+          if (mapel && d.mapel !== mapel) return false;
+
+          return true;
+        });
+
+        // Sort by date
+        filteredRecords.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        renderRiwayatPenilaianContent(filteredRecords);
+      }
+
+      function renderRiwayatPenilaianContent(penilaianRecords) {
+        const container = document.getElementById('riwayat-penilaian-content');
+
+        if (penilaianRecords.length === 0) {
+          container.innerHTML = `
+          <div class="text-center py-12">
+            <div class="text-6xl mb-4">📊</div>
+            <h3 class="text-xl font-semibold mb-2">Tidak Ada Data Penilaian</h3>
+            <p class="text-gray-600">Belum ada penilaian untuk periode ini</p>
+          </div>
+        `;
+          return;
+        }
+
+        // Group by date
+        const groupedByDate = {};
+        penilaianRecords.forEach(record => {
+          const dateKey = record.tanggal;
+          if (!groupedByDate[dateKey]) {
+            groupedByDate[dateKey] = [];
+          }
+          groupedByDate[dateKey].push(record);
+        });
+
+        // Render grouped content
+        container.innerHTML = Object.keys(groupedByDate).map(dateKey => {
+          const date = new Date(dateKey);
+          const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+          const monthNames = [
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+          ];
+
+          const dayName = dayNames[date.getDay()];
+          const formattedDate = `${dayName}, ${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+
+          const recordsForDate = groupedByDate[dateKey];
+
+          return `
+          <div class="mb-8">
+            <!-- Date Header -->
+            <div class="text-center mb-6">
+              <h3 class="text-2xl font-bold text-blue-600">${formattedDate}</h3>
+              <div class="w-24 h-1 bg-blue-600 mx-auto mt-2 rounded"></div>
+            </div>
+            
+            <!-- Penilaian Cards for this date -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${recordsForDate.map(record => {
+            const nilaiData = JSON.parse(record.data);
+            const nilaiArray = Object.values(nilaiData).filter(n => n !== null && n !== undefined);
+            const rataRata = nilaiArray.length > 0 ? (nilaiArray.reduce((sum, n) => sum + n, 0) / nilaiArray.length).toFixed(1) : 0;
+            const jumlahSiswa = nilaiArray.length;
+
+            return `
+                  <div class="rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 border-blue-500 relative">
+                    <div class="absolute top-2 right-2">
+                      <button onclick="event.stopPropagation(); deletePenilaian('${record.__backendId}', '${record.judul}')" 
+                        class="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors" 
+                        title="Hapus Penilaian">
+                        🗑️
+                      </button>
+                    </div>
+                    <div class="cursor-pointer" onclick="showDetailPenilaian('${record.__backendId}')">
+                      <div class="mb-4 pr-8">
+                        <h4 class="font-bold text-lg text-gray-800 mb-2">${record.judul}</h4>
+                        <div class="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                          <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                            📚 ${record.mapel}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div class="text-center">
+                          <p class="text-gray-600">Rata-rata</p>
+                          <p class="text-2xl font-bold text-green-600">${rataRata}</p>
+                        </div>
+                        <div class="text-center">
+                          <p class="text-gray-600">Siswa Dinilai</p>
+                          <p class="text-2xl font-bold text-blue-600">${jumlahSiswa}</p>
+                        </div>
+                      </div>
+                      
+                      <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p class="text-xs text-gray-500 text-center">Klik untuk melihat detail nilai</p>
+                      </div>
+                    </div>
+                  </div>
+                `;
+          }).join('')}
+            </div>
+          </div>
+        `;
+        }).join('');
+      }
+
+      function showDetailPenilaian(penilaianId) {
+        currentPenilaianId = penilaianId;
+        const penilaian = allData.find(d => d.__backendId === penilaianId);
+        if (!penilaian) return;
+
+        // Fill detail info
+        document.getElementById('detail-judul').value = penilaian.judul;
+        document.getElementById('detail-kelas').value = penilaian.kelas;
+        document.getElementById('detail-mapel').value = penilaian.mapel;
+
+        const date = new Date(penilaian.tanggal);
+        const formattedDate = date.toLocaleDateString('id-ID', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        document.getElementById('detail-tanggal').value = formattedDate;
+
+        // Calculate statistics
+        const nilaiData = JSON.parse(penilaian.data);
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === penilaian.kelas);
+
+        const nilaiArray = [];
+        siswaKelas.forEach(siswa => {
+          const nilai = nilaiData[siswa.__backendId];
+          if (nilai !== null && nilai !== undefined && nilai !== '') {
+            nilaiArray.push(parseInt(nilai));
+          }
+        });
+
+        const kkmValue = getKKMForMapel(penilaian.mapel, penilaian.kelas);
+        const rataRata = nilaiArray.length > 0 ? (nilaiArray.reduce((sum, n) => sum + n, 0) / nilaiArray.length).toFixed(1) : 0;
+        const tertinggi = nilaiArray.length > 0 ? Math.max(...nilaiArray) : 0;
+        const terendah = nilaiArray.length > 0 ? Math.min(...nilaiArray) : 0;
+        const tuntas = nilaiArray.filter(n => n >= kkmValue).length;
+        const belumTuntas = nilaiArray.filter(n => n < kkmValue).length;
+        const totalSiswa = nilaiArray.length;
+
+        document.getElementById('stat-rata-rata').textContent = rataRata;
+        document.getElementById('stat-tertinggi').textContent = tertinggi;
+        document.getElementById('stat-terendah').textContent = terendah;
+        document.getElementById('stat-tuntas').textContent = tuntas;
+        document.getElementById('stat-tuntas-persen').textContent = totalSiswa > 0 ? `${Math.round((tuntas / totalSiswa) * 100)}%` : '0%';
+        document.getElementById('stat-belum-tuntas').textContent = belumTuntas;
+        document.getElementById('stat-belum-tuntas-persen').textContent = totalSiswa > 0 ? `${Math.round((belumTuntas / totalSiswa) * 100)}%` : '0%';
+
+        // Render nilai list
+        const nilaiListContainer = document.getElementById('detail-nilai-list');
+        nilaiListContainer.innerHTML = siswaKelas.map((siswa, index) => {
+          const nilai = nilaiData[siswa.__backendId];
+          const hasNilai = nilai !== null && nilai !== undefined && nilai !== '';
+          const nilaiInt = hasNilai ? parseInt(nilai) : null;
+          const kkmValue = getKKMForMapel(penilaian.mapel, penilaian.kelas);
+          const status = hasNilai ? (nilaiInt >= kkmValue ? 'Tuntas' : 'Belum Tuntas') : 'Belum Dinilai';
+          const statusColor = hasNilai ? (nilaiInt >= kkmValue ? 'text-green-600' : 'text-red-600') : 'text-gray-500';
+
+          return `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="px-4 py-3 text-center font-medium">${index + 1}</td>
+            <td class="px-4 py-3 font-semibold">${siswa.nama}</td>
+            <td class="px-4 py-3 text-center">
+              ${hasNilai ? `<span class="text-2xl font-bold ${nilaiInt >= kkmValue ? 'text-green-600' : 'text-red-600'}">${nilai}</span>` : '<span class="text-gray-400">-</span>'}
+            </td>
+            <td class="px-4 py-3 text-center">
+              <span class="px-3 py-1 rounded-full text-sm font-medium ${hasNilai ? (nilaiInt >= kkmValue ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') : 'bg-gray-100 text-gray-600'}">
+                ${status}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <button onclick="editNilaiSiswa('${penilaianId}', '${siswa.__backendId}', '${siswa.nama}', '${nilai || ''}')" 
+                class="px-3 py-1 text-sm rounded bg-blue-500 text-white hover:bg-blue-600">
+                ✏️ Edit
+              </button>
+            </td>
+          </tr>
+        `;
+        }).join('');
+
+        showView('detail-penilaian');
+      }
+
+      function backToRiwayatPenilaian() {
+        showView('riwayat-penilaian');
+      }
+
+      async function editNilaiSiswa(penilaianId, siswaId, namaSiswa, currentNilai) {
+        const penilaianRecord = allData.find(d => d.__backendId === penilaianId);
+        if (!penilaianRecord) return;
+
+        const kkmValue = getKKMForMapel(penilaianRecord.mapel, penilaianRecord.kelas);
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit Nilai: ${namaSiswa}`;
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Nilai (0-100)</label>
+          <input type="number" id="edit-nilai" min="0" max="100" value="${currentNilai}" placeholder="Masukkan nilai 0-100" class="w-full px-3 py-2 border rounded-lg">
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          <p>• Nilai ≥ ${kkmValue}: Tuntas</p>
+          <p>• Nilai < ${kkmValue}: Belum Tuntas</p>
+          <p>• KKM ${penilaianRecord.kelas} - ${penilaianRecord.mapel}: ${kkmValue}</p>
+          <p>• Kosongkan untuk menghapus nilai</p>
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          const newNilai = document.getElementById('edit-nilai').value.trim();
+          await updateNilaiSiswa(penilaianId, siswaId, newNilai);
+          closeModal();
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function updateNilaiSiswa(penilaianId, siswaId, newNilai) {
+        const penilaianRecord = allData.find(d => d.__backendId === penilaianId);
+        if (!penilaianRecord) return;
+
+        const nilaiData = JSON.parse(penilaianRecord.data);
+
+        if (newNilai === '' || newNilai === null) {
+          delete nilaiData[siswaId]; // Remove nilai if empty
+        } else {
+          nilaiData[siswaId] = parseInt(newNilai);
+        }
+
+        const updatedRecord = {
+          ...penilaianRecord,
+          data: JSON.stringify(nilaiData)
+        };
+
+        const result = await window.dataSdk.update(updatedRecord);
+        if (result.isOk) {
+          showToast('Nilai berhasil diubah', 'success');
+          // Refresh the detail view
+          showDetailPenilaian(penilaianId);
+        } else {
+          showToast('Gagal mengubah nilai', 'error');
+        }
+      }
+
+      function deletePenilaian(penilaianId, judulPenilaian) {
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus penilaian "${judulPenilaian}"?</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDeletePenilaian('${penilaianId}')" class="px-3 py-1 bg-red-600 rounded text-white">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded text-white">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      async function confirmDeletePenilaian(penilaianId) {
+        const penilaianRecord = allData.find(d => d.__backendId === penilaianId);
+        if (!penilaianRecord) return;
+
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+
+        const result = await window.dataSdk.delete(penilaianRecord);
+        if (result.isOk) {
+          showToast('Penilaian berhasil dihapus', 'success');
+          // Refresh the riwayat penilaian view
+          loadRiwayatPenilaian();
+        } else {
+          showToast('Gagal menghapus penilaian', 'error');
+        }
+      }
+
+      function showLaporanAbsensi() {
+        const kelas = allData.find(d => d.__backendId === currentKelasId);
+        if (!kelas) return;
+
+        // Check if there are any absensi records for this class
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelas.nama
+        );
+
+        if (absensiRecords.length === 0) {
+          showToast('Belum ada data absensi untuk kelas ini', 'error');
+          return;
+        }
+
+        showLaporanAbsensiPage(kelas.nama);
+      }
+
+      function showLaporanPenilaian() {
+        showToast('Fitur Laporan Penilaian akan segera hadir', 'info');
+      }
+
+      // Laporan Absensi Functions
+      let currentDisplayMode = 'jumlah'; // 'jumlah' or 'persentase'
+      let currentLaporanData = null;
+
+      function showLaporanAbsensiPage(kelasNama) {
+        showView('laporan-absensi');
+
+        // Set initial values
+        document.getElementById('laporan-kelas').value = kelasNama;
+
+        // Set default date range (current month)
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+        document.getElementById('laporan-tanggal-mulai').value = firstDay.toISOString().split('T')[0];
+        document.getElementById('laporan-tanggal-akhir').value = lastDay.toISOString().split('T')[0];
+
+        // Populate mapel dropdown
+        const absensiRecords = allData.filter(d =>
+          d.type === 'absensi' &&
+          d.kelas === kelasNama
+        );
+
+        const mapelSet = new Set(absensiRecords.map(r => r.mapel));
+        const mapelOptions = Array.from(mapelSet);
+
+        const mapelSelect = document.getElementById('laporan-mapel');
+        mapelSelect.innerHTML = `<option value="">Semua Mata Pelajaran</option>` +
+          mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+
+        // Load initial data
+        loadLaporanAbsensi();
+      }
+
+      function loadLaporanAbsensi() {
+        const kelas = document.getElementById('laporan-kelas').value;
+        const tanggalMulai = document.getElementById('laporan-tanggal-mulai').value;
+        const tanggalAkhir = document.getElementById('laporan-tanggal-akhir').value;
+        const mapel = document.getElementById('laporan-mapel').value;
+
+        if (!kelas || !tanggalMulai || !tanggalAkhir) {
+          document.getElementById('laporan-display-options').classList.add('hidden');
+          document.getElementById('laporan-table-container').innerHTML = '<p class="text-center py-8">Lengkapi filter terlebih dahulu</p>';
+          return;
+        }
+
+        if (new Date(tanggalMulai) > new Date(tanggalAkhir)) {
+          showToast('Tanggal mulai tidak boleh lebih besar dari tanggal akhir', 'error');
+          return;
+        }
+
+        // Filter absensi records by date range and mapel
+        let filteredRecords = allData.filter(d => {
+          if (d.type !== 'absensi' || d.kelas !== kelas) return false;
+
+          const recordDate = new Date(d.tanggal);
+          const startDate = new Date(tanggalMulai);
+          const endDate = new Date(tanggalAkhir);
+
+          if (recordDate < startDate || recordDate > endDate) return false;
+
+          if (mapel && d.mapel !== mapel) return false;
+
+          return true;
+        });
+
+        // Sort by date
+        filteredRecords.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+        // Get siswa for this class
+        const siswaKelas = allData.filter(d => d.type === 'siswa' && d.kelas === kelas);
+
+        if (siswaKelas.length === 0) {
+          document.getElementById('laporan-display-options').classList.add('hidden');
+          document.getElementById('laporan-table-container').innerHTML = '<p class="text-center py-8">Belum ada siswa di kelas ini</p>';
+          return;
+        }
+
+        if (filteredRecords.length === 0) {
+          document.getElementById('laporan-display-options').classList.add('hidden');
+          document.getElementById('laporan-table-container').innerHTML = '<p class="text-center py-8">Tidak ada data absensi untuk periode ini</p>';
+          return;
+        }
+
+        // Show display options
+        document.getElementById('laporan-display-options').classList.remove('hidden');
+
+        // Store data for export
+        currentLaporanData = {
+          siswaKelas,
+          filteredRecords,
+          kelas,
+          tanggalMulai,
+          tanggalAkhir,
+          mapel: mapel || 'Semua Mata Pelajaran'
+        };
+
+        renderLaporanTable(siswaKelas, filteredRecords);
+      }
+
+      function setDisplayMode(mode) {
+        currentDisplayMode = mode;
+
+        // Update button styles
+        const btnJumlah = document.getElementById('btn-jumlah');
+        const btnPersentase = document.getElementById('btn-persentase');
+
+        if (mode === 'jumlah') {
+          btnJumlah.className = 'px-4 py-2 rounded-lg font-medium border-2 border-blue-500 bg-blue-500 text-white';
+          btnPersentase.className = 'px-4 py-2 rounded-lg font-medium border-2 border-gray-300 text-gray-600';
+        } else {
+          btnJumlah.className = 'px-4 py-2 rounded-lg font-medium border-2 border-gray-300 text-gray-600';
+          btnPersentase.className = 'px-4 py-2 rounded-lg font-medium border-2 border-blue-500 bg-blue-500 text-white';
+        }
+
+        // Re-render table with new display mode
+        if (currentLaporanData) {
+          renderLaporanTable(currentLaporanData.siswaKelas, currentLaporanData.filteredRecords);
+        }
+      }
+
+      function renderLaporanTable(siswaKelas, absensiRecords) {
+        const allStatuses = getAllStatuses();
+
+        // Create status info map
+        const statusInfoMap = {};
+        allStatuses.forEach(status => {
+          statusInfoMap[status.code] = { color: status.color, label: status.label };
+        });
+
+        // Calculate statistics for each student
+        const studentStats = {};
+        siswaKelas.forEach(siswa => {
+          studentStats[siswa.__backendId] = {};
+          allStatuses.forEach(status => {
+            studentStats[siswa.__backendId][status.code] = 0;
+          });
+        });
+
+        // Process each absensi record
+        absensiRecords.forEach(record => {
+          const absensiData = JSON.parse(record.data);
+          Object.keys(absensiData).forEach(siswaId => {
+            const status = absensiData[siswaId];
+            if (studentStats[siswaId] && studentStats[siswaId].hasOwnProperty(status)) {
+              studentStats[siswaId][status]++;
+            }
+          });
+        });
+
+        // Create table HTML
+        const tableContainer = document.getElementById('laporan-table-container');
+        const totalPertemuan = absensiRecords.length;
+
+        tableContainer.innerHTML = `
+        <div class="mb-4">
+          <h3 class="text-lg font-semibold">Laporan Absensi Siswa</h3>
+          <p class="text-sm text-gray-600">Periode: ${new Date(currentLaporanData.tanggalMulai).toLocaleDateString('id-ID')} - ${new Date(currentLaporanData.tanggalAkhir).toLocaleDateString('id-ID')} | Total Pertemuan: ${totalPertemuan}</p>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse border border-gray-300">
+            <thead>
+              <tr class="bg-gray-100">
+                <th class="border border-gray-300 px-4 py-3 text-left font-semibold">No</th>
+                <th class="border border-gray-300 px-4 py-3 text-left font-semibold">Nama Siswa</th>
+                ${allStatuses.map(status => `
+                  <th class="border border-gray-300 px-3 py-3 text-center font-semibold" style="background-color: ${status.color}20;">
+                    <div class="text-sm">${status.label}</div>
+                    <div class="font-bold" style="color: ${status.color};">${status.code}</div>
+                  </th>
+                `).join('')}
+                <th class="border border-gray-300 px-4 py-3 text-center font-semibold bg-blue-50">
+                  <div class="text-sm">Kehadiran</div>
+                  <div class="text-xs">H / Total</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              ${siswaKelas.map((siswa, index) => {
+          const totalHadir = studentStats[siswa.__backendId]['H'] || 0;
+          const persentaseKehadiran = totalPertemuan > 0 ? Math.round((totalHadir / totalPertemuan) * 100) : 0;
+
+          return `
+                  <tr class="hover:bg-gray-50">
+                    <td class="border border-gray-300 px-4 py-3 text-center font-medium">${index + 1}</td>
+                    <td class="border border-gray-300 px-4 py-3 font-semibold">${siswa.nama}</td>
+                    ${allStatuses.map(status => {
+            const count = studentStats[siswa.__backendId][status.code] || 0;
+            const percentage = totalPertemuan > 0 ? Math.round((count / totalPertemuan) * 100) : 0;
+            const displayValue = currentDisplayMode === 'jumlah' ? count : `${percentage}%`;
+
+            return `<td class="border border-gray-300 px-3 py-3 text-center font-bold" style="color: ${status.color};">
+                        ${displayValue}
+                      </td>`;
+          }).join('')}
+                    <td class="border border-gray-300 px-4 py-3 text-center font-bold ${persentaseKehadiran >= 75 ? 'text-green-600' : persentaseKehadiran >= 50 ? 'text-yellow-600' : 'text-red-600'}">
+                      ${currentDisplayMode === 'jumlah' ? `${totalHadir}/${totalPertemuan}` : `${persentaseKehadiran}%`}
+                    </td>
+                  </tr>
+                `;
+        }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="mt-6">
+          <h4 class="text-md font-semibold mb-4">Ringkasan Statistik</h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            ${allStatuses.map(status => {
+          const totalCount = Object.values(studentStats).reduce((sum, stats) => sum + (stats[status.code] || 0), 0);
+          const totalPossible = siswaKelas.length * totalPertemuan;
+          const percentage = totalPossible > 0 ? Math.round((totalCount / totalPossible) * 100) : 0;
+          const displayValue = currentDisplayMode === 'jumlah' ? totalCount : `${percentage}%`;
+
+          return `
+                <div class="rounded-lg shadow-md p-4" style="background-color: ${status.color}; color: white;">
+                  <div class="text-center">
+                    <p class="text-sm font-medium mb-1">Total ${status.label}</p>
+                    <p class="text-2xl font-bold">${displayValue}</p>
+                    ${currentDisplayMode === 'jumlah' ? `<p class="text-xs mt-1">${percentage}%</p>` : `<p class="text-xs mt-1">${totalCount} kali</p>`}
+                  </div>
+                </div>
+              `;
+        }).join('')}
+          </div>
+        </div>
+      `;
+      }
+
+      function exportToExcel() {
+        if (!currentLaporanData) {
+          showToast('Tidak ada data untuk diekspor', 'error');
+          return;
+        }
+
+        const { siswaKelas, filteredRecords, kelas, tanggalMulai, tanggalAkhir, mapel } = currentLaporanData;
+        const allStatuses = getAllStatuses();
+        const totalPertemuan = filteredRecords.length;
+
+        // Calculate statistics for each student
+        const studentStats = {};
+        siswaKelas.forEach(siswa => {
+          studentStats[siswa.__backendId] = {};
+          allStatuses.forEach(status => {
+            studentStats[siswa.__backendId][status.code] = 0;
+          });
+        });
+
+        // Process each absensi record
+        filteredRecords.forEach(record => {
+          const absensiData = JSON.parse(record.data);
+          Object.keys(absensiData).forEach(siswaId => {
+            const status = absensiData[siswaId];
+            if (studentStats[siswaId] && studentStats[siswaId].hasOwnProperty(status)) {
+              studentStats[siswaId][status]++;
+            }
+          });
+        });
+
+        // Create HTML table for Excel export
+        let htmlContent = `
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            table { border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+            th { background-color: #f0f0f0; font-weight: bold; }
+            .header { text-align: left; margin-bottom: 10px; font-weight: bold; }
+            .left { text-align: left; }
+          </style>
+        </head>
+        <body>
+          <div class="header">LAPORAN ABSENSI SISWA</div>
+          <div class="header">Kelas: ${kelas}</div>
+          <div class="header">Mata Pelajaran: ${mapel}</div>
+          <div class="header">Periode: ${new Date(tanggalMulai).toLocaleDateString('id-ID')} - ${new Date(tanggalAkhir).toLocaleDateString('id-ID')}</div>
+          <div class="header">Total Pertemuan: ${totalPertemuan}</div>
+          <div class="header">Mode Tampilan: ${currentDisplayMode === 'jumlah' ? 'Jumlah' : 'Persentase'}</div>
+          <div class="header">Tanggal Export: ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID')}</div>
+          <br>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Nama Siswa</th>
+                ${allStatuses.map(status => `<th>${status.label}<br>(${status.code})</th>`).join('')}
+                <th>Kehadiran</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${siswaKelas.map((siswa, index) => {
+          const totalHadir = studentStats[siswa.__backendId]['H'] || 0;
+          const persentaseKehadiran = totalPertemuan > 0 ? Math.round((totalHadir / totalPertemuan) * 100) : 0;
+
+          return `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td class="left">${siswa.nama}</td>
+                    ${allStatuses.map(status => {
+            const count = studentStats[siswa.__backendId][status.code] || 0;
+            const percentage = totalPertemuan > 0 ? Math.round((count / totalPertemuan) * 100) : 0;
+            const displayValue = currentDisplayMode === 'jumlah' ? count : `${percentage}%`;
+            return `<td>${displayValue}</td>`;
+          }).join('')}
+                    <td>${currentDisplayMode === 'jumlah' ? `${totalHadir}/${totalPertemuan}` : `${persentaseKehadiran}%`}</td>
+                  </tr>
+                `;
+        }).join('')}
+            </tbody>
+          </table>
+          
+          <br><br>
+          <div class="header">RINGKASAN STATISTIK</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Total</th>
+                <th>Persentase</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allStatuses.map(status => {
+          const totalCount = Object.values(studentStats).reduce((sum, stats) => sum + (stats[status.code] || 0), 0);
+          const totalPossible = siswaKelas.length * totalPertemuan;
+          const percentage = totalPossible > 0 ? Math.round((totalCount / totalPossible) * 100) : 0;
+
+          return `
+                  <tr>
+                    <td class="left">${status.label} (${status.code})</td>
+                    <td>${totalCount}</td>
+                    <td>${percentage}%</td>
+                  </tr>
+                `;
+        }).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+        try {
+          // Method 1: Try HTML download first (most compatible)
+          const blob = new Blob([htmlContent], {
+            type: 'application/vnd.ms-excel'
+          });
+
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+          const timeString = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+          const fileName = `Laporan_Absensi_${kelas.replace(/\s+/g, '_')}_${timestamp}_${timeString}.xls`;
+
+          // Create and trigger download
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName;
+          link.style.display = 'none';
+
+          // Add to DOM, click, and remove
+          document.body.appendChild(link);
+
+          // Force click with user interaction
+          const clickEvent = new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+
+          link.dispatchEvent(clickEvent);
+
+          // Cleanup after delay
+          setTimeout(() => {
+            if (document.body.contains(link)) {
+              document.body.removeChild(link);
+            }
+            URL.revokeObjectURL(link.href);
+          }, 1000);
+
+          // Show success message
+          showToast(`✅ File Excel berhasil diunduh!\n📁 ${fileName}\n📂 Periksa folder Downloads Anda`, 'success');
+
+          // Fallback method if first doesn't work
+          setTimeout(() => {
+            showToast('💡 Jika file tidak muncul:\n1. Periksa pengaturan download browser\n2. Izinkan popup/download otomatis\n3. Periksa folder Downloads', 'info');
+          }, 2000);
+
+          // Alternative method using window.open as fallback
+          setTimeout(() => {
+            try {
+              const newWindow = window.open('', '_blank');
+              if (newWindow) {
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+                showToast('📄 Jika download gagal, gunakan Ctrl+S di tab baru untuk menyimpan file', 'info');
+              }
+            } catch (popupError) {
+              // Popup blocked, show manual copy option
+              showToast('⚠️ Popup diblokir. Coba aktifkan popup untuk situs ini atau gunakan browser lain', 'error');
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('Export error:', error);
+
+          // Final fallback: show data in new window for manual save
+          try {
+            const newWindow = window.open('', '_blank');
+            if (newWindow) {
+              newWindow.document.write(htmlContent);
+              newWindow.document.close();
+              showToast('📄 Data ditampilkan di tab baru. Gunakan Ctrl+S untuk menyimpan sebagai file HTML/Excel', 'info');
+            } else {
+              showToast('❌ Gagal export. Aktifkan popup atau coba browser lain', 'error');
+            }
+          } catch (finalError) {
+            showToast('❌ Export gagal. Coba refresh halaman atau gunakan browser lain', 'error');
+          }
+        }
+      }
+
+      function backToKelasDetailFromLaporan() {
+        showKelasDetail(currentKelasId);
+      }
+
+      // KKM Functions
+      function showPengaturanKKM() {
+        showView('pengaturan-kkm');
+
+        // Load current default KKM
+        document.getElementById('default-kkm').value = defaultKKM;
+
+        // Set default tab
+        currentKKMTab = 'mapel';
+        switchKKMTab('mapel');
+      }
+
+      function switchKKMTab(tab) {
+        currentKKMTab = tab;
+
+        // Update tab buttons
+        document.getElementById('tab-mapel').className = tab === 'mapel'
+          ? 'px-6 py-3 font-medium border-b-2 border-blue-500 text-blue-600'
+          : 'px-6 py-3 font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800';
+
+        document.getElementById('tab-kelas').className = tab === 'kelas'
+          ? 'px-6 py-3 font-medium border-b-2 border-blue-500 text-blue-600'
+          : 'px-6 py-3 font-medium border-b-2 border-transparent text-gray-600 hover:text-gray-800';
+
+        // Show/hide tab content
+        document.getElementById('kkm-mapel-tab').classList.toggle('hidden', tab !== 'mapel');
+        document.getElementById('kkm-kelas-tab').classList.toggle('hidden', tab !== 'kelas');
+
+        // Render appropriate content
+        if (tab === 'mapel') {
+          renderKKMList();
+        } else {
+          renderKKMKelasList();
+        }
+      }
+
+      function backToKelasDetailFromKKM() {
+        showKelasDetail(currentKelasId);
+      }
+
+      function renderKKMList() {
+        const container = document.getElementById('kkm-list');
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+
+        if (mapelOptions.length === 0) {
+          container.innerHTML = '<p class="text-center py-4 text-gray-600">Belum ada mata pelajaran. Tambahkan mata pelajaran terlebih dahulu.</p>';
+          return;
+        }
+
+        container.innerHTML = mapelOptions.map(mapel => {
+          const kkmValue = kkmSettings[mapel] || defaultKKM;
+          const isCustom = kkmSettings.hasOwnProperty(mapel);
+
+          return `
+          <div class="flex items-center justify-between p-4 rounded-lg border ${isCustom ? 'border-blue-300 bg-blue-50' : 'border-gray-300'}">
+            <div class="flex items-center gap-3">
+              <div class="text-2xl">📚</div>
+              <div>
+                <p class="font-semibold">${mapel}</p>
+                <p class="text-sm text-gray-600">${isCustom ? 'KKM Khusus' : 'Menggunakan KKM Default'}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="text-center">
+                <p class="text-2xl font-bold ${kkmValue >= 75 ? 'text-green-600' : 'text-orange-600'}">${kkmValue}</p>
+                <p class="text-xs text-gray-600">KKM</p>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="editKKM('${mapel}', ${kkmValue})" class="px-3 py-1 text-sm rounded bg-blue-500 text-white hover:bg-blue-600">
+                  ✏️ Edit
+                </button>
+                ${isCustom ? `
+                  <button onclick="deleteKKM('${mapel}')" class="px-3 py-1 text-sm rounded bg-red-500 text-white hover:bg-red-600">
+                    🗑️ Hapus
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        }).join('');
+      }
+
+      function openTambahKKM() {
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+        const availableMapel = mapelOptions.filter(m => !kkmSettings.hasOwnProperty(m));
+
+        if (availableMapel.length === 0) {
+          showToast('Semua mata pelajaran sudah memiliki KKM khusus', 'info');
+          return;
+        }
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Tambah KKM Mata Pelajaran';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <select id="kkm-mapel" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Mata Pelajaran</option>
+            ${availableMapel.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Nilai KKM</label>
+          <input type="number" id="kkm-nilai" min="0" max="100" value="${defaultKKM}" required class="w-full px-3 py-2 border rounded-lg">
+          <p class="text-xs text-gray-600 mt-1">Masukkan nilai 0-100</p>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          <p><strong>Contoh KKM:</strong></p>
+          <p>• 75-80: Standar umum</p>
+          <p>• 70-74: Untuk mata pelajaran sulit</p>
+          <p>• 80-85: Untuk mata pelajaran mudah</p>
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await tambahKKM();
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function tambahKKM() {
+        const mapel = document.getElementById('kkm-mapel').value;
+        const nilai = parseInt(document.getElementById('kkm-nilai').value);
+
+        if (!mapel || !nilai) {
+          showToast('Lengkapi semua field', 'error');
+          return;
+        }
+
+        if (nilai < 0 || nilai > 100) {
+          showToast('Nilai KKM harus antara 0-100', 'error');
+          return;
+        }
+
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai', 'error');
+          return;
+        }
+
+        const kkmData = {
+          id: Date.now().toString(),
+          type: 'kkm_setting',
+          mapel: mapel,
+          nilai: nilai,
+          createdAt: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(kkmData);
+
+        if (result.isOk) {
+          showToast('KKM berhasil ditambahkan', 'success');
+          closeModal();
+          renderKKMList();
+        } else {
+          showToast('Gagal menambahkan KKM', 'error');
+        }
+      }
+
+      function editKKM(mapel, currentValue) {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit KKM: ${mapel}`;
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <input type="text" value="${mapel}" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-100">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Nilai KKM</label>
+          <input type="number" id="edit-kkm-nilai" min="0" max="100" value="${currentValue}" required class="w-full px-3 py-2 border rounded-lg">
+          <p class="text-xs text-gray-600 mt-1">Masukkan nilai 0-100</p>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          <p><strong>Nilai saat ini:</strong> ${currentValue}</p>
+          <p><strong>Status:</strong> ${kkmSettings.hasOwnProperty(mapel) ? 'KKM Khusus' : 'Menggunakan Default'}</p>
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await updateKKM(mapel);
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function updateKKM(mapel) {
+        const nilai = parseInt(document.getElementById('edit-kkm-nilai').value);
+
+        if (!nilai) {
+          showToast('Masukkan nilai KKM', 'error');
+          return;
+        }
+
+        if (nilai < 0 || nilai > 100) {
+          showToast('Nilai KKM harus antara 0-100', 'error');
+          return;
+        }
+
+        // Check if KKM already exists
+        const existingKKM = allData.find(d => d.type === 'kkm_setting' && d.mapel === mapel);
+
+        if (existingKKM) {
+          // Update existing KKM
+          const updatedRecord = {
+            ...existingKKM,
+            nilai: nilai
+          };
+
+          const result = await window.dataSdk.update(updatedRecord);
+
+          if (result.isOk) {
+            showToast('KKM berhasil diperbarui', 'success');
+            closeModal();
+            renderKKMList();
+          } else {
+            showToast('Gagal memperbarui KKM', 'error');
+          }
+        } else {
+          // Create new KKM
+          if (allData.length >= 999) {
+            showToast('Maksimum 999 data tercapai', 'error');
+            return;
+          }
+
+          const kkmData = {
+            id: Date.now().toString(),
+            type: 'kkm_setting',
+            mapel: mapel,
+            nilai: nilai,
+            createdAt: new Date().toISOString()
+          };
+
+          const result = await window.dataSdk.create(kkmData);
+
+          if (result.isOk) {
+            showToast('KKM berhasil ditambahkan', 'success');
+            closeModal();
+            renderKKMList();
+          } else {
+            showToast('Gagal menambahkan KKM', 'error');
+          }
+        }
+      }
+
+      function deleteKKM(mapel) {
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus KKM khusus untuk ${mapel}?</p>
+        <p class="text-xs mb-2">Mata pelajaran akan menggunakan KKM default (${defaultKKM})</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDeleteKKM('${mapel}')" class="px-3 py-1 bg-red-600 rounded text-white">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded text-white">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      async function confirmDeleteKKM(mapel) {
+        const kkmRecord = allData.find(d => d.type === 'kkm_setting' && d.mapel === mapel);
+        if (!kkmRecord) return;
+
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+
+        const result = await window.dataSdk.delete(kkmRecord);
+        if (result.isOk) {
+          showToast('KKM khusus berhasil dihapus', 'success');
+          renderKKMList();
+        } else {
+          showToast('Gagal menghapus KKM', 'error');
+        }
+      }
+
+      async function saveDefaultKKM() {
+        const nilai = parseInt(document.getElementById('default-kkm').value);
+
+        if (!nilai) {
+          showToast('Masukkan nilai KKM default', 'error');
+          return;
+        }
+
+        if (nilai < 0 || nilai > 100) {
+          showToast('Nilai KKM harus antara 0-100', 'error');
+          return;
+        }
+
+        // Check if default KKM setting exists
+        const existingDefault = allData.find(d => d.type === 'kkm_setting' && d.mapel === 'default');
+
+        if (existingDefault) {
+          // Update existing default
+          const updatedRecord = {
+            ...existingDefault,
+            nilai: nilai
+          };
+
+          const result = await window.dataSdk.update(updatedRecord);
+
+          if (result.isOk) {
+            showToast('KKM default berhasil diperbarui', 'success');
+            renderKKMList();
+          } else {
+            showToast('Gagal memperbarui KKM default', 'error');
+          }
+        } else {
+          // Create new default KKM
+          if (allData.length >= 999) {
+            showToast('Maksimum 999 data tercapai', 'error');
+            return;
+          }
+
+          const kkmData = {
+            id: Date.now().toString(),
+            type: 'kkm_setting',
+            mapel: 'default',
+            nilai: nilai,
+            createdAt: new Date().toISOString()
+          };
+
+          const result = await window.dataSdk.create(kkmData);
+
+          if (result.isOk) {
+            showToast('KKM default berhasil disimpan', 'success');
+            renderKKMList();
+          } else {
+            showToast('Gagal menyimpan KKM default', 'error');
+          }
+        }
+      }
+
+      function getKKMForMapel(mapel, kelas = null) {
+        // Priority: 1. KKM per kelas & mapel, 2. KKM per mapel, 3. Default KKM
+        if (kelas) {
+          const kelasMapelKey = `${kelas}_${mapel}`;
+          if (kkmKelasSettings[kelasMapelKey]) {
+            return kkmKelasSettings[kelasMapelKey];
+          }
+        }
+
+        return kkmSettings[mapel] || defaultKKM;
+      }
+
+      function renderKKMKelasList() {
+        const container = document.getElementById('kkm-kelas-list');
+        const kelasOptions = allData.filter(d => d.type === 'kelas').map(k => k.nama);
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+
+        if (kelasOptions.length === 0 || mapelOptions.length === 0) {
+          container.innerHTML = '<p class="text-center py-4 text-gray-600">Tambahkan kelas dan mata pelajaran terlebih dahulu.</p>';
+          return;
+        }
+
+        // Get all KKM kelas settings
+        const kkmKelasData = allData.filter(d => d.type === 'kkm_setting' && d.kelas);
+
+        if (kkmKelasData.length === 0) {
+          container.innerHTML = '<p class="text-center py-4 text-gray-600">Belum ada KKM khusus per kelas. Klik "Tambah KKM Kelas" untuk menambahkan.</p>';
+          return;
+        }
+
+        // Group by kelas
+        const groupedByKelas = {};
+        kkmKelasData.forEach(kkm => {
+          if (!groupedByKelas[kkm.kelas]) {
+            groupedByKelas[kkm.kelas] = [];
+          }
+          groupedByKelas[kkm.kelas].push(kkm);
+        });
+
+        container.innerHTML = Object.keys(groupedByKelas).map(kelas => {
+          const kkmList = groupedByKelas[kelas];
+          return `
+          <div class="border border-blue-200 rounded-lg p-4 bg-blue-50">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-bold text-lg text-blue-800">🏫 ${kelas}</h4>
+              <span class="text-sm text-blue-600">${kkmList.length} mata pelajaran</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${kkmList.map(kkm => `
+                <div class="flex items-center justify-between p-3 rounded-lg border border-blue-300 bg-white">
+                  <div class="flex items-center gap-2">
+                    <div class="text-lg">📚</div>
+                    <div>
+                      <p class="font-semibold">${kkm.mapel}</p>
+                      <p class="text-xs text-gray-600">KKM Khusus Kelas</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <div class="text-center">
+                      <p class="text-xl font-bold ${kkm.nilai >= 75 ? 'text-green-600' : 'text-orange-600'}">${kkm.nilai}</p>
+                      <p class="text-xs text-gray-600">KKM</p>
+                    </div>
+                    <div class="flex gap-1">
+                      <button onclick="editKKMKelas('${kkm.__backendId}', '${kelas}', '${kkm.mapel}', ${kkm.nilai})" class="px-2 py-1 text-xs rounded bg-blue-500 text-white hover:bg-blue-600">
+                        ✏️
+                      </button>
+                      <button onclick="deleteKKMKelas('${kkm.__backendId}', '${kelas}', '${kkm.mapel}')" class="px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600">
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+        }).join('');
+      }
+
+      function openTambahKKMKelas() {
+        const kelasOptions = allData.filter(d => d.type === 'kelas').map(k => k.nama);
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+
+        if (kelasOptions.length === 0 || mapelOptions.length === 0) {
+          showToast('Tambahkan kelas dan mata pelajaran terlebih dahulu', 'error');
+          return;
+        }
+
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = 'Tambah KKM per Kelas & Mata Pelajaran';
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Kelas</label>
+          <select id="kkm-kelas-kelas" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Kelas</option>
+            ${kelasOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <select id="kkm-kelas-mapel" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="">Pilih Mata Pelajaran</option>
+            ${mapelOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Nilai KKM</label>
+          <input type="number" id="kkm-kelas-nilai" min="0" max="100" value="${defaultKKM}" required class="w-full px-3 py-2 border rounded-lg">
+          <p class="text-xs text-gray-600 mt-1">Masukkan nilai 0-100</p>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          <p><strong>Contoh Penggunaan:</strong></p>
+          <p>• Kelas VII: KKM 67 (tingkat dasar)</p>
+          <p>• Kelas XI: KKM 70 (tingkat menengah)</p>
+          <p>• Kelas XII: KKM 75 (tingkat lanjut)</p>
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await tambahKKMKelas();
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function tambahKKMKelas() {
+        const kelas = document.getElementById('kkm-kelas-kelas').value;
+        const mapel = document.getElementById('kkm-kelas-mapel').value;
+        const nilai = parseInt(document.getElementById('kkm-kelas-nilai').value);
+
+        if (!kelas || !mapel || !nilai) {
+          showToast('Lengkapi semua field', 'error');
+          return;
+        }
+
+        if (nilai < 0 || nilai > 100) {
+          showToast('Nilai KKM harus antara 0-100', 'error');
+          return;
+        }
+
+        // Check if combination already exists
+        const existingKKM = allData.find(d =>
+          d.type === 'kkm_setting' &&
+          d.kelas === kelas &&
+          d.mapel === mapel
+        );
+
+        if (existingKKM) {
+          showToast('KKM untuk kombinasi kelas dan mata pelajaran ini sudah ada', 'error');
+          return;
+        }
+
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai', 'error');
+          return;
+        }
+
+        const kkmData = {
+          id: Date.now().toString(),
+          type: 'kkm_setting',
+          kelas: kelas,
+          mapel: mapel,
+          nilai: nilai,
+          createdAt: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(kkmData);
+
+        if (result.isOk) {
+          showToast('KKM per kelas berhasil ditambahkan', 'success');
+          closeModal();
+          renderKKMKelasList();
+        } else {
+          showToast('Gagal menambahkan KKM per kelas', 'error');
+        }
+      }
+
+      function editKKMKelas(backendId, kelas, mapel, currentValue) {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        title.textContent = `Edit KKM: ${kelas} - ${mapel}`;
+        formFields.innerHTML = `
+        <div>
+          <label class="block text-sm font-medium mb-1">Kelas</label>
+          <input type="text" value="${kelas}" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-100">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Mata Pelajaran</label>
+          <input type="text" value="${mapel}" readonly class="w-full px-3 py-2 border rounded-lg bg-gray-100">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Nilai KKM</label>
+          <input type="number" id="edit-kkm-kelas-nilai" min="0" max="100" value="${currentValue}" required class="w-full px-3 py-2 border rounded-lg">
+          <p class="text-xs text-gray-600 mt-1">Masukkan nilai 0-100</p>
+        </div>
+        <div class="text-sm text-gray-600 mt-2">
+          <p><strong>Nilai saat ini:</strong> ${currentValue}</p>
+          <p><strong>Status:</strong> KKM Khusus per Kelas & Mapel</p>
+        </div>
+      `;
+
+        document.getElementById('modal-form').onsubmit = async function (e) {
+          e.preventDefault();
+          await updateKKMKelas(backendId);
+        };
+
+        modal.classList.add('active');
+      }
+
+      async function updateKKMKelas(backendId) {
+        const nilai = parseInt(document.getElementById('edit-kkm-kelas-nilai').value);
+
+        if (!nilai) {
+          showToast('Masukkan nilai KKM', 'error');
+          return;
+        }
+
+        if (nilai < 0 || nilai > 100) {
+          showToast('Nilai KKM harus antara 0-100', 'error');
+          return;
+        }
+
+        const kkmRecord = allData.find(d => d.__backendId === backendId);
+        if (!kkmRecord) return;
+
+        const updatedRecord = {
+          ...kkmRecord,
+          nilai: nilai
+        };
+
+        const result = await window.dataSdk.update(updatedRecord);
+
+        if (result.isOk) {
+          showToast('KKM per kelas berhasil diperbarui', 'success');
+          closeModal();
+          renderKKMKelasList();
+        } else {
+          showToast('Gagal memperbarui KKM per kelas', 'error');
+        }
+      }
+
+      function deleteKKMKelas(backendId, kelas, mapel) {
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus KKM khusus untuk ${kelas} - ${mapel}?</p>
+        <p class="text-xs mb-2">Akan menggunakan KKM mata pelajaran atau default</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDeleteKKMKelas('${backendId}')" class="px-3 py-1 bg-red-600 rounded text-white">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded text-white">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      async function confirmDeleteKKMKelas(backendId) {
+        const kkmRecord = allData.find(d => d.__backendId === backendId);
+        if (!kkmRecord) return;
+
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+
+        const result = await window.dataSdk.delete(kkmRecord);
+        if (result.isOk) {
+          showToast('KKM per kelas berhasil dihapus', 'success');
+          renderKKMKelasList();
+        } else {
+          showToast('Gagal menghapus KKM per kelas', 'error');
+        }
+      }
+
+      function renderCurrentView() {
+        if (currentView === 'home') {
+          updateStatistics();
+        } else if (currentView === 'mapel') {
+          renderMapel();
+        } else if (currentView === 'kelas') {
+          renderKelas();
+        } else if (currentView === 'jadwal') {
+          renderJadwal();
+        } else if (currentView === 'siswa') {
+          renderSiswa();
+        } else if (currentView === 'jurnal') {
+          renderJurnal();
+        } else if (currentView === 'grup') {
+          renderGrup();
+        }
+      }
+
+      function renderMapel() {
+        const mapelData = allData.filter(d => d.type === 'mapel');
+        const container = document.getElementById('mapel-list');
+        if (mapelData.length === 0) {
+          container.innerHTML = '<p class="col-span-full text-center py-8">Belum ada mata pelajaran</p>';
+        } else {
+          container.innerHTML = mapelData.map(m => `
+          <div class="p-4 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow" onclick="editMapel('${m.__backendId}')">
+            <div class="flex justify-between items-start mb-2">
+              <p class="font-semibold text-lg">📚 ${m.nama}</p>
+              <button onclick="event.stopPropagation(); deleteItem('${m.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function renderKelas() {
+        const kelasData = allData.filter(d => d.type === 'kelas');
+        const container = document.getElementById('kelas-list');
+        if (kelasData.length === 0) {
+          container.innerHTML = '<p class="col-span-full text-center py-8">Belum ada kelas</p>';
+        } else {
+          container.innerHTML = kelasData.map(k => `
+          <div class="p-4 rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow" onclick="showKelasDetail('${k.__backendId}')">
+            <div class="flex justify-between items-start mb-2">
+              <p class="font-semibold text-lg">🏫 ${k.nama}</p>
+              <button onclick="event.stopPropagation(); deleteItem('${k.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function renderJadwal() {
+        const jadwalData = allData.filter(d => d.type === 'jadwal');
+        const container = document.getElementById('jadwal-list');
+        if (jadwalData.length === 0) {
+          container.innerHTML = '<p class="text-center py-8">Belum ada jadwal</p>';
+        } else {
+          container.innerHTML = jadwalData.map(j => `
+          <div class="p-4 rounded-lg shadow-md">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <p class="font-semibold">${j.mapel}</p>
+                <p class="text-sm mt-1">${j.hari} • Jam ke-${j.jamKe} (${j.jamMulai} - ${j.jamSelesai})</p>
+                <p class="text-sm">${j.kelas} • Ruangan: ${j.ruangan}</p>
+              </div>
+              <button onclick="deleteItem('${j.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function renderSiswa() {
+        const siswaData = allData.filter(d => d.type === 'siswa');
+        const container = document.getElementById('siswa-list');
+        if (siswaData.length === 0) {
+          container.innerHTML = '<p class="text-center py-8">Belum ada siswa</p>';
+        } else {
+          container.innerHTML = siswaData.map(s => `
+          <div class="p-4 rounded-lg shadow-md">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <p class="font-semibold">👨‍🎓 ${s.nama}</p>
+                <p class="text-sm mt-1">Kelas: ${s.kelas}</p>
+              </div>
+              <button onclick="deleteItem('${s.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function renderJurnal() {
+        const jurnalData = allData.filter(d => d.type === 'jurnal');
+        const container = document.getElementById('jurnal-list');
+        if (jurnalData.length === 0) {
+          container.innerHTML = '<p class="text-center py-8">Belum ada jurnal</p>';
+        } else {
+          container.innerHTML = jurnalData.map(j => `
+          <div class="p-4 rounded-lg shadow-md">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <p class="font-semibold">${j.mapel} - ${j.kelas}</p>
+                <p class="text-sm mt-1">${j.tanggal} • Jam ke-${j.jamKe} • Pertemuan ke-${j.pertemuanKe}</p>
+                <p class="text-sm mt-2"><strong>Materi:</strong> ${j.kompetensiDasar}</p>
+                <p class="text-sm mt-1"><strong>Ketuntasan:</strong> ${j.ketuntasanMateri}</p>
+                ${j.catatanSiswa ? `<p class="text-sm mt-1"><strong>Catatan:</strong> ${j.catatanSiswa}</p>` : ''}
+              </div>
+              <button onclick="deleteItem('${j.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+        }
+      }
+
+      function renderGrup() {
+        const grupData = allData.filter(d => d.type === 'grup');
+        const container = document.getElementById('grup-list');
+        if (grupData.length === 0) {
+          container.innerHTML = '<p class="col-span-full text-center py-8">Belum ada grup</p>';
+        } else {
+          container.innerHTML = grupData.map(g => `
+          <div class="p-4 rounded-lg shadow-md">
+            <div class="flex justify-between items-start mb-2">
+              <p class="font-semibold text-lg">👥 ${g.nama}</p>
+              <button onclick="deleteItem('${g.__backendId}')" class="text-red-500 hover:text-red-700">🗑️</button>
+            </div>
+            <p class="text-sm">${g.anggota}</p>
+          </div>
+        `).join('');
+        }
+      }
+
+      function openModal(type) {
+        if (allData.length >= 999) {
+          showToast('Maksimum 999 data tercapai. Hapus beberapa data terlebih dahulu.', 'error');
+          return;
+        }
+
+        // Handle jurnal with custom modal
+        if (type === 'jurnal') {
+          openJurnalModal();
+          return;
+        }
+
+        currentType = type;
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('modal-title');
+        const formFields = document.getElementById('form-fields');
+
+        const titles = {
+          mapel: 'Tambah Mata Pelajaran',
+          kelas: 'Tambah Kelas',
+          jadwal: 'Tambah Jadwal',
+          siswa: 'Tambah Siswa',
+          grup: 'Tambah Grup'
+        };
+
+        title.textContent = titles[type];
+
+        // Get available options from data
+        const kelasOptions = allData.filter(d => d.type === 'kelas').map(k => k.nama);
+        const mapelOptions = allData.filter(d => d.type === 'mapel').map(m => m.nama);
+
+        const fields = {
+          mapel: [
+            { name: 'nama', label: 'Nama Mata Pelajaran', type: 'text', required: true }
+          ],
+          kelas: [
+            { name: 'nama', label: 'Nama Kelas', type: 'text', required: true }
+          ],
+          jadwal: [
+            { name: 'mapel', label: 'Mata Pelajaran', type: 'select', options: mapelOptions, required: true, allowEmpty: mapelOptions.length === 0, emptyMessage: 'Tambahkan mata pelajaran terlebih dahulu' },
+            { name: 'kelas', label: 'Kelas', type: 'select', options: kelasOptions, required: true, allowEmpty: kelasOptions.length === 0, emptyMessage: 'Tambahkan kelas terlebih dahulu' },
+            { name: 'hari', label: 'Hari', type: 'select', options: ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], required: true },
+            { name: 'jamKe', label: 'Jam Ke', type: 'select', options: ['1', '2', '3', '4', '5', '6', '7'], required: true },
+            { name: 'jamMulai', label: 'Jam Mulai', type: 'time', required: true },
+            { name: 'jamSelesai', label: 'Jam Selesai', type: 'time', required: true },
+            { name: 'ruangan', label: 'Ruangan', type: 'text', required: true }
+          ],
+          siswa: [
+            { name: 'nama', label: 'Nama Siswa', type: 'text', required: true },
+            { name: 'kelas', label: 'Kelas', type: 'select', options: kelasOptions, required: true, allowEmpty: kelasOptions.length === 0, emptyMessage: 'Tambahkan kelas terlebih dahulu' }
+          ],
+          jurnal: 'custom', // Use custom modal for jurnal
+          grup: [
+            { name: 'nama', label: 'Nama Grup', type: 'text', required: true },
+            { name: 'anggota', label: 'Anggota', type: 'textarea', placeholder: 'Pisahkan dengan koma', required: true }
+          ]
+        };
+
+        formFields.innerHTML = fields[type].map(field => {
+          if (field.type === 'select') {
+            if (field.allowEmpty && field.options.length === 0) {
+              return `
+              <div>
+                <label class="block text-sm font-medium mb-1">${field.label}</label>
+                <div class="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-500">
+                  ${field.emptyMessage}
+                </div>
+              </div>
+            `;
+            }
+            return `
+            <div>
+              <label class="block text-sm font-medium mb-1">${field.label}</label>
+              <select name="${field.name}" ${field.required ? 'required' : ''} class="w-full px-3 py-2 border rounded-lg">
+                <option value="">Pilih ${field.label}</option>
+                ${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+              </select>
+            </div>
+          `;
+          } else if (field.type === 'textarea') {
+            return `
+            <div>
+              <label class="block text-sm font-medium mb-1">${field.label}</label>
+              <textarea name="${field.name}" ${field.required ? 'required' : ''} ${field.readonly ? 'readonly' : ''} placeholder="${field.placeholder || ''}" class="w-full px-3 py-2 border rounded-lg ${field.readonly ? 'bg-gray-50' : ''}" rows="3"></textarea>
+            </div>
+          `;
+          } else {
+            return `
+            <div>
+              <label class="block text-sm font-medium mb-1">${field.label}</label>
+              <input type="${field.type}" name="${field.name}" ${field.required ? 'required' : ''} ${field.readonly ? 'readonly' : ''} placeholder="${field.placeholder || ''}" class="w-full px-3 py-2 border rounded-lg ${field.readonly ? 'bg-gray-50' : ''}">
+            </div>
+          `;
+          }
+        }).join('');
+
+        modal.classList.add('active');
+      }
+
+      function closeModal() {
+        document.getElementById('modal').classList.remove('active');
+        document.getElementById('modal-form').reset();
+        editingItem = null;
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.classList.add('loading');
+        submitBtn.textContent = 'Menyimpan...';
+
+        let result;
+
+        if (editingItem) {
+          // Update existing item
+          const updatedData = { ...editingItem };
+          for (let [key, value] of formData.entries()) {
+            updatedData[key] = value;
+          }
+          result = await window.dataSdk.update(updatedData);
+        } else {
+          // Create new item
+          const data = {
+            id: Date.now().toString(),
+            type: currentType,
+            createdAt: new Date().toISOString()
+          };
+
+          for (let [key, value] of formData.entries()) {
+            data[key] = value;
+          }
+
+          result = await window.dataSdk.create(data);
+        }
+
+        submitBtn.classList.remove('loading');
+        submitBtn.textContent = 'Simpan';
+
+        if (result.isOk) {
+          showToast('Data berhasil disimpan', 'success');
+          closeModal();
+          editingItem = null;
+        } else {
+          showToast('Gagal menyimpan data', 'error');
+        }
+      }
+
+      async function deleteItem(backendId) {
+        const item = allData.find(d => d.__backendId === backendId);
+        if (!item) return;
+
+        const confirmDiv = document.createElement('div');
+        confirmDiv.className = 'toast';
+        confirmDiv.style.backgroundColor = '#f59e0b';
+        confirmDiv.innerHTML = `
+        <p class="mb-2">Hapus data ini?</p>
+        <div class="flex gap-2">
+          <button onclick="confirmDelete('${backendId}')" class="px-3 py-1 bg-red-600 rounded">Ya</button>
+          <button onclick="this.closest('.toast').remove()" class="px-3 py-1 bg-gray-600 rounded">Tidak</button>
+        </div>
+      `;
+        document.body.appendChild(confirmDiv);
+        setTimeout(() => confirmDiv.remove(), 5000);
+      }
+
+      async function confirmDelete(backendId) {
+        const item = allData.find(d => d.__backendId === backendId);
+        if (!item) return;
+
+        document.querySelectorAll('.toast').forEach(t => t.remove());
+
+        const result = await window.dataSdk.delete(item);
+        if (result.isOk) {
+          showToast('Data berhasil dihapus', 'success');
+          // If deleting from kelas detail, go back to kelas list
+          if (backendId === currentKelasId) {
+            showView('kelas');
+          }
+        } else {
+          showToast('Gagal menghapus data', 'error');
+        }
+      }
+
+      function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        const colors = {
+          success: '#10b981',
+          error: '#ef4444',
+          info: '#3b82f6'
+        };
+        toast.style.backgroundColor = colors[type] || '#3b82f6';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      }
+
+      init();
+    </script>
+    <script>(function () { function c() { var b = a.contentDocument || a.contentWindow.document; if (b) { var d = b.createElement('script'); d.innerHTML = "window.__CF$cv$params={r:'9a266df7b2795f51',t:'MTc2Mzc5MzU2NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);"; b.getElementsByTagName('head')[0].appendChild(d) } } if (document.body) { var a = document.createElement('iframe'); a.height = 1; a.width = 1; a.style.position = 'absolute'; a.style.top = 0; a.style.left = 0; a.style.border = 'none'; a.style.visibility = 'hidden'; document.body.appendChild(a); if ('loading' !== document.readyState) c(); else if (window.addEventListener) document.addEventListener('DOMContentLoaded', c); else { var e = document.onreadystatechange || function () { }; document.onreadystatechange = function (b) { e(b); 'loading' !== document.readyState && (document.onreadystatechange = e, c()) } } } })();</script>
+  </body>
+
+</html>
