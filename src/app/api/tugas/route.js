@@ -109,6 +109,8 @@ export async function GET(req) {
 	}
 }
 
+// app/api/tugas/route.js
+
 export async function PUT(req) {
 	try {
 		const body = await req.json();
@@ -125,27 +127,62 @@ export async function PUT(req) {
 			return Response.json({ error: 'Sheet MASTER_NILAI tidak ditemukan' }, { status: 404 });
 		}
 
+		// Ambil data siswa untuk validasi
+		const siswaSheet = doc.sheetsByTitle['MASTER_SISWA'];
+		const siswaRows = await siswaSheet.getRows();
+
 		const rows = await sheet.getRows();
 		let updateCount = 0;
+		let insertCount = 0;
+
+		// Prepare array untuk row baru (siswa yang belum ada di tugas ini)
+		const newRows = [];
 
 		for (const nilaiItem of nilai) {
-			const row = rows.find((r) => String(r.get('tugas_id')) === String(tugasId) && String(r.get('siswa_id')) === String(nilaiItem.siswa_id));
+			// Cari apakah siswa ini sudah ada di tugas ini
+			const existingRow = rows.find((r) => String(r.get('tugas_id')) === String(tugasId) && String(r.get('siswa_id')) === String(nilaiItem.siswa_id));
 
-			if (row) {
-				row.set('kategori', judul);
-				row.set('tanggal', tanggal);
-				row.set('nilai', nilaiItem.nilai);
+			if (existingRow) {
+				// UPDATE: Siswa sudah ada, update nilai
+				existingRow.set('kategori', judul);
+				existingRow.set('tanggal', tanggal);
+				existingRow.set('nilai', nilaiItem.nilai);
 
-				await row.save();
+				await existingRow.save();
 				updateCount++;
+			} else {
+				// INSERT: Siswa baru, tambahkan ke array untuk di-insert
+				const siswa = siswaRows.find((s) => String(s.get('id')) === String(nilaiItem.siswa_id));
+
+				if (siswa && nilaiItem.nilai && parseInt(nilaiItem.nilai) > 0) {
+					newRows.push({
+						id: generateId(),
+						siswa_id: nilaiItem.siswa_id,
+						nama_siswa: siswa.get('nama_lengkap'),
+						kelas: kelas,
+						mapel: mapel,
+						kategori: judul,
+						nilai: nilaiItem.nilai,
+						tanggal: tanggal,
+						tugas_id: tugasId,
+					});
+					insertCount++;
+				}
 			}
+		}
+
+		// Insert siswa baru jika ada
+		if (newRows.length > 0) {
+			await sheet.addRows(newRows);
 		}
 
 		return Response.json(
 			{
 				success: true,
 				message: 'Nilai berhasil diperbarui',
-				count: updateCount,
+				updated: updateCount,
+				inserted: insertCount,
+				total: updateCount + insertCount,
 			},
 			{ status: 200 },
 		);

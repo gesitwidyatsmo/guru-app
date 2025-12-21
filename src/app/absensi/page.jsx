@@ -657,7 +657,7 @@ export default function AbsensiPage() {
 							<select
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
-								disabled={mode === 'rekap'}
+								// disabled={mode === 'rekap'}
 								className='w-full px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed'>
 								{kelasList.map((k) => (
 									<option
