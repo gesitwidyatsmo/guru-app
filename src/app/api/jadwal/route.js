@@ -12,15 +12,18 @@ export async function GET() {
 
 		const rows = await sheet.getRows();
 
-		// Mapping data row ke object JSON
-		const jadwal = rows.map((row) => ({
-			id: row.get('id'),
-			kelas: row.get('kelas'),
-			mapel: row.get('mapel'),
-			hari: row.get('hari'), // Penting: pastikan di sheet tulisannya 'Senin', 'Selasa', dst.
-			jam_mulai: row.get('jam_mulai'),
-			jam_selesai: row.get('jam_selesai'),
-		}));
+		const jadwal = rows
+			.map((row) => ({
+				id: row.get('id'),
+				kelas: row.get('kelas'),
+				mapel: row.get('mapel'),
+				jam_ke: Number(row.get('jam_ke')), // pastikan number
+				hari: row.get('hari'),
+				jam_mulai: row.get('jam_mulai'),
+				jam_selesai: row.get('jam_selesai'),
+			}))
+			.sort((a, b) => a.jam_ke - b.jam_ke); // sorting ASC
+		// console.log('data:', jadwal);
 
 		return Response.json(jadwal);
 	} catch (error) {
