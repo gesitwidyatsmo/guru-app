@@ -79,3 +79,38 @@ export async function POST(req) {
 		return Response.json({ error: error?.message || 'Terjadi kesalahan server' }, { status: 500 });
 	}
 }
+
+export async function PUT(req) {
+	try {
+		const body = await req.json();
+		const { id, status, keterangan } = body;
+
+		if (!id || !status) {
+			return Response.json({ error: 'ID dan status harus diisi' }, { status: 400 });
+		}
+
+		const doc = await getSheet();
+		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
+
+		if (!sheet) {
+			return Response.json({ error: 'Sheet MASTER_ABSENSI tidak ditemukan' }, { status: 404 });
+		}
+
+		const rows = await sheet.getRows();
+		const row = rows.find((r) => String(r.get('id')) === String(id));
+
+		if (!row) {
+			return Response.json({ error: 'Data absensi tidak ditemukan' }, { status: 404 });
+		}
+
+		// Update data
+		row.set('status', status);
+		row.set('keterangan', keterangan || '');
+		await row.save();
+
+		return Response.json({ success: true, message: 'Absensi berhasil diperbarui' });
+	} catch (error) {
+		console.error('❌ Error updating absensi:', error);
+		return Response.json({ error: 'Gagal memperbarui absensi', details: error.message }, { status: 500 });
+	}
+}
