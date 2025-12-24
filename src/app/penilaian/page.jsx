@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,25 +7,30 @@ import Swal from 'sweetalert2';
 
 export default function PenilaianPage() {
 	const router = useRouter();
+
+	// State Data Master
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
+
+	// State Filter & Form
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
-	const [judul, setJudul] = useState(''); // Judul tugas/penilaian
+	const [judul, setJudul] = useState('');
 	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
-	const [nilai, setNilai] = useState({});
+	const [nilai, setNilai] = useState({}); // Object {siswa_id: nilai}
+
+	// State UI
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 
-	// State untuk daftar tugas yang sudah ada
+	// State Daftar Tugas (Side/Top Menu)
 	const [daftarTugas, setDaftarTugas] = useState([]);
 	const [selectedTugasId, setSelectedTugasId] = useState('');
 	const [loadingTugas, setLoadingTugas] = useState(false);
-
 	const [initialSiswaIds, setInitialSiswaIds] = useState([]);
 
-	// Fetch initial data
+	// --- 1. Fetch Data Awal (Kelas, Mapel, Siswa) ---
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
@@ -38,6 +44,7 @@ export default function PenilaianPage() {
 				setMapelList(dataMapel);
 				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
 
+				// Set default selection
 				if (dataKelas.length > 0) {
 					setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
 				}
@@ -46,17 +53,17 @@ export default function PenilaianPage() {
 				}
 			} catch (err) {
 				console.error(err);
+				Swal.fire('Error', 'Gagal memuat data awal', 'error');
 			} finally {
 				setLoading(false);
 			}
 		};
-
 		fetchAll();
 	}, []);
 
 	const siswaKelasIni = siswaList.filter((s) => s.kelas === selectedKelas);
 
-	// Fetch daftar tugas ketika kelas atau mapel berubah
+	// --- 2. Fetch Daftar Tugas saat Filter Berubah ---
 	useEffect(() => {
 		if (!selectedKelas || !selectedMapel) return;
 
@@ -72,9 +79,9 @@ export default function PenilaianPage() {
 				setLoadingTugas(true);
 				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
 				const res = await fetch(url);
-
 				if (res.ok) {
 					const data = await res.json();
+					// Grouping data raw menjadi daftar tugas unik
 					const tugasMap = new Map();
 					data.forEach((item) => {
 						if (!tugasMap.has(item.tugas_id)) {
@@ -90,6 +97,7 @@ export default function PenilaianPage() {
 							tugasMap.get(item.tugas_id).jumlahSiswa++;
 						}
 					});
+					// Sort descending by date
 					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 				}
 			} catch (err) {
@@ -98,14 +106,13 @@ export default function PenilaianPage() {
 				setLoadingTugas(false);
 			}
 		};
-
 		fetchTugas();
 	}, [selectedKelas, selectedMapel]);
 
-	// Load nilai ketika memilih tugas yang sudah ada
-	// Load nilai ketika memilih tugas yang sudah ada
+	// --- 3. Load Nilai Detail saat Tugas Dipilih ---
 	useEffect(() => {
 		if (!selectedTugasId) {
+			// Mode "Tugas Baru" -> Reset Form
 			setJudul('');
 			setNilai({});
 			setInitialSiswaIds([]);
@@ -116,10 +123,8 @@ export default function PenilaianPage() {
 			try {
 				const url = `/api/tugas?tugasId=${selectedTugasId}`;
 				const res = await fetch(url);
-
 				if (res.ok) {
 					const data = await res.json();
-
 					if (data.length > 0) {
 						setJudul(data[0].kategori);
 						setTanggal(data[0].tanggal);
@@ -128,7 +133,7 @@ export default function PenilaianPage() {
 						const existingIds = data.map((item) => item.siswa_id);
 						setInitialSiswaIds(existingIds);
 
-						// Map nilai ke state
+						// Map nilai ke state object
 						const nilaiMap = {};
 						data.forEach((item) => {
 							nilaiMap[item.siswa_id] = item.nilai;
@@ -140,11 +145,11 @@ export default function PenilaianPage() {
 				console.error('Error loading nilai tugas:', err);
 			}
 		};
-
 		loadNilaiTugas();
 	}, [selectedTugasId]);
 
-	// Helper functions
+	// --- Helper Functions ---
+
 	const getSiswaById = (siswaId) => {
 		return siswaList.find((s) => s.id === siswaId);
 	};
@@ -169,8 +174,8 @@ export default function PenilaianPage() {
 		return 'E';
 	};
 
+	// Handle input manual (Mode Tugas Baru)
 	const handleNilaiChange = (siswaId, value) => {
-		// Validasi input hanya angka 0-100
 		if (value === '' || (parseFloat(value) >= 0 && parseFloat(value) <= 100)) {
 			setNilai((prev) => ({
 				...prev,
@@ -179,6 +184,7 @@ export default function PenilaianPage() {
 		}
 	};
 
+	// Refresh data setelah edit
 	const refreshCurrentTugasData = async (tugasId) => {
 		if (!tugasId) return;
 		try {
@@ -188,11 +194,9 @@ export default function PenilaianPage() {
 			const data = await res.json();
 			if (!Array.isArray(data) || data.length === 0) return;
 
-			// Update ID siswa yang sudah punya nilai (hilangkan badge ✨ Belum)
 			const existingIds = data.map((item) => item.siswa_id);
 			setInitialSiswaIds(existingIds);
 
-			// Update nilai per siswa di state
 			const nilaiMap = {};
 			data.forEach((item) => {
 				nilaiMap[item.siswa_id] = item.nilai;
@@ -206,9 +210,10 @@ export default function PenilaianPage() {
 		}
 	};
 
-	// Modifikasi handleSimpan di halaman penilaian
-	const handleSimpan = async () => {
-		// Validasi judul
+	// --- 4. Logic Simpan & Update ---
+
+	// Simpan Massal (Hanya untuk Mode Tugas Baru)
+	const handleSimpanMassal = async () => {
 		if (!judul.trim()) {
 			Swal.fire({
 				icon: 'error',
@@ -225,9 +230,7 @@ export default function PenilaianPage() {
 			nilai: nilai[s.id] || '0',
 		}));
 
-		// Hitung yang terisi
 		const terisi = nilaiArray.filter((n) => n.nilai && parseInt(n.nilai) > 0).length;
-
 		if (terisi === 0) {
 			Swal.fire({
 				icon: 'warning',
@@ -238,162 +241,53 @@ export default function PenilaianPage() {
 			return;
 		}
 
-		// Jika mode update, cek apakah ada siswa baru
-		let siswaBaruCount = 0;
-		if (selectedTugasId) {
-			try {
-				// Fetch data tugas yang ada untuk cek siswa baru
-				const url = `/api/tugas?tugasId=${selectedTugasId}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const existingData = await res.json();
-					const existingIds = existingData.map((d) => d.siswa_id);
-					const currentIds = siswaKelasIni.map((s) => s.id);
-					siswaBaruCount = currentIds.filter((id) => !existingIds.includes(id)).length;
-				}
-			} catch (err) {
-				console.error('Error checking siswa baru:', err);
-				// Lanjutkan proses meskipun gagal cek siswa baru
-			}
-		}
-
-		// Konfirmasi dengan info siswa baru (jika ada)
 		const result = await Swal.fire({
-			title: selectedTugasId ? 'Update Nilai?' : 'Simpan Nilai?',
-			html: `
-      <div style="text-align: left;">
-        <p style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">${judul}</p>
-        <p style="color: #6B7280; margin-bottom: 4px;">📊 ${terisi} dari ${siswaKelasIni.length} siswa akan disimpan</p>
-        ${siswaBaruCount > 0 ? `<p style="color: #059669; font-weight: bold; margin-top: 8px;">✨ ${siswaBaruCount} siswa yang belum dinilai</p>` : ''}
-      </div>
-    `,
+			title: 'Simpan Nilai Baru?',
+			text: `Menyimpan nilai untuk ${terisi} siswa`,
 			icon: 'question',
 			showCancelButton: true,
 			confirmButtonColor: '#4F46E5',
 			cancelButtonColor: '#6B7280',
-			confirmButtonText: selectedTugasId ? '✅ Ya, Update & Tambahkan' : 'Ya, Simpan',
+			confirmButtonText: 'Ya, Simpan',
 			cancelButtonText: 'Batal',
 		});
 
 		if (!result.isConfirmed) return;
 
 		setSaving(true);
-
-		const payload = {
-			judul,
-			mapel: selectedMapel,
-			kelas: selectedKelas,
-			tanggal,
-			nilai: nilaiArray,
-		};
-
 		try {
-			let res;
+			// POST ke API create baru
+			const payload = {
+				judul,
+				kelas: selectedKelas,
+				mapel: selectedMapel,
+				tanggal,
+				nilai: nilaiArray,
+			};
 
-			if (selectedTugasId) {
-				// Update existing tugas
-				res = await fetch('/api/tugas', {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						...payload,
-						tugasId: selectedTugasId,
-					}),
-				});
-			} else {
-				// Create new tugas
-				res = await fetch('/api/tugas', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
-				});
-			}
+			const res = await fetch('/api/tugas', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
 
+			const data = await res.json();
 			if (res.ok) {
-				const data = await res.json();
-
-				// Tampilkan pesan sukses dengan detail
-				let successMessage = `<div style="text-align: left;">`;
-				successMessage += `<p style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">${judul}</p>`;
-
-				if (data.updated !== undefined && data.inserted !== undefined) {
-					// Response dari UPSERT
-					if (data.updated > 0) {
-						successMessage += `<p style="color: #3B82F6; margin-bottom: 4px;">✏️ ${data.updated} nilai diperbarui</p>`;
-					}
-					if (data.inserted > 0) {
-						successMessage += `<p style="color: #059669; margin-bottom: 4px;">✨ ${data.inserted} siswa baru dinilai</p>`;
-					}
-					successMessage += `<p style="color: #6B7280; margin-top: 8px; font-weight: bold;">📊 Total: ${data.total || data.count} nilai tersimpan</p>`;
-				} else if (data.count !== undefined) {
-					// Response dari POST biasa
-					successMessage += `<p style="color: #059669;">✅ ${data.count} nilai berhasil disimpan</p>`;
-				}
-
-				successMessage += `</div>`;
-
 				await Swal.fire({
 					icon: 'success',
 					title: 'Berhasil!',
-					html: successMessage,
-					confirmButtonColor: '#4F46E5',
-					timer: 2500,
-					timerProgressBar: true,
+					text: 'Tugas baru berhasil dibuat',
+					timer: 1500,
+					showConfirmButton: false,
 				});
 
-				// Refresh daftar tugas
-				const listUrl = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const reloadRes = await fetch(listUrl);
-				if (reloadRes.ok) {
-					const reloadData = await reloadRes.json();
-					const tugasMap = new Map();
-					reloadData.forEach((item) => {
-						if (!tugasMap.has(item.tugas_id)) {
-							tugasMap.set(item.tugas_id, {
-								tugas_id: item.tugas_id,
-								judul: item.kategori,
-								tanggal: item.tanggal,
-								kelas: item.kelas,
-								mapel: item.mapel,
-								jumlahSiswa: 1,
-							});
-						} else {
-							tugasMap.get(item.tugas_id).jumlahSiswa++;
-						}
-					});
-					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
-				}
-
-				// Jika baru buat, set selectedTugasId dari response
-				if (!selectedTugasId && data.tugasId) {
-					setSelectedTugasId(data.tugasId);
-					await refreshCurrentTugasData(data.tugasId);
-				} else if (selectedTugasId) {
-					// Jika update tugas existing, refresh data tugas sekarang
-					await refreshCurrentTugasData(selectedTugasId);
-				}
-
-				// Refresh nilai yang ditampilkan
-				if (selectedTugasId) {
-					const nilaiUrl = `/api/tugas?tugasId=${selectedTugasId}`;
-					const nilaiRes = await fetch(nilaiUrl);
-					if (nilaiRes.ok) {
-						const nilaiData = await nilaiRes.json();
-
-						// Update state nilai dengan data terbaru
-						const updatedNilai = {};
-						nilaiData.forEach((item) => {
-							updatedNilai[item.siswa_id] = item.nilai;
-						});
-						setNilai(updatedNilai);
-					}
-				} else if (data.tugasId) {
-					// Jika baru buat, set selectedTugasId
-					setSelectedTugasId(data.tugasId);
-				}
+				// Refresh daftar tugas dan pilih tugas yang baru dibuat
+				const tugasBaruId = data.tugasId;
+				// Trigger refetch daftar tugas via dependency effect
+				// Tapi kita force select tugas baru agar masuk mode edit
+				setSelectedTugasId(tugasBaruId);
 			} else {
-				const errorData = await res.json();
-				throw new Error(errorData.error || 'Gagal menyimpan nilai');
+				throw new Error(data.error || 'Gagal menyimpan');
 			}
 		} catch (error) {
 			console.error(error);
@@ -408,113 +302,104 @@ export default function PenilaianPage() {
 		}
 	};
 
-	const handleTugasBaru = () => {
-		setSelectedTugasId('');
-		setJudul('');
-		setNilai({});
-		setTanggal(new Date().toISOString().slice(0, 10));
-	};
+	// Edit Nilai Per Siswa (Popup) - Mode Tugas Lama
+	const handleEditNilai = async (siswaId, currentNilai) => {
+		const siswa = getSiswaById(siswaId);
+		if (!siswa) return;
 
-	const handleHapusTugas = async () => {
-		if (!selectedTugasId) return;
-
-		const result = await Swal.fire({
-			title: 'Hapus Tugas?',
-			html: `Yakin ingin menghapus <b>${judul}</b>?<br>Semua nilai akan terhapus!`,
-			icon: 'warning',
+		const { value: newNilai } = await Swal.fire({
+			title: `<h3 class="text-xl font-bold text-gray-800">Edit Nilai</h3>`,
+			html: `
+        <div class="text-left bg-gray-50 p-4 rounded-xl mb-4 border border-gray-100">
+          <p class="text-sm text-gray-500 mb-1">Nama Siswa</p>
+          <p class="font-bold text-gray-800 text-lg">${siswa.nama_lengkap}</p>
+          <p class="text-xs text-gray-400">NIS: ${siswa.nis || '-'}</p>
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700 mb-2">Nilai (0-100)</label>
+          <input 
+            id="swal-input-nilai" 
+            type="number" 
+            class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg text-center font-bold text-indigo-600 transition-all outline-none"
+            min="0" 
+            max="100" 
+            value="${currentNilai || 0}"
+            placeholder="0"
+          >
+        </div>
+      `,
 			showCancelButton: true,
-			confirmButtonColor: '#EF4444',
-			cancelButtonColor: '#6B7280',
-			confirmButtonText: 'Ya, Hapus',
+			confirmButtonColor: '#4F46E5',
+			cancelButtonColor: '#EF4444',
+			confirmButtonText: 'Simpan Perubahan',
 			cancelButtonText: 'Batal',
+			focusConfirm: false,
+			preConfirm: () => {
+				const val = document.getElementById('swal-input-nilai').value;
+				if (!val || val < 0 || val > 100) {
+					Swal.showValidationMessage('Masukkan nilai valid (0-100)');
+				}
+				return val;
+			},
 		});
 
-		if (!result.isConfirmed) return;
+		if (newNilai) {
+			try {
+				// Gunakan method PUT untuk update
+				const payload = {
+					tugasId: selectedTugasId,
+					judul: judul, // Kirim judul saat ini (bisa diedit di header)
+					kelas: selectedKelas,
+					mapel: selectedMapel,
+					tanggal: tanggal,
+					nilai: [{ siswa_id: siswaId, nilai: newNilai }],
+				};
 
-		try {
-			const res = await fetch(`/api/tugas?tugasId=${selectedTugasId}`, {
-				method: 'DELETE',
-			});
-
-			if (res.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Terhapus!',
-					text: 'Tugas berhasil dihapus',
-					confirmButtonColor: '#4F46E5',
-					timer: 1500,
-					timerProgressBar: true,
+				const res = await fetch('/api/tugas', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
 				});
 
-				// Reset dan refresh
-				handleTugasBaru();
-
-				// Refresh list
-				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const reloadRes = await fetch(url);
-				if (reloadRes.ok) {
-					const reloadData = await reloadRes.json();
-					const tugasMap = new Map();
-					reloadData.forEach((item) => {
-						if (!tugasMap.has(item.tugas_id)) {
-							tugasMap.set(item.tugas_id, {
-								tugas_id: item.tugas_id,
-								judul: item.kategori,
-								tanggal: item.tanggal,
-								kelas: item.kelas,
-								mapel: item.mapel,
-								jumlahSiswa: 1,
-							});
-						} else {
-							tugasMap.get(item.tugas_id).jumlahSiswa++;
-						}
+				if (res.ok) {
+					Swal.fire({
+						icon: 'success',
+						title: 'Tersimpan',
+						text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${newNilai}`,
+						timer: 1000,
+						showConfirmButton: false,
 					});
-					setDaftarTugas(Array.from(tugasMap.values()));
+					// Refresh data lokal
+					refreshCurrentTugasData(selectedTugasId);
+				} else {
+					throw new Error('Gagal update nilai');
 				}
-			} else {
-				throw new Error('Gagal menghapus tugas');
+			} catch (err) {
+				console.error(err);
+				Swal.fire('Error', 'Gagal mengupdate nilai', 'error');
 			}
-		} catch (error) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menghapus',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
-			});
 		}
 	};
 
-	// Hitung statistik
-	const stats = {
-		total: siswaKelasIni.length,
-		terisi: Object.values(nilai).filter((n) => n !== '' && parseInt(n) > 0).length,
-		kosong: siswaKelasIni.length - Object.values(nilai).filter((n) => n !== '' && parseInt(n) > 0).length,
-		rataRata:
-			Object.values(nilai).filter((n) => n !== '' && parseInt(n) > 0).length > 0
-				? (Object.values(nilai).reduce((sum, n) => sum + (parseFloat(n) || 0), 0) / Object.values(nilai).filter((n) => n !== '' && parseInt(n) > 0).length).toFixed(2)
-				: '0',
-	};
+	// --- 5. Render UI ---
 
 	if (loading) {
 		return (
-			<div className='min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<div className='animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto mb-4'></div>
-					<p className='text-gray-600 font-medium'>Memuat data...</p>
-				</div>
+			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
+				<div className='animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600'></div>
 			</div>
 		);
 	}
 
 	return (
-		<div className='min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50'>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
-				{/* Header */}
-				<div className='bg-gradient-to-r from-purple-600 via-pink-600 to-red-500 rounded-3xl shadow-2xl p-6 sm:p-8 mb-6 text-white'>
-					<div className='flex items-center justify-between mb-4'>
+		<div className='min-h-screen bg-gray-50 pb-20'>
+			{/* Header Gradient */}
+			<div className='bg-gradient-to-r from-blue-600 to-indigo-700 pb-20 pt-8 px-4 sm:px-8 rounded-b-[3rem] shadow-2xl'>
+				<div className='max-w-6xl mx-auto'>
+					<div className='flex items-center gap-4 mb-6'>
 						<button
 							onClick={() => router.back()}
-							className='bg-white/20 backdrop-blur-sm hover:bg-white/30 p-2 rounded-xl transition-all'>
+							className='p-2 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/30 transition-all'>
 							<svg
 								className='w-6 h-6'
 								fill='none'
@@ -528,18 +413,17 @@ export default function PenilaianPage() {
 								/>
 							</svg>
 						</button>
-						<h1 className='text-2xl sm:text-3xl font-bold'>📝 Penilaian Siswa</h1>
-						<div className='w-10'></div>
+						<h1 className='text-3xl font-bold text-white'>Input Penilaian</h1>
 					</div>
 
 					{/* Filter Section */}
-					<div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
-						<div>
-							<label className='block text-xs font-medium text-white/90 mb-2'>Kelas</label>
+					<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+						<div className='bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20'>
+							<label className='text-blue-100 text-sm mb-2 block'>Kelas</label>
 							<select
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
-								className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
+								className='w-full bg-white/90 border-0 rounded-xl px-4 py-3 text-gray-800 font-semibold focus:ring-2 focus:ring-blue-400'>
 								{kelasList.map((k) => (
 									<option
 										key={k.id}
@@ -549,13 +433,12 @@ export default function PenilaianPage() {
 								))}
 							</select>
 						</div>
-
-						<div>
-							<label className='block text-xs font-medium text-white/90 mb-2'>Mata Pelajaran</label>
+						<div className='bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20'>
+							<label className='text-blue-100 text-sm mb-2 block'>Mata Pelajaran</label>
 							<select
 								value={selectedMapel}
 								onChange={(e) => setSelectedMapel(e.target.value)}
-								className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
+								className='w-full bg-white/90 border-0 rounded-xl px-4 py-3 text-gray-800 font-semibold focus:ring-2 focus:ring-blue-400'>
 								{mapelList.map((m) => (
 									<option
 										key={m.id}
@@ -567,165 +450,236 @@ export default function PenilaianPage() {
 						</div>
 					</div>
 				</div>
+			</div>
 
-				{/* Daftar Tugas & Buat Baru */}
-				<div className='grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6'>
-					{/* Tugas Baru Button */}
-					<button
-						onClick={handleTugasBaru}
-						className={`bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-2xl shadow-lg p-6 text-white transition-all transform hover:scale-105 ${
-							!selectedTugasId ? 'ring-4 ring-green-300' : ''
-						}`}>
-						<div className='text-center'>
-							<div className='text-4xl mb-2'>➕</div>
-							<h3 className='font-bold text-lg'>Tugas Baru</h3>
-							<p className='text-sm text-white/80 mt-1'>Buat penilaian baru</p>
-						</div>
-					</button>
+			<div className='max-w-6xl mx-auto px-4 sm:px-8 -mt-10'>
+				<div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
+					{/* SIDEBAR: Daftar Tugas */}
+					<div className='lg:col-span-1 space-y-4'>
+						<div className='bg-white rounded-2xl shadow-xl p-4 border border-gray-100 h-fit'>
+							<div className='flex items-center justify-between mb-4'>
+								<h2 className='font-bold text-gray-700'>Daftar Tugas</h2>
+								{/* <button
+									onClick={() => setSelectedTugasId('')}
+									className='text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200 transition-colors font-semibold'>
+									+ Baru
+								</button> */}
+							</div>
 
-					{/* Daftar Tugas yang Ada */}
-					{loadingTugas ? (
-						<div className='col-span-2 flex items-center justify-center'>
-							<div className='animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent'></div>
-						</div>
-					) : daftarTugas.length > 0 ? (
-						<div className='col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4'>
-							{daftarTugas.map((tugas) => (
-								<button
-									key={tugas.tugas_id}
-									onClick={() => setSelectedTugasId(tugas.tugas_id)}
-									className={`bg-white hover:bg-purple-50 rounded-2xl shadow-lg p-4 text-left transition-all ${selectedTugasId === tugas.tugas_id ? 'ring-4 ring-purple-400' : ''}`}>
-									<div className='flex justify-between items-start mb-2'>
-										<h3 className='font-bold text-gray-800 text-base line-clamp-1'>{tugas.judul}</h3>
-										<span className='bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs font-bold'>{tugas.jumlahSiswa} siswa</span>
-									</div>
-									<p className='text-xs text-gray-500'>
-										📅{' '}
-										{new Date(tugas.tanggal).toLocaleDateString('id-ID', {
-											day: 'numeric',
-											month: 'short',
-											year: 'numeric',
-										})}
-									</p>
-								</button>
-							))}
-						</div>
-					) : (
-						<div className='col-span-2 bg-white rounded-2xl shadow-lg p-8 text-center'>
-							<div className='text-gray-400 text-5xl mb-3'>📋</div>
-							<p className='text-gray-500 font-medium'>Belum ada tugas/penilaian</p>
-							<p className='text-gray-400 text-sm mt-1'>Klik &quot;Tugas Baru&quot; untuk membuat</p>
-						</div>
-					)}
-				</div>
-
-				{/* Form Input */}
-				<div className='bg-white rounded-2xl shadow-xl border-2 border-gray-100 overflow-hidden mb-6'>
-					<div className='p-4 sm:p-6 bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-gray-200'>
-						<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-							<div className='sm:col-span-2'>
-								<label className='block text-xs font-medium text-gray-700 mb-2'>Judul Tugas/Penilaian</label>
-								<input
-									type='text'
-									placeholder='Contoh: Tugas 1, Quiz, UTS, dll'
-									value={judul}
-									onChange={(e) => setJudul(e.target.value)}
-									className='w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all font-semibold'
-								/>
-							</div>
-							<div>
-								<label className='block text-xs font-medium text-gray-700 mb-2'>Tanggal</label>
-								<input
-									type='date'
-									value={tanggal}
-									onChange={(e) => setTanggal(e.target.value)}
-									className='w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all font-semibold'
-								/>
-							</div>
-						</div>
-					</div>
-
-					{/* Statistik */}
-					<div className='p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200'>
-						<div className='grid grid-cols-4 gap-3'>
-							<div className='text-center'>
-								<p className='text-xs text-gray-600 mb-1'>Total</p>
-								<p className='text-2xl font-bold text-gray-800'>{stats.total}</p>
-							</div>
-							<div className='text-center'>
-								<p className='text-xs text-gray-600 mb-1'>Terisi</p>
-								<p className='text-2xl font-bold text-green-600'>{stats.terisi}</p>
-							</div>
-							<div className='text-center'>
-								<p className='text-xs text-gray-600 mb-1'>Kosong</p>
-								<p className='text-2xl font-bold text-orange-600'>{stats.kosong}</p>
-							</div>
-							<div className='text-center'>
-								<p className='text-xs text-gray-600 mb-1'>Rata-rata</p>
-								<p className='text-2xl font-bold text-blue-600'>{stats.rataRata}</p>
-							</div>
-						</div>
-					</div>
-
-					{/* Daftar Siswa */}
-					<div className='divide-y-2 divide-gray-100 max-h-[500px] overflow-y-auto'>
-						{siswaKelasIni.map((siswa, index) => {
-							const isSiswaBaru = selectedTugasId && !initialSiswaIds.includes(siswa.id);
-
-							return (
+							<div className='space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar'>
+								{/* Item "Tugas Baru" */}
 								<div
-									key={siswa.id}
-									className={`p-4 transition-all ${isSiswaBaru ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500' : 'hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50'}`}>
-									<div className='flex items-center gap-3'>
-										<div className='bg-purple-100 text-purple-600 font-bold rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0'>{index + 1}</div>
-										<div className='flex-1'>
-											<div className='flex items-center gap-2'>
-												<h3 className='font-bold text-gray-800 text-sm sm:text-base'>{siswa.nama_lengkap}</h3>
-												{isSiswaBaru && <span className='bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold'>✨ Belum</span>}
-											</div>
-											{siswa.nis && <p className='text-xs text-gray-500'>NIS: {siswa.nis}</p>}
-										</div>
-										<div className='flex items-center gap-2'>
-											<input
-												type='number'
-												min='0'
-												max='100'
-												placeholder='0-100'
-												value={nilai[siswa.id] || ''}
-												onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
-												className={`w-20 sm:w-24 px-3 py-2 border-2 rounded-xl text-center font-bold text-lg focus:ring-2 focus:ring-purple-500 outline-none transition-all ${
-													isSiswaBaru ? 'border-green-300 bg-green-50' : 'border-gray-200'
-												}`}
-											/>
-											{nilai[siswa.id] && parseInt(nilai[siswa.id]) > 0 && <div className='bg-purple-100 text-purple-700 px-3 py-1 rounded-lg font-bold text-sm'>{getPredikat(nilai[siswa.id])}</div>}
-										</div>
-									</div>
+									onClick={() => setSelectedTugasId('')}
+									className={`p-3 rounded-xl cursor-pointer transition-all border ${
+										!selectedTugasId ? 'bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'
+									}`}>
+									<p className={`font-bold text-sm ${!selectedTugasId ? 'text-indigo-700' : 'text-gray-700'}`}>📝 Tugas Baru</p>
+									<p className='text-xs text-gray-500 mt-1'>Buat penilaian baru</p>
 								</div>
-							);
-						})}
-					</div>
-				</div>
 
-				{/* Tombol Action */}
-				<div className='flex gap-3'>
-					{selectedTugasId && (
-						<button
-							onClick={handleHapusTugas}
-							className='px-6 py-4 bg-white border-2 border-red-300 text-red-600 rounded-2xl font-bold hover:bg-red-50 transition-all shadow-lg'>
-							🗑️ Hapus
-						</button>
-					)}
-					<button
-						onClick={() => router.back()}
-						className='flex-1 sm:flex-none px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-2xl font-bold hover:bg-gray-50 transition-all shadow-lg'>
-						Batal
-					</button>
-					<button
-						onClick={handleSimpan}
-						disabled={saving}
-						className='flex-1 sm:flex-auto px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl font-bold hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-105'>
-						{saving ? 'Menyimpan...' : selectedTugasId ? '💾 Update Nilai' : '💾 Simpan Nilai'}
-					</button>
+								{/* List Tugas Existing */}
+								{loadingTugas ? (
+									<p className='text-center text-xs text-gray-400 py-4'>Memuat...</p>
+								) : daftarTugas.length === 0 ? (
+									<p className='text-center text-xs text-gray-400 py-4'>Belum ada riwayat tugas</p>
+								) : (
+									daftarTugas.map((t) => (
+										<div
+											key={t.tugas_id}
+											onClick={() => setSelectedTugasId(t.tugas_id)}
+											className={`p-3 rounded-xl cursor-pointer transition-all border group ${
+												selectedTugasId === t.tugas_id ? 'bg-white border-indigo-500 shadow-md ring-1 ring-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-300 hover:shadow-sm'
+											}`}>
+											<div className='flex justify-between items-start mb-1'>
+												<p className={`font-bold text-sm line-clamp-1 ${selectedTugasId === t.tugas_id ? 'text-indigo-700' : 'text-gray-700'}`}>{t.judul}</p>
+												<span className='text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-mono'>
+													{new Date(t.tanggal).toLocaleDateString('id-ID', {
+														day: '2-digit',
+														month: 'short',
+													})}
+												</span>
+											</div>
+											<div className='flex justify-between items-center mt-2'>
+												<span className='text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded-md'>{t.jumlahSiswa} Siswa</span>
+												{selectedTugasId === t.tugas_id && <span className='w-2 h-2 rounded-full bg-indigo-500 animate-pulse'></span>}
+											</div>
+										</div>
+									))
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* MAIN CONTENT: Form Input / Table */}
+					<div className='lg:col-span-3 space-y-6'>
+						{/* Info Tugas Card */}
+						<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
+							<div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-4'>
+								<div>
+									<label className='block text-sm font-medium text-gray-500 mb-1'>Judul Tugas / Materi</label>
+									<input
+										type='text'
+										value={judul}
+										onChange={(e) => setJudul(e.target.value)}
+										disabled={!!selectedTugasId} // Disable edit judul langsung jika mode edit (opsional, bisa dienable kalau mau support rename)
+										className={`w-full px-4 py-2 rounded-xl border ${
+											selectedTugasId ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-white border-gray-300'
+										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500`}
+										placeholder='Contoh: UH Matematika Bab 1'
+									/>
+								</div>
+								<div>
+									<label className='block text-sm font-medium text-gray-500 mb-1'>Tanggal</label>
+									<input
+										type='date'
+										value={tanggal}
+										onChange={(e) => setTanggal(e.target.value)}
+										disabled={!!selectedTugasId}
+										className={`w-full px-4 py-2 rounded-xl border ${
+											selectedTugasId ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-white border-gray-300'
+										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500`}
+									/>
+								</div>
+							</div>
+
+							{selectedTugasId && (
+								<div className='bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2'>
+									<svg
+										className='w-5 h-5'
+										fill='none'
+										stroke='currentColor'
+										viewBox='0 0 24 24'>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											strokeWidth={2}
+											d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+										/>
+									</svg>
+									<span>
+										Anda sedang melihat data tersimpan. Klik pada <b>Baris Siswa</b> untuk mengedit nilai.
+									</span>
+								</div>
+							)}
+						</div>
+
+						{/* Tabel Siswa */}
+						<div className='bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
+							<div className='grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b border-gray-100 text-sm font-semibold text-gray-500 uppercase tracking-wider'>
+								<div className='col-span-1 text-center'>No</div>
+								<div className='col-span-6 sm:col-span-6'>Nama Siswa</div>
+								<div className='col-span-3 sm:col-span-3 text-center'>Nilai</div>
+								<div className='col-span-2 text-center'>
+									<span className='block md:hidden'>Ket.</span>
+									<span className='hidden md:block'>Predikat</span>
+								</div>
+							</div>
+
+							<div className='divide-y divide-gray-100 max-h-[600px] overflow-y-auto'>
+								{siswaKelasIni.length === 0 ? (
+									<div className='p-8 text-center text-gray-400'>Tidak ada siswa di kelas ini</div>
+								) : (
+									siswaKelasIni.map((siswa, idx) => {
+										const nilaiSiswa = nilai[siswa.id] || '';
+										const isEditMode = !!selectedTugasId;
+										const isNewStudentInTask = isEditMode && !initialSiswaIds.includes(siswa.id);
+
+										return (
+											<div
+												key={siswa.id}
+												onClick={() => {
+													if (isEditMode) handleEditNilai(siswa.id, nilaiSiswa);
+												}}
+												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${isEditMode ? 'cursor-pointer hover:bg-indigo-50 group' : 'hover:bg-gray-50'}`}>
+												<div className='col-span-1 text-center text-gray-500 font-medium'>{idx + 1}</div>
+												<div className='col-span-6 sm:col-span-6'>
+													<div className='flex items-center gap-2'>
+														<p className='font-bold text-gray-800 group-hover:text-indigo-700 transition-colors'>{siswa.nama_lengkap}</p>
+														{isNewStudentInTask && <span className='px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200'>BARU</span>}
+													</div>
+													<p className='text-xs text-gray-400'>{siswa.nis || '-'}</p>
+												</div>
+												<div className='col-span-3 sm:col-span-3 flex justify-center'>
+													{isEditMode ? (
+														// --- VIEW MODE (Badge) ---
+														<div
+															className={`w-16 h-10 flex items-center justify-center rounded-lg font-bold text-white shadow-sm transform transition-transform group-hover:scale-110 bg-gradient-to-br ${getNilaiColor(
+																nilaiSiswa,
+															)}`}>
+															{nilaiSiswa || '0'}
+														</div>
+													) : (
+														// --- INPUT MODE (Form) ---
+														<input
+															type='number'
+															min='0'
+															max='100'
+															value={nilaiSiswa}
+															onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
+															className='w-full text-center font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all'
+															placeholder='0'
+														/>
+													)}
+												</div>
+												<div className='col-span-2 text-center'>
+													<span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold text-sm ${nilaiSiswa ? 'bg-gray-100 text-gray-700' : 'text-gray-300'}`}>{getPredikat(nilaiSiswa)}</span>
+												</div>
+											</div>
+										);
+									})
+								)}
+							</div>
+						</div>
+
+						{/* Floating Action Button / Save Button */}
+						{!selectedTugasId && (
+							<div className='mt-6 flex justify-end sticky bottom-6'>
+								<button
+									onClick={handleSimpanMassal}
+									disabled={saving}
+									className='bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 backdrop-blur-md bg-opacity-90'>
+									{saving ? (
+										<>
+											<svg
+												className='animate-spin h-5 w-5 text-white'
+												xmlns='http://www.w3.org/2000/svg'
+												fill='none'
+												viewBox='0 0 24 24'>
+												<circle
+													className='opacity-25'
+													cx='12'
+													cy='12'
+													r='10'
+													stroke='currentColor'
+													strokeWidth='4'></circle>
+												<path
+													className='opacity-75'
+													fill='currentColor'
+													d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
+											</svg>
+											Menyimpan...
+										</>
+									) : (
+										<>
+											<svg
+												className='w-6 h-6'
+												fill='none'
+												stroke='currentColor'
+												viewBox='0 0 24 24'>
+												<path
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													strokeWidth={2}
+													d='M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4'
+												/>
+											</svg>
+											Simpan Semua Nilai
+										</>
+									)}
+								</button>
+							</div>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>
