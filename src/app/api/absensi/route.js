@@ -1,5 +1,8 @@
 import { getSheet } from '@/lib/sheets';
 
+// Helper Generate ID
+const generateId = () => Math.random().toString(36).slice(2, 11);
+
 // GET: Ambil data absensi berdasarkan kelas dan tanggal
 export async function GET(req) {
 	try {
@@ -13,9 +16,8 @@ export async function GET(req) {
 
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
-
 		if (!sheet) {
-			return Response.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+			return Response.json({ error: 'Sheet MASTER_ABSENSI tidak ditemukan' }, { status: 404 });
 		}
 
 		const rows = await sheet.getRows();
@@ -42,10 +44,10 @@ export async function GET(req) {
 	}
 }
 
-// POST: simpan banyak baris absensi sekaligus
+// POST: Simpan banyak baris absensi SEKALIGUS (Batch Insert)
 export async function POST(req) {
 	try {
-		const body = await req.json(); // array payload
+		const body = await req.json();
 
 		if (!Array.isArray(body) || body.length === 0) {
 			return Response.json({ error: 'Payload kosong' }, { status: 400 });
@@ -53,33 +55,32 @@ export async function POST(req) {
 
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
-
 		if (!sheet) {
 			return Response.json({ error: 'Sheet MASTER_ABSENSI tidak ditemukan' }, { status: 404 });
 		}
 
-		// Simpan semua baris absensi (tanpa cek duplikasi)
-		for (const item of body) {
-			const newId = Math.random().toString(36).slice(2, 11);
+		// PERBAIKAN: Siapkan array objek untuk disimpan sekaligus
+		const rowsToSave = body.map((item) => ({
+			id: generateId(),
+			tanggal: item.tanggal,
+			kelas_id: item.kelas_id || '', // Handle optional
+			kelas: item.kelas,
+			siswa_id: item.siswa_id,
+			status: item.status,
+			keterangan: item.keterangan || '',
+		}));
 
-			await sheet.addRow({
-				id: newId,
-				tanggal: item.tanggal,
-				kelas_id: item.kelas_id,
-				kelas: item.kelas,
-				siswa_id: item.siswa_id,
-				status: item.status,
-				keterangan: item.keterangan || '',
-			});
-		}
+		// Gunakan addRows (plural) untuk batch insert -> Cuma 1 Request ke Google!
+		await sheet.addRows(rowsToSave);
 
-		return Response.json({ success: true }, { status: 201 });
+		return Response.json({ success: true, count: rowsToSave.length }, { status: 201 });
 	} catch (error) {
 		console.error('Error simpan absensi:', error);
 		return Response.json({ error: error?.message || 'Terjadi kesalahan server' }, { status: 500 });
 	}
 }
 
+// PUT: Update satu baris absensi
 export async function PUT(req) {
 	try {
 		const body = await req.json();
@@ -91,7 +92,6 @@ export async function PUT(req) {
 
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
-
 		if (!sheet) {
 			return Response.json({ error: 'Sheet MASTER_ABSENSI tidak ditemukan' }, { status: 404 });
 		}
