@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
+import Loader from '@/app/components/loading';
 
 export default function RiwayatNilaiPage() {
 	const params = useParams();
@@ -17,6 +18,7 @@ export default function RiwayatNilaiPage() {
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 	const [tugasList, setTugasList] = useState([]);
 	const [loading, setLoading] = useState(false);
+	const [loadingPage, setLoadingPage] = useState(true);
 
 	const bulanNama = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
@@ -38,6 +40,8 @@ export default function RiwayatNilaiPage() {
 				setMapelList(dataMapel);
 			} catch (error) {
 				console.error('Error fetching data:', error);
+			} finally {
+				setLoadingPage(false);
 			}
 		};
 
@@ -123,6 +127,16 @@ export default function RiwayatNilaiPage() {
 	};
 
 	const groupedTugas = groupTugasByDate();
+
+	if (loadingPage) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className='bg-gray-50 min-h-screen pb-6'>

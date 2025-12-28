@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
+import Loader from '@/app/components/loading';
 
 export default function BuatTugasPage() {
 	const params = useParams();
@@ -18,6 +19,7 @@ export default function BuatTugasPage() {
 	const [mapelList, setMapelList] = useState([]);
 	const [nilaiSiswa, setNilaiSiswa] = useState({});
 	const [loading, setLoading] = useState(false);
+	const [loadingPage, setLoadingPage] = useState(true);
 
 	// Fetch data kelas dan siswa
 	useEffect(() => {
@@ -53,6 +55,8 @@ export default function BuatTugasPage() {
 				setMapelList(dataMapel);
 			} catch (error) {
 				console.error('Error fetching data:', error);
+			} finally {
+				setLoadingPage(false);
 			}
 		};
 
@@ -138,6 +142,14 @@ export default function BuatTugasPage() {
 			setLoading(false);
 		}
 	};
+
+	if (loadingPage) {
+		return (
+			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
+				<Loader />
+			</div>
+		);
+	}
 
 	return (
 		<div className='bg-gray-50 min-h-screen pb-6'>

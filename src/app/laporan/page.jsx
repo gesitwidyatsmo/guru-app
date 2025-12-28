@@ -4,11 +4,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
+import Loader from '../components/loading';
 
 export default function LaporanPage() {
 	const router = useRouter();
 	const [activeTab, setActiveTab] = useState('absensi'); // absensi, nilai, jurnal
-	const [loading, setLoading] = useState(false);
+	const [loading, setLoading] = useState(true);
+	const [loadingRekap, setLoadingRekap] = useState(true);
 
 	// Filter states
 	const [kelasList, setKelasList] = useState([]);
@@ -48,6 +50,8 @@ export default function LaporanPage() {
 				}
 			} catch (err) {
 				console.error(err);
+			} finally {
+				setLoading(false);
 			}
 		};
 
@@ -58,7 +62,7 @@ export default function LaporanPage() {
 	const fetchLaporan = async () => {
 		if (!selectedKelas) return;
 
-		setLoading(true);
+		setLoadingRekap(true);
 		try {
 			if (activeTab === 'absensi') {
 				// Fetch rekap absensi
@@ -120,7 +124,7 @@ export default function LaporanPage() {
 				confirmButtonColor: '#4F46E5',
 			});
 		} finally {
-			setLoading(false);
+			setLoadingRekap(false);
 		}
 	};
 
@@ -340,6 +344,18 @@ export default function LaporanPage() {
 		tahunOptions.push(i);
 	}
 
+	if (loading) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
+
+	<Loader />;
+
 	return (
 		<div className='min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
@@ -544,7 +560,7 @@ export default function LaporanPage() {
 				</div>
 
 				{/* Content */}
-				{loading ? (
+				{loadingRekap ? (
 					<div className='text-center py-12'>
 						<div className='animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto mb-4'></div>
 						<p className='text-gray-600 font-medium'>Memuat data...</p>

@@ -5,6 +5,7 @@ import SectionHeader from '../components/SectionHeader';
 import Modal from '../components/Modal';
 import EditButton from '../components/button/EditButton';
 import DeleteButton from '../components/button/DeleteButton';
+import Loader from '../components/loading';
 // import Edit from '../components/button/EditButton';
 
 export default function Page() {
@@ -12,6 +13,7 @@ export default function Page() {
 	const [mapelList, setMapelList] = useState([]);
 	const [mapelBaru, setMapelBaru] = useState('');
 	const [loading, setLoading] = useState(false);
+	const [loadingPage, setLoadingPage] = useState(true);
 	const [editMode, setEditMode] = useState(false);
 	const [mapelEditId, setMapelEditId] = useState(null);
 	const [deleteLoading, setDeleteLoading] = useState(false);
@@ -20,10 +22,20 @@ export default function Page() {
 	const handleBack = () => window.history.back();
 
 	useEffect(() => {
-		fetch('/api/mapel')
-			.then((res) => res.json())
-			.then(setMapelList);
-	}, []);
+		const fecthData = async () => {
+			try {
+				const res = await fetch('/api/mapel');
+				const data = await res.json();
+				setMapelList(data);
+			} catch (err) {
+				console.log(err);
+			} finally {
+				setLoadingPage(false);
+			}
+		};
+
+		fecthData();
+	});
 
 	// Tambah function submitMapel
 	async function submitMapel(e) {
@@ -84,6 +96,16 @@ export default function Page() {
 				.then((res) => res.json())
 				.then(setMapelList);
 		}
+	}
+
+	if (loadingPage) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
 	}
 
 	return (

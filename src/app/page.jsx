@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Loader from './components/loading';
 
 export default function Home() {
 	const [stat, setStat] = useState({
@@ -245,6 +246,14 @@ export default function Home() {
 			color: 'bg-gradient-to-br from-violet-400 to-purple-500',
 		},
 	];
+
+	if (loading) {
+		return (
+			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
+				<Loader />
+			</div>
+		);
+	}
 
 	return (
 		<main className='min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50'>

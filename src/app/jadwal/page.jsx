@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import ModalJadwal from '../components/ModalJadwal';
+import Loader from '../components/loading';
 
 export default function Page() {
 	// State & Variabel
@@ -18,6 +19,8 @@ export default function Page() {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [editData, setEditData] = useState(null); // Data jadwal yang sedang diedit
+
+	const [loading, setLoading] = useState(true);
 
 	// Inisialisasi Hari Ini
 	useEffect(() => {
@@ -36,12 +39,22 @@ export default function Page() {
 
 	// Filter Jadwal
 	useEffect(() => {
-		if (selectedHari && allJadwal.length > 0) {
-			const hasilFilter = allJadwal.filter((item) => item.hari.toLowerCase() === selectedHari.toLowerCase());
-			setFilteredJadwal(hasilFilter);
-		} else {
-			setFilteredJadwal([]);
-		}
+		const fecthAll = async () => {
+			try {
+				if (selectedHari && allJadwal.length > 0) {
+					const hasilFilter = allJadwal.filter((item) => item.hari.toLowerCase() === selectedHari.toLowerCase());
+					setFilteredJadwal(hasilFilter);
+				} else {
+					setFilteredJadwal([]);
+				}
+			} catch (err) {
+				console.log(err);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		fecthAll();
 	}, [selectedHari, allJadwal]);
 
 	// ---------------------------------------------------------
@@ -99,6 +112,16 @@ export default function Page() {
 			window.location.href = '/';
 		}
 	};
+
+	if (loading) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div>

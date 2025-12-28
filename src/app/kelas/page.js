@@ -8,6 +8,7 @@ import ExploreButton from '../components/button/ExploreButton';
 import Modal from '../components/Modal';
 import EditButton from '../components/button/EditButton';
 import DeleteButton from '../components/button/DeleteButton';
+import Loader from '../components/loading';
 
 export default function Page() {
 	const [kelasList, setKelasList] = useState([]);
@@ -17,6 +18,7 @@ export default function Page() {
 	const [editMode, setEditMode] = useState(false);
 	const [kelasEditId, setKelasEditId] = useState(null);
 	const [loading, setLoading] = useState(false);
+	const [loadingPage, setLoadingPage] = useState(true);
 	const [deleteLoading, setDeleteLoading] = useState(false);
 	const [deleteId, setDeleteId] = useState(null);
 
@@ -24,9 +26,19 @@ export default function Page() {
 	const handleAdd = () => console.log('Tambah Kelas diklik!');
 
 	useEffect(() => {
-		fetch('/api/kelas')
-			.then((res) => res.json())
-			.then(setKelasList);
+		const fetchAll = async () => {
+			try {
+				const res = await fetch('/api/kelas');
+				const data = await res.json();
+				setKelasList(data);
+			} catch (error) {
+				console.error('Gagal mengambil data kelas:', error);
+			} finally {
+				setLoadingPage(false);
+			}
+		};
+
+		fetchAll();
 	}, []);
 
 	async function submitKelas(e) {
@@ -93,7 +105,15 @@ export default function Page() {
 		}
 	}
 
-	console.log(kelasList);
+	if (loadingPage) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div>

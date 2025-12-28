@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import SectionHeader from '../components/SectionHeader'; // gunakan path absolut (butuh support jsconfig.json/tsconfig.json)
 import Modal from '../components/Modal';
 import Link from 'next/link';
+import Loader from '../components/loading';
 
 // inline modal seleksi kelas
 function ClassPickerModal({ isOpen, onClose, kelasList, onSelect }) {
@@ -184,6 +185,7 @@ export default function Page() {
 	const [filteredSiswa, setFilteredSiswa] = useState([]); // Hasil filter
 	const [selectedKelas, setSelectedKelas] = useState('Semua'); // Kelas aktif
 	const [loading, setLoading] = useState(true);
+	const [loadingPage, setLoadingPage] = useState(true);
 	const [showClassPicker, setShowClassPicker] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
 
@@ -208,6 +210,8 @@ export default function Page() {
 			} catch (err) {
 				console.error(err);
 				setLoading(false);
+			} finally {
+				setLoadingPage(false);
 			}
 		};
 
@@ -250,6 +254,16 @@ export default function Page() {
 			alert('Terjadi kesalahan jaringan.');
 		}
 	};
+
+	if (loadingPage) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div>

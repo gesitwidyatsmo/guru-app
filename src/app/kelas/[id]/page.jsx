@@ -3,6 +3,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
+import Loader from '@/app/components/loading';
 
 export default function KelasDetail() {
 	const params = useParams();
@@ -11,19 +12,27 @@ export default function KelasDetail() {
 	const [jumlahSiswa, setJumlahSiswa] = useState(0);
 	const [namaKelas, setNamaKelas] = useState('');
 	const [siswaList, setSiswaList] = useState([]);
+	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		if (!id) return;
 
-		fetch('/api/kelas')
-			.then((res) => res.json())
-			.then((data) => {
+		const fetchAll = async () => {
+			try {
+				const res = await fetch('/api/kelas');
+				const data = await res.json();
+
 				const kelas = data.find((k) => k.id === id);
 				if (kelas) {
 					setKelasDetail(kelas);
 					setNamaKelas(kelas.kelas);
 				}
-			});
+			} catch (error) {
+				console.error('Gagal mengambil data kelas: ', error);
+			}
+		};
+
+		fetchAll();
 	}, [id]);
 
 	useEffect(() => {
@@ -41,11 +50,23 @@ export default function KelasDetail() {
 				setSiswaList(siswaListIni);
 			} catch (error) {
 				console.error('Gagal mengambil statistik:', error);
+			} finally {
+				setLoading(false);
 			}
 		};
 
 		fetchStats();
 	}, [namaKelas]);
+
+	if (loading) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div>
@@ -151,7 +172,7 @@ export default function KelasDetail() {
 							<div>Buat Tugas</div>
 						</Link>
 						<hr className='border-gray-100' />
-						<div className='flex gap-2'>
+						<Link href={`/kelas/${id}/jurnal`} className='flex gap-2'>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -166,7 +187,7 @@ export default function KelasDetail() {
 								/>
 							</svg>
 							<div>Buat Jurnal</div>
-						</div>
+						</Link>
 						<hr className='border-gray-100' />
 						<div className='flex gap-2'>
 							<svg

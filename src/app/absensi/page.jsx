@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
+import Loader from '../components/loading';
 
 export default function AbsensiPage() {
 	const router = useRouter();
@@ -617,8 +618,7 @@ export default function AbsensiPage() {
 		return (
 			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
 				<div className='text-center'>
-					<div className='animate-spin rounded-full h-16 w-16 border-4 border-indigo-500 border-t-transparent mx-auto mb-4'></div>
-					<p className='text-gray-600 font-medium'>Memuat data...</p>
+					<Loader />
 				</div>
 			</div>
 		);

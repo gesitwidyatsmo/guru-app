@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
+import Loader from '../components/loading';
 
 export default function PenilaianPage() {
 	const router = useRouter();
@@ -386,7 +387,7 @@ export default function PenilaianPage() {
 	if (loading) {
 		return (
 			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
-				<div className='animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600'></div>
+				<Loader />
 			</div>
 		);
 	}

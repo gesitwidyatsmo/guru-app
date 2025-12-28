@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SectionHeader from '../../components/SectionHeader'; // Pastikan path benar
+import Loader from '@/app/components/loading';
 
 export default function SiswaPage() {
 	const params = useParams();
@@ -36,7 +37,15 @@ export default function SiswaPage() {
 			});
 	}, [id]);
 
-	if (loading) return <div>Loading...</div>;
+	if (loading) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 	if (!siswaData) return <div>Data siswa tidak ditemukan.</div>;
 
 	return (

@@ -5,6 +5,7 @@ import Swal from 'sweetalert2';
 import { useParams, useRouter } from 'next/navigation';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
+import Loader from '@/app/components/loading';
 
 export default function AbsensiKelasPage() {
 	const params = useParams();
@@ -18,6 +19,7 @@ export default function AbsensiKelasPage() {
 
 	const [absensi, setAbsensi] = useState({});
 	const [loading, setLoading] = useState(true);
+	const [loadingPage, setLoadingPage] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [saveMessage, setSaveMessage] = useState('');
 
@@ -69,6 +71,7 @@ export default function AbsensiKelasPage() {
 				console.error(err);
 			} finally {
 				setLoading(false);
+				setLoadingPage(false);
 			}
 		};
 
@@ -80,7 +83,7 @@ export default function AbsensiKelasPage() {
 
 	// Reset absensi saat tanggal berubah
 	useEffect(() => {
-		console.log('🔄 Tanggal berubah, reset absensi');
+		// console.log('🔄 Tanggal berubah, reset absensi');
 		setAbsensi({});
 		setDataAbsensiTersimpan([]);
 	}, [tanggal]);
@@ -205,7 +208,7 @@ export default function AbsensiKelasPage() {
 		});
 	};
 
-	// ✅ NEW: Handle edit absensi siswa
+	// Handle edit absensi siswa
 	const handleEditAbsensi = async (absensiData) => {
 		const siswa = siswaList.find((s) => s.id === absensiData.siswa_id);
 		if (!siswa || !absensiData.id) {
@@ -271,7 +274,7 @@ export default function AbsensiKelasPage() {
 			}),
 		});
 
-		// 👉 User batal / klik luar / ESC
+		// User batal / klik luar / ESC
 		if (!result.isConfirmed) return;
 
 		try {
@@ -366,7 +369,7 @@ export default function AbsensiKelasPage() {
 		}
 	};
 
-	// ✅ NEW: Hitung statistik absensi
+	// Hitung statistik absensi
 	const getStatistikAbsensi = () => {
 		const stats = {};
 		const total = dataAbsensiTersimpan.length;
@@ -385,6 +388,16 @@ export default function AbsensiKelasPage() {
 	};
 
 	const { stats, total } = sudahAdaAbsensi ? getStatistikAbsensi() : { stats: {}, total: 0 };
+
+	if (loading) {
+		return (
+			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
+				<div className='text-center'>
+					<Loader />
+				</div>
+			</div>
+		);
+	}
 
 	// ✅ NEW: Render Section Statistik & List Siswa
 	const renderAbsensiTersimpan = () => {
