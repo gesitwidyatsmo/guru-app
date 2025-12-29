@@ -1,16 +1,18 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
 
 export default function LaporanPage() {
 	const router = useRouter();
+
 	const [activeTab, setActiveTab] = useState('absensi'); // absensi, nilai, jurnal
 	const [loading, setLoading] = useState(true);
-	const [loadingRekap, setLoadingRekap] = useState(true);
+	const [loadingRekap, setLoadingRekap] = useState(false);
 
 	// Filter states
 	const [kelasList, setKelasList] = useState([]);
@@ -18,17 +20,14 @@ export default function LaporanPage() {
 	const [siswaList, setSiswaList] = useState([]);
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
-	const [bulan, setBulan] = useState(() => {
-		const now = new Date();
-		return String(now.getMonth() + 1).padStart(2, '0');
-	});
+	const [bulan, setBulan] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
 	const [tahun, setTahun] = useState(() => new Date().getFullYear());
 
-	// Data states
+	// Data
 	const [dataRekap, setDataRekap] = useState(null);
 	const [stats, setStats] = useState({});
 
-	// Load initial data
+	// Load initial master data
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
@@ -42,14 +41,16 @@ export default function LaporanPage() {
 				setMapelList(dataMapel);
 				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
 
-				if (dataKelas.length > 0) {
-					setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
-				}
-				if (dataMapel.length > 0) {
-					setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
-				}
+				if (dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
+				if (dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
 			} catch (err) {
 				console.error(err);
+				Swal.fire({
+					icon: 'error',
+					title: 'Gagal memuat data awal',
+					text: err.message,
+					confirmButtonColor: '#4F46E5',
+				});
 			} finally {
 				setLoading(false);
 			}
@@ -58,155 +59,8 @@ export default function LaporanPage() {
 		fetchAll();
 	}, []);
 
-	// Fetch laporan data
-	const fetchLaporan = async () => {
-		if (!selectedKelas) return;
-
-		setLoadingRekap(true);
-		try {
-			if (activeTab === 'absensi') {
-				// Fetch rekap absensi
-				const url = `/api/absensi/rekap?kelas=${encodeURIComponent(selectedKelas)}&bulan=${bulan}&tahun=${tahun}`;
-				console.log('Fetching:', url);
-
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
-					console.log('Data received:', data);
-					setDataRekap(data);
-					calculateAbsensiStats(data);
-				} else {
-					const error = await res.json();
-					console.error('API Error:', error);
-					throw new Error(error.error || 'Gagal memuat data');
-				}
-			} else if (activeTab === 'nilai') {
-				// Fetch nilai
-				if (!selectedMapel) return;
-				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
-
-					// Filter by bulan & tahun
-					const filtered = data.filter((item) => {
-						const itemDate = new Date(item.tanggal);
-						return itemDate.getMonth() + 1 === parseInt(bulan) && itemDate.getFullYear() === parseInt(tahun);
-					});
-
-					setDataRekap({ data: filtered });
-					calculateNilaiStats(filtered);
-				}
-			} else if (activeTab === 'jurnal') {
-				// Fetch jurnal
-				if (!selectedMapel) return;
-				const url = `/api/jurnal?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
-
-					// Filter by bulan & tahun
-					const filtered = data.filter((item) => {
-						const itemDate = new Date(item.tanggal);
-						return itemDate.getMonth() + 1 === parseInt(bulan) && itemDate.getFullYear() === parseInt(tahun);
-					});
-
-					setDataRekap({ data: filtered });
-					calculateJurnalStats(filtered);
-				}
-			}
-		} catch (err) {
-			console.error('Error fetching laporan:', err);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Memuat Data',
-				text: err.message,
-				confirmButtonColor: '#4F46E5',
-			});
-		} finally {
-			setLoadingRekap(false);
-		}
-	};
-
-	// Auto fetch saat filter berubah
-	useEffect(() => {
-		if (selectedKelas) {
-			fetchLaporan();
-		}
-	}, [activeTab, selectedKelas, selectedMapel, bulan, tahun]);
-
-	// Calculate statistics
-	const calculateAbsensiStats = (data) => {
-		if (!data || !data.siswa) {
-			setStats({});
-			return;
-		}
-
-		let totalHadir = 0;
-		let totalSakit = 0;
-		let totalIzin = 0;
-		let totalAlpha = 0;
-
-		data.siswa.forEach((siswa) => {
-			if (siswa.ringkasan) {
-				totalHadir += siswa.ringkasan.H || 0;
-				totalSakit += siswa.ringkasan.S || 0;
-				totalIzin += siswa.ringkasan.I || 0;
-				totalAlpha += siswa.ringkasan.A || 0;
-			}
-		});
-
-		const total = totalHadir + totalSakit + totalIzin + totalAlpha;
-
-		setStats({
-			total,
-			hadir: totalHadir,
-			sakit: totalSakit,
-			izin: totalIzin,
-			alpha: totalAlpha,
-			persentaseHadir: total > 0 ? ((totalHadir / total) * 100).toFixed(1) : 0,
-		});
-	};
-
-	const calculateNilaiStats = (data) => {
-		const total = data.length;
-		if (total === 0) {
-			setStats({});
-			return;
-		}
-
-		const nilaiArr = data.map((d) => parseFloat(d.nilai) || 0);
-		const rataRata = (nilaiArr.reduce((a, b) => a + b, 0) / total).toFixed(2);
-		const tertinggi = Math.max(...nilaiArr);
-		const terendah = Math.min(...nilaiArr);
-		const lulus = data.filter((d) => parseFloat(d.nilai) >= 70).length;
-
-		setStats({
-			total,
-			rataRata,
-			tertinggi,
-			terendah,
-			lulus,
-			persentaseLulus: ((lulus / total) * 100).toFixed(1),
-		});
-	};
-
-	const calculateJurnalStats = (data) => {
-		const total = data.length;
-		const uniqueDates = new Set(data.map((d) => d.tanggal)).size;
-		const uniqueMateri = new Set(data.map((d) => d.materi)).size;
-
-		setStats({
-			total,
-			totalPertemuan: uniqueDates,
-			totalMateri: uniqueMateri,
-		});
-	};
-
 	// Helper functions
-	const getSiswaById = (siswaId) => {
-		return siswaList.find((s) => s.id === siswaId);
-	};
+	const getSiswaById = (siswaId) => siswaList.find((s) => String(s.id) === String(siswaId));
 
 	const getNamaSiswa = (siswaId) => {
 		const siswa = getSiswaById(siswaId);
@@ -238,7 +92,8 @@ export default function LaporanPage() {
 	};
 
 	const getNilaiBadgeColor = (nilai) => {
-		const n = parseFloat(nilai);
+		const n = Number(nilai);
+		if (Number.isNaN(n)) return 'bg-gray-200 text-gray-700';
 		if (n >= 90) return 'bg-gradient-to-br from-green-500 to-green-600 text-white';
 		if (n >= 80) return 'bg-gradient-to-br from-blue-500 to-blue-600 text-white';
 		if (n >= 70) return 'bg-gradient-to-br from-yellow-500 to-yellow-600 text-white';
@@ -247,7 +102,8 @@ export default function LaporanPage() {
 	};
 
 	const getPredikat = (nilai) => {
-		const n = parseFloat(nilai);
+		const n = Number(nilai);
+		if (Number.isNaN(n)) return '-';
 		if (n >= 90) return 'A';
 		if (n >= 80) return 'B';
 		if (n >= 70) return 'C';
@@ -255,10 +111,243 @@ export default function LaporanPage() {
 		return 'E';
 	};
 
-	// Export functions
-	const handlePrint = () => {
-		window.print();
+	// Statistik Absensi (rekap API)
+	const calculateAbsensiStats = (data) => {
+		if (!data?.siswa) return;
+
+		const total = data.siswa.length;
+		let hadir = 0;
+		let sakit = 0;
+		let izin = 0;
+		let alpha = 0;
+
+		data.siswa.forEach((s) => {
+			hadir += Number(s.ringkasan?.H || 0);
+			sakit += Number(s.ringkasan?.S || 0);
+			izin += Number(s.ringkasan?.I || 0);
+			alpha += Number(s.ringkasan?.A || 0);
+		});
+
+		const totalHari = data.tanggalList?.length || 0;
+		const maxHadir = total * totalHari;
+		const persentaseHadir = maxHadir > 0 ? Math.round((hadir / maxHadir) * 100) : 0;
+
+		setStats({
+			total,
+			hadir,
+			sakit,
+			izin,
+			alpha,
+			persentaseHadir,
+		});
 	};
+
+	// Statistik Nilai (list nilai mentah)
+	const calculateNilaiStats = (rows) => {
+		if (!Array.isArray(rows) || rows.length === 0) {
+			setStats({});
+			return;
+		}
+
+		const nilaiNums = rows.map((r) => Number(r.nilai)).filter((n) => !Number.isNaN(n));
+
+		const total = nilaiNums.length;
+		const rataRata = total > 0 ? Math.round(nilaiNums.reduce((a, b) => a + b, 0) / total) : 0;
+		const tertinggi = total > 0 ? Math.max(...nilaiNums) : 0;
+		const terendah = total > 0 ? Math.min(...nilaiNums) : 0;
+
+		const lulus = nilaiNums.filter((n) => n >= 70).length;
+		const persentaseLulus = total > 0 ? Math.round((lulus / total) * 100) : 0;
+
+		setStats({
+			total,
+			rataRata,
+			tertinggi,
+			terendah,
+			lulus,
+			persentaseLulus,
+		});
+	};
+
+	// Statistik Jurnal
+	const calculateJurnalStats = (rows) => {
+		if (!Array.isArray(rows) || rows.length === 0) {
+			setStats({});
+			return;
+		}
+
+		const total = rows.length;
+		const totalPertemuan = rows.filter((r) => r.pertemuan_ke !== undefined && String(r.pertemuan_ke).trim() !== '').length;
+		const totalMateri = rows.filter((r) => r.materi && String(r.materi).trim() !== '').length;
+
+		setStats({
+			total,
+			totalPertemuan,
+			totalMateri,
+		});
+	};
+
+	// Pivot nilai: baris = siswa, kolom = tugas
+	const pivotNilai = (dataRaw) => {
+		if (!Array.isArray(dataRaw) || dataRaw.length === 0) return { kolomTugas: [], barisSiswa: [] };
+
+		// kolom tugas unik
+		const tugasMap = new Map();
+		for (const item of dataRaw) {
+			const key = item.tugas_id ? String(item.tugas_id) : `${item.kategori}::${String(item.tanggal).slice(0, 10)}`;
+			if (!tugasMap.has(key)) {
+				tugasMap.set(key, {
+					key,
+					judul: item.kategori || '-',
+					tanggal: String(item.tanggal || '').slice(0, 10),
+				});
+			}
+		}
+		const kolomTugas = Array.from(tugasMap.values()).sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+		// baris siswa (master)
+		const siswaKelasIni = siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim());
+
+		const barisMap = new Map();
+		siswaKelasIni.forEach((s) => {
+			barisMap.set(String(s.id), {
+				siswa_id: String(s.id),
+				nis: s.nis || '-',
+				nama_lengkap: s.nama_lengkap || '-',
+				nilaiByTugas: {},
+				rataRata: null,
+			});
+		});
+
+		// isi nilai
+		for (const item of dataRaw) {
+			const sid = String(item.siswa_id);
+			if (!barisMap.has(sid)) {
+				barisMap.set(sid, {
+					siswa_id: sid,
+					nis: getNisSiswa(item.siswa_id),
+					nama_lengkap: getNamaSiswa(item.siswa_id),
+					nilaiByTugas: {},
+					rataRata: null,
+				});
+			}
+			const tugasKey = item.tugas_id ? String(item.tugas_id) : `${item.kategori}::${String(item.tanggal).slice(0, 10)}`;
+			barisMap.get(sid).nilaiByTugas[tugasKey] = item.nilai;
+		}
+
+		// hitung rata-rata per siswa
+		const barisSiswa = Array.from(barisMap.values()).map((row) => {
+			let sum = 0;
+			let cnt = 0;
+
+			kolomTugas.forEach((t) => {
+				const v = row.nilaiByTugas[t.key];
+				if (v !== undefined && v !== null && String(v).trim() !== '') {
+					const num = Number(v);
+					if (!Number.isNaN(num)) {
+						sum += num;
+						cnt += 1;
+					}
+				}
+			});
+
+			return {
+				...row,
+				rataRata: cnt > 0 ? Math.round(sum / cnt) : null,
+			};
+		});
+
+		// sort nama
+		barisSiswa.sort((a, b) => String(a.nama_lengkap).localeCompare(String(b.nama_lengkap), 'id'));
+
+		return { kolomTugas, barisSiswa };
+	};
+
+	const pivotedNilai = useMemo(() => {
+		if (activeTab !== 'nilai') return { kolomTugas: [], barisSiswa: [] };
+		return pivotNilai(dataRekap?.data || []);
+	}, [activeTab, dataRekap, selectedKelas, siswaList]);
+
+	// Fetch laporan based on tab/filter
+	const fetchLaporan = async () => {
+		if (!selectedKelas) return;
+
+		setLoadingRekap(true);
+		try {
+			if (activeTab === 'absensi') {
+				const url = `/api/absensi/rekap?kelas=${encodeURIComponent(selectedKelas)}&bulan=${bulan}&tahun=${tahun}`;
+				const res = await fetch(url);
+				if (!res.ok) {
+					const error = await res.json();
+					throw new Error(error.error || 'Gagal memuat data absensi');
+				}
+				const data = await res.json();
+				setDataRekap(data);
+				calculateAbsensiStats(data);
+			}
+
+			if (activeTab === 'nilai') {
+				if (!selectedMapel) return;
+
+				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const res = await fetch(url);
+				if (!res.ok) {
+					const error = await res.json();
+					throw new Error(error.error || 'Gagal memuat data nilai');
+				}
+
+				const data = await res.json();
+				const filtered = data.filter((item) => {
+					const d = new Date(item.tanggal);
+					return d.getMonth() + 1 === parseInt(bulan) && d.getFullYear() === parseInt(tahun);
+				});
+
+				setDataRekap({ data: filtered });
+				calculateNilaiStats(filtered);
+			}
+
+			if (activeTab === 'jurnal') {
+				if (!selectedMapel) return;
+
+				const url = `/api/jurnal?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const res = await fetch(url);
+				if (!res.ok) {
+					const error = await res.json();
+					throw new Error(error.error || 'Gagal memuat data jurnal');
+				}
+
+				const data = await res.json();
+				const filtered = data.filter((item) => {
+					const d = new Date(item.tanggal);
+					return d.getMonth() + 1 === parseInt(bulan) && d.getFullYear() === parseInt(tahun);
+				});
+
+				setDataRekap({ data: filtered });
+				calculateJurnalStats(filtered);
+			}
+		} catch (err) {
+			console.error(err);
+			Swal.fire({
+				icon: 'error',
+				title: 'Gagal Memuat Data',
+				text: err.message,
+				confirmButtonColor: '#4F46E5',
+			});
+			setDataRekap(null);
+			setStats({});
+		} finally {
+			setLoadingRekap(false);
+		}
+	};
+
+	// Auto fetch saat filter/tab berubah
+	useEffect(() => {
+		if (loading) return;
+		fetchLaporan();
+	}, [loading, activeTab, selectedKelas, selectedMapel, bulan, tahun]);
+
+	// Export & Print
+	const handlePrint = () => window.print();
 
 	const handleExportCSV = () => {
 		if (!dataRekap) {
@@ -275,46 +364,154 @@ export default function LaporanPage() {
 		let filename = '';
 
 		if (activeTab === 'absensi' && dataRekap.siswa) {
-			// Header
 			csv = 'No,NIS,Nama Siswa';
 			dataRekap.tanggalList.forEach((tgl) => {
 				csv += `,${tgl}`;
 			});
 			csv += ',Hadir,Izin,Sakit,Alpha\n';
 
-			// Data
 			dataRekap.siswa.forEach((siswa, index) => {
 				csv += `${index + 1},"${siswa.nis}","${siswa.nama_lengkap}"`;
-
 				dataRekap.tanggalList.forEach((tgl) => {
 					const abs = siswa.absensi[tgl];
 					csv += `,"${abs ? abs.status : '-'}"`;
 				});
-
 				csv += `,${siswa.ringkasan.H},${siswa.ringkasan.I},${siswa.ringkasan.S},${siswa.ringkasan.A}\n`;
 			});
 
 			filename = `Laporan_Absensi_${selectedKelas}_${bulan}_${tahun}.csv`;
-		} else if (activeTab === 'nilai' && dataRekap.data) {
-			csv = 'No,Tanggal,Kategori,NIS,Nama Siswa,Nilai,Predikat\n';
-			dataRekap.data.forEach((item, index) => {
-				csv += `${index + 1},"${item.tanggal}","${item.kategori}","${getNisSiswa(item.siswa_id)}","${getNamaSiswa(item.siswa_id)}","${item.nilai}","${getPredikat(item.nilai)}"\n`;
+		}
+
+		if (activeTab === 'nilai' && dataRekap.data) {
+			const { kolomTugas, barisSiswa } = pivotNilai(dataRekap.data);
+
+			csv = 'No,NIS,Nama Siswa';
+			kolomTugas.forEach((t) => {
+				const tglLabel = t.tanggal ? new Date(t.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
+				csv += `,"${t.judul}${tglLabel ? ' (' + tglLabel + ')' : ''}"`;
 			});
+			csv += ',Rata-rata\n';
+
+			barisSiswa.forEach((row, idx) => {
+				csv += `${idx + 1},"${row.nis}","${row.nama_lengkap}"`;
+				kolomTugas.forEach((t) => {
+					const v = row.nilaiByTugas[t.key];
+					csv += `,"${v !== undefined && v !== null && String(v).trim() !== '' ? v : '-'}"`;
+				});
+				csv += `,"${row.rataRata ?? '-'}"\n`;
+			});
+
 			filename = `Laporan_Nilai_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.csv`;
-		} else if (activeTab === 'jurnal' && dataRekap.data) {
-			csv = 'No,Tanggal,Jam Ke,Materi,Kegiatan\n';
+		}
+
+		if (activeTab === 'jurnal' && dataRekap.data) {
+			csv = 'No,Tanggal,Jam Ke,Pertemuan,Mapel,Materi,Kegiatan,Hambatan,Solusi,Tuntas\n';
 			dataRekap.data.forEach((item, index) => {
-				csv += `${index + 1},"${item.tanggal}","${item.jam_ke}","${item.materi}","${item.kegiatan || ''}"\n`;
+				csv += `${index + 1},"${String(item.tanggal).slice(0, 10)}","${item.jam_ke || ''}","${item.pertemuan_ke || ''}","${item.mapel || ''}","${(item.materi || '').replaceAll('"', '""')}","${(
+					item.kegiatan || ''
+				).replaceAll('"', '""')}","${(item.hambatan || '').replaceAll('"', '""')}","${(item.solusi || '').replaceAll('"', '""')}","${item.tuntas ? 'TRUE' : 'FALSE'}"\n`;
 			});
 			filename = `Laporan_Jurnal_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.csv`;
 		}
 
-		// Download CSV
 		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement('a');
 		link.href = URL.createObjectURL(blob);
-		link.download = filename;
+		link.download = filename || `Laporan_${activeTab}.csv`;
 		link.click();
+	};
+
+	const handleExportExcel = () => {
+		if (!dataRekap) {
+			Swal.fire('Warning', 'Tidak ada data untuk diekspor', 'warning');
+			return;
+		}
+
+		let dataExport = [];
+		let header = [];
+		// Gunakan Array of Arrays (AoA) agar lebih mudah mengatur layout custom
+		let aoa = [];
+
+		if (activeTab === 'absensi' && dataRekap.siswa) {
+			// 1. Header Baris 1
+			header = ['No', 'NIS', 'Nama Siswa', ...dataRekap.tanggalList.map((t) => new Date(t).getDate()), 'H', 'I', 'S', 'A'];
+			aoa.push(header);
+
+			// 2. Data Baris
+			dataRekap.siswa.forEach((siswa, index) => {
+				const row = [index + 1, siswa.nis, siswa.nama_lengkap];
+				// Isi status per tanggal
+				dataRekap.tanggalList.forEach((tgl) => {
+					const abs = siswa.absensi[tgl];
+					row.push(abs ? abs.status.substring(0, 1) : '-'); // Ambil huruf depan saja (H, I, S, A)
+				});
+				// Isi Ringkasan
+				row.push(siswa.ringkasan.H, siswa.ringkasan.I, siswa.ringkasan.S, siswa.ringkasan.A);
+
+				aoa.push(row);
+			});
+		} else if (activeTab === 'nilai' && dataRekap.data) {
+			// Panggil fungsi pivot yang sudah kita buat sebelumnya
+			const { kolomTugas, barisSiswa } = pivotNilai(dataRekap.data);
+
+			// 1. Header
+			const headerTugas = kolomTugas.map((t) => `${t.judul} (${t.tanggal ? new Date(t.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : ''})`);
+			header = ['No', 'NIS', 'Nama Siswa', ...headerTugas, 'Rata-rata'];
+			aoa.push(header);
+
+			// 2. Data Baris
+			barisSiswa.forEach((row, idx) => {
+				const rowData = [idx + 1, row.nis, row.nama_lengkap];
+
+				// Nilai per tugas
+				kolomTugas.forEach((t) => {
+					const val = row.nilaiByTugas[t.key];
+					rowData.push(val !== undefined && val !== null ? Number(val) : '-');
+				});
+
+				// Rata-rata
+				rowData.push(row.rataRata !== null ? Number(row.rataRata) : '-');
+
+				aoa.push(rowData);
+			});
+		} else if (activeTab === 'jurnal' && dataRekap.data) {
+			// Header
+			header = ['No', 'Tanggal', 'Jam', 'Pert.', 'Mapel', 'Materi', 'Kegiatan', 'Hambatan', 'Solusi', 'Tuntas'];
+			aoa.push(header);
+
+			// Data
+			dataRekap.data.forEach((item, index) => {
+				aoa.push([
+					index + 1,
+					new Date(item.tanggal).toLocaleDateString('id-ID'),
+					item.jam_ke || '',
+					item.pertemuan_ke || '',
+					item.mapel || '',
+					item.materi || '',
+					item.kegiatan || '',
+					item.hambatan || '',
+					item.solusi || '',
+					item.tuntas ? 'Ya' : 'Tidak',
+				]);
+			});
+		}
+
+		// --- PROSES PEMBUATAN FILE EXCEL ---
+		// 1. Buat Worksheet dari Array data
+		const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+		// (Opsional) Auto width kolom sederhana
+		const wscols = header.map(() => ({ wch: 15 })); // set lebar kolom rata 15 char
+		wscols[2] = { wch: 30 }; // kolom Nama Siswa lebih lebar
+		worksheet['!cols'] = wscols;
+
+		// 2. Buat Workbook
+		const workbook = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(workbook, worksheet, activeTab);
+
+		// 3. Download File
+		const filename = `Laporan_${activeTab}_${selectedKelas}_${bulan}_${tahun}.xlsx`;
+		XLSX.writeFile(workbook, filename);
 	};
 
 	const tabs = [
@@ -338,11 +535,12 @@ export default function LaporanPage() {
 		{ value: '12', label: 'Desember' },
 	];
 
-	const tahunOptions = [];
-	const currentYear = new Date().getFullYear();
-	for (let i = currentYear - 2; i <= currentYear + 1; i++) {
-		tahunOptions.push(i);
-	}
+	const tahunOptions = useMemo(() => {
+		const list = [];
+		const currentYear = new Date().getFullYear();
+		for (let i = currentYear - 2; i <= currentYear + 1; i++) list.push(i);
+		return list;
+	}, []);
 
 	if (loading) {
 		return (
@@ -354,120 +552,142 @@ export default function LaporanPage() {
 		);
 	}
 
-	<Loader />;
-
 	return (
-		<div className='min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50'>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
-				{/* Header */}
-				<div className='bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-3xl shadow-2xl p-6 sm:p-8 mb-6 text-white'>
-					<div className='flex items-center justify-between mb-6'>
-						<button
-							onClick={() => router.back()}
-							className='bg-white/20 backdrop-blur-sm hover:bg-white/30 p-2 rounded-xl transition-all'>
-							<svg
-								className='w-6 h-6'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M15 19l-7-7 7-7'
-								/>
-							</svg>
-						</button>
-						<h1 className='text-2xl sm:text-3xl font-bold'>📊 Laporan</h1>
-						<div className='w-10'></div>
+		<div className='min-h-screen bg-gray-50 pb-16'>
+			{/* Header */}
+			<div className='bg-gradient-to-r from-indigo-600 to-purple-700 py-8 px-4 sm:px-8 rounded-b-[2.5rem] shadow-2xl'>
+				<div className='max-w-6xl mx-auto'>
+					<div className='flex items-center justify-between gap-4'>
+						<div className='flex items-center gap-3'>
+							<button
+								onClick={() => router.back()}
+								className='p-2 bg-white/15 hover:bg-white/25 text-white rounded-xl transition-colors'>
+								<svg
+									className='w-5 h-5'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										strokeWidth={2}
+										d='M15 19l-7-7 7-7'
+									/>
+								</svg>
+							</button>
+							<div>
+								<h1 className='text-2xl sm:text-3xl font-bold text-white'>Laporan</h1>
+								<p className='text-indigo-100 text-sm'>Absensi, Nilai, dan Jurnal per periode</p>
+							</div>
+						</div>
+
+						<div className='flex items-center gap-2'>
+							<button
+								onClick={handleExportCSV}
+								className='bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl font-semibold transition-colors'>
+								Export CSV
+							</button>
+							<button
+								onClick={handleExportExcel}
+								className='bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-xl font-bold transition-colors'>
+								Export Excel
+							</button>
+						</div>
 					</div>
 
 					{/* Tabs */}
-					<div className='flex gap-2 mb-6 overflow-x-auto pb-2'>
-						{tabs.map((tab) => (
+					<div className='mt-6 flex gap-2 flex-wrap'>
+						{tabs.map((t) => (
 							<button
-								key={tab.id}
-								onClick={() => setActiveTab(tab.id)}
-								className={`flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all ${
-									activeTab === tab.id ? 'bg-white text-purple-600 shadow-lg scale-105' : 'bg-white/20 backdrop-blur-sm hover:bg-white/30'
-								}`}>
-								<span className='text-xl'>{tab.icon}</span>
-								<span className='text-sm sm:text-base'>{tab.name}</span>
+								key={t.id}
+								onClick={() => setActiveTab(t.id)}
+								className={`px-4 py-2 rounded-xl font-semibold transition-all ${activeTab === t.id ? 'bg-white text-indigo-700 shadow-lg' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+								<span className='mr-2'>{t.icon}</span>
+								{t.name}
 							</button>
 						))}
 					</div>
 
 					{/* Filters */}
-					<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4'>
-						<div>
-							<label className='block text-xs font-medium text-white/90 mb-2'>Kelas</label>
+					<div className='mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3'>
+						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
+							<p className='text-xs text-indigo-100 mb-1'>Kelas</p>
 							<select
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
-								className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
-								{kelasList.map((k) => (
-									<option
-										key={k.id}
-										value={k.kelas || k.nama_kelas}>
-										{k.kelas || k.nama_kelas}
-									</option>
-								))}
+								className='w-full rounded-xl px-3 py-2 font-semibold text-gray-800 bg-white/90 outline-none'>
+								{kelasList.map((k) => {
+									const nama = k.kelas || k.nama_kelas;
+									return (
+										<option
+											key={k.id}
+											value={nama}>
+											{nama}
+										</option>
+									);
+								})}
 							</select>
 						</div>
 
-						{(activeTab === 'nilai' || activeTab === 'jurnal') && (
-							<div>
-								<label className='block text-xs font-medium text-white/90 mb-2'>Mata Pelajaran</label>
-								<select
-									value={selectedMapel}
-									onChange={(e) => setSelectedMapel(e.target.value)}
-									className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
-									{mapelList.map((m) => (
+						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
+							<p className='text-xs text-indigo-100 mb-1'>Mapel</p>
+							<select
+								value={selectedMapel}
+								onChange={(e) => setSelectedMapel(e.target.value)}
+								disabled={activeTab === 'absensi'}
+								className={`w-full rounded-xl px-3 py-2 font-semibold outline-none ${activeTab === 'absensi' ? 'bg-white/40 text-white/70 cursor-not-allowed' : 'bg-white/90 text-gray-800'}`}>
+								{mapelList.map((m) => {
+									const nama = m.mapel || m.nama_mapel;
+									return (
 										<option
 											key={m.id}
-											value={m.mapel || m.nama_mapel}>
-											{m.mapel || m.nama_mapel}
+											value={nama}>
+											{nama}
 										</option>
-									))}
-								</select>
-							</div>
-						)}
+									);
+								})}
+							</select>
+							{activeTab === 'absensi' && <p className='text-[11px] text-indigo-100 mt-1'>Mapel tidak dipakai untuk Absensi.</p>}
+						</div>
 
-						<div>
-							<label className='block text-xs font-medium text-white/90 mb-2'>Bulan</label>
+						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
+							<p className='text-xs text-indigo-100 mb-1'>Bulan</p>
 							<select
 								value={bulan}
 								onChange={(e) => setBulan(e.target.value)}
-								className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
-								{bulanOptions.map((opt) => (
+								className='w-full rounded-xl px-3 py-2 font-semibold text-gray-800 bg-white/90 outline-none'>
+								{bulanOptions.map((b) => (
 									<option
-										key={opt.value}
-										value={opt.value}>
-										{opt.label}
+										key={b.value}
+										value={b.value}>
+										{b.label}
 									</option>
 								))}
 							</select>
 						</div>
 
-						<div>
-							<label className='block text-xs font-medium text-white/90 mb-2'>Tahun</label>
+						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
+							<p className='text-xs text-indigo-100 mb-1'>Tahun</p>
 							<select
 								value={tahun}
 								onChange={(e) => setTahun(e.target.value)}
-								className='w-full px-3 py-2 sm:px-4 sm:py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'>
-								{tahunOptions.map((y) => (
+								className='w-full rounded-xl px-3 py-2 font-semibold text-gray-800 bg-white/90 outline-none'>
+								{tahunOptions.map((t) => (
 									<option
-										key={y}
-										value={y}>
-										{y}
+										key={t}
+										value={t}>
+										{t}
 									</option>
 								))}
 							</select>
 						</div>
 					</div>
 				</div>
+			</div>
 
-				{/* Statistics Cards */}
+			{/* Content */}
+			<div className='max-w-6xl mx-auto px-4 sm:px-8 mt-8'>
+				{/* Stats */}
 				{activeTab === 'absensi' && stats.total > 0 && (
 					<div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6'>
 						<div className='bg-white rounded-2xl shadow-lg p-4 border-2 border-gray-100'>
@@ -515,11 +735,11 @@ export default function LaporanPage() {
 							<p className='text-xs text-white/90 mb-1'>Terendah</p>
 							<p className='text-2xl sm:text-3xl font-bold'>{stats.terendah}</p>
 						</div>
-						<div className='bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-4 text-white'>
+						<div className='bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-4 text-white'>
 							<p className='text-xs text-white/90 mb-1'>Lulus (≥70)</p>
 							<p className='text-2xl sm:text-3xl font-bold'>{stats.lulus}</p>
 						</div>
-						<div className='bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-lg p-4 text-white'>
+						<div className='bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-4 text-white'>
 							<p className='text-xs text-white/90 mb-1'>% Lulus</p>
 							<p className='text-2xl sm:text-3xl font-bold'>{stats.persentaseLulus}%</p>
 						</div>
@@ -527,41 +747,25 @@ export default function LaporanPage() {
 				)}
 
 				{activeTab === 'jurnal' && stats.total > 0 && (
-					<div className='grid grid-cols-3 gap-3 sm:gap-4 mb-6'>
+					<div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6'>
 						<div className='bg-white rounded-2xl shadow-lg p-4 border-2 border-gray-100'>
 							<p className='text-xs text-gray-600 mb-1'>Total Jurnal</p>
 							<p className='text-2xl sm:text-3xl font-bold text-gray-800'>{stats.total}</p>
 						</div>
 						<div className='bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-4 text-white'>
-							<p className='text-xs text-white/90 mb-1'>Pertemuan</p>
+							<p className='text-xs text-white/90 mb-1'>Pertemuan Terisi</p>
 							<p className='text-2xl sm:text-3xl font-bold'>{stats.totalPertemuan}</p>
 						</div>
-						<div className='bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-4 text-white'>
-							<p className='text-xs text-white/90 mb-1'>Materi</p>
+						<div className='bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl shadow-lg p-4 text-white'>
+							<p className='text-xs text-white/90 mb-1'>Materi Terisi</p>
 							<p className='text-2xl sm:text-3xl font-bold'>{stats.totalMateri}</p>
 						</div>
 					</div>
 				)}
 
-				{/* Action Buttons */}
-				<div className='flex gap-3 mb-6'>
-					<button
-						onClick={handlePrint}
-						disabled={!dataRekap}
-						className='flex-1 sm:flex-none px-6 py-3 bg-white border-2 border-indigo-300 text-indigo-600 rounded-2xl font-bold hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg'>
-						🖨️ Cetak
-					</button>
-					<button
-						onClick={handleExportCSV}
-						disabled={!dataRekap}
-						className='flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-bold hover:from-green-700 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg'>
-						📥 Export CSV
-					</button>
-				</div>
-
-				{/* Content */}
+				{/* Table card */}
 				{loadingRekap ? (
-					<div className='text-center py-12'>
+					<div className='bg-white rounded-2xl shadow-xl p-12 text-center'>
 						<div className='animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mx-auto mb-4'></div>
 						<p className='text-gray-600 font-medium'>Memuat data...</p>
 					</div>
@@ -575,63 +779,55 @@ export default function LaporanPage() {
 					</div>
 				) : (
 					<div className='bg-white rounded-2xl shadow-xl border-2 border-gray-100 overflow-hidden'>
-						{/* Table Header */}
 						<div className='bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4'>
 							<h2 className='text-xl font-bold text-white'>
 								{activeTab === 'absensi' && dataRekap.periode ? `Rekap Absensi - ${dataRekap.periode}` : `Laporan ${tabs.find((t) => t.id === activeTab)?.name}`}
 							</h2>
 						</div>
 
-						{/* Table Content */}
-						<div className='overflow-x-auto'>
-							{activeTab === 'absensi' && dataRekap.siswa && (
-								<table className='w-full text-sm'>
+						{/* ABSENSI */}
+						{activeTab === 'absensi' && dataRekap.siswa && (
+							<div className='overflow-x-auto'>
+								<table className='w-full min-w-[900px]'>
 									<thead className='bg-gray-50 border-b-2 border-gray-200'>
 										<tr>
-											<th className='px-3 py-2 text-left text-xs font-bold text-gray-700 uppercase sticky left-0 bg-gray-50 z-10'>No</th>
-											<th className='px-3 py-2 text-left text-xs font-bold text-gray-700 uppercase sticky left-12 bg-gray-50 z-10'>NIS</th>
-											<th className='px-3 py-2 text-left text-xs font-bold text-gray-700 uppercase sticky left-32 bg-gray-50 z-10'>Nama Siswa</th>
-											{dataRekap.tanggalList &&
-												dataRekap.tanggalList.map((tgl) => (
-													<th
-														key={tgl}
-														className='px-2 py-2 text-center text-xs font-bold text-gray-700 uppercase min-w-[60px]'>
-														{new Date(tgl).getDate()}
-													</th>
-												))}
-											<th className='px-3 py-2 text-center text-xs font-bold text-green-700 uppercase bg-green-50'>H</th>
-											<th className='px-3 py-2 text-center text-xs font-bold text-blue-700 uppercase bg-blue-50'>I</th>
-											<th className='px-3 py-2 text-center text-xs font-bold text-yellow-700 uppercase bg-yellow-50'>S</th>
-											<th className='px-3 py-2 text-center text-xs font-bold text-red-700 uppercase bg-red-50'>A</th>
+											<th className='px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase sticky left-0 bg-gray-50 z-10'>No</th>
+											<th className='px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase sticky left-[56px] bg-gray-50 z-10'>NIS</th>
+											<th className='px-3 py-3 text-left text-xs font-bold text-gray-700 uppercase sticky left-[160px] bg-gray-50 z-10 min-w-[220px]'>Nama Siswa</th>
+											{dataRekap.tanggalList.map((tgl) => (
+												<th
+													key={tgl}
+													className='px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase min-w-[70px]'>
+													{new Date(tgl).getDate()}
+												</th>
+											))}
+											<th className='px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase bg-green-50'>H</th>
+											<th className='px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase bg-blue-50'>I</th>
+											<th className='px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase bg-yellow-50'>S</th>
+											<th className='px-3 py-3 text-center text-xs font-bold text-gray-700 uppercase bg-red-50'>A</th>
 										</tr>
 									</thead>
 									<tbody className='divide-y divide-gray-100'>
 										{dataRekap.siswa.map((siswa, index) => (
 											<tr
-												key={siswa.id}
+												key={siswa.siswa_id || siswa.id}
 												className='hover:bg-gray-50 transition-colors'>
-												<td className='px-3 py-2 text-sm font-medium text-gray-900 sticky left-0 bg-white'>{index + 1}</td>
-												<td className='px-3 py-2 text-sm text-gray-700 sticky left-12 bg-white'>{siswa.nis}</td>
-												<td className='px-3 py-2 text-sm font-semibold text-gray-900 sticky left-32 bg-white'>{siswa.nama_lengkap}</td>
-												{dataRekap.tanggalList &&
-													dataRekap.tanggalList.map((tgl) => {
-														const abs = siswa.absensi[tgl];
-														return (
-															<td
-																key={tgl}
-																className='px-2 py-2 text-center'>
-																{abs ? (
-																	<span
-																		className={`inline-flex w-8 h-8 rounded-lg items-center justify-center text-xs font-bold ${getStatusBadgeColor(abs.status)}`}
-																		title={abs.keterangan || ''}>
-																		{abs.status === 'Hadir' ? 'H' : abs.status === 'Izin' ? 'I' : abs.status === 'Sakit' ? 'S' : abs.status === 'Alpha' ? 'A' : '-'}
-																	</span>
-																) : (
-																	<span className='text-gray-300'>-</span>
-																)}
-															</td>
-														);
-													})}
+												<td className='px-3 py-2 sticky left-0 bg-white z-10 border-r border-gray-100 text-sm font-medium text-gray-900'>{index + 1}</td>
+												<td className='px-3 py-2 sticky left-[56px] bg-white z-10 border-r border-gray-100 text-sm text-gray-700 font-mono'>{siswa.nis}</td>
+												<td className='px-3 py-2 sticky left-[160px] bg-white z-10 border-r border-gray-100 text-sm font-semibold text-gray-900'>{siswa.nama_lengkap}</td>
+
+												{dataRekap.tanggalList.map((tgl) => {
+													const abs = siswa.absensi[tgl];
+													const label = abs?.status === 'Hadir' ? 'H' : abs?.status === 'Izin' ? 'I' : abs?.status === 'Sakit' ? 'S' : abs?.status === 'Alpha' ? 'A' : '-';
+													return (
+														<td
+															key={tgl}
+															className='px-3 py-2 text-center'>
+															<span className={`inline-block px-2 py-1 rounded-lg text-xs font-bold ${getStatusBadgeColor(label)}`}>{label}</span>
+														</td>
+													);
+												})}
+
 												<td className='px-3 py-2 text-center font-bold text-green-700 bg-green-50'>{siswa.ringkasan.H}</td>
 												<td className='px-3 py-2 text-center font-bold text-blue-700 bg-blue-50'>{siswa.ringkasan.I}</td>
 												<td className='px-3 py-2 text-center font-bold text-yellow-700 bg-yellow-50'>{siswa.ringkasan.S}</td>
@@ -640,111 +836,112 @@ export default function LaporanPage() {
 										))}
 									</tbody>
 								</table>
-							)}
+							</div>
+						)}
 
-							{activeTab === 'nilai' && dataRekap.data && (
-								<table className='w-full'>
+						{/* NILAI (PIVOT) */}
+						{activeTab === 'nilai' && dataRekap.data && (
+							<div className='overflow-x-auto'>
+								<table className='w-full min-w-[900px]'>
 									<thead className='bg-gray-50 border-b-2 border-gray-200'>
 										<tr>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>No</th>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Tanggal</th>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Kategori</th>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>NIS</th>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Nama Siswa</th>
-											<th className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase'>Nilai</th>
-											<th className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase'>Predikat</th>
+											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase sticky left-0 bg-gray-50 z-10'>No</th>
+											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase sticky left-[56px] bg-gray-50 z-10 min-w-[240px]'>Siswa</th>
+
+											{pivotedNilai.kolomTugas.map((t) => (
+												<th
+													key={t.key}
+													className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase min-w-[140px]'>
+													<div className='flex flex-col items-center gap-1'>
+														<span className='line-clamp-1'>{t.judul}</span>
+														<span className='text-[10px] font-medium text-gray-400 normal-case'>{t.tanggal ? new Date(t.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : ''}</span>
+													</div>
+												</th>
+											))}
+
+											<th className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase bg-gray-100 min-w-[120px]'>Rata-rata</th>
 										</tr>
 									</thead>
+
 									<tbody className='divide-y divide-gray-100'>
-										{dataRekap.data.map((item, index) => (
+										{pivotedNilai.barisSiswa.map((row, idx) => (
 											<tr
-												key={item.id}
+												key={row.siswa_id}
 												className='hover:bg-gray-50 transition-colors'>
-												<td className='px-4 py-3 text-sm font-medium text-gray-900'>{index + 1}</td>
-												<td className='px-4 py-3 text-sm text-gray-700'>
-													{new Date(item.tanggal).toLocaleDateString('id-ID', {
-														day: 'numeric',
-														month: 'short',
-														year: 'numeric',
-													})}
+												<td className='px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-white z-10 border-r border-gray-100'>{idx + 1}</td>
+												<td className='px-4 py-3 sticky left-[56px] bg-white z-10 border-r border-gray-100'>
+													<div className='flex flex-col'>
+														<span className='text-sm font-semibold text-gray-900 line-clamp-1'>{row.nama_lengkap}</span>
+														<span className='text-xs text-gray-400 font-mono'>{row.nis}</span>
+													</div>
 												</td>
-												<td className='px-4 py-3 text-sm font-semibold text-gray-700'>{item.kategori}</td>
-												<td className='px-4 py-3 text-sm text-gray-700'>{getNisSiswa(item.siswa_id)}</td>
-												<td className='px-4 py-3 text-sm font-semibold text-gray-900'>{getNamaSiswa(item.siswa_id)}</td>
-												<td className='px-4 py-3 text-center'>
-													<span className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${getNilaiBadgeColor(item.nilai)}`}>{item.nilai}</span>
-												</td>
-												<td className='px-4 py-3 text-center'>
-													<span className='inline-block px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-sm font-bold'>{getPredikat(item.nilai)}</span>
+
+												{pivotedNilai.kolomTugas.map((t) => {
+													const v = row.nilaiByTugas[t.key];
+													const has = v !== undefined && v !== null && String(v).trim() !== '';
+													return (
+														<td
+															key={t.key}
+															className='px-4 py-3 text-center'>
+															{has ? <span className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${getNilaiBadgeColor(v)}`}>{v}</span> : <span className='text-gray-300'>-</span>}
+														</td>
+													);
+												})}
+
+												<td className='px-4 py-3 text-center bg-gray-50'>
+													{row.rataRata !== null ? (
+														<span className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${getNilaiBadgeColor(row.rataRata)}`}>{row.rataRata}</span>
+													) : (
+														<span className='text-gray-300'>-</span>
+													)}
 												</td>
 											</tr>
 										))}
 									</tbody>
 								</table>
-							)}
+							</div>
+						)}
 
-							{activeTab === 'jurnal' && dataRekap.data && (
-								<table className='w-full'>
+						{/* JURNAL */}
+						{activeTab === 'jurnal' && dataRekap.data && (
+							<div className='overflow-x-auto'>
+								<table className='w-full min-w-[900px]'>
 									<thead className='bg-gray-50 border-b-2 border-gray-200'>
 										<tr>
 											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>No</th>
 											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Tanggal</th>
-											<th className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase'>Jam Ke</th>
+											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Jam</th>
+											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Pert.</th>
 											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Materi</th>
 											<th className='px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase'>Kegiatan</th>
+											<th className='px-4 py-3 text-center text-xs font-bold text-gray-700 uppercase'>Tuntas</th>
 										</tr>
 									</thead>
 									<tbody className='divide-y divide-gray-100'>
 										{dataRekap.data.map((item, index) => (
 											<tr
-												key={item.id}
+												key={item.id || index}
 												className='hover:bg-gray-50 transition-colors'>
 												<td className='px-4 py-3 text-sm font-medium text-gray-900'>{index + 1}</td>
-												<td className='px-4 py-3 text-sm text-gray-700'>
-													{new Date(item.tanggal).toLocaleDateString('id-ID', {
-														day: 'numeric',
-														month: 'short',
-														year: 'numeric',
-													})}
-												</td>
+												<td className='px-4 py-3 text-sm text-gray-700'>{new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+												<td className='px-4 py-3 text-sm text-gray-700'>{item.jam_ke || '-'}</td>
+												<td className='px-4 py-3 text-sm text-gray-700'>{item.pertemuan_ke || '-'}</td>
+												<td className='px-4 py-3 text-sm font-semibold text-gray-900'>{item.materi || '-'}</td>
+												<td className='px-4 py-3 text-sm text-gray-700'>{item.kegiatan || '-'}</td>
 												<td className='px-4 py-3 text-center'>
-													<span className='inline-block px-3 py-1 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold'>{item.jam_ke}</span>
+													<span className={`inline-block px-3 py-1 rounded-lg text-sm font-bold ${item.tuntas ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+														{item.tuntas ? 'Ya' : 'Tidak'}
+													</span>
 												</td>
-												<td className='px-4 py-3 text-sm font-semibold text-gray-900'>{item.materi}</td>
-												<td className='px-4 py-3 text-sm text-gray-600'>{item.kegiatan || '-'}</td>
 											</tr>
 										))}
 									</tbody>
 								</table>
-							)}
-						</div>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
-
-			{/* Print Styles */}
-			<style
-				jsx
-				global>{`
-				@media print {
-					body * {
-						visibility: hidden;
-					}
-					.print-area,
-					.print-area * {
-						visibility: visible;
-					}
-					.print-area {
-						position: absolute;
-						left: 0;
-						top: 0;
-						width: 100%;
-					}
-					button {
-						display: none !important;
-					}
-				}
-			`}</style>
 		</div>
 	);
 }
