@@ -3,7 +3,7 @@ import styled from 'styled-components';
 
 const Loader = () => {
 	return (
-		<StyledWrapper>
+		<StyledWrapper className='h-screen flex items-center justify-center bg-gray-50'>
 			<div className='loader'>
 				<div>
 					<ul>

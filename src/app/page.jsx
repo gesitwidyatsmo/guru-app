@@ -16,8 +16,6 @@ export default function Home() {
 	const [jadwalHariIni, setJadwalHariIni] = useState([]);
 	const [loading, setLoading] = useState(true);
 
-	console.log(jadwalHariIni);
-
 	const router = useRouter();
 
 	// Nama hari dalam Bahasa Indonesia
@@ -248,11 +246,7 @@ export default function Home() {
 	];
 
 	if (loading) {
-		return (
-			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
-				<Loader />
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (
@@ -422,10 +416,10 @@ export default function Home() {
 				{/* Jadwal Hari Ini */}
 				<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
 					<div className='flex items-center justify-between mb-6'>
-						<h2 className='text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2'>
-							<span className='text-2xl'>📅</span>
+						<h2 className='text-md sm:text-2xl font-bold text-gray-800 flex items-center gap-2'>
+							<span className='text-2xl '>📅</span>
 							Jadwal Hari Ini
-							<span className='text-base font-normal text-gray-500'>({hariIni})</span>
+							<span className='text-base hidden lg:block font-normal text-gray-500'>({hariIni})</span>
 						</h2>
 						<Link
 							href='/jadwal'

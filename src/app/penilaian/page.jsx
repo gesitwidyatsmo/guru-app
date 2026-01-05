@@ -78,7 +78,7 @@ export default function PenilaianPage() {
 		const fetchTugas = async () => {
 			try {
 				setLoadingTugas(true);
-				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
 				const res = await fetch(url);
 				if (res.ok) {
 					const data = await res.json();
@@ -122,7 +122,7 @@ export default function PenilaianPage() {
 
 		const loadNilaiTugas = async () => {
 			try {
-				const url = `/api/tugas?tugasId=${selectedTugasId}`;
+				const url = `/api/nilai?tugasId=${selectedTugasId}`;
 				const res = await fetch(url);
 				if (res.ok) {
 					const data = await res.json();
@@ -189,7 +189,7 @@ export default function PenilaianPage() {
 	const refreshCurrentTugasData = async (tugasId) => {
 		if (!tugasId) return;
 		try {
-			const url = `/api/tugas?tugasId=${tugasId}`;
+			const url = `/api/nilai?tugasId=${tugasId}`;
 			const res = await fetch(url);
 			if (!res.ok) return;
 			const data = await res.json();
@@ -266,7 +266,7 @@ export default function PenilaianPage() {
 				nilai: nilaiArray,
 			};
 
-			const res = await fetch('/api/tugas', {
+			const res = await fetch('/api/nilai', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
@@ -356,7 +356,7 @@ export default function PenilaianPage() {
 					nilai: [{ siswa_id: siswaId, nilai: newNilai }],
 				};
 
-				const res = await fetch('/api/tugas', {
+				const res = await fetch('/api/nilai', {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(payload),

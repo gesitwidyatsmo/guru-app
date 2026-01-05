@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 
 export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, isEditMode = false }) {
 	// State form data
+	const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+	const hariIni = namaHari[new Date().getDay()];
+
 	const [formData, setFormData] = useState({
 		mapel: '',
 		kelas: '',
-		hari: 'Senin',
+		hari: hariIni,
 		jam_mulai: '',
 		jam_selesai: '',
 	});
@@ -43,7 +46,7 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 			setFormData({
 				mapel: '',
 				kelas: '',
-				hari: 'Senin',
+				hari: hariIni,
 				jam_mulai: '',
 				jam_selesai: '',
 			});

@@ -5,22 +5,32 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
+import ButtonBack from '../components/button/ButtonBack';
 
-export default function AbsensiPage() {
+export default function AbsensiMapelPage() {
 	const router = useRouter();
+
+	// --- State UI ---
 	const [kelasList, setKelasList] = useState([]);
+	const [mapelList, setMapelList] = useState([]);
 	const [statusList, setStatusList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
+
+	// --- Filter State ---
 	const [selectedKelas, setSelectedKelas] = useState('');
+	const [selectedMapel, setSelectedMapel] = useState('');
 	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [jamKe, setJamKe] = useState('');
+
+	// --- Data State ---
 	const [absensi, setAbsensi] = useState({});
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 
-	// State untuk mode (input atau rekap)
+	const [existingId, setExistingId] = useState(null);
+
+	// MODE: 'input' (Form Input), 'edit' (Form Edit), 'rekap' (Tampilan Tabel Hasil)
 	const [mode, setMode] = useState('input');
-	const [dataRekap, setDataRekap] = useState([]);
-	const [loadingRekap, setLoadingRekap] = useState(false);
 
 	// Helper status colors
 	const getStatusClasses = (warna, active) => {
@@ -42,144 +52,146 @@ export default function AbsensiPage() {
 		return `${base} bg-white text-gray-600 border-2 border-gray-200 hover:border-gray-300 hover:shadow-md`;
 	};
 
-	const getStatusBadgeColor = (status) => {
-		switch (status) {
-			case 'Hadir':
-				return 'from-green-500 to-green-600';
-			case 'Sakit':
-				return 'from-yellow-400 to-yellow-500';
-			case 'Izin':
-				return 'from-blue-500 to-blue-600';
-			case 'Alpha':
-				return 'from-red-500 to-red-600';
+	// Helper Badge untuk Tabel Rekap
+	const getBadgeRekap = (status) => {
+		const s = statusList.find((sl) => sl.label === status);
+		const warna = s ? s.warna : 'gray';
+
+		const style = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide';
+		switch (warna) {
+			case 'green':
+				return <span className={`${style} bg-emerald-100 text-emerald-700`}>Hadir</span>;
+			case 'yellow':
+				return <span className={`${style} bg-amber-100 text-amber-700`}>Sakit</span>;
+			case 'blue':
+				return <span className={`${style} bg-blue-100 text-blue-700`}>Izin</span>;
+			case 'red':
+				return <span className={`${style} bg-rose-100 text-rose-700`}>Alpha</span>;
 			default:
-				return 'from-gray-400 to-gray-500';
+				return <span className={`${style} bg-gray-100 text-gray-700`}>{status}</span>;
 		}
 	};
 
-	// Fetch initial data
+	// 1. Fetch Master Data
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resStatus, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/status-absensi'), fetch('/api/siswa')]);
-
+				const [resKelas, resMapel, resStatus, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/status-absensi'), fetch('/api/siswa')]);
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
+				const dataMapel = resMapel.ok ? await resMapel.json() : [];
 				const dataStatus = resStatus.ok ? await resStatus.json() : [];
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
 
 				setKelasList(dataKelas);
+				setMapelList(dataMapel);
 				setStatusList(dataStatus);
 				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
 
-				if (dataKelas.length > 0) {
-					setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
-				}
+				if (dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
+				if (dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
 			} catch (err) {
 				console.error(err);
 			} finally {
 				setLoading(false);
 			}
 		};
-
 		fetchAll();
 	}, []);
 
-	const siswaKelasIni = siswaList.filter((s) => s.kelas === selectedKelas);
+	const siswaKelasIni = siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim());
 
-	// Helper function untuk get data siswa by ID
-	const getSiswaById = (siswaId) => {
-		return siswaList.find((s) => s.id === siswaId);
-	};
-
-	const getNamaSiswa = (siswaId) => {
-		const siswa = getSiswaById(siswaId);
-		return siswa?.nama_lengkap || 'Nama tidak ditemukan';
-	};
-
-	const getNisSiswa = (siswaId) => {
-		const siswa = getSiswaById(siswaId);
-		return siswa?.nis || '-';
-	};
-
-	// Check apakah sudah ada absensi untuk tanggal & kelas ini
+	// 2. Check Absensi Mapel
 	useEffect(() => {
-		if (!selectedKelas || !tanggal || siswaList.length === 0) return;
+		if (!selectedKelas || !selectedMapel || !tanggal || !jamKe || siswaKelasIni.length === 0) {
+			// Reset ke input bersih
+			const init = {};
+			siswaKelasIni.forEach((s) => {
+				init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+			});
+			setAbsensi(init);
+			setMode('input');
+			setExistingId(null);
+			return;
+		}
 
 		const checkAbsensi = async () => {
 			try {
-				setLoadingRekap(true);
-				const url = `/api/absensi?kelas=${encodeURIComponent(selectedKelas)}&tanggal=${tanggal}`;
-				const res = await fetch(url);
+				const params = new URLSearchParams({
+					kelas: selectedKelas,
+					mapel: selectedMapel,
+					tanggal: tanggal,
+					jam_ke: jamKe,
+				});
+				const res = await fetch(`/api/absensi-mapel?${params.toString()}`);
 
 				if (res.ok) {
 					const data = await res.json();
 
 					if (data && data.length > 0) {
+						// DATA DITEMUKAN -> Masuk Mode REKAP
+						const loadedAbsensi = {};
+						data.forEach((item) => {
+							loadedAbsensi[item.siswa_id] = {
+								status: item.status,
+								keterangan: '',
+							};
+						});
+						setAbsensi(loadedAbsensi);
+
+						// Default langsung REKAP agar user tau data sudah ada
 						setMode('rekap');
-						setDataRekap(data);
+
+						if (data[0]?.id_row) setExistingId(data[0].id_row);
 					} else {
+						// Data Baru -> Mode Input
 						setMode('input');
-						setDataRekap([]);
-						if (siswaKelasIni.length > 0 && statusList.length > 0) {
-							const init = {};
-							siswaKelasIni.forEach((s) => {
-								init[s.id] = { status: statusList[0]?.label || '', keterangan: '' };
-							});
-							setAbsensi(init);
-						}
+						setExistingId(null);
+						const init = {};
+						siswaKelasIni.forEach((s) => {
+							init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+						});
+						setAbsensi(init);
 					}
-				} else {
-					setMode('input');
-					setDataRekap([]);
 				}
 			} catch (err) {
 				console.error('Error checking absensi:', err);
-				setMode('input');
-			} finally {
-				setLoadingRekap(false);
 			}
 		};
 
 		checkAbsensi();
-	}, [selectedKelas, tanggal, siswaList.length, siswaKelasIni.length, statusList.length]);
+	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni.length]);
 
 	const handleStatusChange = (siswaId, labelStatus) => {
 		setAbsensi((prev) => ({
 			...prev,
-			[siswaId]: {
-				...(prev[siswaId] || { keterangan: '' }),
-				status: labelStatus,
-			},
+			[siswaId]: { ...(prev[siswaId] || { keterangan: '' }), status: labelStatus },
 		}));
 	};
 
 	const handleKeteranganChange = (siswaId, value) => {
 		setAbsensi((prev) => ({
 			...prev,
-			[siswaId]: {
-				...(prev[siswaId] || { status: statusList[0]?.label || '' }),
-				keterangan: value,
-			},
+			[siswaId]: { ...(prev[siswaId] || { status: statusList[0]?.label || '' }), keterangan: value },
 		}));
 	};
 
-	const handleTandaiSemua = (labelStatus) => {
-		setAbsensi((prev) => {
-			const updated = { ...prev };
-			siswaKelasIni.forEach((s) => {
-				updated[s.id] = {
-					status: labelStatus,
-					keterangan: prev[s.id]?.keterangan || '',
-				};
-			});
-			return updated;
-		});
-	};
-
+	// 3. Simpan
 	const handleSimpan = async () => {
+		if (!jamKe || jamKe.trim() === '') {
+			Swal.fire({
+				icon: 'warning',
+				title: 'Jam Belum Diisi',
+				text: 'Harap isi Jam Ke (misal: 1-2) sebelum menyimpan.',
+				confirmButtonColor: '#f59e0b',
+			});
+			return;
+		}
+
+		if (siswaKelasIni.length === 0) return;
+
 		const result = await Swal.fire({
-			title: 'Simpan Absensi?',
-			text: `Menyimpan absensi untuk ${siswaKelasIni.length} siswa`,
+			title: 'Simpan Absensi Mapel?',
+			text: `Simpan data ${selectedMapel} jam ke-${jamKe}?`,
 			icon: 'question',
 			showCancelButton: true,
 			confirmButtonColor: '#4F46E5',
@@ -189,476 +201,89 @@ export default function AbsensiPage() {
 		});
 
 		if (!result.isConfirmed) return;
-
 		setSaving(true);
 
-		const payload = siswaKelasIni.map((s) => ({
-			tanggal,
-			kelas: selectedKelas,
-			siswa_id: s.id,
-			status: absensi[s.id]?.status || '',
-			keterangan: absensi[s.id]?.keterangan || '',
-		}));
-
 		try {
-			const res = await fetch('/api/absensi', {
-				method: 'POST',
+			const dataToSave = siswaKelasIni.map((s) => ({
+				siswa_id: s.id,
+				status: absensi[s.id]?.status || 'Hadir',
+			}));
+
+			const payload = {
+				id: existingId,
+				tanggal,
+				kelas: selectedKelas,
+				mapel: selectedMapel,
+				jam_ke: jamKe,
+				data: dataToSave,
+			};
+
+			const res = await fetch('/api/absensi-mapel', {
+				method: 'POST', // POST untuk Upsert (Insert/Update handled by backend or ID)
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
 
 			if (res.ok) {
+				const responseData = await res.json();
 				await Swal.fire({
 					icon: 'success',
 					title: 'Berhasil!',
-					text: `Absensi ${siswaKelasIni.length} siswa tersimpan`,
-					confirmButtonColor: '#4F46E5',
+					text: 'Data absensi mapel tersimpan.',
 					timer: 1500,
-					timerProgressBar: true,
 					showConfirmButton: false,
 				});
 
-				// Refresh data untuk menampilkan rekap
-				const url = `/api/absensi?kelas=${encodeURIComponent(selectedKelas)}&tanggal=${tanggal}`;
-				const rekapRes = await fetch(url);
-				const rekapData = await rekapRes.json();
-
+				// Setelah simpan, pindah ke mode Rekap
 				setMode('rekap');
-				setDataRekap(rekapData);
+				// Update ID jika ini insert baru
+				if (!existingId && responseData.id) setExistingId(responseData.id);
 			} else {
-				throw new Error('Gagal menyimpan absensi');
+				throw new Error('Gagal menyimpan');
 			}
 		} catch (error) {
 			console.error(error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menyimpan',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
-			});
+			Swal.fire('Error', 'Gagal menyimpan data', 'error');
 		} finally {
 			setSaving(false);
 		}
 	};
 
-	// Edit absensi per siswa dengan modal
-	// Edit absensi per siswa dengan modal MODERN
-	const handleEditSiswa = async (absensiItem) => {
-		const siswa = getSiswaById(absensiItem.siswa_id);
-		if (!siswa) return;
-
-		let selectedStatus = absensiItem.status;
-
-		// Icon untuk setiap status
-		const statusIcons = {
-			Hadir: '✓',
-			Sakit: '🤒',
-			Izin: '📝',
-			Alpha: '✗',
-		};
-
-		// Buat HTML untuk modal
-		const statusButtonsHTML = statusList
-			.map((st) => {
-				const icon = statusIcons[st.label] || '•';
-				const isActive = selectedStatus === st.label;
-
-				let bgColor = 'background: rgba(255, 255, 255, 0.9); color: #6B7280; border: 2px solid rgba(229, 231, 235, 0.8);';
-				if (isActive) {
-					switch (st.warna) {
-						case 'green':
-							bgColor = 'background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; border: 2px solid #10B981; transform: scale(1.05);';
-							break;
-						case 'yellow':
-							bgColor = 'background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%); color: white; border: 2px solid #FBBF24; transform: scale(1.05);';
-							break;
-						case 'blue':
-							bgColor = 'background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; border: 2px solid #3B82F6; transform: scale(1.05);';
-							break;
-						case 'red':
-							bgColor = 'background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); color: white; border: 2px solid #EF4444; transform: scale(1.05);';
-							break;
-						case 'purple':
-							bgColor = 'background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; border: 2px solid #8B5CF6; transform: scale(1.05);';
-							break;
-					}
-				}
-
-				return `
-      <button 
-        type="button"
-        class="status-btn-custom"
-        data-status="${st.label}"
-        data-color="${st.warna}"
-        style="
-          padding: 10px 12px;
-          border-radius: 12px;
-          font-weight: 600;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          box-shadow: ${isActive ? '0 6px 12px rgba(0, 0, 0, 0.15)' : '0 2px 4px rgba(0, 0, 0, 0.05)'};
-          ${bgColor}
-          backdrop-filter: blur(10px);
-        ">
-        <span style="font-size: 20px;">${icon}</span>
-        <span style="font-size: 12px;">${st.label}</span>
-      </button>
-    `;
-			})
-			.join('');
-
-		const result = await Swal.fire({
-			html: `
-      <div style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); padding: 20px 16px; margin: -16px -16px 0 -16px; border-radius: 20px 20px 0 0;">
-        <div style="text-align: center; color: white;">
-          <div style="width: 56px; height: 56px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 24px; font-weight: bold;">
-            ${siswa.nama_lengkap.charAt(0).toUpperCase()}
-          </div>
-          <h2 style="font-size: 18px; font-weight: 700; margin: 0 0 4px 0;">${siswa.nama_lengkap}</h2>
-          <p style="font-size: 12px; opacity: 0.9; margin: 0;">NIS: ${siswa.nis || '-'}</p>
-        </div>
-      </div>
-      
-      <div style="padding: 20px 16px 16px 16px;">
-        <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #374151; font-size: 13px; text-align: left;">
-          📊 Status Kehadiran
-        </label>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;">
-          ${statusButtonsHTML}
-        </div>
-        
-        <label style="display: block; font-weight: 600; margin-bottom: 10px; color: #374151; font-size: 13px; text-align: left;">
-          💬 Keterangan
-        </label>
-        <input 
-          id="modal-keterangan" 
-          type="text" 
-          placeholder="Keterangan (opsional)"
-          value="${absensiItem.keterangan || ''}"
-          style="
-            width: 100%;
-            padding: 12px 14px;
-            border: 2px solid rgba(229, 231, 235, 0.8);
-            border-radius: 12px;
-            font-size: 13px;
-            outline: none;
-            transition: all 0.2s;
-            box-sizing: border-box;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-          "
-        >
-      </div>
-    `,
-			showCancelButton: true,
-			confirmButtonText: '💾 Simpan',
-			cancelButtonText: 'Batal',
-			width: window.innerWidth < 640 ? '90%' : '480px',
-			padding: '16px',
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#6B7280',
-			allowOutsideClick: true,
-			allowEscapeKey: true,
-			allowEnterKey: true,
-			buttonsStyling: true,
-			background: 'rgba(255, 255, 255, 0.95)',
-			backdrop: 'rgba(0, 0, 0, 0.6)',
-			customClass: {
-				popup: 'swal-popup-blur',
-				confirmButton: 'swal-btn-confirm',
-				cancelButton: 'swal-btn-cancel',
-				actions: 'swal-actions-custom',
-			},
-			didOpen: () => {
-				// Add blur effect to popup
-				const popup = document.querySelector('.swal-popup-blur');
-				if (popup) {
-					popup.style.backdropFilter = 'blur(20px)';
-					popup.style.WebkitBackdropFilter = 'blur(20px)';
-					popup.style.borderRadius = '20px';
-					popup.style.border = '1px solid rgba(255, 255, 255, 0.3)';
-					popup.style.boxShadow = '0 20px 60px rgba(0, 0, 0, 0.3)';
-				}
-
-				// Style buttons
-				const confirmBtn = document.querySelector('.swal-btn-confirm');
-				const cancelBtn = document.querySelector('.swal-btn-cancel');
-				const actions = document.querySelector('.swal-actions-custom');
-
-				if (confirmBtn) {
-					confirmBtn.style.borderRadius = '12px';
-					confirmBtn.style.padding = '10px 24px';
-					confirmBtn.style.fontSize = '14px';
-					confirmBtn.style.fontWeight = '600';
-				}
-
-				if (cancelBtn) {
-					cancelBtn.style.borderRadius = '12px';
-					cancelBtn.style.padding = '10px 24px';
-					cancelBtn.style.fontSize = '14px';
-					cancelBtn.style.fontWeight = '600';
-				}
-
-				if (actions) {
-					actions.style.gap = '8px';
-					actions.style.marginTop = '16px';
-				}
-
-				// Responsive grid for larger screens
-				if (window.innerWidth >= 640) {
-					const statusContainer = popup.querySelector('div[style*="grid-template-columns"]');
-					if (statusContainer) {
-						statusContainer.style.gridTemplateColumns = 'repeat(4, 1fr)';
-					}
-				}
-
-				const buttons = document.querySelectorAll('.status-btn-custom');
-
-				buttons.forEach((btn) => {
-					// Hover effect
-					btn.addEventListener('mouseenter', () => {
-						if (!btn.classList.contains('active-status')) {
-							btn.style.transform = 'translateY(-2px)';
-							btn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
-						}
-					});
-
-					btn.addEventListener('mouseleave', () => {
-						if (!btn.classList.contains('active-status')) {
-							btn.style.transform = 'translateY(0)';
-							btn.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
-						}
-					});
-
-					// Click handler
-					btn.addEventListener('click', () => {
-						const status = btn.getAttribute('data-status');
-						const color = btn.getAttribute('data-color');
-						selectedStatus = status;
-
-						// Update semua buttons
-						buttons.forEach((b) => {
-							b.classList.remove('active-status');
-							b.style.background = 'rgba(255, 255, 255, 0.9)';
-							b.style.color = '#6B7280';
-							b.style.borderColor = 'rgba(229, 231, 235, 0.8)';
-							b.style.transform = 'scale(1)';
-							b.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
-						});
-
-						// Set active button
-						btn.classList.add('active-status');
-						let bgGradient = '';
-						switch (color) {
-							case 'green':
-								bgGradient = 'linear-gradient(135deg, #10B981 0%, #059669 100%)';
-								btn.style.borderColor = '#10B981';
-								break;
-							case 'yellow':
-								bgGradient = 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)';
-								btn.style.borderColor = '#FBBF24';
-								break;
-							case 'blue':
-								bgGradient = 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';
-								btn.style.borderColor = '#3B82F6';
-								break;
-							case 'red':
-								bgGradient = 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
-								btn.style.borderColor = '#EF4444';
-								break;
-							case 'purple':
-								bgGradient = 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)';
-								btn.style.borderColor = '#8B5CF6';
-								break;
-							default:
-								bgGradient = 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)';
-								btn.style.borderColor = '#4F46E5';
-						}
-						btn.style.background = bgGradient;
-						btn.style.color = 'white';
-						btn.style.transform = 'scale(1.05)';
-						btn.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.15)';
-					});
-				});
-
-				// Focus handler untuk input
-				const input = document.getElementById('modal-keterangan');
-				if (input) {
-					input.addEventListener('focus', () => {
-						input.style.borderColor = '#4F46E5';
-						input.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
-						input.style.background = 'white';
-					});
-					input.addEventListener('blur', () => {
-						input.style.borderColor = 'rgba(229, 231, 235, 0.8)';
-						input.style.boxShadow = 'none';
-						input.style.background = 'rgba(255, 255, 255, 0.9)';
-					});
-				}
-			},
-			preConfirm: () => {
-				const keterangan = document.getElementById('modal-keterangan').value;
-				return {
-					status: selectedStatus,
-					keterangan: keterangan,
-				};
-			},
-		});
-
-		// Handle jika user confirm (klik Simpan)
-		if (result.isConfirmed) {
-			try {
-				// Tampilkan loading
-				Swal.fire({
-					title: 'Menyimpan...',
-					html: '<div style="font-size: 14px; color: #6B7280;">Memperbarui data absensi</div>',
-					allowOutsideClick: false,
-					allowEscapeKey: false,
-					showConfirmButton: false,
-					background: 'rgba(255, 255, 255, 0.95)',
-					backdrop: 'rgba(0, 0, 0, 0.6)',
-					didOpen: () => {
-						Swal.showLoading();
-					},
-				});
-
-				const updateRes = await fetch('/api/absensi', {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						id: absensiItem.id,
-						status: result.value.status,
-						keterangan: result.value.keterangan,
-					}),
-				});
-
-				if (updateRes.ok) {
-					await Swal.fire({
-						icon: 'success',
-						title: 'Berhasil! 🎉',
-						html: `<div style="font-size: 14px; color: #6B7280;">Absensi ${siswa.nama_lengkap} berhasil diperbarui</div>`,
-						confirmButtonColor: '#4F46E5',
-						confirmButtonText: 'OK',
-						timer: 2000,
-						timerProgressBar: true,
-						background: 'rgba(255, 255, 255, 0.95)',
-						backdrop: 'rgba(0, 0, 0, 0.6)',
-						customClass: {
-							confirmButton: 'swal-btn-confirm',
-						},
-						didOpen: () => {
-							const btn = document.querySelector('.swal-btn-confirm');
-							if (btn) {
-								btn.style.borderRadius = '12px';
-								btn.style.padding = '10px 24px';
-								btn.style.fontSize = '14px';
-							}
-						},
-					});
-
-					// Refresh data rekap
-					const url = `/api/absensi?kelas=${encodeURIComponent(selectedKelas)}&tanggal=${tanggal}`;
-					const rekapRes = await fetch(url);
-					const rekapData = await rekapRes.json();
-					setDataRekap(rekapData);
-				} else {
-					const errorData = await updateRes.json();
-					throw new Error(errorData.error || 'Gagal memperbarui absensi');
-				}
-			} catch (error) {
-				console.error('Error updating absensi:', error);
-				Swal.fire({
-					icon: 'error',
-					title: 'Gagal',
-					html: `<div style="font-size: 14px; color: #6B7280;">${error.message}</div>`,
-					confirmButtonColor: '#4F46E5',
-					confirmButtonText: 'OK',
-					background: 'rgba(255, 255, 255, 0.95)',
-					backdrop: 'rgba(0, 0, 0, 0.6)',
-					customClass: {
-						confirmButton: 'swal-btn-confirm',
-					},
-					didOpen: () => {
-						const btn = document.querySelector('.swal-btn-confirm');
-						if (btn) {
-							btn.style.borderRadius = '12px';
-							btn.style.padding = '10px 24px';
-							btn.style.fontSize = '14px';
-						}
-					},
-				});
-			}
-		}
-	};
-
-	// Hitung statistik
-	const stats =
-		mode === 'rekap' && dataRekap.length > 0
-			? {
-					total: dataRekap.length,
-					hadir: dataRekap.filter((d) => d.status === 'Hadir').length,
-					sakit: dataRekap.filter((d) => d.status === 'Sakit').length,
-					izin: dataRekap.filter((d) => d.status === 'Izin').length,
-					alpha: dataRekap.filter((d) => d.status === 'Alpha').length,
-			  }
-			: {
-					total: siswaKelasIni.length,
-					hadir: Object.values(absensi).filter((a) => a.status === 'Hadir').length,
-					sakit: Object.values(absensi).filter((a) => a.status === 'Sakit').length,
-					izin: Object.values(absensi).filter((a) => a.status === 'Izin').length,
-					alpha: Object.values(absensi).filter((a) => a.status === 'Alpha').length,
-			  };
-
 	if (loading) {
-		return (
-			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<Loader />
-				</div>
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (
-		<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50'>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6'>
-				{/* Header */}
-				<div className='bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 rounded-3xl shadow-2xl p-6 sm:p-8 mb-6 text-white'>
-					<div className='flex items-center justify-between mb-4'>
-						<button
-							onClick={() => router.back()}
-							className='bg-white/20 backdrop-blur-sm hover:bg-white/30 p-2 rounded-xl transition-all'>
-							<svg
-								className='w-6 h-6'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M15 19l-7-7 7-7'
-								/>
-							</svg>
-						</button>
-						<h1 className='text-2xl sm:text-3xl font-bold'>{mode === 'rekap' ? '📊 Rekap Absensi' : '📋 Input Absensi'}</h1>
-						<div className='w-10'></div>
+		<div className='min-h-screen bg-gray-50 pb-32 font-sans'>
+			{/* --- Header & Filters --- */}
+			<div className='bg-white shadow-sm border-b border-gray-200'>
+				<div className='max-w-5xl mx-auto px-4 py-4 space-y-4'>
+					<ButtonBack />
+					{/* Title Row */}
+					<div className='flex justify-between items-center'>
+						<div>
+							<h1 className='text-xl font-bold text-gray-800'>Absensi Mapel</h1>
+							<div className='flex items-center gap-2 mt-1'>
+								{mode === 'rekap' ? (
+									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700'>Data Tersimpan (Rekap)</span>
+								) : mode === 'edit' ? (
+									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700'>Mode Edit</span>
+								) : (
+									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700'>Input Baru</span>
+								)}
+							</div>
+						</div>
 					</div>
 
-					{/* Filter Section */}
-					<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-						<div>
-							<label className='block text-sm font-medium text-white/90 mb-2'>Pilih Kelas</label>
+					{/* Filter Grid */}
+					<div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
+						{/* Kelas */}
+						<div className='relative'>
 							<select
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
-								// disabled={mode === 'rekap'}
-								className='w-full px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed'>
+								disabled={mode === 'edit'} // Kunci saat edit
+								className='w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none disabled:opacity-60'>
 								{kelasList.map((k) => (
 									<option
 										key={k.id}
@@ -667,241 +292,167 @@ export default function AbsensiPage() {
 									</option>
 								))}
 							</select>
+							<div className='absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400'>▼</div>
 						</div>
 
-						<div>
-							<label className='block text-sm font-medium text-white/90 mb-2'>Tanggal</label>
-							<input
-								type='date'
-								value={tanggal}
-								onChange={(e) => setTanggal(e.target.value)}
-								className='w-full px-4 py-3 rounded-xl bg-white/90 backdrop-blur-sm text-gray-800 font-semibold border-2 border-white/50 focus:ring-2 focus:ring-white focus:border-white outline-none transition-all'
-							/>
+						{/* Mapel */}
+						<div className='relative'>
+							<select
+								value={selectedMapel}
+								onChange={(e) => setSelectedMapel(e.target.value)}
+								disabled={mode === 'edit'}
+								className='w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none disabled:opacity-60'>
+								{mapelList.map((m) => (
+									<option
+										key={m.id}
+										value={m.mapel || m.nama_mapel}>
+										{m.mapel || m.nama_mapel}
+									</option>
+								))}
+							</select>
+							<div className='absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400'>▼</div>
 						</div>
+
+						{/* Tanggal */}
+						<input
+							type='date'
+							value={tanggal}
+							onChange={(e) => setTanggal(e.target.value)}
+							disabled={mode === 'edit'}
+							className='w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-60'
+						/>
+
+						{/* Jam Ke */}
+						<input
+							type='text'
+							placeholder='Jam (mis: 1-2)'
+							value={jamKe}
+							onChange={(e) => setJamKe(e.target.value)}
+							disabled={mode === 'edit'}
+							className={`w-full px-3 py-2 bg-gray-50 border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none text-center disabled:opacity-60 ${
+								!jamKe ? 'border-red-300 bg-red-50 placeholder-red-400' : 'border-gray-200'
+							}`}
+						/>
 					</div>
 				</div>
+			</div>
 
-				{/* Statistik */}
-				<div className='grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6'>
-					<div className='bg-white rounded-2xl shadow-lg p-4 border-2 border-gray-100 hover:shadow-xl transition-all'>
-						<div className='text-center'>
-							<p className='text-xs sm:text-sm text-gray-600 mb-1'>Total Siswa</p>
-							<p className='text-2xl sm:text-3xl font-bold text-gray-800'>{stats.total}</p>
-						</div>
+			{/* --- MAIN CONTENT --- */}
+			<div className='max-w-5xl mx-auto px-4 py-6'>
+				{/* 1. STATE KOSONG */}
+				{siswaKelasIni.length === 0 ? (
+					<div className='flex flex-col items-center justify-center py-20 opacity-50'>
+						<div className='text-6xl mb-4'>🎓</div>
+						<p className='text-gray-500 font-medium'>Tidak ada siswa di kelas ini</p>
 					</div>
-					<div className='bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg p-4 text-white hover:shadow-xl transition-all'>
-						<div className='text-center'>
-							<p className='text-xs sm:text-sm text-white/90 mb-1'>Hadir</p>
-							<p className='text-2xl sm:text-3xl font-bold'>{stats.hadir}</p>
-						</div>
-					</div>
-					<div className='bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-2xl shadow-lg p-4 text-white hover:shadow-xl transition-all'>
-						<div className='text-center'>
-							<p className='text-xs sm:text-sm text-white/90 mb-1'>Sakit</p>
-							<p className='text-2xl sm:text-3xl font-bold'>{stats.sakit}</p>
-						</div>
-					</div>
-					<div className='bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-4 text-white hover:shadow-xl transition-all'>
-						<div className='text-center'>
-							<p className='text-xs sm:text-sm text-white/90 mb-1'>Izin</p>
-							<p className='text-2xl sm:text-3xl font-bold'>{stats.izin}</p>
-						</div>
-					</div>
-					<div className='bg-gradient-to-br from-red-500 to-red-600 rounded-2xl shadow-lg p-4 text-white hover:shadow-xl transition-all'>
-						<div className='text-center'>
-							<p className='text-xs sm:text-sm text-white/90 mb-1'>Alpha</p>
-							<p className='text-2xl sm:text-3xl font-bold'>{stats.alpha}</p>
-						</div>
-					</div>
-				</div>
-
-				{loadingRekap ? (
-					<div className='text-center py-12'>
-						<div className='animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto'></div>
-					</div>
-				) : mode === 'input' ? (
-					/* MODE INPUT */
-					<>
-						{/* Quick Actions */}
-						<div className='bg-white rounded-2xl shadow-lg p-4 sm:p-6 mb-6 border-2 border-gray-100'>
-							<h3 className='text-sm font-semibold text-gray-700 mb-3'>Tandai Semua Sebagai:</h3>
-							<div className='flex flex-wrap gap-2'>
-								{statusList.map((st) => (
-									<button
-										key={st.id}
-										onClick={() => handleTandaiSemua(st.label)}
-										className={`${getStatusClasses(st.warna, false)} hover:scale-105`}>
-										{st.label}
-									</button>
-								))}
+				) : mode === 'rekap' ? (
+					/* 2. MODE REKAPITULASI (Tabel Read Only) */
+					<div className='bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden'>
+						<div className='px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50'>
+							<div>
+								<h2 className='font-bold text-gray-800 text-lg'>Rekapitulasi Kehadiran</h2>
+								<p className='text-sm text-gray-500'>
+									{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
+								</p>
 							</div>
-						</div>
-
-						{/* Form Input Absensi */}
-						<div className='bg-white rounded-2xl shadow-xl border-2 border-gray-100 overflow-hidden mb-6'>
-							<div className='p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200'>
-								<h2 className='text-xl font-bold text-gray-800'>Daftar Siswa ({siswaKelasIni.length})</h2>
-							</div>
-
-							<div className='divide-y-2 divide-gray-100'>
-								{siswaKelasIni.map((siswa, index) => (
-									<div
-										key={siswa.id}
-										className='p-4 sm:p-6 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all'>
-										{/* Mobile Layout */}
-										<div className='block lg:hidden'>
-											<div className='flex items-start gap-3 mb-4'>
-												<div className='bg-indigo-100 text-indigo-600 font-bold rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0'>{index + 1}</div>
-												<div className='flex-1'>
-													<h3 className='font-bold text-gray-800 text-base mb-1'>{siswa.nama_lengkap}</h3>
-													{siswa.nis && <p className='text-xs text-gray-500'>NIS: {siswa.nis}</p>}
-												</div>
-											</div>
-
-											<div className='grid grid-cols-2 gap-2 mb-3'>
-												{statusList.map((st) => {
-													const active = absensi[siswa.id]?.status === st.label;
-													return (
-														<button
-															key={st.id}
-															onClick={() => handleStatusChange(siswa.id, st.label)}
-															className={getStatusClasses(st.warna, active)}>
-															{st.label}
-														</button>
-													);
-												})}
-											</div>
-
-											<input
-												type='text'
-												placeholder='Keterangan (opsional)'
-												value={absensi[siswa.id]?.keterangan || ''}
-												onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-												className='w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm'
-											/>
-										</div>
-
-										{/* Desktop Layout */}
-										<div className='hidden lg:grid lg:grid-cols-12 lg:gap-4 lg:items-center'>
-											<div className='col-span-3 flex items-center gap-3'>
-												<div className='bg-indigo-100 text-indigo-600 font-bold rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0'>{index + 1}</div>
-												<div>
-													<h3 className='font-bold text-gray-800 text-sm'>{siswa.nama_lengkap}</h3>
-													{siswa.nis && <p className='text-xs text-gray-500'>NIS: {siswa.nis}</p>}
-												</div>
-											</div>
-
-											<div className='col-span-6 flex gap-2'>
-												{statusList.map((st) => {
-													const active = absensi[siswa.id]?.status === st.label;
-													return (
-														<button
-															key={st.id}
-															onClick={() => handleStatusChange(siswa.id, st.label)}
-															className={getStatusClasses(st.warna, active)}>
-															{st.label}
-														</button>
-													);
-												})}
-											</div>
-
-											<div className='col-span-3'>
-												<input
-													type='text'
-													placeholder='Keterangan'
-													value={absensi[siswa.id]?.keterangan || ''}
-													onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-													className='w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm'
-												/>
-											</div>
-										</div>
-									</div>
-								))}
-							</div>
-						</div>
-
-						{/* Tombol Simpan */}
-						<div className='flex gap-3'>
 							<button
-								onClick={() => router.back()}
-								className='flex-1 sm:flex-none px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-2xl font-bold hover:bg-gray-50 transition-all shadow-lg'>
-								Batal
-							</button>
-							<button
-								onClick={handleSimpan}
-								disabled={saving}
-								className='flex-1 sm:flex-auto px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-bold hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:scale-105'>
-								{saving ? 'Menyimpan...' : '💾 Simpan Absensi'}
+								onClick={() => setMode('edit')}
+								className='px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm'>
+								✏️ Edit Data
 							</button>
 						</div>
-					</>
+
+						<div className='overflow-x-auto'>
+							<table className='w-full'>
+								<thead className='bg-gray-50 text-gray-500 text-xs uppercase tracking-wider font-bold'>
+									<tr>
+										<th className='px-6 py-4 text-left w-16'>No</th>
+										<th className='px-6 py-4 text-left'>Nama Siswa</th>
+										<th className='px-6 py-4 text-center w-32'>Status</th>
+										<th className='px-6 py-4 text-left w-1/3'>Keterangan</th>
+									</tr>
+								</thead>
+								<tbody className='divide-y divide-gray-100'>
+									{siswaKelasIni.map((siswa, idx) => {
+										const status = absensi[siswa.id]?.status || '-';
+										const ket = absensi[siswa.id]?.keterangan || '-';
+										return (
+											<tr
+												key={siswa.id}
+												className='hover:bg-gray-50/50 transition-colors'>
+												<td className='px-6 py-4 text-gray-400 font-medium'>{idx + 1}</td>
+												<td className='px-6 py-4'>
+													<p className='font-bold text-gray-800'>{siswa.nama_lengkap}</p>
+													<p className='text-xs text-gray-400'>{siswa.nis}</p>
+												</td>
+												<td className='px-6 py-4 text-center'>{getBadgeRekap(status)}</td>
+												<td className='px-6 py-4 text-sm text-gray-500 italic'>{ket !== '-' ? ket : <span className='text-gray-300'>Tidak ada keterangan</span>}</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					</div>
 				) : (
-					/* MODE REKAP */
-					<>
-						{/* Success Badge */}
-						<div className='text-center mb-6'>
-							<div className='inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-full shadow-lg'>
-								<svg
-									className='w-6 h-6'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={3}
-										d='M5 13l4 4L19 7'
-									/>
-								</svg>
-								<span className='font-bold'>Absensi Sudah Tersimpan - Klik siswa untuk edit</span>
-							</div>
-						</div>
+					/* 3. MODE INPUT / EDIT (Card UI) */
+					<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+						{siswaKelasIni.map((siswa, idx) => {
+							const currentStatus = absensi[siswa.id]?.status || 'Hadir';
 
-						{/* Detail Rekap */}
-						<div className='bg-white rounded-2xl shadow-xl border-2 border-gray-100 overflow-hidden'>
-							<div className='bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-4'>
-								<h2 className='text-xl font-bold text-white'>Detail Absensi Siswa</h2>
-							</div>
-							<div className='divide-y divide-gray-100 max-h-[600px] overflow-y-auto'>
-								{dataRekap.map((item, index) => (
-									<div
-										key={item.id}
-										onClick={() => handleEditSiswa(item)}
-										className='p-4 hover:bg-indigo-50 transition-all cursor-pointer group'>
-										<div className='flex items-center justify-between gap-4'>
-											<div className='flex items-center gap-3 flex-1'>
-												<div className='bg-gray-100 group-hover:bg-indigo-100 text-gray-700 group-hover:text-indigo-600 font-bold rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0 transition-all'>
-													{index + 1}
-												</div>
-												<div className='flex-1'>
-													<h3 className='font-semibold text-gray-800 group-hover:text-indigo-700 transition-colors'>{getNamaSiswa(item.siswa_id)}</h3>
-													<p className='text-xs text-gray-500'>NIS: {getNisSiswa(item.siswa_id)}</p>
-													{item.keterangan && <p className='text-xs text-gray-500 mt-1'>💬 {item.keterangan}</p>}
-												</div>
-											</div>
-											<div className='flex items-center gap-3'>
-												<div className={`bg-gradient-to-br ${getStatusBadgeColor(item.status)} px-4 py-2 rounded-xl text-white font-bold text-sm shadow-md`}>{item.status}</div>
-												<svg
-													className='w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors'
-													fill='none'
-													stroke='currentColor'
-													viewBox='0 0 24 24'>
-													<path
-														strokeLinecap='round'
-														strokeLinejoin='round'
-														strokeWidth={2}
-														d='M9 5l7 7-7 7'
-													/>
-												</svg>
-											</div>
+							return (
+								<div
+									key={siswa.id}
+									className='bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200'>
+									<div className='flex justify-between items-start mb-4'>
+										<div>
+											<h3 className='font-bold text-gray-800 line-clamp-1 text-base'>{siswa.nama_lengkap}</h3>
+											<p className='text-xs text-gray-400 font-mono mt-0.5'>{siswa.nis || '-'}</p>
 										</div>
+										<span className='text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full'>#{idx + 1}</span>
 									</div>
-								))}
-							</div>
-						</div>
-					</>
+
+									<div className='grid grid-cols-4 gap-2 mb-3'>
+										{statusList.map((st) => {
+											const isActive = currentStatus === st.label;
+											return (
+												<button
+													key={st.id}
+													onClick={() => handleStatusChange(siswa.id, st.label)}
+													className={getStatusClasses(st.warna, isActive)}>
+													{st.kode || st.label.substring(0, 1)}
+												</button>
+											);
+										})}
+									</div>
+
+									<div className='relative'>
+										<input
+											type='text'
+											placeholder='Keterangan...'
+											value={absensi[siswa.id]?.keterangan || ''}
+											onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+											className='w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-gray-50 focus:bg-white transition-colors'
+										/>
+									</div>
+								</div>
+							);
+						})}
+					</div>
 				)}
 			</div>
+
+			{/* --- Floating Save Button (Hanya Muncul di Mode Input/Edit) --- */}
+			{siswaKelasIni.length > 0 && mode !== 'rekap' && (
+				<div className='fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-gray-200 z-30 flex justify-end shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]'>
+					<button
+						onClick={handleSimpan}
+						disabled={saving}
+						className='w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95'>
+						{saving ? 'Menyimpan...' : 'Simpan'}
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }
