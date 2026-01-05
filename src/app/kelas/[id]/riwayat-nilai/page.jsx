@@ -63,7 +63,7 @@ export default function RiwayatNilaiPage() {
 					params.append('mapel', selectedMapel);
 				}
 
-				const response = await fetch(`/api/tugas?${params}`);
+				const response = await fetch(`/api/nilai?${params}`);
 				const data = await response.json();
 
 				// Filter berdasarkan bulan dan tahun
@@ -129,13 +129,7 @@ export default function RiwayatNilaiPage() {
 	const groupedTugas = groupTugasByDate();
 
 	if (loadingPage) {
-		return (
-			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<Loader />
-				</div>
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (

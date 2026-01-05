@@ -105,7 +105,7 @@ export default function BuatTugasPage() {
 				})),
 			};
 
-			const response = await fetch('/api/tugas', {
+			const response = await fetch('/api/nilai', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

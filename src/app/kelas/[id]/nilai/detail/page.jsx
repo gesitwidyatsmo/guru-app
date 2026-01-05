@@ -34,7 +34,7 @@ export default function DetailNilaiPage() {
 					tanggal,
 				}).toString();
 
-				const response = await fetch(`/api/tugas?${params}`);
+				const response = await fetch(`/api/nilai?${params}`);
 				const data = await response.json();
 
 				if (Array.isArray(data) && data.length > 0) {

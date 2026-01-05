@@ -1,18 +1,30 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
+import { ModalAddSiswa } from '@/app/components/ModalAddSiswa';
+import { swalProcess, swalSuccess, swalError, swalConfirmDelete } from '@/lib/swal';
 
 export default function KelasDetail() {
 	const params = useParams();
 	const id = params.id;
+	const router = useRouter();
 	const [kelasDetail, setKelasDetail] = useState(null);
 	const [jumlahSiswa, setJumlahSiswa] = useState(0);
 	const [namaKelas, setNamaKelas] = useState('');
 	const [siswaList, setSiswaList] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [isAddOpen, setIsAddOpen] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+	const [editFormData, setEditFormData] = useState({
+		kelas: '',
+		wali_kelas: '',
+		// tahun_ajaran: '',
+		// status: 'Aktif',
+	});
 
 	useEffect(() => {
 		if (!id) return;
@@ -58,14 +70,100 @@ export default function KelasDetail() {
 		fetchStats();
 	}, [namaKelas]);
 
+	const fetchKelasData = async () => {
+		if (!id) return;
+		try {
+			const res = await fetch('/api/kelas');
+			const data = await res.json();
+			const kelas = data.find((k) => k.id === id);
+			if (kelas) {
+				setKelasDetail(kelas);
+				setNamaKelas(kelas.kelas);
+			}
+		} catch (error) {
+			console.error('Gagal ambil data kelas:', error);
+		}
+	};
+
+	// 2. Definisikan Fetch Data Siswa secara terpisah
+	const fetchSiswaData = async () => {
+		if (!namaKelas) return;
+		// setLoading(true); // Opsional: jangan set loading true jika ingin silent update
+		try {
+			const resSiswa = await fetch('/api/siswa');
+			const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+			const siswaListIni = dataSiswa.filter((siswa) => siswa.kelas === namaKelas);
+			setJumlahSiswa(siswaListIni.length);
+			setSiswaList(siswaListIni);
+		} catch (error) {
+			console.error('Gagal ambil data siswa:', error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchKelasData();
+	}, [id]);
+
+	useEffect(() => {
+		fetchSiswaData();
+	}, [namaKelas]);
+
+	const handleOpenEdit = () => {
+		if (kelasDetail) {
+			setEditFormData({
+				kelas: kelasDetail.kelas,
+				wali_kelas: kelasDetail.wali_kelas,
+				// tahun_ajaran: kelasDetail.tahun_ajaran,
+				// status: kelasDetail.status,
+			});
+			setIsEditModalOpen(true);
+		}
+	};
+
+	const handleEditSubmit = async (e) => {
+		e.preventDefault();
+		swalProcess('Menyimpan Perubahan...');
+		setIsEditModalOpen(false);
+
+		try {
+			const res = await fetch('/api/kelas', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id, ...editFormData }),
+			});
+
+			if (!res.ok) throw new Error('Gagal update kelas');
+
+			await swalSuccess('Berhasil', 'Data kelas diperbarui');
+			// Refresh data manual atau reload page
+			fetchKelasData();
+		} catch (error) {
+			swalError('Gagal', error.message);
+		}
+	};
+
+	// Handler: Hapus Kelas
+	const handleDeleteKelas = async () => {
+		const confirm = await swalConfirmDelete('Hapus Kelas Ini?', 'Semua data siswa di kelas ini mungkin akan menjadi yatim piatu (tidak punya kelas).');
+
+		if (confirm.isConfirmed) {
+			swalProcess('Menghapus Kelas...');
+			try {
+				const res = await fetch(`/api/kelas?id=${id}`, { method: 'DELETE' });
+				if (!res.ok) throw new Error('Gagal menghapus kelas');
+
+				await swalSuccess('Terhapus', 'Kelas berhasil dihapus');
+				router.push('/kelas');
+			} catch (error) {
+				swalError('Gagal', error.message);
+			}
+		}
+	};
+
 	if (loading) {
-		return (
-			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<Loader />
-				</div>
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (
@@ -172,7 +270,9 @@ export default function KelasDetail() {
 							<div>Buat Tugas</div>
 						</Link>
 						<hr className='border-gray-100' />
-						<Link href={`/kelas/${id}/jurnal`} className='flex gap-2'>
+						<Link
+							href={`/kelas/${id}/jurnal`}
+							className='flex gap-2'>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -189,7 +289,9 @@ export default function KelasDetail() {
 							<div>Buat Jurnal</div>
 						</Link>
 						<hr className='border-gray-100' />
-						<div className='flex gap-2'>
+						<button
+							onClick={() => setIsAddOpen(true)}
+							className='flex gap-2'>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -204,7 +306,7 @@ export default function KelasDetail() {
 								/>
 							</svg>
 							<div>Tambah Siswa</div>
-						</div>
+						</button>
 					</div>
 				</div>
 
@@ -214,7 +316,7 @@ export default function KelasDetail() {
 					<div className='bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center space-y-2 mt-1'>
 						<Link
 							className='flex gap-2'
-							href={`/riwayat-absensi`}>
+							href={`/kelas/${id}/riwayat-absensi`}>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -352,7 +454,9 @@ export default function KelasDetail() {
 				{/* action */}
 				<div className='my-6'>
 					<div className='bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center space-y-2 mt-1'>
-						<div className='flex gap-2'>
+						<button
+							onClick={handleOpenEdit}
+							className='flex gap-2'>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -367,9 +471,11 @@ export default function KelasDetail() {
 								/>
 							</svg>
 							<div>Edit</div>
-						</div>
+						</button>
 						<hr className='border-gray-100' />
-						<div className='flex gap-2'>
+						<button
+							onClick={handleDeleteKelas}
+							className='flex gap-2'>
 							<svg
 								xmlns='http://www.w3.org/2000/svg'
 								fill='none'
@@ -384,10 +490,185 @@ export default function KelasDetail() {
 								/>
 							</svg>
 							<div>Hapus Kelas</div>
-						</div>
+						</button>
 					</div>
 				</div>
 			</div>
+
+			{/* 4. Modal Form - Clean & Direct */}
+			{isModalOpen && (
+				<div
+					className='fixed inset-0 z-50 overflow-y-auto'
+					aria-labelledby='modal-title'
+					role='dialog'
+					aria-modal='true'>
+					{/* Backdrop */}
+					<div
+						className='fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity'
+						onClick={() => setIsModalOpen(false)}></div>
+
+					<div className='flex min-h-full items-center justify-center p-4 text-center sm:p-0'>
+						<div className='relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg'>
+							<div className='bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4'>
+								<h3
+									className='text-lg font-semibold leading-6 text-slate-900 mb-4'
+									id='modal-title'>
+									{isEditMode ? 'Edit Siswa' : 'Tambah Siswa Baru'}
+								</h3>
+
+								<form
+									id='siswaForm'
+									onSubmit={handleSubmit}
+									className='space-y-4'>
+									<div>
+										<label className='block text-sm font-medium leading-6 text-slate-900'>Nama Lengkap</label>
+										<input
+											required
+											type='text'
+											className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+											value={formData.nama_lengkap}
+											onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
+										/>
+									</div>
+
+									<div className='grid grid-cols-2 gap-4'>
+										<div>
+											<label className='block text-sm font-medium leading-6 text-slate-900'>NIS</label>
+											<input
+												type='text'
+												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												value={formData.nis}
+												onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
+											/>
+										</div>
+										<div>
+											<label className='block text-sm font-medium leading-6 text-slate-900'>Kelas</label>
+											<select
+												required
+												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												value={formData.kelas}
+												onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
+												<option value=''>Pilih Kelas</option>
+												{kelasList.map((k, i) => (
+													<option
+														key={i}
+														value={k.kelas || k.nama_kelas}>
+														{k.kelas || k.nama_kelas}
+													</option>
+												))}
+											</select>
+										</div>
+									</div>
+
+									<div className='grid grid-cols-2 gap-4'>
+										<div>
+											<label className='block text-sm font-medium leading-6 text-slate-900'>Jenis Kelamin</label>
+											<select
+												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												value={formData.jenis_kelamin}
+												onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}>
+												<option value='Laki-laki'>Laki-laki</option>
+												<option value='Perempuan'>Perempuan</option>
+											</select>
+										</div>
+										<div>
+											<label className='block text-sm font-medium leading-6 text-slate-900'>Status</label>
+											<select
+												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												value={formData.status}
+												onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+												<option value='Aktif'>Aktif</option>
+												<option value='Non-Aktif'>Non-Aktif</option>
+												<option value='Lulus'>Lulus</option>
+												<option value='Pindah'>Pindah</option>
+											</select>
+										</div>
+									</div>
+								</form>
+							</div>
+
+							<div className='bg-slate-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6'>
+								<button
+									type='submit'
+									form='siswaForm'
+									className='inline-flex w-full justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 sm:ml-3 sm:w-auto'>
+									Simpan
+								</button>
+								<button
+									type='button'
+									className='mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 sm:mt-0 sm:w-auto'
+									onClick={() => setIsModalOpen(false)}>
+									Batal
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+			<ModalAddSiswa
+				isOpen={isAddOpen}
+				onClose={() => setIsAddOpen(false)}
+				currentKelas={namaKelas}
+				onRefresh={fetchSiswaData}
+			/>
+
+			{/* --- MODAL EDIT KELAS --- */}
+			{isEditModalOpen && (
+				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm'>
+					<div className='w-full max-w-md rounded-2xl bg-white p-6 shadow-xl'>
+						<h3 className='text-lg font-bold text-gray-900 mb-4'>Edit Data Kelas</h3>
+						<form
+							onSubmit={handleEditSubmit}
+							className='space-y-4'>
+							<div>
+								<label className='block text-sm font-medium text-gray-700'>Nama Kelas</label>
+								<input
+									type='text'
+									required
+									value={editFormData.kelas}
+									onChange={(e) => setEditFormData({ ...editFormData, kelas: e.target.value })}
+									className='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500'
+								/>
+							</div>
+
+							<div>
+								<label className='block text-sm font-medium text-gray-700'>Wali Kelas</label>
+								<input
+									type='text'
+									required
+									value={editFormData.wali_kelas}
+									onChange={(e) => setEditFormData({ ...editFormData, wali_kelas: e.target.value })}
+									className='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500'
+								/>
+							</div>
+
+							{/* <div>
+								<label className='block text-sm font-medium text-gray-700'>Tahun Ajaran</label>
+								<input
+									type='text'
+									value={editFormData.tahun_ajaran}
+									onChange={(e) => setEditFormData({ ...editFormData, tahun_ajaran: e.target.value })}
+									className='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500'
+								/>
+							</div> */}
+
+							<div className='flex gap-3 pt-4'>
+								<button
+									type='button'
+									onClick={() => setIsEditModalOpen(false)}
+									className='flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50'>
+									Batal
+								</button>
+								<button
+									type='submit'
+									className='flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700'>
+									Simpan Perubahan
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

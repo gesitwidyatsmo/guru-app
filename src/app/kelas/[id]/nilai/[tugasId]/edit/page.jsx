@@ -25,7 +25,7 @@ export default function EditNilaiPage() {
 
 		const fetchDetailTugas = async () => {
 			try {
-				const response = await fetch(`/api/tugas?tugasId=${tugasId}`);
+				const response = await fetch(`/api/nilai?tugasId=${tugasId}`);
 				const data = await response.json();
 
 				console.log('Data fetched for edit:', data);
@@ -114,7 +114,7 @@ export default function EditNilaiPage() {
 				})),
 			};
 
-			const response = await fetch('/api/tugas', {
+			const response = await fetch('/api/nilai', {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',

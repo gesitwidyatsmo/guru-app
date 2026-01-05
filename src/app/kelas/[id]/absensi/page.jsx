@@ -225,7 +225,7 @@ export default function AbsensiKelasPage() {
 			html: `
       <div class="relative px-2">
         <!-- Header -->
-        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-4 mb-4 text-white">
+        <div class="bg-linear-to-r from-indigo-500 to-purple-600 rounded-xl p-4 mb-4 text-white">
           <div class="font-bold text-lg">${siswa.nama_lengkap}</div>
           <div class="text-xs opacity-90">NIS: ${siswa.nis}</div>
         </div>
@@ -390,16 +390,9 @@ export default function AbsensiKelasPage() {
 	const { stats, total } = sudahAdaAbsensi ? getStatistikAbsensi() : { stats: {}, total: 0 };
 
 	if (loading) {
-		return (
-			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<Loader />
-				</div>
-			</div>
-		);
+		return <Loader />;
 	}
 
-	// ✅ NEW: Render Section Statistik & List Siswa
 	const renderAbsensiTersimpan = () => {
 		if (loadingAbsensi) {
 			return <div className='p-6 text-center text-gray-400 text-sm'>Memuat data absensi...</div>;
@@ -408,7 +401,7 @@ export default function AbsensiKelasPage() {
 		return (
 			<>
 				{/* Section 1: Statistik Absensi */}
-				<div className='p-4 bg-gradient-to-br from-indigo-50 to-blue-50 border-b border-gray-100'>
+				<div className='p-4 bg-linear-to-br from-indigo-50 to-blue-50 border-b border-gray-100'>
 					<h3 className='text-sm font-semibold text-gray-700 mb-3'>📊 Ringkasan Absensi - {tanggal}</h3>
 					<div className='grid grid-cols-2 md:grid-cols-4 gap-3'>
 						{Object.entries(stats).map(([label, data]) => (

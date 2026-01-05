@@ -17,7 +17,7 @@ export async function GET() {
 		const data = rows.map((row) => ({
 			id: row.get('id'),
 			kelas: row.get('nama_kelas'),
-			wali_kelas: row.get('wali_kelas') || '', // Ambil wali kelas, default kosong
+			wali_kelas: row.get('wali_kelas') || '',
 		}));
 
 		return Response.json(data);
@@ -85,8 +85,9 @@ export async function PUT(request) {
 // 4. DELETE: Hapus kelas
 export async function DELETE(request) {
 	try {
-		const body = await request.json();
-		const { id } = body;
+		// AMBIL DARI URL SEARCH PARAMS
+		const { searchParams } = new URL(request.url);
+		const id = searchParams.get('id');
 
 		if (!id) {
 			return Response.json({ error: 'ID wajib diisi' }, { status: 400 });
@@ -95,7 +96,6 @@ export async function DELETE(request) {
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle['MASTER_KELAS'];
 		const rows = await sheet.getRows();
-
 		const row = rows.find((r) => r.get('id') === id);
 
 		if (row) {

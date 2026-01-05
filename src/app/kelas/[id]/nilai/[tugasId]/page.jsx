@@ -19,7 +19,7 @@ export default function DetailNilaiPage() {
 
 		const fetchDetailTugas = async () => {
 			try {
-				const response = await fetch(`/api/tugas?tugasId=${tugasId}`);
+				const response = await fetch(`/api/nilai?tugasId=${tugasId}`);
 				const data = await response.json();
 
 				console.log('Data fetched:', data);
@@ -75,7 +75,7 @@ export default function DetailNilaiPage() {
 		if (!result.isConfirmed) return;
 
 		try {
-			const response = await fetch(`/api/tugas?tugasId=${tugasId}`, {
+			const response = await fetch(`/api/nilai?tugasId=${tugasId}`, {
 				method: 'DELETE',
 			});
 
