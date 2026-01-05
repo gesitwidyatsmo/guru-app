@@ -80,7 +80,7 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'>
 			<div className='bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden'>
 				<div className='bg-purple-600 px-6 py-4 flex justify-between items-center'>
-					<h3 className='text-xl font-bold text-white'>Tambah Siswa</h3>
+					<h2 className='text-xl font-bold text-white'>Tambah Siswa</h2>
 					<button
 						onClick={onClose}
 						className='text-white/80 hover:text-white'>
@@ -97,6 +97,7 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 						<input
 							type='text'
 							required
+							placeholder='Masukan NIS'
 							className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none'
 							value={formData.nis}
 							onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
@@ -109,6 +110,7 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 						<input
 							type='text'
 							required
+							placeholder='Masukan nama siswa'
 							className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none'
 							value={formData.nama_lengkap}
 							onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
@@ -180,12 +182,16 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 }
 
 export default function Page() {
-	const [siswaList, setSiswaList] = useState([]);
 	const [kelasList, setKelasList] = useState([]); // Data MASTER_KELAS
-	const [filteredSiswa, setFilteredSiswa] = useState([]); // Hasil filter
-	const [selectedKelas, setSelectedKelas] = useState('Semua'); // Kelas aktif
+	const [siswaList, setSiswaList] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [loadingPage, setLoadingPage] = useState(true);
+
+	// filter & search
+	const [selectedKelas, setSelectedKelas] = useState('Semua'); // Kelas aktif
+	const [filteredSiswa, setFilteredSiswa] = useState([]); // Hasil filter
+	const [searchQuery, setSearchQuery] = useState('');
+
 	const [showClassPicker, setShowClassPicker] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
 
@@ -218,15 +224,23 @@ export default function Page() {
 		fetchData();
 	}, []);
 
-	// 2. Logic Filter (Setiap kali selectedKelas berubah)
+	// 2. Logic Filter (Setiap kali selectedKelas atau searchQuery berubah)
 	useEffect(() => {
-		if (selectedKelas === 'Semua') {
-			setFilteredSiswa(siswaList);
-		} else {
-			const hasil = siswaList.filter((s) => s.kelas === selectedKelas);
-			setFilteredSiswa(hasil);
+		let hasil = siswaList;
+
+		// Filter berdasarkan kelas
+		if (selectedKelas !== 'Semua') {
+			hasil = hasil.filter((s) => s.kelas === selectedKelas);
 		}
-	}, [selectedKelas, siswaList]);
+
+		// Filter berdasarkan pencarian (nama atau NIS)
+		if (searchQuery.trim() !== '') {
+			const query = searchQuery.toLowerCase();
+			hasil = hasil.filter((s) => s.nama_lengkap.toLowerCase().includes(query) || s.nis.toLowerCase().includes(query));
+		}
+
+		setFilteredSiswa(hasil);
+	}, [selectedKelas, searchQuery, siswaList]);
 
 	// Logic Simpan Siswa Baru
 	const handleSaveSiswa = async (newData) => {
@@ -243,9 +257,6 @@ export default function Page() {
 				const resSiswa = await fetch('/api/siswa');
 				const dataSiswa = await resSiswa.json();
 				setSiswaList(dataSiswa);
-				// Reset filter jika perlu
-				if (selectedKelas === 'Semua') setFilteredSiswa(dataSiswa);
-				else setFilteredSiswa(dataSiswa.filter((s) => s.kelas === selectedKelas));
 			} else {
 				alert('Gagal menyimpan siswa.');
 			}
@@ -256,13 +267,7 @@ export default function Page() {
 	};
 
 	if (loadingPage) {
-		return (
-			<div className='min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center'>
-				<div className='text-center'>
-					<Loader />
-				</div>
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (
@@ -287,8 +292,58 @@ export default function Page() {
 				rightIcon={<span className='text-xl'>＋</span>}
 				onRightClick={() => setShowAddModal(true)}
 			/>
-			{/* FILTER BAR */}
+
+			{/* SEARCH BAR */}
 			<div className='px-4 mt-4'>
+				<div className='bg-white p-3 rounded-2xl shadow-sm border border-gray-100'>
+					<div className='relative'>
+						<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+							<svg
+								xmlns='http://www.w3.org/2000/svg'
+								fill='none'
+								viewBox='0 0 24 24'
+								strokeWidth='1.5'
+								stroke='currentColor'
+								className='w-5 h-5 text-gray-400'>
+								<path
+									strokeLinecap='round'
+									strokeLinejoin='round'
+									d='m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z'
+								/>
+							</svg>
+						</div>
+						<input
+							type='text'
+							placeholder='Cari nama atau NIS siswa...'
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							className='w-full pl-10 pr-4 py-2 border-0 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-gray-50'
+						/>
+						{searchQuery && (
+							<button
+								onClick={() => setSearchQuery('')}
+								className='absolute inset-y-0 right-0 pr-3 flex items-center'>
+								<svg
+									xmlns='http://www.w3.org/2000/svg'
+									fill='none'
+									viewBox='0 0 24 24'
+									strokeWidth='1.5'
+									stroke='currentColor'
+									className='w-5 h-5 text-gray-400 hover:text-gray-600'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										d='M6 18 18 6M6 6l12 12'
+									/>
+								</svg>
+							</button>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{/* FILTER BAR */}
+			<div className='px-4 mt-3'>
 				<div className='bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center'>
 					<div className='flex gap-3 items-center'>
 						<div className='bg-purple-100 p-2 rounded-full text-purple-600'>
@@ -331,17 +386,26 @@ export default function Page() {
 				</div>
 			</div>
 
+			{/* HASIL PENCARIAN INFO */}
+			{searchQuery && (
+				<div className='px-4 mt-3'>
+					<p className='text-sm text-gray-600'>
+						Menampilkan <span className='font-bold text-purple-600'>{filteredSiswa.length}</span> hasil untuk &quot;{searchQuery}&quot;
+					</p>
+				</div>
+			)}
+
 			{/* LIST SISWA */}
 			<div className='p-5'>
 				{loading ? (
 					<div className='text-center text-gray-500'>Memuat data siswa...</div>
 				) : (
-					<div className='grid grid-cols-3 md:grid-cols-5 gap-3'>
+					<div className='grid md:grid-cols-4 gap-3'>
 						{filteredSiswa.map((siswa) => (
 							<Link
 								href={`/siswa/${siswa.id}`}
 								key={siswa.id}
-								className='bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1'>
+								className='bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-1 hover:shadow-md transition-shadow'>
 								<div className='flex justify-between items-start'>
 									<div>
 										<h3 className='font-bold text-lg text-gray-800'>{siswa.nama_lengkap}</h3>
@@ -357,7 +421,26 @@ export default function Page() {
 							</Link>
 						))}
 
-						{siswaList.length === 0 && !loading && <p className='text-center text-gray-400'>Belum ada data siswa.</p>}
+						{filteredSiswa.length === 0 && !loading && (
+							<div className='col-span-full text-center py-8'>
+								<div className='text-gray-400 text-lg mb-2'>
+									<svg
+										xmlns='http://www.w3.org/2000/svg'
+										fill='none'
+										viewBox='0 0 24 24'
+										strokeWidth='1.5'
+										stroke='currentColor'
+										className='w-16 h-16 mx-auto'>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											d='m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z'
+										/>
+									</svg>
+								</div>
+								<p className='text-gray-400'>{searchQuery ? 'Tidak ada siswa yang cocok dengan pencarian' : 'Belum ada data siswa'}</p>
+							</div>
+						)}
 					</div>
 				)}
 			</div>
