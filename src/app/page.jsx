@@ -13,7 +13,14 @@ export default function Home() {
 		jurnal: 0,
 	});
 
+	const [userRole, setUserRole] = useState(null);
+	const [userName, setUserName] = useState('');
+
 	const [jadwalHariIni, setJadwalHariIni] = useState([]);
+	const [leaderboard, setLeaderboard] = useState({
+		topPositif: [],
+		topNegatif: [],
+	});
 	const [loading, setLoading] = useState(true);
 
 	const router = useRouter();
@@ -26,13 +33,28 @@ export default function Home() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				const [resSiswa, resMapel, resKelas, resJadwal, resJurnal] = await Promise.all([fetch('/api/siswa'), fetch('/api/mapel'), fetch('/api/kelas'), fetch('/api/jadwal'), fetch('/api/jurnal')]);
+				const [resSiswa, resMapel, resKelas, resJadwal, resJurnal, resPoin, resAuth] = await Promise.all([
+					fetch('/api/siswa'),
+					fetch('/api/mapel'),
+					fetch('/api/kelas'),
+					fetch('/api/jadwal'),
+					fetch('/api/jurnal'),
+					fetch('/api/poin'),
+					fetch('/api/auth/me'),
+				]);
 
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataJadwal = resJadwal.ok ? await resJadwal.json() : [];
 				const dataJurnal = resJurnal.ok ? await resJurnal.json() : [];
+				const dataPoin = resPoin.ok ? await resPoin.json() : [];
+
+				if (resAuth.ok) {
+					const dataAuth = await resAuth.json();
+					setUserRole(dataAuth.user.role);
+					setUserName(dataAuth.user.nama_lengkap);
+				}
 
 				const siswaAktif = dataSiswa.filter((siswa) => siswa.status === 'Aktif');
 
@@ -52,6 +74,30 @@ export default function Home() {
 					jurnal: dataJurnal.length,
 				});
 
+				// Kalkulasi Poin Leaderboard
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
+
+				const siswaWithPoin = siswaAktif.map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
+
+				const topPositif = [...siswaWithPoin]
+					.sort((a, b) => b.poinPositif - a.poinPositif)
+					.filter((s) => s.poinPositif > 0)
+					.slice(0, 5);
+				const topNegatif = [...siswaWithPoin]
+					.sort((a, b) => b.poinNegatif - a.poinNegatif)
+					.filter((s) => s.poinNegatif > 0)
+					.slice(0, 5);
+
+				setLeaderboard({ topPositif, topNegatif });
 				setJadwalHariIni(jadwalFiltered);
 			} catch (error) {
 				console.error('Gagal mengambil data:', error);
@@ -243,7 +289,37 @@ export default function Home() {
 			route: '/grup',
 			color: 'bg-gradient-to-br from-violet-400 to-purple-500',
 		},
+		{
+			label: 'Profil Ajar',
+			icon: (
+				<svg
+					className='w-7 h-7'
+					fill='none'
+					stroke='currentColor'
+					viewBox='0 0 24 24'>
+					<path
+						strokeLinecap='round'
+						strokeLinejoin='round'
+						strokeWidth={2}
+						d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+					/>
+				</svg>
+			),
+			route: '/profil',
+			color: 'bg-gradient-to-br from-indigo-500 to-blue-600',
+		},
 	];
+
+	// Filter menu reguler (Sembunyikan Master Data konfidensial dari Guru)
+	const filteredMenuItems = menuItems.filter((item) => {
+		if (userRole === 'Guru' && [''].includes(item.label)) {
+			return false;
+		}
+		if (userRole === 'Admin' && ['Jadwal', 'Profil Ajar'].includes(item.label)) {
+			return false;
+		}
+		return true;
+	});
 
 	if (loading) {
 		return <Loader />;
@@ -253,16 +329,63 @@ export default function Home() {
 		<main className='min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8'>
 				{/* Header */}
-				<div className='mb-8'>
-					<h1 className='text-3xl sm:text-4xl font-bold text-gray-800 mb-2'>Selamat Datang! 👋</h1>
-					<p className='text-gray-600 text-sm sm:text-base'>
-						{new Date().toLocaleDateString('id-ID', {
-							weekday: 'long',
-							year: 'numeric',
-							month: 'long',
-							day: 'numeric',
-						})}
-					</p>
+				<div className='mb-8 flex items-start justify-between gap-4'>
+					<div>
+						<h1 className='text-3xl sm:text-4xl font-bold text-gray-800 mb-2'>Selamat Datang{userName ? `, ${userName}` : ''}! 👋</h1>
+						<p className='text-gray-600 text-sm sm:text-base'>
+							{new Date().toLocaleDateString('id-ID', {
+								weekday: 'long',
+								year: 'numeric',
+								month: 'long',
+								day: 'numeric',
+							})}
+						</p>
+					</div>
+					<div className='flex items-center gap-2'>
+						<button
+							onClick={async () => {
+								await fetch('/api/logout');
+								window.location.href = '/login';
+							}}
+							title='Keluar Akun'
+							className='flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-500 transition-all duration-200 group'>
+							<svg
+								className='w-6 h-6 group-hover:-translate-x-0.5 transition-transform'
+								fill='none'
+								stroke='currentColor'
+								viewBox='0 0 24 24'>
+								<path
+									strokeLinecap='round'
+									strokeLinejoin='round'
+									strokeWidth={2}
+									d='M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1'
+								/>
+							</svg>
+						</button>
+						<Link
+							href='/pengaturan'
+							title='Pengaturan'
+							className='flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-gray-100 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 group'>
+							<svg
+								className='w-6 h-6 group-hover:rotate-45 transition-transform duration-300'
+								fill='none'
+								stroke='currentColor'
+								viewBox='0 0 24 24'>
+								<path
+									strokeLinecap='round'
+									strokeLinejoin='round'
+									strokeWidth={2}
+									d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
+								/>
+								<path
+									strokeLinecap='round'
+									strokeLinejoin='round'
+									strokeWidth={2}
+									d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
+								/>
+							</svg>
+						</Link>
+					</div>
 				</div>
 
 				{/* Statistik Cards */}
@@ -399,7 +522,7 @@ export default function Home() {
 						Menu Utama
 					</h2>
 					<div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4'>
-						{menuItems.map((item, idx) => (
+						{filteredMenuItems.map((item, idx) => (
 							<Link
 								key={idx}
 								href={item.route}
@@ -410,6 +533,74 @@ export default function Home() {
 								</div>
 							</Link>
 						))}
+					</div>
+				</div>
+
+				{/* Leaderboard Poin Siswa */}
+				<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8'>
+					{/* Top Positif */}
+					<div className='bg-white rounded-2xl shadow-xl p-6 border border-emerald-100 relative overflow-hidden'>
+						<div className='absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -z-10 opacity-50'></div>
+						<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
+							<span className='text-2xl'>🌟</span>
+							Bintang Kelas
+						</h2>
+						{leaderboard.topPositif.length > 0 ? (
+							<div className='space-y-3'>
+								{leaderboard.topPositif.map((siswa, idx) => (
+									<div
+										key={siswa.id}
+										className='flex items-center gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 rounded-xl transition-colors border border-emerald-100/50'>
+										<div
+											className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-400 text-yellow-900' : idx === 1 ? 'bg-gray-300 text-gray-800' : idx === 2 ? 'bg-amber-600 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+											{idx + 1}
+										</div>
+										<div className='flex-1'>
+											<Link
+												href={`/siswa/${siswa.id}`}
+												className='font-semibold text-gray-800 text-sm hover:text-indigo-600 transition-colors'>
+												{siswa.nama_lengkap}
+											</Link>
+											<p className='text-xs text-gray-500'>{siswa.kelas}</p>
+										</div>
+										<div className='bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold text-sm'>+{siswa.poinPositif}</div>
+									</div>
+								))}
+							</div>
+						) : (
+							<p className='text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-xl border border-gray-100'>Belum ada siswa dengan poin positif.</p>
+						)}
+					</div>
+
+					{/* Top Negatif */}
+					<div className='bg-white rounded-2xl shadow-xl p-6 border border-rose-100 relative overflow-hidden'>
+						<div className='absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-bl-full -z-10 opacity-50'></div>
+						<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
+							<span className='text-2xl'>⚠️</span>
+							Perhatian Khusus
+						</h2>
+						{leaderboard.topNegatif.length > 0 ? (
+							<div className='space-y-3'>
+								{leaderboard.topNegatif.map((siswa, idx) => (
+									<div
+										key={siswa.id}
+										className='flex items-center gap-3 p-3 bg-rose-50/50 hover:bg-rose-50 rounded-xl transition-colors border border-rose-100/50'>
+										<div className='w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-rose-100 text-rose-700'>{idx + 1}</div>
+										<div className='flex-1'>
+											<Link
+												href={`/siswa/${siswa.id}`}
+												className='font-semibold text-gray-800 text-sm hover:text-indigo-600 transition-colors'>
+												{siswa.nama_lengkap}
+											</Link>
+											<p className='text-xs text-gray-500'>{siswa.kelas}</p>
+										</div>
+										<div className='bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-bold text-sm'>-{siswa.poinNegatif}</div>
+									</div>
+								))}
+							</div>
+						) : (
+							<p className='text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-xl border border-gray-100'>Sempurna! Tidak ada siswa dengan pelanggaran.</p>
+						)}
 					</div>
 				</div>
 

@@ -13,15 +13,36 @@ export async function GET(req) {
 		const sheet = doc.sheetsByTitle['MASTER_SISWA'];
 		if (!sheet) return Response.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
 
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
+
+		let allowedClasses = null;
+		if (role === 'Guru' && userId) {
+			const kbmSheet = doc.sheetsByTitle['GURU_KBM'];
+			if (kbmSheet) {
+				const kbmRows = await kbmSheet.getRows();
+				const list = kbmRows.filter((r) => String(r.get('id_user')) === String(userId)).map((r) => r.get('kelas'));
+				allowedClasses = [...new Set(list)];
+			} else {
+				allowedClasses = [];
+			}
+		}
+
 		const rows = await sheet.getRows();
-		let siswaList = rows.map((row) => ({
-			id: row.get('id'),
-			nis: row.get('nis'),
-			nama_lengkap: row.get('nama_lengkap'),
-			kelas: row.get('kelas'),
-			jenis_kelamin: row.get('jenis_kelamin'),
-			status: row.get('status'),
-		}));
+		let siswaList = [];
+		for (const row of rows) {
+			const kls = row.get('kelas');
+			if (allowedClasses === null || allowedClasses.includes(kls)) {
+				siswaList.push({
+					id: row.get('id'),
+					nis: row.get('nis'),
+					nama_lengkap: row.get('nama_lengkap'),
+					kelas: kls,
+					jenis_kelamin: row.get('jenis_kelamin'),
+					status: row.get('status'),
+				});
+			}
+		}
 
 		if (kelas) siswaList = siswaList.filter((s) => s.kelas === kelas);
 		if (status) siswaList = siswaList.filter((s) => s.status === status);
@@ -35,6 +56,9 @@ export async function GET(req) {
 
 // --- METHOD POST (Tambah Data Baru - Manual & Bulk) ---
 export async function POST(request) {
+	if (request.headers.get('x-user-role') === 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	}
 	try {
 		const contentType = request.headers.get('content-type') || '';
 
@@ -113,6 +137,9 @@ export async function POST(request) {
 
 // --- METHOD PUT (Update Data) ---
 export async function PUT(req) {
+	if (req.headers.get('x-user-role') === 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	}
 	try {
 		const body = await req.json();
 		const { id, nis, nama_lengkap, kelas, jenis_kelamin, status } = body;
@@ -140,6 +167,9 @@ export async function PUT(req) {
 
 // --- METHOD DELETE (Hapus Data) ---
 export async function DELETE(req) {
+	if (req.headers.get('x-user-role') === 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	}
 	try {
 		const { searchParams } = new URL(req.url);
 		const id = searchParams.get('id');

@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 
@@ -71,9 +70,9 @@ export default function JurnalKelasPage() {
 		};
 
 		initData();
-	}, [classId]);
+	}, [classId, router, fetchJurnals]);
 
-	const fetchJurnals = async (namaKelas) => {
+	const fetchJurnals = useCallback(async (namaKelas) => {
 		try {
 			const res = await fetch(`/api/jurnal?kelas=${encodeURIComponent(namaKelas)}`);
 			if (res.ok) {
@@ -83,7 +82,7 @@ export default function JurnalKelasPage() {
 		} catch (error) {
 			console.error('Gagal load jurnal:', error);
 		}
-	};
+	}, []);
 
 	// --- Logic Auto-Suggest Pertemuan ---
 	useEffect(() => {
@@ -96,7 +95,7 @@ export default function JurnalKelasPage() {
 				setFormData((prev) => ({ ...prev, pertemuan_ke: suggestion }));
 			}
 		}
-	}, [formData.mapel, isModalOpen, isEditing, journals, kelasInfo]);
+	}, [formData.mapel, isModalOpen, isEditing, journals, kelasInfo, formData.pertemuan_ke]);
 
 	// --- Handlers ---
 	const handleOpenModal = (item = null) => {

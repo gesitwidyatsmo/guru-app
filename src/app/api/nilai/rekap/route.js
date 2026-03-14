@@ -92,6 +92,7 @@ export async function GET(req) {
 				tugasMap.set(tugasId, {
 					tugas_id: tugasId,
 					kategori: String(row.get('kategori') || ''),
+					type: String(row.get('type') || ''),
 					mapel: String(row.get('mapel') || ''),
 					tanggal: normalizeDate(row.get('tanggal')),
 				});
@@ -109,11 +110,28 @@ export async function GET(req) {
 			let countNilai = 0;
 
 			filteredNilai.forEach((row) => {
-				const rowSiswaId = String(row.get('siswa_id') || '');
 				const tugasId = String(row.get('tugas_id') || '');
+				if (!tugasId) return;
 
-				if (rowSiswaId === siswa.id && tugasId) {
-					const nilai = parseFloat(row.get('nilai') || 0);
+				let data_nilai = [];
+				try {
+					data_nilai = JSON.parse(row.get('data_nilai') || '[]');
+				} catch (e) {
+					data_nilai = [];
+				}
+
+				// Fallback kompatibilitas format rekam baris terdahulu
+				if (data_nilai.length === 0 && row.get('siswa_id')) {
+					data_nilai.push({
+						siswa_id: row.get('siswa_id'),
+						nilai: row.get('nilai'),
+					});
+				}
+
+				const matchedSiswa = data_nilai.find((d) => String(d.siswa_id) === String(siswa.id));
+
+				if (matchedSiswa && matchedSiswa.nilai) {
+					const nilai = parseFloat(matchedSiswa.nilai || 0);
 					nilaiSiswa[tugasId] = nilai;
 					totalNilai += nilai;
 					countNilai++;

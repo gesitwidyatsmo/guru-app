@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -13,6 +12,8 @@ export default function JurnalPage() {
 	const [journals, setJournals] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [filterKelas, setFilterKelas] = useState('Semua');
+
+	const [userRole, setUserRole] = useState('');
 
 	// State Form Modal
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -44,10 +45,15 @@ export default function JurnalPage() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				const [resKelas, resMapel] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel')]);
+				const [resKelas, resMapel, resAuth] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/auth/me')]);
 
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
+
+				if (resAuth.ok) {
+					const authData = await resAuth.json();
+					setUserRole(authData.user?.role || '');
+				}
 
 				setKelasList(dataKelas);
 				setMapelList(dataMapel);
@@ -335,6 +341,7 @@ export default function JurnalPage() {
 													</svg>
 													Jam ke-{journal.jam_ke}
 												</span>
+												{userRole === 'Admin' && <span className='ml-2 text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded'>ID Guru: {journal.guru_id || 'Tidak Diketahui'}</span>}
 											</div>
 										</div>
 									</div>

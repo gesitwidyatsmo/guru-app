@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 import { useState, useEffect } from 'react';
 
@@ -38,20 +37,26 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 	}, [isOpen]);
 
 	// 2. Isi form jika ada initialData (Mode Edit)
-	useEffect(() => {
-		if (isOpen && initialData) {
-			setFormData(initialData);
-		} else if (isOpen && !initialData) {
-			// Reset form
-			setFormData({
-				mapel: '',
-				kelas: '',
-				hari: hariIni,
-				jam_mulai: '',
-				jam_selesai: '',
-			});
+	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+	const [prevInitialData, setPrevInitialData] = useState(initialData);
+
+	if (isOpen !== prevIsOpen || initialData !== prevInitialData) {
+		setPrevIsOpen(isOpen);
+		setPrevInitialData(initialData);
+		if (isOpen) {
+			if (initialData) {
+				setFormData(initialData);
+			} else {
+				setFormData({
+					mapel: '',
+					kelas: '',
+					hari: hariIni,
+					jam_mulai: '',
+					jam_selesai: '',
+				});
+			}
 		}
-	}, [isOpen, initialData]);
+	}
 
 	if (!isOpen) return null;
 

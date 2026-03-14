@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Users, Shuffle, TrendingUp, Save, Loader2, G
 import Loader from '@/app/components/loading';
 import DragDropBoard from '@/app/components/DragDropBoard';
 import ButtonBack from '@/app/components/button/ButtonBack';
+import Swal from 'sweetalert2';
 
 export default function CreateGroupPage() {
 	const router = useRouter();
@@ -15,6 +16,7 @@ export default function CreateGroupPage() {
 		kelas: '',
 		mapel: '',
 		metode: 'random',
+		tugasSumber: 'all',
 		jumlahGrup: 4,
 	});
 
@@ -22,6 +24,7 @@ export default function CreateGroupPage() {
 	const [kelasList, setKelasList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
+	const [tugasList, setTugasList] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [loadingPage, setLoadingPage] = useState(false);
 
@@ -42,7 +45,6 @@ export default function CreateGroupPage() {
 
 				setKelasList(data);
 				setMapelList(mapelData);
-				console.log(mapelList);
 			} catch (err) {
 				console.error('Error fetching kelas:', err);
 			} finally {
@@ -61,7 +63,9 @@ export default function CreateGroupPage() {
 		const fetchSiswa = async () => {
 			setLoading(true);
 			try {
-				const url = `/api/siswa?kelas=${encodeURIComponent(form.kelas)}&status=Aktif`;
+				// Gunakan rekap untuk menyedot info .avg secara eager
+				const mapelQuery = form.mapel ? `&mapel=${encodeURIComponent(form.mapel)}` : '';
+				const url = `/api/nilai/rekap?kelas=${encodeURIComponent(form.kelas)}&bulan=all${mapelQuery}`;
 				console.log('Fetching siswa from:', url);
 
 				const res = await fetch(url);
@@ -72,26 +76,44 @@ export default function CreateGroupPage() {
 				}
 
 				const data = await res.json();
-
-				if (!Array.isArray(data)) {
-					throw new Error('Format data siswa tidak valid');
+				// data berisi object rekapan, kita ambil murni data.siswa nya
+				if (!data.siswa || !Array.isArray(data.siswa)) {
+					throw new Error('Format rekap siswa tidak valid');
 				}
 
-				setSiswaList(data);
+				// Fetch Poin Aktif
+				const resPoin = await fetch(`/api/poin?kelas=${encodeURIComponent(form.kelas)}`);
+				const dataPoin = resPoin.ok ? await resPoin.json() : [];
 
-				if (data.length === 0) {
-					alert(`⚠️ Tidak ada siswa aktif di kelas ${form.kelas}`);
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = 0;
+					if (p.tipe === 'positif') poinMap[p.siswa_id] += p.poin || 0;
+					if (p.tipe === 'negatif') poinMap[p.siswa_id] -= p.poin || 0;
+				});
+
+				const siswaDataUpdated = data.siswa.map((s) => ({
+					...s,
+					netPoin: poinMap[s.id] || 0,
+				}));
+
+				setSiswaList(siswaDataUpdated);
+				setTugasList(data.tugasList || []);
+
+				if (siswaDataUpdated.length === 0) {
+					Swal.fire('Informasi', `Tidak ada siswa aktif di kelas ${form.kelas}`, 'info');
 				}
 			} catch (err) {
-				alert('❌ ' + err.message);
+				Swal.fire('Gagal', err.message, 'error');
 				setSiswaList([]);
+				setTugasList([]);
 			} finally {
 				setLoading(false);
 			}
 		};
 
 		fetchSiswa();
-	}, [form.kelas]);
+	}, [form.kelas, form.mapel]);
 
 	const fisherYatesShuffle = (arr) => {
 		const a = [...arr];
@@ -104,7 +126,7 @@ export default function CreateGroupPage() {
 
 	const generateRandomGroups = () => {
 		if (siswaList.length === 0) {
-			alert('⚠️ Tidak ada siswa untuk dibagi ke dalam grup');
+			Swal.fire('Maaf', 'Tidak ada siswa untuk dibagi ke dalam grup', 'warning');
 			return;
 		}
 
@@ -133,13 +155,68 @@ export default function CreateGroupPage() {
 		setShowBoard(true);
 	};
 
-	const generateHeterogenGroups = () => {
+	const generateHeterogenGroups = async () => {
 		if (siswaList.length === 0) {
-			alert('⚠️ Tidak ada siswa untuk dibagi ke dalam grup');
+			Swal.fire('Maaf', 'Tidak ada siswa untuk dibagi ke dalam grup', 'warning');
 			return;
 		}
 
-		const sorted = [...siswaList].sort((a, b) => (b.nilai || 0) - (a.nilai || 0));
+		// Bila all, validasinya countNilai. Bila spesifik, validasinya adalah map nilai spesifik ada isinya
+		let totalRekamNilai = 0;
+		if (form.tugasSumber === 'all') {
+			totalRekamNilai = siswaList.reduce((acc, s) => acc + (s.countNilai || 0), 0);
+		} else if (form.tugasSumber !== 'poin_aktif') {
+			totalRekamNilai = siswaList.reduce((acc, s) => acc + (s.nilai && typeof s.nilai[form.tugasSumber] !== 'undefined' ? 1 : 0), 0);
+		}
+
+		if (form.tugasSumber !== 'poin_aktif' && totalRekamNilai === 0) {
+			const labelTugas = form.tugasSumber === 'all' ? 'belum ada nilai rute manapun' : 'belum ada satupun yang dinilai pada tugas ini';
+			Swal.fire('Tidak Dapat Diproses', `Tidak dapat membuat grup metode heterogen. Siswa ${labelTugas} di database.`, 'error');
+			return;
+		}
+
+		let adaYgNol = false;
+		if (form.tugasSumber === 'all') {
+			adaYgNol = siswaList.some((s) => (s.countNilai || 0) < tugasList.length);
+		} else if (form.tugasSumber !== 'poin_aktif') {
+			adaYgNol = siswaList.some((s) => !(s.nilai && typeof s.nilai[form.tugasSumber] !== 'undefined'));
+		}
+
+		if (adaYgNol) {
+			const result = await Swal.fire({
+				title: 'Peringatan Data Kosong',
+				text:
+					form.tugasSumber === 'all'
+						? 'Beberapa siswa tidak memiliki kerekaman nilai secara lengkap pada seluruh tugas di kelas ini. Kekosongan akan dianggap 0 dan memotong rata-rata akhirnya. Lanjutkan?'
+						: 'Beberapa siswa belum memiliki rekam nilai untuk tugas kriteria ini. Mereka akan dianggap bernilai 0. Lanjutkan?',
+				icon: 'warning',
+				showCancelButton: true,
+				confirmButtonColor: '#3085d6',
+				cancelButtonColor: '#d33',
+				confirmButtonText: 'Ya, lanjutkan',
+			});
+			if (!result.isConfirmed) return;
+		}
+
+		// Kalkulator khusus "Semua Nilai" agar membagi berdasar total TugasList, bukan countNilainya si anak
+		const getScoreAvg = (siswa) => {
+			if (form.tugasSumber === 'poin_aktif') return siswa.netPoin || 0;
+			if (form.tugasSumber !== 'all') {
+				return siswa.nilai?.[form.tugasSumber] || 0;
+			}
+			if (tugasList.length === 0) return 0;
+
+			// Akumulasi total nilai mutlak
+			const totalMutlak = Object.values(siswa.nilai || {}).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
+			return totalMutlak / tugasList.length;
+		};
+
+		// Urutkan nilai tertinggi ke terendah (Descending)
+		const sorted = [...siswaList].sort((a, b) => {
+			const scoreA = getScoreAvg(a);
+			const scoreB = getScoreAvg(b);
+			return scoreB - scoreA;
+		});
 
 		const groups = Array.from({ length: form.jumlahGrup }, (_, i) => ({
 			id: `grup-${i + 1}`,
@@ -147,32 +224,67 @@ export default function CreateGroupPage() {
 			members: [],
 		}));
 
-		// Distribusi zig-zag (tinggi-rendah merata)
-		sorted.forEach((siswa, idx) => {
-			const groupIdx = idx % form.jumlahGrup;
-			groups[groupIdx].members.push({
-				id: siswa.id,
-				nama: siswa.nama_lengkap,
-				nis: siswa.nis,
-				nilai: siswa.nilai || null,
-			});
-		});
+		// Distribusi Snake-Draft (Melanggar arah di setiap repetisi untuk keseimbangan)
+		// e.g., 1-2-3-4 -> 4-3-2-1 -> 1-2-3-4
+		let arahMaju = true;
+
+		// Bagi ke dalam 'ronde' putaran
+		for (let i = 0; i < sorted.length; i += form.jumlahGrup) {
+			const batch = sorted.slice(i, i + form.jumlahGrup);
+
+			if (arahMaju) {
+				// Isi normal (K1, K2, K3, K4)
+				batch.forEach((siswa, idx) => {
+					groups[idx].members.push({
+						id: siswa.id,
+						nama: siswa.nama_lengkap,
+						nis: siswa.nis,
+						avg: getScoreAvg(siswa),
+					});
+				});
+			} else {
+				// Isi terbalik (K4, K3, K2, K1)
+				batch.forEach((siswa, idx) => {
+					// Balik indeks berdasarkan sisa ukuran batch (Bisa saja batch sisa kurang dari jumlahGrup)
+					const reverseIdx = form.jumlahGrup - 1 - idx;
+					// Pastikan indeks tidak undefined jika batch melompati struktur
+					if (groups[reverseIdx]) {
+						groups[reverseIdx].members.push({
+							id: siswa.id,
+							nama: siswa.nama_lengkap,
+							nis: siswa.nis,
+							avg: getScoreAvg(siswa),
+						});
+					} else {
+						// Fallback aman
+						groups[idx].members.push({
+							id: siswa.id,
+							nama: siswa.nama_lengkap,
+							nis: siswa.nis,
+							avg: getScoreAvg(siswa),
+						});
+					}
+				});
+			}
+
+			// Ganti arah putaran untuk ronde berikutnya
+			arahMaju = !arahMaju;
+		}
 
 		setGeneratedGroups(groups);
 		setShowBoard(true);
 	};
 
 	const handleGenerate = async () => {
-		if (!form.judul || !form.kelas) return alert('Mohon lengkapi judul dan kelas');
+		if (!form.judul || !form.kelas) {
+			Swal.fire('Ops!', 'Mohon lengkapi perihal judul aktivitas beserta kelas yang dituju.', 'warning');
+			return;
+		}
 		setLoading(true);
 
 		try {
-			const url = `/api/siswa?kelas=${encodeURIComponent(form.kelas)}`;
-			const res = await fetch(url);
-			const allSiswa = await res.json();
-
-			if (!allSiswa.length) {
-				alert(`Tidak ada siswa ditemukan untuk kelas "${form.kelas}". Periksa nama kelas di database.`);
+			if (!siswaList.length) {
+				Swal.fire('Maaf', `Tidak ada siswa di database yang terdaftar untuk kelas "${form.kelas}".`, 'error');
 				setLoading(false);
 				return;
 			}
@@ -341,7 +453,7 @@ export default function CreateGroupPage() {
 														onChange={(e) => setForm({ ...form, metode: e.target.value })}
 														className='mt-1 h-4 w-4 accent-blue-600'
 													/>
-													<div className='min-w-0'>
+													<div className='min-w-0 flex-1'>
 														<div className='flex items-center gap-2'>
 															<Shuffle className='h-5 w-5 text-blue-600' />
 															<p className='text-sm font-semibold text-slate-900'>Acak</p>
@@ -351,24 +463,57 @@ export default function CreateGroupPage() {
 												</label>
 
 												{/* Heterogen */}
-												<label className='group relative flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300'>
-													<input
-														disabled
-														type='radio'
-														name='metode'
-														value='heterogen'
-														checked={form.metode === 'heterogen'}
-														onChange={(e) => setForm({ ...form, metode: e.target.value })}
-														className='mt-1 h-4 w-4 accent-emerald-600'
-													/>
-													<div className='min-w-0'>
-														<div className='flex items-center gap-2'>
-															<TrendingUp className='h-5 w-5 text-emerald-600' />
-															<p className='text-sm font-semibold text-slate-900'>Heterogen (berdasarkan nilai)</p>
+												<div
+													className={`rounded-2xl border bg-white shadow-sm transition ${form.metode === 'heterogen' ? 'border-emerald-500 ring-1 ring-emerald-500 rounded-b-none border-b-0' : 'border-slate-200 hover:border-slate-300'}`}>
+													<label className='group relative flex cursor-pointer gap-3 p-4'>
+														<input
+															type='radio'
+															name='metode'
+															value='heterogen'
+															checked={form.metode === 'heterogen'}
+															onChange={(e) => setForm({ ...form, metode: e.target.value })}
+															className='mt-1 h-4 w-4 accent-emerald-600'
+														/>
+														<div className='min-w-0 flex-1'>
+															<div className='flex items-center gap-2'>
+																<TrendingUp className='h-5 w-5 text-emerald-600' />
+																<p className='text-sm font-semibold text-slate-900'>Heterogen (berdasarkan nilai)</p>
+															</div>
+															<p className='mt-1 text-sm text-slate-500'>Distribusi merata menyeimbangkan skor kelompok.</p>
 														</div>
-														<p className='mt-1 text-sm text-slate-500'>Distribusi merata berdasarkan nilai (jika tersedia).</p>
-													</div>
-												</label>
+													</label>
+
+													{form.metode === 'heterogen' && (
+														<div className='px-4 pb-4 animate-in slide-in-from-top-2 fade-in duration-200'>
+															<hr className='border-slate-100 mb-3' />
+															<label
+																htmlFor='tugasSumber'
+																className='block text-xs font-medium text-slate-500 mb-1'>
+																Pilih Dasar Perhitungan Nilai:
+															</label>
+															<select
+																id='tugasSumber'
+																value={form.tugasSumber}
+																onChange={(e) => setForm({ ...form, tugasSumber: e.target.value })}
+																className='w-full text-sm rounded-lg border border-slate-200 bg-emerald-50/50 px-3 py-2 text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500'>
+																<option value='all'>⭐ Semua Nilai (Rata-rata)</option>
+																<option value='poin_aktif'>🎭 Keaktifan Karakter (Net Poin)</option>
+																{tugasList.length > 0 && (
+																	<optgroup label='Berdasarkan Tugas Kelompok/Individu:'>
+																		{tugasList.map((t) => (
+																			<option
+																				key={t.tugas_id}
+																				value={t.tugas_id}>
+																				{t.kategori} - {t.tanggal} (Mapel: {t.mapel})
+																			</option>
+																		))}
+																	</optgroup>
+																)}
+															</select>
+															{tugasList.length === 0 && form.kelas && !loading && <p className='text-[10px] text-amber-600 mt-1 italic'>Belum ada satupun riwayat nilai di kelas terkait.</p>}
+														</div>
+													)}
+												</div>
 											</div>
 										</div>
 

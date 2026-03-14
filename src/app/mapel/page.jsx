@@ -12,6 +12,11 @@ export default function MapelPage() {
 	const [loading, setLoading] = useState(true); // Loading awal halaman
 	const [saving, setSaving] = useState(false); // Loading saat simpan/hapus
 
+	const [userRole, setUserRole] = useState('');
+	const [allMapels, setAllMapels] = useState([]);
+	const [myMapels, setMyMapels] = useState([]);
+	const [showChecklistModal, setShowChecklistModal] = useState(false);
+
 	// State Filter/Search
 	const [searchQuery, setSearchQuery] = useState('');
 
@@ -23,9 +28,31 @@ export default function MapelPage() {
 	// --- FETCH DATA ---
 	const fetchMapel = async () => {
 		try {
+			// 1. Ambil Profil User
+			const resAuth = await fetch('/api/auth/me');
+			let role = '';
+			if (resAuth.ok) {
+				const dataAuth = await resAuth.json();
+				role = dataAuth.user?.role || '';
+				setUserRole(role);
+			}
+
+			// 2. Tampilkan Mapel List Regular (Filter Guru berlaku)
 			const res = await fetch('/api/mapel');
 			const data = res.ok ? await res.json() : [];
 			setMapelList(data);
+
+			// 3. Tarik Master penuh dan Profil Centang jika ia seorang Guru
+			if (role === 'Guru') {
+				const resAll = await fetch('/api/mapel?all=true');
+				if (resAll.ok) setAllMapels(await resAll.json());
+
+				const resMy = await fetch('/api/kbm/mandiri');
+				if (resMy.ok) {
+					const dataMy = await resMy.json();
+					setMyMapels(dataMy.mapel || []);
+				}
+			}
 		} catch (err) {
 			console.error('Error fetching mapel:', err);
 			Swal.fire('Error', 'Gagal memuat data mata pelajaran', 'error');
@@ -124,6 +151,31 @@ export default function MapelPage() {
 		}
 	};
 
+	// --- HANDLER GURU (CHECKLIST) --- //
+	const handleCheckboxChange = (nama) => {
+		setMyMapels((prev) => (prev.includes(nama) ? prev.filter((k) => k !== nama) : [...prev, nama]));
+	};
+
+	const submitChecklist = async (e) => {
+		e.preventDefault();
+		setSaving(true);
+		try {
+			const res = await fetch('/api/kbm/mandiri', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					target: 'mapel',
+					data: myMapels,
+				}),
+			});
+			if (res.ok) {
+				setShowChecklistModal(false);
+				fetchMapel(); // Refresh List
+			}
+		} catch (e) {}
+		setSaving(false);
+	};
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -132,7 +184,6 @@ export default function MapelPage() {
 		<div className='min-h-screen bg-gray-50/50 p-6 space-y-6'>
 			{/* Header Section */}
 			<SectionHeader
-				// title={'Riwayat Absensi'}
 				leftIcon={
 					<div className='bg-indigo-100 text-indigo-600 p-2 rounded-full'>
 						<svg
@@ -150,21 +201,6 @@ export default function MapelPage() {
 					</div>
 				}
 				onLeftClick={() => window.history.back()}
-				rightIcon={
-					<svg
-						xmlns='http://www.w3.org/2000/svg'
-						fill='none'
-						viewBox='0 0 24 24'
-						strokeWidth='1.5'
-						stroke='currentColor'
-						className='size-6'>
-						<path
-							strokeLinecap='round'
-							strokeLinejoin='round'
-							d='M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z'
-						/>
-					</svg>
-				}
 			/>
 			<div className='bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4'>
 				<div>
@@ -187,12 +223,20 @@ export default function MapelPage() {
 						/>
 					</div>
 
-					<button
-						onClick={() => handleOpenModal()}
-						className='px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 whitespace-nowrap'>
-						<PlusIcon className='w-5 h-5' />
-						<span>Tambah Baru</span>
-					</button>
+					{userRole === 'Admin' ? (
+						<button
+							onClick={() => handleOpenModal()}
+							className='px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 whitespace-nowrap'>
+							<PlusIcon className='w-5 h-5' />
+							<span>Tambah Baru</span>
+						</button>
+					) : (
+						<button
+							onClick={() => setShowChecklistModal(true)}
+							className='px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 whitespace-nowrap'>
+							<span>☑ Ceklis Ajar</span>
+						</button>
+					)}
 				</div>
 			</div>
 
@@ -312,6 +356,53 @@ export default function MapelPage() {
 										</svg>
 									)}
 									{saving ? 'Menyimpan...' : 'Simpan'}
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
+
+			{/* Popup Modal untuk Checklist Guru (Self-Service) */}
+			{userRole === 'Guru' && isModalOpen === false && (
+				<div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity ${showChecklistModal ? 'visible opacity-100' : 'invisible opacity-0'}`}>
+					<div className={`bg-white w-full max-w-md rounded-2xl shadow-2xl transform transition-all ${showChecklistModal ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+						<div className='p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center rounded-t-2xl'>
+							<h3 className='text-lg font-bold text-gray-800'>Centang Mapel Ajar Anda</h3>
+							<button
+								onClick={() => setShowChecklistModal(false)}
+								className='text-gray-400 hover:text-gray-600 transition-colors'>
+								✕
+							</button>
+						</div>
+						<form
+							onSubmit={submitChecklist}
+							className='p-6'>
+							<div className='mb-4 max-h-60 overflow-y-auto pr-2 space-y-2'>
+								{allMapels.length === 0 ? (
+									<p className='text-gray-400 text-sm'>Tidak ada master mapel yang tersedia.</p>
+								) : (
+									allMapels.map((item) => (
+										<label
+											key={item.id}
+											className='flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-lg cursor-pointer hover:bg-indigo-50 hover:border-indigo-100 transition group'>
+											<input
+												type='checkbox'
+												className='w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 bg-white border-gray-300 transition-all cursor-pointer'
+												checked={myMapels.includes(item.mapel)}
+												onChange={() => handleCheckboxChange(item.mapel)}
+											/>
+											<span className='font-medium text-gray-700 group-hover:text-indigo-700'>{item.mapel}</span>
+										</label>
+									))
+								)}
+							</div>
+							<div className='pt-2 mt-2 border-t border-gray-100'>
+								<button
+									type='submit'
+									disabled={saving}
+									className='bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white shadow-md px-4 py-3 rounded-xl w-full font-bold transition-all text-sm'>
+									{saving ? 'Menyimpan...' : 'Simpan Pilihan Saya'}
 								</button>
 							</div>
 						</form>

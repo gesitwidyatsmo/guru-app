@@ -146,7 +146,7 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 						kelas_id: metaData.kelas,
 						mapel_id: metaData.mapel,
 						data_grup: dataToSave,
-				  };
+					};
 
 			const response = await fetch(url, {
 				method,
@@ -228,7 +228,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 					{groups.map((group) => (
 						<DroppableGroupColumn
 							key={group.id}
-							group={group}>
+							group={group}
+							isHeterogen={metaData?.metode === 'heterogen'}>
 							<div className='space-y-2 p-3'>
 								{group.members.map((member) => (
 									<DraggableMemberCard
@@ -260,19 +261,26 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 	);
 };
 
-function DroppableGroupColumn({ group, children }) {
+function DroppableGroupColumn({ group, isHeterogen, children }) {
 	const { isOver, setNodeRef } = useDroppable({ id: String(group.id) });
 
 	return (
 		<div
 			ref={setNodeRef}
 			className={['bg-white rounded-2xl border shadow-sm flex flex-col transition', isOver ? 'border-indigo-300 ring-2 ring-indigo-200' : 'border-slate-200/70'].join(' ')}>
-			<div className='p-5 border-b rounded-2xl border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between gap-3'>
+			<div className='p-4 border-b rounded-t-2xl border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between gap-3'>
 				<div className='min-w-0'>
 					<h3 className='font-bold text-lg text-slate-900 truncate'>{group.nama}</h3>
 					<p className='text-xs text-slate-500 mt-1'>Drag & drop antar grup</p>
 				</div>
-				<span className='bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1 rounded-full'>{group.members.length}</span>
+				<div className='flex flex-col items-end gap-1'>
+					<span className='bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1 rounded-full text-center min-w-[3rem]'>{group.members.length}</span>
+					{isHeterogen && (
+						<span className='bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full'>
+							{(group.members.reduce((acc, m) => acc + (parseFloat(m.avg) || 0), 0) / (group.members.length || 1)).toFixed(1)}
+						</span>
+					)}
+				</div>
 			</div>
 
 			{children}
@@ -304,25 +312,27 @@ function DraggableMemberCard({ member, fromGroupId }) {
 					<div className='font-semibold text-slate-900 text-sm truncate'>{member.nama}</div>
 				</div>
 
-				<button
-					type='button'
-					{...listeners}
-					{...attributes}
-					style={{ touchAction: 'none' }}
-					className='ml-2 p-1 rounded-lg bg-slate-50 cursor-grab active:cursor-grabbing text-slate-700'
-					aria-label='Tahan 1 detik lalu tarik untuk memindahkan'>
-					<GripVertical className='h-5 w-5' />
-				</button>
+				<div className='flex items-center gap-2'>
+					{typeof member.avg !== 'undefined' && (
+						<span
+							className={[
+								'text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap',
+								member.avg >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : member.avg >= 60 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-rose-50 text-rose-700 border-rose-100',
+							].join(' ')}>
+							{parseFloat(member.avg).toFixed(1)}
+						</span>
+					)}
 
-				{/* {typeof member.nilai !== 'undefined' && (
-					<span
-						className={[
-							'text-xs font-bold px-2 py-0.5 rounded-full border whitespace-nowrap',
-							member.nilai >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : member.nilai >= 60 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-rose-50 text-rose-700 border-rose-100',
-						].join(' ')}>
-						{member.nilai}
-					</span>
-				)} */}
+					<button
+						type='button'
+						{...listeners}
+						{...attributes}
+						style={{ touchAction: 'none' }}
+						className='p-1 rounded-lg bg-slate-50 cursor-grab active:cursor-grabbing text-slate-700'
+						aria-label='Tahan 1 detik lalu tarik untuk memindahkan'>
+						<GripVertical className='h-4 w-4 text-slate-400' />
+					</button>
+				</div>
 			</div>
 		</div>
 	);

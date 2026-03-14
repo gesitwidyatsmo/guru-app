@@ -13,6 +13,8 @@ export default function BuatTugasPage() {
 
 	const [namaKelas, setNamaKelas] = useState('');
 	const [judul, setJudul] = useState('');
+	const [type, setType] = useState('Formatif');
+	const [deskripsi, setDeskripsi] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
 	const [tanggal, setTanggal] = useState('');
 	const [siswaList, setSiswaList] = useState([]);
@@ -96,6 +98,8 @@ export default function BuatTugasPage() {
 		try {
 			const tugasData = {
 				judul,
+				type,
+				deskripsi,
 				mapel: selectedMapel,
 				kelas: namaKelas,
 				tanggal,
@@ -192,17 +196,42 @@ export default function BuatTugasPage() {
 			<form
 				onSubmit={handleSubmit}
 				className='px-5 mt-6 space-y-4'>
-				{/* Section 1: Input Judul */}
-				<div className='bg-white p-4 rounded-xl shadow-sm border border-gray-100'>
-					<label className='block text-sm font-medium text-gray-700 mb-2'>Judul Tugas</label>
-					<input
-						type='text'
-						value={judul}
-						onChange={(e) => setJudul(e.target.value)}
-						placeholder='Contoh: Tugas Matematika Bab 1'
-						className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all'
-						required
-					/>
+				{/* Section 1: Input Judul, Tipe, & Deskripsi */}
+				<div className='bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-4'>
+					<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+						<div className='md:col-span-2'>
+							<label className='block text-sm font-medium text-gray-700 mb-2'>Judul Tugas</label>
+							<input
+								type='text'
+								value={judul}
+								onChange={(e) => setJudul(e.target.value)}
+								placeholder='Contoh: Tugas Matematika Bab 1'
+								className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all'
+								required
+							/>
+						</div>
+						<div>
+							<label className='block text-sm font-medium text-gray-700 mb-2'>Tipe Penilaian</label>
+							<select
+								value={type}
+								onChange={(e) => setType(e.target.value)}
+								className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all'>
+								<option value='Formatif'>Formatif</option>
+								<option value='Sumatif'>Sumatif</option>
+								<option value='SAS'>SAS</option>
+							</select>
+						</div>
+					</div>
+					<div>
+						<label className='block text-sm font-medium text-gray-700 mb-2'>Deskripsi (Opsional)</label>
+						<textarea
+							value={deskripsi}
+							onChange={(e) => setDeskripsi(e.target.value)}
+							rows={2}
+							className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none'
+							placeholder='Catatan tambahan tentang tugas ini'
+						/>
+					</div>
 				</div>
 
 				{/* Section 2: Pilihan Mapel dan Tanggal */}

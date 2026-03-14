@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
@@ -65,7 +64,7 @@ export default function LaporanPage() {
 	const getNisSiswa = (siswaId) => getSiswaById(siswaId)?.nis || '-';
 
 	// --- LOGIC BARU: Pivot Absensi Mapel (JSON) ---
-	const processAbsensiMapel = (rawData) => {
+	const processAbsensiMapel = useCallback((rawData) => {
 		if (!rawData || rawData.length === 0) return { kolomTanggal: [], barisSiswa: [] };
 
 		// 1. Ambil List Tanggal/Pertemuan Unik
@@ -142,14 +141,14 @@ export default function LaporanPage() {
 		barisSiswa.sort((a, b) => a.nama.localeCompare(b.nama));
 
 		return { kolomTanggal: pertemuanList, barisSiswa };
-	};
+	}, [siswaList, selectedKelas]);
 
 	// Memoize Data Absensi agar tidak render ulang terus
 	const pivotedAbsensi = useMemo(() => {
 		if (activeTab !== 'absensi') return null;
 		// Asumsi dataRekap.data berisi array raw absensi mapel
 		return processAbsensiMapel(dataRekap?.data || []);
-	}, [activeTab, dataRekap, siswaList, selectedKelas]);
+	}, [activeTab, dataRekap, processAbsensiMapel]);
 
 	// --- Logic Baru: Pivot Nilai (Rata-rata memperhitungkan nilai 0) ---
 	const pivotNilai = (dataRaw) => {
@@ -228,7 +227,7 @@ export default function LaporanPage() {
 	};
 
 	// --- FETCHING DATA ---
-	const fetchLaporan = async () => {
+	const fetchLaporan = useCallback(async () => {
 		if (!selectedKelas) return;
 		setLoadingRekap(true);
 		try {
@@ -241,7 +240,9 @@ export default function LaporanPage() {
 				const data = await res.json();
 				const filtered = data.filter((item) => {
 					const d = new Date(item.tanggal);
-					return d.getMonth() + 1 === parseInt(bulan) && d.getFullYear() === parseInt(tahun);
+					const isYearMatch = d.getFullYear() === parseInt(tahun);
+					if (bulan === 'all') return isYearMatch;
+					return d.getMonth() + 1 === parseInt(bulan) && isYearMatch;
 				});
 
 				setDataRekap({ data: filtered });
@@ -270,7 +271,9 @@ export default function LaporanPage() {
 				const data = await res.json();
 				const filtered = data.filter((item) => {
 					const d = new Date(item.tanggal);
-					return d.getMonth() + 1 === parseInt(bulan) && d.getFullYear() === parseInt(tahun);
+					const isYearMatch = d.getFullYear() === parseInt(tahun);
+					if (bulan === 'all') return isYearMatch;
+					return d.getMonth() + 1 === parseInt(bulan) && isYearMatch;
 				});
 				setDataRekap({ data: filtered });
 
@@ -290,7 +293,9 @@ export default function LaporanPage() {
 				const data = await res.json();
 				const filtered = data.filter((item) => {
 					const d = new Date(item.tanggal);
-					return d.getMonth() + 1 === parseInt(bulan) && d.getFullYear() === parseInt(tahun);
+					const isYearMatch = d.getFullYear() === parseInt(tahun);
+					if (bulan === 'all') return isYearMatch;
+					return d.getMonth() + 1 === parseInt(bulan) && isYearMatch;
 				});
 				setDataRekap({ data: filtered });
 				setStats({ totalJurnal: filtered.length });
@@ -303,12 +308,12 @@ export default function LaporanPage() {
 		} finally {
 			setLoadingRekap(false);
 		}
-	};
+	}, [activeTab, selectedKelas, selectedMapel, bulan, tahun, processAbsensiMapel]);
 
 	useEffect(() => {
 		if (loading) return;
 		fetchLaporan();
-	}, [loading, activeTab, selectedKelas, selectedMapel, bulan, tahun]);
+	}, [loading, fetchLaporan]);
 
 	// --- EXPORT EXCEL ---
 	const handleExportExcel = () => {
@@ -483,6 +488,7 @@ export default function LaporanPage() {
 								value={bulan}
 								onChange={(e) => setBulan(e.target.value)}
 								className='w-full rounded-xl px-3 py-2 font-bold text-gray-800 bg-white/90 outline-none cursor-pointer hover:bg-white'>
+								<option value='all'>Semua Bulan</option>
 								<option value='01'>Januari</option>
 								<option value='02'>Februari</option>
 								<option value='03'>Maret</option>

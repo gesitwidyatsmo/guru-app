@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 // src/app/Siswa/page.js
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import SectionHeader from '../components/SectionHeader'; // gunakan path absolut (butuh support jsconfig.json/tsconfig.json)
 import Modal from '../components/Modal';
 import Link from 'next/link';
@@ -54,7 +53,10 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 	const [loading, setLoading] = useState(false);
 
 	// Reset form saat modal dibuka
-	useEffect(() => {
+	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+
+	if (isOpen !== prevIsOpen) {
+		setPrevIsOpen(isOpen);
 		if (isOpen) {
 			setFormData({
 				nis: '',
@@ -64,7 +66,7 @@ function ModalFormSiswa({ isOpen, onClose, onSubmit, kelasList }) {
 				status: 'Aktif',
 			});
 		}
-	}, [isOpen]);
+	}
 
 	if (!isOpen) return null;
 
@@ -186,10 +188,11 @@ export default function Page() {
 	const [siswaList, setSiswaList] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [loadingPage, setLoadingPage] = useState(true);
+	const [userRole, setUserRole] = useState('');
+	const [userName, setUserName] = useState('');
 
 	// filter & search
 	const [selectedKelas, setSelectedKelas] = useState('Semua'); // Kelas aktif
-	const [filteredSiswa, setFilteredSiswa] = useState([]); // Hasil filter
 	const [searchQuery, setSearchQuery] = useState('');
 
 	const [showClassPicker, setShowClassPicker] = useState(false);
@@ -201,17 +204,27 @@ export default function Page() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				// Ambil Siswa
-				const resSiswa = await fetch('/api/siswa');
+				const [resSiswa, resKelas, resPoin] = await Promise.all([fetch('/api/siswa'), fetch('/api/kelas'), fetch('/api/poin')]);
+
 				const dataSiswa = await resSiswa.json();
-				setSiswaList(dataSiswa);
-				setFilteredSiswa(dataSiswa); // Awalnya tampilkan semua
-
-				// Ambil Kelas (Untuk Filter)
-				const resKelas = await fetch('/api/kelas');
 				const dataKelas = await resKelas.json();
-				setKelasList(dataKelas);
+				const dataPoin = resPoin.ok ? await resPoin.json() : [];
 
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
+
+				const siswaWithPoin = dataSiswa.map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
+
+				setSiswaList(siswaWithPoin);
+				setKelasList(dataKelas);
 				setLoading(false);
 			} catch (err) {
 				console.error(err);
@@ -225,7 +238,7 @@ export default function Page() {
 	}, []);
 
 	// 2. Logic Filter (Setiap kali selectedKelas atau searchQuery berubah)
-	useEffect(() => {
+	const filteredSiswa = useMemo(() => {
 		let hasil = siswaList;
 
 		// Filter berdasarkan kelas
@@ -239,7 +252,7 @@ export default function Page() {
 			hasil = hasil.filter((s) => s.nama_lengkap.toLowerCase().includes(query) || s.nis.toLowerCase().includes(query));
 		}
 
-		setFilteredSiswa(hasil);
+		return hasil;
 	}, [selectedKelas, searchQuery, siswaList]);
 
 	// Logic Simpan Siswa Baru
@@ -266,9 +279,25 @@ export default function Page() {
 		}
 	};
 
+	useEffect(() => {
+		const fetchAuth = async () => {
+			try {
+				const res = await fetch('/api/auth/me');
+				if (res.ok) {
+					const data = await res.json();
+					setUserName(data.user.nama_lengkap);
+					setUserRole(data.user.role);
+				}
+			} catch (err) {}
+		};
+		fetchAuth();
+	}, []);
+
 	if (loadingPage) {
 		return <Loader />;
 	}
+
+	const isAdmin = userRole === 'Admin';
 
 	return (
 		<div>
@@ -289,8 +318,8 @@ export default function Page() {
 					</svg>
 				}
 				onLeftClick={handleBack}
-				rightIcon={<span className='text-xl'>＋</span>}
-				onRightClick={() => setShowAddModal(true)}
+				rightIcon={isAdmin && <span className='text-xl'>＋</span>}
+				onRightClick={isAdmin ? () => setShowAddModal(true) : undefined}
 			/>
 
 			{/* SEARCH BAR */}
@@ -414,9 +443,19 @@ export default function Page() {
 									<span className={`text-xs px-2 py-1 rounded-full font-medium ${siswa.status === 'Aktif' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{siswa.status}</span>
 								</div>
 
-								<div className='flex gap-3 mt-2 text-sm text-gray-600'>
+								<div className='flex gap-2 mt-2 text-sm text-gray-600 flex-wrap'>
 									<span className='bg-gray-100 px-2 py-0.5 rounded'>Kelas: {siswa.kelas}</span>
 									<span className='bg-blue-50 text-blue-600 px-2 py-0.5 rounded'>{siswa.jenis_kelamin}</span>
+									<span
+										className='bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold border border-emerald-100'
+										title='Total Poin Positif'>
+										+{siswa.poinPositif || 0}
+									</span>
+									<span
+										className='bg-rose-50 text-rose-600 px-2 py-0.5 rounded font-bold border border-rose-100'
+										title='Total Poin Negatif'>
+										-{siswa.poinNegatif || 0}
+									</span>
 								</div>
 							</Link>
 						))}

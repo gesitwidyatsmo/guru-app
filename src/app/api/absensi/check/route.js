@@ -27,10 +27,10 @@ export async function GET(req) {
 		}
 
 		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
+		const sheet = doc.sheetsByTitle['MASTER_ABSENSI_HARIAN'];
 
 		if (!sheet) {
-			return Response.json({ error: 'Sheet MASTER_ABSENSI tidak ditemukan' }, { status: 404 });
+			return Response.json({ error: 'Sheet MASTER_ABSENSI_HARIAN tidak ditemukan' }, { status: 404 });
 		}
 
 		const rows = await sheet.getRows();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import { useParams, useRouter } from 'next/navigation';
 import SectionHeader from '@/app/components/SectionHeader';
@@ -57,16 +57,30 @@ export default function AbsensiKelasPage() {
 
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resStatus, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/status-absensi'), fetch('/api/siswa')]);
+				const [resKelas, resStatus, resSiswa, resPoin] = await Promise.all([fetch('/api/kelas'), fetch('/api/status-absensi'), fetch('/api/siswa'), fetch('/api/poin')]);
 
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataStatus = resStatus.ok ? await resStatus.json() : [];
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+				const dataPoin = resPoin.ok ? await resPoin.json() : [];
+
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
+
+				const siswaDataUpdated = dataSiswa.map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
 
 				const kelas = dataKelas.find((k) => String(k.id) === String(id)) || null;
 				setKelasDetail(kelas);
 				setStatusList(dataStatus);
-				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
+				setSiswaList(siswaDataUpdated.filter((s) => s.status === 'Aktif'));
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -79,7 +93,7 @@ export default function AbsensiKelasPage() {
 	}, [id]);
 
 	const namaKelas = kelasDetail?.kelas || kelasDetail?.nama_kelas || '';
-	const siswaKelasIni = siswaList.filter((s) => namaKelas && s.kelas === namaKelas);
+	const siswaKelasIni = useMemo(() => siswaList.filter((s) => namaKelas && s.kelas === namaKelas), [siswaList, namaKelas]);
 
 	// Reset absensi saat tanggal berubah
 	useEffect(() => {
@@ -173,7 +187,7 @@ export default function AbsensiKelasPage() {
 		});
 
 		setAbsensi(init);
-	}, [namaKelas, siswaKelasIni.length, statusList.length, sudahAdaAbsensi, cekLoading]);
+	}, [namaKelas, siswaKelasIni, statusList, sudahAdaAbsensi, cekLoading]);
 
 	const handleStatusChange = (siswaId, labelStatus) => {
 		setAbsensi((prev) => ({
@@ -208,103 +222,7 @@ export default function AbsensiKelasPage() {
 		});
 	};
 
-	// Handle edit absensi siswa
-	const handleEditAbsensi = async (absensiData) => {
-		const siswa = siswaList.find((s) => s.id === absensiData.siswa_id);
-		if (!siswa || !absensiData.id) {
-			await Swal.fire({
-				icon: 'error',
-				title: 'Error',
-				text: 'Data absensi tidak valid',
-			});
-			return;
-		}
-
-		const result = await Swal.fire({
-			title: '',
-			html: `
-      <div class="relative px-2">
-        <!-- Header -->
-        <div class="bg-linear-to-r from-indigo-500 to-purple-600 rounded-xl p-4 mb-4 text-white">
-          <div class="font-bold text-lg">${siswa.nama_lengkap}</div>
-          <div class="text-xs opacity-90">NIS: ${siswa.nis}</div>
-        </div>
-
-        <!-- Status -->
-        <label class="block text-sm font-semibold mb-1">Status Kehadiran</label>
-        <select 
-          id="swal-status"
-          class="w-full border rounded-lg px-3 py-2 mb-3"
-        >
-          ${statusList.map((st) => `<option value="${st.label}" ${st.label === absensiData.status ? 'selected' : ''}>${st.kode} - ${st.label}</option>`).join('')}
-        </select>
-
-        <!-- Keterangan -->
-        <label class="block text-sm font-semibold mb-1">Keterangan</label>
-        <textarea
-          id="swal-keterangan"
-          class="w-full border rounded-lg px-3 py-2"
-          rows="3"
-        >${absensiData.keterangan || ''}</textarea>
-      </div>
-    `,
-			showCancelButton: true,
-			confirmButtonText: 'Simpan',
-			cancelButtonText: 'Batal',
-			buttonsStyling: false,
-
-			allowOutsideClick: true,
-			allowEscapeKey: true,
-
-			customClass: {
-				popup: 'rounded-2xl max-w-md',
-				confirmButton: 'bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg',
-				cancelButton: 'bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg',
-				actions: 'flex gap-2 mt-4',
-			},
-
-			didOpen: () => {
-				const closeBtn = document.getElementById('swal-close-btn');
-				if (closeBtn) closeBtn.onclick = () => Swal.close();
-			},
-
-			preConfirm: () => ({
-				status: document.getElementById('swal-status').value,
-				keterangan: document.getElementById('swal-keterangan').value,
-			}),
-		});
-
-		// User batal / klik luar / ESC
-		if (!result.isConfirmed) return;
-
-		try {
-			const res = await fetch(`/api/absensi/${absensiData.id}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(result.value),
-			});
-
-			if (!res.ok) throw new Error('Gagal update absensi');
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil',
-				text: 'Absensi berhasil diperbarui',
-				timer: 1200,
-				showConfirmButton: false,
-			});
-
-			// Refresh data
-			const refresh = await fetch(`/api/absensi?kelas=${encodeURIComponent(namaKelas)}&tanggal=${tanggal}`);
-			setDataAbsensiTersimpan(await refresh.json());
-		} catch (err) {
-			await Swal.fire({
-				icon: 'error',
-				title: 'Gagal',
-				text: err.message,
-			});
-		}
-	};
+	// Handle edit absensi dipindahkan mutlak ke halaman "Riwayat Absensi"
 
 	const handleSimpan = async () => {
 		if (!kelasDetail) return;
@@ -320,14 +238,17 @@ export default function AbsensiKelasPage() {
 
 		if (!konfirmasi.isConfirmed) return;
 
-		const payload = siswaKelasIni.map((s) => ({
-			tanggal,
-			kelas_id: kelasDetail.id,
-			kelas: namaKelas,
+		const data_absensi = siswaKelasIni.map((s) => ({
 			siswa_id: s.id,
 			status: absensi[s.id]?.status || '',
 			keterangan: absensi[s.id]?.keterangan || '',
 		}));
+
+		const payload = {
+			tanggal,
+			kelas: namaKelas,
+			data: data_absensi,
+		};
 
 		try {
 			setSaving(true);
@@ -414,12 +335,12 @@ export default function AbsensiKelasPage() {
 											data.color === 'green'
 												? 'bg-green-100 text-green-700'
 												: data.color === 'red'
-												? 'bg-red-100 text-red-700'
-												: data.color === 'yellow'
-												? 'bg-yellow-100 text-yellow-700'
-												: data.color === 'blue'
-												? 'bg-blue-100 text-blue-700'
-												: 'bg-purple-100 text-purple-700'
+													? 'bg-red-100 text-red-700'
+													: data.color === 'yellow'
+														? 'bg-yellow-100 text-yellow-700'
+														: data.color === 'blue'
+															? 'bg-blue-100 text-blue-700'
+															: 'bg-purple-100 text-purple-700'
 										}`}>
 										{data.kode}
 									</span>
@@ -446,8 +367,10 @@ export default function AbsensiKelasPage() {
 				<div className='p-4'>
 					<h3 className='text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between'>
 						<span>👥 Daftar Siswa</span>
-						<span className='text-xs text-gray-500 font-normal'>Klik untuk edit</span>
 					</h3>
+					<div className='bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm mb-4 border border-yellow-200'>
+						Absensi untuk pertemuan ini telah tersimpan. Jika ada kesalahan, klik tombol <b>Riwayat Absensi</b> di bawah untuk mengubah status atau mengganti tanggal sesi secara interaktif.
+					</div>
 					<div className='space-y-2'>
 						{dataAbsensiTersimpan.map((absensi, index) => {
 							const siswa = siswaList.find((s) => s.id === absensi.siswa_id);
@@ -456,10 +379,9 @@ export default function AbsensiKelasPage() {
 							const statusData = statusList.find((st) => st.label === absensi.status);
 
 							return (
-								<button
-									key={absensi.id}
-									onClick={() => handleEditAbsensi(absensi)}
-									className='w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-100 transition cursor-pointer text-left'>
+								<div
+									key={absensi.siswa_id || index}
+									className='w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-100 transition text-left'>
 									<div className='flex items-center gap-3'>
 										<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold'>{index + 1}</div>
 										<div>
@@ -475,31 +397,17 @@ export default function AbsensiKelasPage() {
 												statusData?.warna === 'green'
 													? 'bg-green-500 text-white'
 													: statusData?.warna === 'red'
-													? 'bg-red-500 text-white'
-													: statusData?.warna === 'yellow'
-													? 'bg-yellow-400 text-white'
-													: statusData?.warna === 'blue'
-													? 'bg-blue-500 text-white'
-													: 'bg-purple-500 text-white'
+														? 'bg-red-500 text-white'
+														: statusData?.warna === 'yellow'
+															? 'bg-yellow-400 text-white'
+															: statusData?.warna === 'blue'
+																? 'bg-blue-500 text-white'
+																: 'bg-purple-500 text-white'
 											}  `}>
 											{statusData?.kode || absensi.status}
 										</span>
-
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-4 h-4 text-gray-400'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='M8.25 4.5l7.5 7.5-7.5 7.5'
-											/>
-										</svg>
 									</div>
-								</button>
+								</div>
 							);
 						})}
 					</div>
@@ -644,8 +552,26 @@ export default function AbsensiKelasPage() {
 											className='border-b border-gray-50 hover:bg-gray-50'>
 											<td className='px-3 py-2 align-top text-gray-500'>{index + 1}</td>
 											<td className='px-3 py-2 align-top'>
-												<div className='font-medium text-gray-800 text-sm'>{siswa.nama_lengkap}</div>
-												<div className='text-[11px] text-gray-400'>NIS: {siswa.nis}</div>
+												<div className='flex items-center gap-1.5'>
+													<div className='font-medium text-gray-800 text-sm'>{siswa.nama_lengkap}</div>
+													<div className='flex gap-1 shrink-0'>
+														{siswa.poinPositif > 0 && (
+															<span
+																className='text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1 py-0.5 rounded-sm'
+																title='Poin +'>
+																+{siswa.poinPositif}
+															</span>
+														)}
+														{siswa.poinNegatif > 0 && (
+															<span
+																className='text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1 py-0.5 rounded-sm'
+																title='Pelanggaran -'>
+																-{siswa.poinNegatif}
+															</span>
+														)}
+													</div>
+												</div>
+												<div className='text-[11px] text-gray-400 mt-0.5'>NIS: {siswa.nis}</div>
 											</td>
 
 											{statusList.map((st) => {
@@ -697,7 +623,7 @@ export default function AbsensiKelasPage() {
 					</div>
 				) : (
 					<Link
-						href={'/riwayat-absensi'}
+						href={`/kelas/${id}/riwayat-absensi`}
 						className='fixed inset-x-0 bottom-0 z-40 cursor-pointer'>
 						<div className='max-w-3xl mx-auto px-4 pb-4'>
 							<button

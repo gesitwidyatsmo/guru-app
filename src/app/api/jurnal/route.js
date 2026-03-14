@@ -9,6 +9,9 @@ function generateId() {
 // GET JURNAL
 export async function GET(req) {
 	try {
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
+
 		const { searchParams } = new URL(req.url);
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
@@ -21,9 +24,10 @@ export async function GET(req) {
 
 		let data = rows.map((row) => ({
 			id: row.get('id'),
+			guru_id: row.get('guru_id') || '',
 			tanggal: row.get('tanggal'),
 			jam_ke: row.get('jam_ke'),
-			pertemuan_ke: row.get('pertemuan_ke') || '', // Field Baru
+			pertemuan_ke: row.get('pertemuan_ke') || '',
 			kelas: row.get('kelas'),
 			mapel: row.get('mapel'),
 			materi: row.get('materi'),
@@ -33,6 +37,12 @@ export async function GET(req) {
 			tuntas: (row.get('tuntas') || '').toString().toLowerCase() === 'true',
 		}));
 
+		// 1. Filter Isolasi Hak Akses (Guru hanya melihat miliknya)
+		if (role === 'Guru' && userId) {
+			data = data.filter((d) => String(d.guru_id) === String(userId));
+		}
+
+		// 2. Filter dari Parameter URL
 		if (kelas) data = data.filter((d) => d.kelas === kelas);
 		if (mapel) data = data.filter((d) => d.mapel === mapel);
 
@@ -49,21 +59,28 @@ export async function GET(req) {
 // POST JURNAL BARU
 export async function POST(req) {
 	try {
+		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		// Destructure termasuk 'pertemuan_ke'
 		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas } = body;
 
 		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return Response.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+		let sheet = doc.sheetsByTitle[SHEET_NAME];
+		// Memastikan jika Master belum dibuat, Header baru dikonstruksi
+		if (!sheet) {
+			sheet = await doc.addSheet({
+				title: SHEET_NAME,
+				headerValues: ['id', 'guru_id', 'tanggal', 'jam_ke', 'pertemuan_ke', 'kelas', 'mapel', 'materi', 'kegiatan', 'hambatan', 'solusi', 'tuntas'],
+			});
+		}
 
 		const id = generateId();
 
 		await sheet.addRow({
 			id,
+			guru_id: userId || '', // Labeling pembuat jurnal
 			tanggal,
 			jam_ke: jam_ke || '',
-			pertemuan_ke: pertemuan_ke || '', // Simpan ke Excel
+			pertemuan_ke: pertemuan_ke || '',
 			kelas,
 			mapel,
 			materi,
@@ -83,20 +100,28 @@ export async function POST(req) {
 // PUT UPDATE JURNAL
 export async function PUT(req) {
 	try {
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
+
 		const body = await req.json();
-		const { id, pertemuan_ke, ...others } = body; // Ambil pertemuan_ke
+		const { id, pertemuan_ke, ...others } = body;
 
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle[SHEET_NAME];
+		if (!sheet) return Response.json({ error: 'Data Jurnal tidak eksis' }, { status: 404 });
+
 		const rows = await sheet.getRows();
 		const row = rows.find((r) => r.get('id') === id);
 
-		if (!row) return Response.json({ error: 'Data tidak ditemukan' }, { status: 404 });
+		if (!row) return Response.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
 
-		// Update field pertemuan_ke jika ada
+		// Proteksi: Guru dilarang mengedit karya orang lain
+		if (role === 'Guru' && String(row.get('guru_id')) !== String(userId)) {
+			return Response.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
+		}
+
 		if (pertemuan_ke !== undefined) row.set('pertemuan_ke', pertemuan_ke);
 
-		// Update field lainnya...
 		Object.keys(others).forEach((key) => {
 			if (key === 'tuntas') {
 				row.set('tuntas', others[key] ? 'TRUE' : 'FALSE');
@@ -114,17 +139,28 @@ export async function PUT(req) {
 
 // DELETE JURNAL
 export async function DELETE(req) {
-	// ...Sama seperti sebelumnya...
 	try {
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
+
 		const { searchParams } = new URL(req.url);
 		const id = searchParams.get('id');
 
 		const doc = await getSheet();
 		const sheet = doc.sheetsByTitle[SHEET_NAME];
+		if (!sheet) return Response.json({ error: 'Data Jurnal tidak eksis' }, { status: 404 });
+
 		const rows = await sheet.getRows();
 		const row = rows.find((r) => r.get('id') === id);
 
-		if (row) await row.delete();
+		if (!row) return Response.json({ error: 'Jurnal ini sudah tak ada di pangkalan data' }, { status: 404 });
+
+		// Proteksi Hapus: Hanya Pemilik (atau Admin) yang boleh menghapus
+		if (role === 'Guru' && String(row.get('guru_id')) !== String(userId)) {
+			return Response.json({ error: 'Akses Ditolak: Anda mencoba menghapus Jurnal kolega Anda.' }, { status: 403 });
+		}
+
+		await row.delete();
 
 		return Response.json({ success: true });
 	} catch (error) {

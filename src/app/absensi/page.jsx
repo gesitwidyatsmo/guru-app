@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
@@ -76,16 +75,30 @@ export default function AbsensiMapelPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resMapel, resStatus, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/status-absensi'), fetch('/api/siswa')]);
+				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/status-absensi'), fetch('/api/siswa'), fetch('/api/poin')]);
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
 				const dataStatus = resStatus.ok ? await resStatus.json() : [];
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+				const dataPoin = resPoin.ok ? await resPoin.json() : [];
+
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
+
+				const siswaDataUpdated = dataSiswa.map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
 
 				setKelasList(dataKelas);
 				setMapelList(dataMapel);
 				setStatusList(dataStatus);
-				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
+				setSiswaList(siswaDataUpdated.filter((s) => s.status === 'Aktif'));
 
 				if (dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
 				if (dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
@@ -98,20 +111,12 @@ export default function AbsensiMapelPage() {
 		fetchAll();
 	}, []);
 
-	const siswaKelasIni = siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim());
+	const siswaKelasIni = useMemo(() => siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim()), [siswaList, selectedKelas]);
 
 	// 2. Check Absensi Mapel
 	useEffect(() => {
 		if (!selectedKelas || !selectedMapel || !tanggal || !jamKe || siswaKelasIni.length === 0) {
-			// Reset ke input bersih
-			const init = {};
-			siswaKelasIni.forEach((s) => {
-				init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
-			});
-			setAbsensi(init);
-			setMode('input');
-			setExistingId(null);
-			return;
+			return; // <-- HAPUS RESET! Biarkan state user tetap
 		}
 
 		const checkAbsensi = async () => {
@@ -128,29 +133,31 @@ export default function AbsensiMapelPage() {
 					const data = await res.json();
 
 					if (data && data.length > 0) {
-						// DATA DITEMUKAN -> Masuk Mode REKAP
+						// Load existing data
 						const loadedAbsensi = {};
 						data.forEach((item) => {
 							loadedAbsensi[item.siswa_id] = {
 								status: item.status,
-								keterangan: '',
+								keterangan: item.keterangan || '', // Tambah keterangan jika ada di DB
 							};
 						});
 						setAbsensi(loadedAbsensi);
-
-						// Default langsung REKAP agar user tau data sudah ada
 						setMode('rekap');
-
 						if (data[0]?.id_row) setExistingId(data[0].id_row);
 					} else {
-						// Data Baru -> Mode Input
+						// Data baru: INIT SAJA jika absensi kosong total (bukan reset)
+						setAbsensi((prev) => {
+							if (Object.keys(prev).length === 0) {
+								const init = {};
+								siswaKelasIni.forEach((s) => {
+									init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+								});
+								return init;
+							}
+							return prev;
+						});
 						setMode('input');
 						setExistingId(null);
-						const init = {};
-						siswaKelasIni.forEach((s) => {
-							init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
-						});
-						setAbsensi(init);
 					}
 				}
 			} catch (err) {
@@ -159,7 +166,7 @@ export default function AbsensiMapelPage() {
 		};
 
 		checkAbsensi();
-	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni.length]);
+	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni, statusList]); // Tambah statusList ke deps
 
 	const handleStatusChange = (siswaId, labelStatus) => {
 		setAbsensi((prev) => ({
@@ -175,7 +182,6 @@ export default function AbsensiMapelPage() {
 		}));
 	};
 
-	// 3. Simpan
 	const handleSimpan = async () => {
 		if (!jamKe || jamKe.trim() === '') {
 			Swal.fire({
@@ -184,6 +190,12 @@ export default function AbsensiMapelPage() {
 				text: 'Harap isi Jam Ke (misal: 1-2) sebelum menyimpan.',
 				confirmButtonColor: '#f59e0b',
 			});
+			return;
+		}
+
+		const hasAbsensiData = siswaKelasIni.some((s) => absensi[s.id]);
+		if (!hasAbsensiData) {
+			Swal.fire('Error', 'Belum ada data absensi siswa', 'error');
 			return;
 		}
 
@@ -203,21 +215,21 @@ export default function AbsensiMapelPage() {
 		if (!result.isConfirmed) return;
 		setSaving(true);
 
+		const dataToSave = siswaKelasIni.map((s) => ({
+			siswa_id: s.id,
+			status: absensi[s.id]?.status || 'Hadir',
+		}));
+
+		const payload = {
+			id: existingId,
+			tanggal,
+			kelas: selectedKelas,
+			mapel: selectedMapel,
+			jam_ke: jamKe,
+			data: dataToSave,
+		};
+
 		try {
-			const dataToSave = siswaKelasIni.map((s) => ({
-				siswa_id: s.id,
-				status: absensi[s.id]?.status || 'Hadir',
-			}));
-
-			const payload = {
-				id: existingId,
-				tanggal,
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				jam_ke: jamKe,
-				data: dataToSave,
-			};
-
 			const res = await fetch('/api/absensi-mapel', {
 				method: 'POST', // POST untuk Upsert (Insert/Update handled by backend or ID)
 				headers: { 'Content-Type': 'application/json' },
@@ -406,7 +418,25 @@ export default function AbsensiMapelPage() {
 									className='bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200'>
 									<div className='flex justify-between items-start mb-4'>
 										<div>
-											<h3 className='font-bold text-gray-800 line-clamp-1 text-base'>{siswa.nama_lengkap}</h3>
+											<div className='flex items-center gap-2'>
+												<h3 className='font-bold text-gray-800 line-clamp-1 text-base'>{siswa.nama_lengkap}</h3>
+												<div className='flex gap-1 shrink-0'>
+													{siswa.poinPositif > 0 && (
+														<span
+															className='text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-md'
+															title='Poin +'>
+															+{siswa.poinPositif}
+														</span>
+													)}
+													{siswa.poinNegatif > 0 && (
+														<span
+															className='text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded-md'
+															title='Pelanggaran -'>
+															-{siswa.poinNegatif}
+														</span>
+													)}
+												</div>
+											</div>
 											<p className='text-xs text-gray-400 font-mono mt-0.5'>{siswa.nis || '-'}</p>
 										</div>
 										<span className='text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full'>#{idx + 1}</span>

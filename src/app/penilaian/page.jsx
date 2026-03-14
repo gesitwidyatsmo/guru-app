@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -18,8 +17,11 @@ export default function PenilaianPage() {
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
 	const [judul, setJudul] = useState('');
+	const [type, setType] = useState('Formatif');
+	const [deskripsi, setDeskripsi] = useState('');
 	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
 	const [nilai, setNilai] = useState({}); // Object {siswa_id: nilai}
+	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// State UI
 	const [loading, setLoading] = useState(true);
@@ -54,7 +56,6 @@ export default function PenilaianPage() {
 				}
 			} catch (err) {
 				console.error(err);
-				Swal.fire('Error', 'Gagal memuat data awal', 'error');
 			} finally {
 				setLoading(false);
 			}
@@ -71,9 +72,12 @@ export default function PenilaianPage() {
 		// Reset ke mode "Tugas Baru" setiap kali mapel/kelas berubah
 		setSelectedTugasId('');
 		setJudul('');
+		setType('Formatif');
+		setDeskripsi('');
 		setNilai({});
 		setInitialSiswaIds([]);
 		setTanggal(new Date().toISOString().slice(0, 10));
+		setSearchSiswa('');
 
 		const fetchTugas = async () => {
 			try {
@@ -115,6 +119,8 @@ export default function PenilaianPage() {
 		if (!selectedTugasId) {
 			// Mode "Tugas Baru" -> Reset Form
 			setJudul('');
+			setType('Formatif');
+			setDeskripsi('');
 			setNilai({});
 			setInitialSiswaIds([]);
 			return;
@@ -128,6 +134,8 @@ export default function PenilaianPage() {
 					const data = await res.json();
 					if (data.length > 0) {
 						setJudul(data[0].kategori);
+						setType(data[0].type || 'Formatif');
+						setDeskripsi(data[0].deskripsi || '');
 						setTanggal(data[0].tanggal);
 
 						// Track siswa IDs yang sudah ada
@@ -226,7 +234,7 @@ export default function PenilaianPage() {
 		}
 
 		// Prepare payload
-		const nilaiArray = siswaKelasIni.map((s) => ({
+		const nilaiArray = filteredSiswa.map((s) => ({
 			siswa_id: s.id,
 			nilai: nilai[s.id] || '0',
 		}));
@@ -256,16 +264,33 @@ export default function PenilaianPage() {
 		if (!result.isConfirmed) return;
 
 		setSaving(true);
+
+		const payload = {
+			judul,
+			type,
+			deskripsi,
+			kelas: selectedKelas,
+			mapel: selectedMapel,
+			tanggal,
+			nilai: nilaiArray,
+		};
+
+		// Jika tidak ada koneksi, simpan ke antrian lokal
+		if (!navigator.onLine) {
+			addToQueue('nilai', payload, 'POST', '/api/nilai');
+			await Swal.fire({
+				icon: 'info',
+				title: 'Disimpan Sementara',
+				text: 'Tidak ada koneksi internet. Data penilaian disimpan lokal dan akan dikirim otomatis saat online.',
+				timer: 3000,
+				showConfirmButton: false,
+			});
+			setSaving(false);
+			return;
+		}
+
 		try {
 			// POST ke API create baru
-			const payload = {
-				judul,
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				tanggal,
-				nilai: nilaiArray,
-			};
-
 			const res = await fetch('/api/nilai', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -350,6 +375,8 @@ export default function PenilaianPage() {
 				const payload = {
 					tugasId: selectedTugasId,
 					judul: judul, // Kirim judul saat ini (bisa diedit di header)
+					type: type,
+					deskripsi: deskripsi,
 					kelas: selectedKelas,
 					mapel: selectedMapel,
 					tanggal: tanggal,
@@ -381,6 +408,173 @@ export default function PenilaianPage() {
 			}
 		}
 	};
+
+	// Hapus Tugas
+	const handleHapusTugas = async () => {
+		if (!selectedTugasId) return;
+
+		const result = await Swal.fire({
+			title: 'Hapus Tugas?',
+			html: `
+				<div class="text-left">
+					<p class="text-gray-700 mb-2">Anda akan menghapus tugas:</p>
+					<div class="bg-red-50 p-3 rounded-lg border border-red-200">
+						<p class="font-bold text-red-700">${judul}</p>
+						<p class="text-sm text-red-600 mt-1">${selectedKelas} - ${selectedMapel}</p>
+					</div>
+					<p class="text-sm text-gray-500 mt-3">⚠️ Semua nilai siswa untuk tugas ini akan dihapus permanen!</p>
+				</div>
+			`,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#EF4444',
+			cancelButtonColor: '#6B7280',
+			confirmButtonText: 'Ya, Hapus!',
+			cancelButtonText: 'Batal',
+		});
+
+		if (!result.isConfirmed) return;
+
+		setSaving(true);
+		try {
+			const res = await fetch(`/api/nilai?tugasId=${selectedTugasId}`, {
+				method: 'DELETE',
+			});
+
+			const data = await res.json();
+
+			if (res.ok) {
+				await Swal.fire({
+					icon: 'success',
+					title: 'Berhasil Dihapus!',
+					text: `${data.count} data nilai berhasil dihapus`,
+					timer: 1500,
+					showConfirmButton: false,
+				});
+
+				// Reset ke mode "Tugas Baru"
+				setSelectedTugasId('');
+				setJudul('');
+				setType('Formatif');
+				setDeskripsi('');
+				setNilai({});
+				setInitialSiswaIds([]);
+				setTanggal(new Date().toISOString().slice(0, 10));
+
+				// Refresh daftar tugas
+				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const refreshRes = await fetch(url);
+				if (refreshRes.ok) {
+					const refreshData = await refreshRes.json();
+					const tugasMap = new Map();
+					refreshData.forEach((item) => {
+						if (!tugasMap.has(item.tugas_id)) {
+							tugasMap.set(item.tugas_id, {
+								tugas_id: item.tugas_id,
+								judul: item.kategori,
+								tanggal: item.tanggal,
+								kelas: item.kelas,
+								mapel: item.mapel,
+								jumlahSiswa: 1,
+							});
+						} else {
+							tugasMap.get(item.tugas_id).jumlahSiswa++;
+						}
+					});
+					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+				}
+			} else {
+				throw new Error(data.error || 'Gagal menghapus tugas');
+			}
+		} catch (error) {
+			console.error(error);
+			Swal.fire({
+				icon: 'error',
+				title: 'Gagal Menghapus',
+				text: error.message,
+				confirmButtonColor: '#4F46E5',
+			});
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	// Update Judul / Tanggal (Mode Edit)
+	const handleUpdateInfoTugas = async () => {
+		if (!selectedTugasId) return;
+		if (!judul.trim()) {
+			require('sweetalert2').fire('Error', 'Judul tidak boleh kosong', 'error');
+			return;
+		}
+
+		setSaving(true);
+		try {
+			const payload = {
+				tugasId: selectedTugasId,
+				judul: judul,
+				type: type,
+				deskripsi: deskripsi,
+				kelas: selectedKelas,
+				mapel: selectedMapel,
+				tanggal: tanggal,
+				nilai: [], // Kosongkan nilai agar backend hanya update judul/tanggal
+			};
+
+			const res = await fetch('/api/nilai', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+
+			if (res.ok) {
+				const Swal = require('sweetalert2');
+				const Toast = Swal.mixin({
+					toast: true,
+					position: 'top-end',
+					showConfirmButton: false,
+					timer: 3000,
+					timerProgressBar: true,
+				});
+				Toast.fire({
+					icon: 'success',
+					title: 'Informasi tugas diperbarui',
+				});
+
+				// Refresh sidebar untuk judul/tanggal
+				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const refreshRes = await fetch(url);
+				if (refreshRes.ok) {
+					const refreshData = await refreshRes.json();
+					const tugasMap = new Map();
+					refreshData.forEach((item) => {
+						if (!tugasMap.has(item.tugas_id)) {
+							tugasMap.set(item.tugas_id, {
+								tugas_id: item.tugas_id,
+								judul: item.kategori,
+								tanggal: item.tanggal,
+								kelas: item.kelas,
+								mapel: item.mapel,
+								jumlahSiswa: 1,
+							});
+						} else {
+							tugasMap.get(item.tugas_id).jumlahSiswa++;
+						}
+					});
+					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+				}
+			} else {
+				throw new Error('Gagal update informasi tugas');
+			}
+		} catch (err) {
+			console.error(err);
+			require('sweetalert2').fire('Error', 'Terjadi kesalahan saat menyimpan', 'error');
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	// --- Filter manual Data Siswa ---
+	const filteredSiswa = siswaKelasIni.filter((s) => (s.nama_lengkap?.toLowerCase() || '').includes(searchSiswa.toLowerCase()) || (s.nis?.toLowerCase() || '').includes(searchSiswa.toLowerCase()));
 
 	// --- 5. Render UI ---
 
@@ -515,19 +709,31 @@ export default function PenilaianPage() {
 					<div className='lg:col-span-3 space-y-6'>
 						{/* Info Tugas Card */}
 						<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
-							<div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-4'>
-								<div>
+							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4'>
+								<div className='lg:col-span-2'>
 									<label className='block text-sm font-medium text-gray-500 mb-1'>Judul Tugas / Materi</label>
 									<input
 										type='text'
 										value={judul}
 										onChange={(e) => setJudul(e.target.value)}
-										disabled={!!selectedTugasId} // Disable edit judul langsung jika mode edit (opsional, bisa dienable kalau mau support rename)
 										className={`w-full px-4 py-2 rounded-xl border ${
-											selectedTugasId ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-white border-gray-300'
-										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500`}
+											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
+										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}
 										placeholder='Contoh: UH Matematika Bab 1'
 									/>
+								</div>
+								<div>
+									<label className='block text-sm font-medium text-gray-500 mb-1'>Tipe</label>
+									<select
+										value={type}
+										onChange={(e) => setType(e.target.value)}
+										className={`w-full px-4 py-2 rounded-xl border ${
+											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
+										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}>
+										<option value='Formatif'>Formatif</option>
+										<option value='Sumatif'>Sumatif</option>
+										<option value='SAS'>SAS</option>
+									</select>
 								</div>
 								<div>
 									<label className='block text-sm font-medium text-gray-500 mb-1'>Tanggal</label>
@@ -535,16 +741,58 @@ export default function PenilaianPage() {
 										type='date'
 										value={tanggal}
 										onChange={(e) => setTanggal(e.target.value)}
-										disabled={!!selectedTugasId}
 										className={`w-full px-4 py-2 rounded-xl border ${
-											selectedTugasId ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-white border-gray-300'
-										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500`}
+											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
+										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}
 									/>
 								</div>
 							</div>
 
+							<div className='mb-4'>
+								<label className='block text-sm font-medium text-gray-500 mb-1'>Deskripsi (Opsional)</label>
+								<textarea
+									value={deskripsi}
+									onChange={(e) => setDeskripsi(e.target.value)}
+									rows={2}
+									className={`w-full px-4 py-2 rounded-xl border ${
+										selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
+									} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none`}
+									placeholder='Catatan tambahan tentang tugas ini'
+								/>
+							</div>
+
 							{selectedTugasId && (
-								<div className='bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2'>
+								<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2'>
+									<div className='bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2 flex-auto'>
+										<svg
+											className='w-5 h-5 flex-shrink-0'
+											fill='none'
+											stroke='currentColor'
+											viewBox='0 0 24 24'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={2}
+												d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+											/>
+										</svg>
+										<span>
+											Sedang mengedit. Klik <b>Simpan</b> untuk menyimpan Judul/Tanggal, atau klik <b>Baris Siswa</b> untuk edit nilai.
+										</span>
+									</div>
+									<button
+										onClick={handleUpdateInfoTugas}
+										disabled={saving}
+										className='flex-shrink-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm'>
+										{saving ? 'Menyimpan...' : 'Simpan Perubahan'}
+									</button>
+								</div>
+							)}
+							{selectedTugasId && (
+								<button
+									onClick={handleHapusTugas}
+									disabled={saving}
+									className='w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-3'>
 									<svg
 										className='w-5 h-5'
 										fill='none'
@@ -554,18 +802,41 @@ export default function PenilaianPage() {
 											strokeLinecap='round'
 											strokeLinejoin='round'
 											strokeWidth={2}
-											d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+											d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
 										/>
 									</svg>
-									<span>
-										Anda sedang melihat data tersimpan. Klik pada <b>Baris Siswa</b> untuk mengedit nilai.
-									</span>
-								</div>
+									Hapus Tugas Ini
+								</button>
 							)}
 						</div>
 
 						{/* Tabel Siswa */}
 						<div className='bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
+							<div className='p-4 bg-white border-b border-gray-100'>
+								<div className='relative'>
+									<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+										<svg
+											className='h-5 w-5 text-gray-400'
+											fill='none'
+											viewBox='0 0 24 24'
+											stroke='currentColor'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={2}
+												d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
+											/>
+										</svg>
+									</div>
+									<input
+										type='text'
+										placeholder='Cari Nama atau NIS Siswa...'
+										value={searchSiswa}
+										onChange={(e) => setSearchSiswa(e.target.value)}
+										className='block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out'
+									/>
+								</div>
+							</div>
 							<div className='grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b border-gray-100 text-sm font-semibold text-gray-500 uppercase tracking-wider'>
 								<div className='col-span-1 text-center'>No</div>
 								<div className='col-span-6 sm:col-span-6'>Nama Siswa</div>
@@ -577,10 +848,10 @@ export default function PenilaianPage() {
 							</div>
 
 							<div className='divide-y divide-gray-100 max-h-[600px] overflow-y-auto'>
-								{siswaKelasIni.length === 0 ? (
+								{filteredSiswa.length === 0 ? (
 									<div className='p-8 text-center text-gray-400'>Tidak ada siswa di kelas ini</div>
 								) : (
-									siswaKelasIni.map((siswa, idx) => {
+									filteredSiswa.map((siswa, idx) => {
 										const nilaiSiswa = nilai[siswa.id] || '';
 										const isEditMode = !!selectedTugasId;
 										const isNewStudentInTask = isEditMode && !initialSiswaIds.includes(siswa.id);

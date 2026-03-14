@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
@@ -130,7 +129,12 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 	const [formData, setFormData] = useState({ id: '', nis: '', nama_lengkap: '', kelas: '', jenis_kelamin: 'Laki-laki', status: 'Aktif' });
 	const [loading, setLoading] = useState(false);
 
-	useEffect(() => {
+	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+	const [prevInitialData, setPrevInitialData] = useState(initialData);
+
+	if (isOpen !== prevIsOpen || initialData !== prevInitialData) {
+		setPrevIsOpen(isOpen);
+		setPrevInitialData(initialData);
 		if (isOpen && initialData) {
 			setFormData({
 				id: initialData.id || '',
@@ -141,7 +145,7 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 				status: initialData.status || 'Aktif',
 			});
 		}
-	}, [isOpen, initialData]);
+	}
 
 	if (!isOpen) return null;
 
@@ -274,26 +278,41 @@ export default function SiswaPage() {
 	const router = useRouter();
 
 	const [siswaData, setSiswaData] = useState(null);
+	const [poinSiswa, setPoinSiswa] = useState({ positif: 0, negatif: 0 });
 	const [loading, setLoading] = useState(true);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [kelasList, setKelasList] = useState([]);
 
-	const fetchSiswa = async () => {
+	const fetchSiswa = useCallback(async () => {
 		try {
-			const res = await fetch(`/api/siswa`);
-			const data = await res.json();
+			const [resSiswa, resPoin] = await Promise.all([fetch(`/api/siswa`), fetch(`/api/poin?siswa_id=${id}`)]);
+
+			const data = await resSiswa.json();
 			const siswa = data.find((item) => String(item.id) === String(id));
 			if (siswa) setSiswaData(siswa);
+
+			if (resPoin.ok) {
+				const dataPoin = await resPoin.json();
+				const poinTerkumpul = dataPoin.reduce(
+					(acc, curr) => {
+						if (curr.tipe === 'positif') acc.positif += curr.poin || 0;
+						else if (curr.tipe === 'negatif') acc.negatif += curr.poin || 0;
+						return acc;
+					},
+					{ positif: 0, negatif: 0 },
+				);
+				setPoinSiswa(poinTerkumpul);
+			}
 		} catch (err) {
 			console.error(err);
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [id]);
 
 	useEffect(() => {
 		if (id) fetchSiswa();
-	}, [id]);
+	}, [id, fetchSiswa]);
 
 	const handleOpenEdit = async () => {
 		if (kelasList.length === 0) {
@@ -409,6 +428,36 @@ export default function SiswaPage() {
 										{siswaData.status}
 									</span>
 									<span className='inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700'>{siswaData.jenis_kelamin || 'Laki-laki'}</span>
+									<span className='inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200'>
+										<svg
+											className='w-4 h-4'
+											fill='none'
+											stroke='currentColor'
+											viewBox='0 0 24 24'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={2}
+												d='M5 13l4 4L19 7'
+											/>
+										</svg>
+										Pts: +{poinSiswa.positif}
+									</span>
+									<span className='inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200'>
+										<svg
+											className='w-4 h-4'
+											fill='none'
+											stroke='currentColor'
+											viewBox='0 0 24 24'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={2}
+												d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+											/>
+										</svg>
+										Pts: -{poinSiswa.negatif}
+									</span>
 								</div>
 							</div>
 						</div>

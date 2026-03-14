@@ -1,523 +1,516 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import SectionHeader from '../../../components/SectionHeader';
-import * as XLSX from 'xlsx';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { useRouter } from 'next/router';
+import Swal from 'sweetalert2';
+import Loader from '../../../components/loading';
+import SectionHeader from '../../../components/SectionHeader';
 
-export default function LaporanAbsensiPage() {
+export default function RiwayatAbsensiPage() {
 	const params = useParams();
-	const { id } = params;
+	const id = params.id;
 
-	const [kelasList, setKelasList] = useState([]);
+	// State Data Master
+	const [kelasDetail, setKelasDetail] = useState(null);
 	const [namaKelas, setNamaKelas] = useState('');
-	const [selectedBulan, setSelectedBulan] = useState('');
-	const [rekapData, setRekapData] = useState(null);
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState(null);
+	const [siswaList, setSiswaList] = useState([]);
 
-	const bulanOptions = [
-		{ value: 'all', label: 'Semua Bulan' },
-		{ value: '01', label: 'Januari' },
-		{ value: '02', label: 'Februari' },
-		{ value: '03', label: 'Maret' },
-		{ value: '04', label: 'April' },
-		{ value: '05', label: 'Mei' },
-		{ value: '06', label: 'Juni' },
-		{ value: '07', label: 'Juli' },
-		{ value: '08', label: 'Agustus' },
-		{ value: '09', label: 'September' },
-		{ value: '10', label: 'Oktober' },
-		{ value: '11', label: 'November' },
-		{ value: '12', label: 'Desember' },
-	];
+	// State Daftar Sesi (Sidebar)
+	const [daftarSesi, setDaftarSesi] = useState([]);
+	const [selectedTanggal, setSelectedTanggal] = useState('');
+	const [loadingSesi, setLoadingSesi] = useState(false);
 
-	// Fetch daftar kelas
+	// State Form Detail
+	const [tanggalEdit, setTanggalEdit] = useState('');
+	const [absensiMap, setAbsensiMap] = useState({}); // {siswa_id: { status, keterangan }}
+
+	// State UI
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
+
+	// --- 1. Fetch Data Awal (Kelas & Siswa) ---
 	useEffect(() => {
-		const fetchKelas = async () => {
+		const fetchInitial = async () => {
+			if (!id) return;
 			try {
-				const response = await fetch('/api/kelas');
-				if (!response.ok) throw new Error('Gagal mengambil data kelas');
-				const dataKelas = await response.json();
+				const resKelas = await fetch('/api/kelas');
+				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const kelas = dataKelas.find((k) => k.id === id);
+
 				if (kelas) {
+					setKelasDetail(kelas);
 					setNamaKelas(kelas.kelas);
+
+					// Ambil siswa untuk kelas ini
+					const resSiswa = await fetch('/api/siswa');
+					const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+					const siswaKelasIni = dataSiswa.filter((s) => s.status === 'Aktif' && s.kelas === kelas.kelas);
+					setSiswaList(siswaKelasIni);
 				}
-			} catch (error) {
-				console.error('Error fetching kelas:', error);
-				setKelasList([]);
+			} catch (err) {
+				console.error(err);
+				Swal.fire('Error', 'Gagal memuat data awal', 'error');
+			} finally {
+				setLoading(false);
 			}
 		};
-		fetchKelas();
-	}, []);
+		fetchInitial();
+	}, [id]);
 
-	// Fetch rekap absensi
-	const fetchRekap = async () => {
-		if (!selectedBulan) {
-			alert('Pilih periode terlebih dahulu');
-			return;
-		}
-
-		setLoading(true);
-		setError(null);
+	// --- 2. Fetch Daftar Sesi Absensi ---
+	const fetchRiwayatSesi = useCallback(async () => {
+		if (!namaKelas) return;
 		try {
-			const params = new URLSearchParams({
-				kelas: namaKelas,
-				bulan: selectedBulan,
-				tahun: new Date().getFullYear(),
-			});
+			setLoadingSesi(true);
+			// Ambil semua absensi kelas tanpa filter tanggal
+			const url = `/api/absensi?kelas=${encodeURIComponent(namaKelas)}`;
+			const res = await fetch(url);
+			if (res.ok) {
+				const data = await res.json();
 
-			const response = await fetch(`/api/absensi/rekap?${params}`);
-			if (!response.ok) throw new Error('Gagal mengambil data rekap');
+				// Group by tanggal
+				const sesiSet = new Set();
+				data.forEach((item) => {
+					// Ambil cuma tanggal YYYY-MM-DD
+					const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
+					if (tgl) sesiSet.add(tgl);
+				});
 
-			const data = await response.json();
-			setRekapData(data);
-		} catch (error) {
-			console.error('Error fetching rekap:', error);
-			setError(error.message);
-			setRekapData(null);
+				// Sort descending by date
+				const sesiArray = Array.from(sesiSet).sort((a, b) => new Date(b) - new Date(a));
+				setDaftarSesi(sesiArray);
+
+				// Optional: update absensiMap jika data sesi spesifik diperlukan
+			}
+		} catch (err) {
+			console.error('Error fetching sesi:', err);
 		} finally {
-			setLoading(false);
+			setLoadingSesi(false);
 		}
-	};
+	}, [namaKelas]);
 
-	// Generate tanggal-tanggal dalam bulan
-	const getDatesInMonth = (dates) => {
-		if (!dates || !Array.isArray(dates) || dates.length === 0) return [];
-		return dates.sort((a, b) => new Date(a) - new Date(b));
-	};
+	useEffect(() => {
+		fetchRiwayatSesi();
+	}, [fetchRiwayatSesi]);
 
-	const getStatusColor = (status) => {
-		const colors = {
-			Hadir: 'bg-green-100 text-green-800',
-			Izin: 'bg-blue-100 text-blue-800',
-			Sakit: 'bg-yellow-100 text-yellow-800',
-			Alpha: 'bg-red-100 text-red-800',
-		};
-		return colors[status] || 'bg-gray-100 text-gray-800';
-	};
-
-	// Fungsi Export ke Excel
-	const exportToExcel = () => {
-		if (!rekapData || !rekapData.siswa || rekapData.siswa.length === 0) {
-			alert('Tidak ada data untuk diekspor');
+	// --- 3. Load Detail Sesi ketika sesi dipilih ---
+	useEffect(() => {
+		if (!selectedTanggal) {
+			setTanggalEdit('');
+			setAbsensiMap({});
 			return;
 		}
 
-		const tanggalList = getDatesInMonth(rekapData.tanggalList);
+		const loadSesiDetail = async () => {
+			try {
+				const url = `/api/absensi?kelas=${encodeURIComponent(namaKelas)}&tanggal=${selectedTanggal}`;
+				const res = await fetch(url);
+				if (res.ok) {
+					const data = await res.json();
+					setTanggalEdit(selectedTanggal);
 
-		// Buat header
-		const headers = ['No', 'NIS', 'Nama Siswa'];
+					// Map ke state form
+					const map = {};
+					data.forEach((item) => {
+						map[item.siswa_id] = {
+							status: item.status,
+							keterangan: item.keterangan || '',
+						};
+					});
+					setAbsensiMap(map);
+				}
+			} catch (err) {
+				console.error('Error loading detail:', err);
+			}
+		};
 
-		// Tambahkan tanggal sebagai header
-		tanggalList.forEach((tanggal) => {
-			const date = new Date(tanggal);
-			const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
-			headers.push(`${date.getDate()} (${dayName})`);
-		});
+		loadSesiDetail();
+	}, [selectedTanggal, namaKelas]);
 
-		// Tambahkan kolom ringkasan
-		headers.push('Hadir', 'Izin', 'Sakit', 'Alpha', 'Total');
+	// --- 4. Handler Input Perubahan ---
+	const handleStatusChange = (siswaId, val) => {
+		setAbsensiMap((prev) => ({
+			...prev,
+			[siswaId]: {
+				...prev[siswaId],
+				status: val,
+			},
+		}));
+	};
 
-		// Buat data rows
-		const data = rekapData.siswa.map((siswa, index) => {
-			const row = [index + 1, siswa.nis || '-', siswa.nama_lengkap];
+	const handleKeteranganChange = (siswaId, val) => {
+		setAbsensiMap((prev) => ({
+			...prev,
+			[siswaId]: {
+				...prev[siswaId],
+				keterangan: val,
+			},
+		}));
+	};
 
-			// Tambahkan status per tanggal
-			tanggalList.forEach((tanggal) => {
-				const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
-				const status = absensi?.status || '-';
-				const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : status === 'Alpha' ? 'A' : '-';
-				row.push(kode);
+	// --- 5. Simpan Perubahan (Bulk Update via PUT) ---
+	const handleSimpan = async () => {
+		if (!selectedTanggal) return;
+
+		setSaving(true);
+		try {
+			// Persiapkan format yg diterima API
+			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
+				siswa_id: siswaId,
+				status: absensiMap[siswaId].status,
+				keterangan: absensiMap[siswaId].keterangan,
+			}));
+
+			const payload = {
+				oldTanggal: selectedTanggal,
+				newTanggal: tanggalEdit,
+				kelas: namaKelas,
+				absensiList,
+			};
+
+			const res = await fetch('/api/absensi', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
 			});
 
-			// Tambahkan ringkasan
-			const total = (siswa.ringkasan?.H || 0) + (siswa.ringkasan?.I || 0) + (siswa.ringkasan?.S || 0) + (siswa.ringkasan?.A || 0);
-			row.push(siswa.ringkasan?.H || 0, siswa.ringkasan?.I || 0, siswa.ringkasan?.S || 0, siswa.ringkasan?.A || 0, total);
+			if (!res.ok) {
+				const err = await res.json();
+				throw new Error(err.error || 'Gagal menyimpan');
+			}
 
-			return row;
+			Swal.fire({
+				icon: 'success',
+				title: 'Berhasil',
+				text: 'Perubahan riwayat absensi disimpan',
+				timer: 1500,
+				showConfirmButton: false,
+			});
+
+			// Refresh sesi, mungkin newTanggal berubah
+			await fetchRiwayatSesi();
+			if (tanggalEdit !== selectedTanggal) {
+				setSelectedTanggal(tanggalEdit);
+			}
+		} catch (error) {
+			console.error(error);
+			Swal.fire('Error', error.message, 'error');
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	// --- 6. Hapus Sesi ---
+	const handleHapusSesi = async () => {
+		if (!selectedTanggal) return;
+
+		const resConfirm = await Swal.fire({
+			title: 'Hapus Sesi Absensi?',
+			text: `Sesi Absen (${selectedTanggal}) akan dihapus secara permanen beserta data seluruh siswa!`,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#d33',
+			cancelButtonColor: '#3085d6',
+			confirmButtonText: 'Ya, Hapus!',
+			cancelButtonText: 'Batal',
 		});
 
-		// Gabungkan header dan data
-		const worksheetData = [
-			[`REKAP ABSENSI - ${rekapData.kelas}`],
-			[`Periode: ${rekapData.periode}`],
-			[`Total Siswa: ${rekapData.siswa.length}`],
-			[], // Baris kosong
-			headers,
-			...data,
-		];
+		if (!resConfirm.isConfirmed) return;
 
-		// Buat worksheet dan workbook
-		const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+		setSaving(true);
+		try {
+			const res = await fetch(`/api/absensi?kelas=${encodeURIComponent(namaKelas)}&tanggal=${selectedTanggal}`, {
+				method: 'DELETE',
+			});
 
-		// Styling untuk merge cells (judul)
-		ws['!merges'] = [
-			{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
-			{ s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
-			{ s: { r: 2, c: 0 }, e: { r: 2, c: headers.length - 1 } },
-		];
+			if (!res.ok) throw new Error('Gagal menghapus');
 
-		// Set column widths
-		const colWidths = [
-			{ wch: 5 }, // No
-			{ wch: 15 }, // NIS
-			{ wch: 30 }, // Nama
-			...tanggalList.map(() => ({ wch: 8 })), // Tanggal
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 }, // Ringkasan
-		];
-		ws['!cols'] = colWidths;
-
-		const wb = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(wb, ws, 'Rekap Absensi');
-
-		// Generate nama file
-		const bulanLabel = bulanOptions.find((b) => b.value === selectedBulan)?.label || 'Semua_Bulan';
-		const filename = `Rekap_Absensi_${rekapData.kelas}_${bulanLabel}_${new Date().getFullYear()}.xlsx`;
-
-		// Download file
-		XLSX.writeFile(wb, filename);
+			Swal.fire('Terhapus!', 'Sesi absensi berhasil dihapus.', 'success');
+			setSelectedTanggal('');
+			await fetchRiwayatSesi();
+		} catch (error) {
+			console.error(error);
+			Swal.fire('Error', 'Gagal menghapus sesi absen', 'error');
+		} finally {
+			setSaving(false);
+		}
 	};
+
+	if (loading) return <Loader />;
 
 	return (
-		<div className='bg-gray-50 min-h-screen'>
-			<div className='container mx-auto p-6 max-w-7xl '>
+		<main className='min-h-screen bg-gray-50 pb-20'>
+			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
 				<SectionHeader
-					title={'Riwayat Absensi'}
+					title={'Kelola Riwayat Absensi'}
 					leftIcon={
-						<div className='bg-indigo-100 text-indigo-600 p-2 rounded-full'>
-							<svg
-								width='24'
-								height='24'
-								fill='none'
-								stroke='currentColor'
-								strokeWidth={2}>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									d='M15 19l-7-7 7-7'
-								/>
-							</svg>
-						</div>
-					}
-					onLeftClick={() => window.history.back()}
-					rightIcon={
 						<svg
 							xmlns='http://www.w3.org/2000/svg'
 							fill='none'
 							viewBox='0 0 24 24'
-							strokeWidth='1.5'
+							strokeWidth='2'
 							stroke='currentColor'
-							className='size-6'>
+							className='w-6 h-6 text-indigo-600'>
 							<path
 								strokeLinecap='round'
 								strokeLinejoin='round'
-								d='M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z'
+								d='M15 19l-7-7 7-7'
 							/>
 						</svg>
 					}
+					onLeftClick={() => window.history.back()}
 				/>
-				{/* Section 1: Filter */}
-				<div className='bg-white rounded-lg shadow-md p-6 mb-6 mt-6'>
-					<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-						{/* Pilih Kelas */}
-						<div>
-							<label className='block text-sm font-medium text-gray-700 mb-2'>Kelas</label>
-							<div className='pt-2 border-t border-gray-100'>
-								<div className='text-sm font-semibold text-gray-800'>{namaKelas}</div>
+
+				<div className='mt-8 flex flex-col lg:flex-row gap-6'>
+					{/* SIDEBAR: Daftar Sesi */}
+					<div className='w-full lg:w-[320px] shrink-0'>
+						<div className='bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[300px] lg:h-[calc(100vh-140px)] overflow-hidden lg:sticky top-[80px]'>
+							<div className='p-5 border-b border-gray-100 bg-gray-50 flex-shrink-0'>
+								<h2 className='text-lg font-bold text-gray-800 break-words'>{namaKelas || 'Pilih Kelas'}</h2>
+								<div className='text-sm text-gray-500 mt-1.5 flex items-center gap-1.5 flex-wrap'>
+									<div className='w-2 h-2 rounded-full bg-indigo-500'></div>
+									<span>Daftar Sesi Perekaman</span>
+								</div>
 							</div>
-						</div>
 
-						{/* Pilih Periode/Bulan */}
-						<div>
-							<label className='block text-sm font-medium text-gray-700 mb-2'>Periode</label>
-							<select
-								value={selectedBulan}
-								onChange={(e) => setSelectedBulan(e.target.value)}
-								className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500'>
-								<option value=''>Pilih Bulan</option>
-								{bulanOptions.map((bulan) => (
-									<option
-										key={bulan.value}
-										value={bulan.value}>
-										{bulan.label}
-									</option>
-								))}
-							</select>
-						</div>
-
-						{/* Tombol Tampilkan */}
-						<div className='flex items-end'>
-							<button
-								onClick={fetchRekap}
-								disabled={loading}
-								className='w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors'>
-								{loading ? 'Memuat...' : 'Tampilkan Rekap'}
-							</button>
+							<div className='flex-1 overflow-y-auto p-3 space-y-2'>
+								{loadingSesi ? (
+									<div className='py-8 text-center text-sm text-gray-400'>Memuat daftar sesi...</div>
+								) : daftarSesi.length === 0 ? (
+									<div className='py-8 text-center flex flex-col items-center justify-center text-gray-400'>
+										<svg
+											className='w-12 h-12 mb-3 text-gray-200'
+											fill='none'
+											viewBox='0 0 24 24'
+											stroke='currentColor'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={1}
+												d='M12 6v6m0 0v6m0-6h6m-6 0H6'
+											/>
+										</svg>
+										<p className='text-sm'>Belum ada riwayat terekam.</p>
+									</div>
+								) : (
+									daftarSesi.map((tgl, idx) => {
+										const isSelected = selectedTanggal === tgl;
+										return (
+											<button
+												key={idx}
+												onClick={() => setSelectedTanggal(tgl)}
+												className={`w-full text-left p-3 rounded-xl border transition-all duration-200 ${
+													isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-indigo-100 hover:shadow hover:bg-gray-50'
+												}`}>
+												<div className='flex items-start justify-between'>
+													<div className='flex items-center gap-3'>
+														<div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+															<svg
+																className='w-5 h-5'
+																fill='none'
+																stroke='currentColor'
+																viewBox='0 0 24 24'>
+																<path
+																	strokeLinecap='round'
+																	strokeLinejoin='round'
+																	strokeWidth={2}
+																	d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+																/>
+															</svg>
+														</div>
+														<div>
+															<div className={`font-bold ${isSelected ? 'text-indigo-900' : 'text-gray-700'}`}>{new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+															<div className='text-xs text-gray-500 mt-0.5'>Klik untuk ubah & lihat</div>
+														</div>
+													</div>
+												</div>
+											</button>
+										);
+									})
+								)}
+							</div>
 						</div>
 					</div>
 
-					{/* Error Message */}
-					{error && <div className='mt-4 p-4 bg-red-100 border border-red-300 text-red-700 rounded-lg'>{error}</div>}
-				</div>
-
-				{/* Section 2: Tabel Absensi */}
-				{rekapData && (
-					<div className='bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
-						{/* Header Card dengan Gradient */}
-						<div className='bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 px-6 py-5'>
-							<div className='flex flex-col lg:flex-row space-y-6 lg:space-y-0 items-center justify-between'>
-								<div className='flex flex-col items-center lg:items-start'>
-									<h2 className='text-2xl font-bold text-white flex items-center gap-2'>
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-7 h-7'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z'
-											/>
-										</svg>
-										{rekapData.kelas}
-									</h2>
-									<p className='text-white/90 text-sm mt-1 flex items-center gap-1.5'>
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-4 h-4'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5'
-											/>
-										</svg>
-										Periode: {rekapData.periode}
-									</p>
-								</div>
-
-								{/* Action Buttons */}
-								<div className='flex items-center gap-3'>
-									{/* Total Siswa Badge */}
-									<div className='bg-white/20 backdrop-blur-sm px-4 py-2 rounded-xl'>
-										<p className='text-xs text-white/80'>Total Siswa</p>
-										<p className='text-2xl font-bold text-white'>{rekapData.siswa?.length || 0}</p>
-									</div>
-
-									{/* Tombol Export Excel */}
-									<button
-										onClick={exportToExcel}
-										className='flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-xl transition-all duration-200 hover:scale-105 border border-white/30 shadow-lg group'>
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-5 h-5 group-hover:animate-bounce'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3'
-											/>
-										</svg>
-										<span className='font-semibold text-sm'>Export Excel</span>
-									</button>
-								</div>
-							</div>
-						</div>
-
-						{rekapData.siswa && Array.isArray(rekapData.siswa) && rekapData.siswa.length > 0 ? (
-							<>
-								<div className='p-6'>
-									{/* Keterangan Status (dipindah ke atas) */}
-									<div className='mb-6 flex flex-wrap gap-3'>
-										<div className='flex items-center gap-2 bg-green-50 px-4 py-2 rounded-xl border border-green-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 text-white font-bold text-sm shadow-sm'>H</span>
-											<span className='text-sm font-medium text-green-900'>Hadir</span>
-										</div>
-										<div className='flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl border border-blue-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-blue-500 text-white font-bold text-sm shadow-sm'>I</span>
-											<span className='text-sm font-medium text-blue-900'>Izin</span>
-										</div>
-										<div className='flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-xl border border-yellow-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-yellow-500 text-white font-bold text-sm shadow-sm'>S</span>
-											<span className='text-sm font-medium text-yellow-900'>Sakit</span>
-										</div>
-										<div className='flex items-center gap-2 bg-red-50 px-4 py-2 rounded-xl border border-red-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-red-500 text-white font-bold text-sm shadow-sm'>A</span>
-											<span className='text-sm font-medium text-red-900'>Alpha</span>
-										</div>
-									</div>
-
-									{/* Container Tabel dengan Shadow */}
-									<div className='overflow-x-auto rounded-xl border border-gray-200 shadow-lg'>
-										<table className='min-w-full border-collapse'>
-											<thead>
-												<tr className='bg-gradient-to-r from-gray-50 to-gray-100'>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sticky left-0 bg-gradient-to-r from-gray-50 to-gray-100 z-20 shadow-sm'>
-														No
-													</th>
-													<th className='border-b-2 border-gray-300 px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider bg-gradient-to-r from-gray-50 to-gray-100 shadow-sm'>Nama Siswa</th>
-
-													{/* Kolom Tanggal dengan style lebih baik */}
-													{getDatesInMonth(rekapData.tanggalList).map((tanggal, idx) => {
-														const date = new Date(tanggal);
-														const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
-														const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-														return (
-															<th
-																key={tanggal}
-																className={`border-b-2 border-gray-300 px-3 py-4 text-center min-w-[60px] group hover:bg-indigo-50 transition-colors ${isWeekend ? 'bg-red-50/50' : ''}`}>
-																<div className='text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors'>{date.getDate()}</div>
-																<div className={`text-[10px] font-medium mt-0.5 ${isWeekend ? 'text-red-600' : 'text-gray-500'} group-hover:text-indigo-500 transition-colors`}>{dayName}</div>
-															</th>
-														);
-													})}
-
-													{/* Kolom Ringkasan dengan gradient */}
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-green-50 to-green-100 text-green-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>✓</span>
-															<span>H</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>ℹ</span>
-															<span>I</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>⚕</span>
-															<span>S</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-red-50 to-red-100 text-red-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>✕</span>
-															<span>A</span>
-														</div>
-													</th>
-												</tr>
-											</thead>
-											<tbody className='bg-white divide-y divide-gray-100'>
-												{rekapData.siswa.map((siswa, index) => (
-													<tr
-														key={siswa.id}
-														className='hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 group'>
-														<td className='border-r border-gray-200 px-4 py-4 text-sm text-gray-600 font-medium sticky left-0 bg-white group-hover:bg-indigo-50 transition-colors z-10'>{index + 1}</td>
-														<td className='border-r border-gray-200 px-6 py-4 bg-white group-hover:bg-indigo-50 transition-colors'>
-															<div className='flex items-center gap-3'>
-																<div className='w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0'>
-																	{siswa.nama_lengkap.charAt(0)}
-																</div>
-																<div>
-																	<div className='text-sm font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors'>{siswa.nama_lengkap}</div>
-																	<div className='text-xs text-gray-500'>NIS: {siswa.nis || '-'}</div>
-																</div>
-															</div>
-														</td>
-
-														{/* Status per Tanggal dengan animasi */}
-														{getDatesInMonth(rekapData.tanggalList).map((tanggal) => {
-															const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
-															const status = absensi?.status || '-';
-															const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : status === 'Alpha' ? 'A' : '-';
-
-															const getStatusStyle = (status) => {
-																switch (status) {
-																	case 'Hadir':
-																		return 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200 hover:scale-110';
-																	case 'Izin':
-																		return 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200 hover:scale-110';
-																	case 'Sakit':
-																		return 'bg-yellow-100 text-yellow-700 border-yellow-300 hover:bg-yellow-200 hover:scale-110';
-																	case 'Alpha':
-																		return 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200 hover:scale-110';
-																	default:
-																		return 'bg-gray-50 text-gray-400 border-gray-200';
-																}
-															};
-
-															return (
-																<td
-																	key={tanggal}
-																	className='border-r border-gray-100 px-3 py-4 text-center'>
-																	<span
-																		className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs border-2 transition-all duration-200 cursor-pointer ${getStatusStyle(status)}`}
-																		title={absensi?.keterangan ? `${status} - ${absensi.keterangan}` : status}>
-																		{kode}
-																	</span>
-																</td>
-															);
-														})}
-
-														{/* Ringkasan dengan style lebih menarik */}
-														<td className='border-r border-gray-200 px-4 py-4 text-center bg-green-50/50'>
-															<div className='inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-green-600 text-white font-bold text-sm shadow-md hover:scale-110 transition-transform'>
-																{siswa.ringkasan?.H || 0}
-															</div>
-														</td>
-														<td className='border-r border-gray-200 px-4 py-4 text-center bg-blue-50/50'>
-															<div className='inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white font-bold text-sm shadow-md hover:scale-110 transition-transform'>
-																{siswa.ringkasan?.I || 0}
-															</div>
-														</td>
-														<td className='border-r border-gray-200 px-4 py-4 text-center bg-yellow-50/50'>
-															<div className='inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-yellow-600 text-white font-bold text-sm shadow-md hover:scale-110 transition-transform'>
-																{siswa.ringkasan?.S || 0}
-															</div>
-														</td>
-														<td className='px-4 py-4 text-center bg-red-50/50'>
-															<div className='inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white font-bold text-sm shadow-md hover:scale-110 transition-transform'>
-																{siswa.ringkasan?.A || 0}
-															</div>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
-								</div>
-							</>
-						) : (
-							<div className='p-12 text-center'>
-								<div className='inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4'>
+					{/* KONTEN UTAMA: Form Edit Detail Sesi */}
+					<div className='flex-1'>
+						{!selectedTanggal ? (
+							<div className='bg-white rounded-2xl shadow-sm border border-gray-100 h-[calc(100vh-140px)] flex flex-col items-center justify-center text-center p-8'>
+								<div className='w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6'>
 									<svg
-										xmlns='http://www.w3.org/2000/svg'
+										className='w-12 h-12 text-gray-300'
 										fill='none'
-										viewBox='0 0 24 24'
-										strokeWidth='1.5'
 										stroke='currentColor'
-										className='w-10 h-10 text-gray-400'>
+										viewBox='0 0 24 24'>
 										<path
 											strokeLinecap='round'
 											strokeLinejoin='round'
-											d='M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z'
+											strokeWidth={1}
+											d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
 										/>
 									</svg>
 								</div>
-								<p className='text-gray-500 font-medium'>Tidak ada data absensi untuk periode yang dipilih</p>
-								<p className='text-sm text-gray-400 mt-2'>Silakan pilih kelas dan periode lain</p>
+								<h3 className='text-xl font-bold text-gray-800 mb-2'>Pilih Sesi Rekaman</h3>
+								<p className='text-gray-500 max-w-sm'>Pilih absensi dari daftar di sebelah kiri untuk melihat, mengedit kehadiran, mengganti tanggal, atau menghapus sesi secara permanen.</p>
+							</div>
+						) : (
+							<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300'>
+								{/* Header Form Detail */}
+								<div className='border-b border-gray-100 p-6 sm:p-8 relative'>
+									<div className='flex flex-col sm:flex-row sm:items-start justify-between gap-6'>
+										<div className='flex-1 max-w-lg'>
+											<h3 className='text-xl font-bold text-gray-800 mb-4'>Pengaturan Data Sesi Kemarin</h3>
+											<div className='space-y-4'>
+												<div>
+													<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Ubah Tanggal Sesi</label>
+													<input
+														type='date'
+														value={tanggalEdit}
+														onChange={(e) => setTanggalEdit(e.target.value)}
+														className='w-full sm:w-64 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow'
+													/>
+												</div>
+											</div>
+										</div>
+
+										{/* Tampilan Action Buttons */}
+										<div className='flex gap-3 sm:flex-col sm:min-w-[160px]'>
+											<button
+												onClick={handleSimpan}
+												disabled={saving}
+												className='flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:-translate-y-0.5'>
+												{saving ? (
+													<div className='w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin'></div>
+												) : (
+													<>
+														<svg
+															className='w-5 h-5'
+															fill='none'
+															stroke='currentColor'
+															viewBox='0 0 24 24'>
+															<path
+																strokeLinecap='round'
+																strokeLinejoin='round'
+																strokeWidth={2}
+																d='M5 13l4 4L19 7'
+															/>
+														</svg>
+														<span>Simpan</span>
+													</>
+												)}
+											</button>
+
+											<button
+												onClick={handleHapusSesi}
+												disabled={saving}
+												className='flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-semibold transition-colors disabled:opacity-50'>
+												<svg
+													className='w-5 h-5'
+													fill='none'
+													stroke='currentColor'
+													viewBox='0 0 24 24'>
+													<path
+														strokeLinecap='round'
+														strokeLinejoin='round'
+														strokeWidth={2}
+														d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+													/>
+												</svg>
+												<span>Hapus Sesi</span>
+											</button>
+										</div>
+									</div>
+								</div>
+
+								{/* Daftar Siswa dan Absensinya */}
+								<div className='p-4 sm:p-6 lg:p-8 bg-gray-50/50'>
+									<div className='bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm'>
+										{siswaList.length === 0 ? (
+											<div className='p-8 text-center text-gray-500'>Tidak ada siswa di kelas ini.</div>
+										) : (
+											<div className='overflow-x-auto'>
+												<table className='w-full min-w-[500px]'>
+													<thead>
+														<tr className='bg-gray-50 border-b border-gray-200'>
+															<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[40%]'>Data Siswa</th>
+															<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kehadiran & Keterangan</th>
+														</tr>
+													</thead>
+													<tbody className='divide-y divide-gray-100'>
+														{siswaList.map((siswa, idx) => {
+															const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
+
+															return (
+																<tr
+																	key={siswa.id}
+																	className='hover:bg-gray-50 transition-colors group'>
+																	{/* Info Siswa */}
+																	<td className='px-6 py-4 align-top'>
+																		<div className='flex items-center gap-4'>
+																			<div className='w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0'>
+																				{idx + 1}
+																			</div>
+																			<div>
+																				<p className='font-bold text-gray-900 group-hover:text-indigo-600 transition-colors'>{siswa.nama_lengkap}</p>
+																				<p className='text-xs text-gray-500 mt-0.5 uppercase tracking-wide'>NIS: {siswa.nis || '-'}</p>
+																			</div>
+																		</div>
+																	</td>
+
+																	{/* Edit Absensi UI */}
+																	<td className='px-6 py-4'>
+																		<div className='flex flex-wrap gap-2 mb-3'>
+																			{[
+																				{ val: 'Hadir', label: 'Hadir', colors: 'text-green-700 bg-green-50 border-green-200 ring-green-500', icon: 'bg-green-500' },
+																				{ val: 'Izin', label: 'Izin', colors: 'text-blue-700 bg-blue-50 border-blue-200 ring-blue-500', icon: 'bg-blue-500' },
+																				{ val: 'Sakit', label: 'Sakit', colors: 'text-yellow-700 bg-yellow-50 border-yellow-200 ring-yellow-500', icon: 'bg-yellow-500' },
+																				{ val: 'Alpha', label: 'Alpha', colors: 'text-red-700 bg-red-50 border-red-200 ring-red-500', icon: 'bg-red-500' },
+																			].map((opt) => {
+																				const isSelected = currentVal.status === opt.val;
+																				return (
+																					<label
+																						key={opt.val}
+																						className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+																							isSelected ? `${opt.colors} shadow-sm border-transparent` : 'text-gray-500 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+																						}`}>
+																						<input
+																							type='radio'
+																							name={`status-${siswa.id}`}
+																							value={opt.val}
+																							checked={isSelected}
+																							onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
+																							className='sr-only'
+																						/>
+																						<div className={`w-2 h-2 rounded-full ${isSelected ? opt.icon : 'bg-gray-300'}`}></div>
+																						<span className='text-sm font-semibold'>{opt.label}</span>
+																					</label>
+																				);
+																			})}
+																		</div>
+
+																		{/* Input Keterangan */}
+																		<input
+																			type='text'
+																			placeholder='Keterangan (Opsional / Alasan Sakit)'
+																			value={currentVal.keterangan || ''}
+																			onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+																			className='w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500'
+																		/>
+																	</td>
+																</tr>
+															);
+														})}
+													</tbody>
+												</table>
+											</div>
+										)}
+									</div>
+								</div>
 							</div>
 						)}
 					</div>
-				)}
+				</div>
 			</div>
-		</div>
+		</main>
 	);
 }

@@ -9,10 +9,10 @@ export async function GET(req) {
 	try {
 		const { searchParams } = new URL(req.url);
 		const siswa_id = searchParams.get('siswa_id');
-		const kelas = searchParams.get('kelas'); // opsional
-		const mapel = searchParams.get('mapel'); // opsional
-		const bulan = searchParams.get('bulan'); // opsional
-		const tahun = searchParams.get('tahun'); // opsional
+		const kelas = searchParams.get('kelas');
+		const mapel = searchParams.get('mapel');
+		const bulan = searchParams.get('bulan');
+		const tahun = searchParams.get('tahun');
 
 		if (!siswa_id) {
 			return NextResponse.json({ error: 'Parameter siswa_id wajib' }, { status: 400 });

@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import ModalJadwal from '../components/ModalJadwal';
 import Loader from '../components/loading';
@@ -9,8 +8,9 @@ import Swal from 'sweetalert2'; // Import SweetAlert
 import { ClockIcon, PencilSquareIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
 import ButtonBack from '../components/button/ButtonBack';
 
+const listHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
+
 export default function JadwalPage() {
-	const listHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 
 	// State
 	const [selectedHari, setSelectedHari] = useState('');
@@ -23,12 +23,24 @@ export default function JadwalPage() {
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [editData, setEditData] = useState(null);
 
+	const fetchJadwal = useCallback(() => {
+		setLoading(true);
+		fetch('/api/jadwal')
+			.then((res) => res.json())
+			.then((data) => {
+				const sorted = Array.isArray(data) ? data.sort((a, b) => a.jam_ke - b.jam_ke) : [];
+				setAllJadwal(sorted);
+			})
+			.catch((err) => console.error(err))
+			.finally(() => setLoading(false));
+	}, []);
+
 	// Init
 	useEffect(() => {
 		const hariIniIndex = new Date().getDay();
 		setSelectedHari(listHari[hariIniIndex]);
 		fetchJadwal();
-	}, []);
+	}, [fetchJadwal]);
 
 	// Filter Logic
 	useEffect(() => {
@@ -41,17 +53,7 @@ export default function JadwalPage() {
 		setLoading(false);
 	}, [selectedHari, allJadwal]);
 
-	const fetchJadwal = () => {
-		setLoading(true);
-		fetch('/api/jadwal')
-			.then((res) => res.json())
-			.then((data) => {
-				const sorted = Array.isArray(data) ? data.sort((a, b) => a.jam_ke - b.jam_ke) : [];
-				setAllJadwal(sorted);
-			})
-			.catch((err) => console.error(err))
-			.finally(() => setLoading(false));
-	};
+
 
 	// --- HANDLERS (UPDATED WITH SWEETALERT) ---
 
