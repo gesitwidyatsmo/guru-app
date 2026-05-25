@@ -39,8 +39,10 @@ export default function MapelPage() {
 
 			// 2. Tampilkan Mapel List Regular (Filter Guru berlaku)
 			const res = await fetch('/api/mapel');
-			const data = res.ok ? await res.json() : [];
-			setMapelList(data);
+			if (res.ok) {
+				const data = await res.json();
+				setMapelList(data);
+			}
 
 			// 3. Tarik Master penuh dan Profil Centang jika ia seorang Guru
 			if (role === 'Guru') {

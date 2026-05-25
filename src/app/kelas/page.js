@@ -46,8 +46,10 @@ export default function Page() {
 
 				// 2. Ambil Kelas yang akan Tampil di Grid (List)
 				const res = await fetch('/api/kelas');
-				const data = await res.json();
-				setKelasList(data);
+				if (res.ok) {
+					const data = await res.json();
+					setKelasList(data);
+				}
 
 				// 2.5 Jika Admin, Ambil Daftar Guru untuk Dropdown Wali Kelas
 				if (role === 'Admin') {
@@ -62,8 +64,10 @@ export default function Page() {
 				if (role === 'Guru') {
 					// Ambil SEMUA kelas master yg ada di DB untuk opsi modal
 					const resAll = await fetch('/api/kelas?all=true');
-					const dataAll = await resAll.json();
-					setAllClasses(dataAll);
+					if (resAll.ok) {
+						const dataAll = await resAll.json();
+						setAllClasses(dataAll);
+					}
 
 					// Ambil kelas yang sudah centang sejauh ini
 					const resMy = await fetch('/api/kbm/mandiri');

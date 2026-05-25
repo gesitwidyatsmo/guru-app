@@ -1,7 +1,6 @@
-// src/app/Siswa/page.js
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import SectionHeader from '../components/SectionHeader'; // gunakan path absolut (butuh support jsconfig.json/tsconfig.json)
+import SectionHeader from '../components/SectionHeader';
 import Modal from '../components/Modal';
 import Link from 'next/link';
 import Loader from '../components/loading';

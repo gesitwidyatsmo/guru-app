@@ -28,7 +28,7 @@ export async function middleware(request) {
 	const { pathname } = request.nextUrl;
 
 	// Daftar rute public yang tidak perlu login
-	const publicRoutes = ['/login'];
+	const publicRoutes = ['/login', '/soal', '/api/soal'];
 
 	// 1. Apakah sedang mencoba akses rute Publik?
 	const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));

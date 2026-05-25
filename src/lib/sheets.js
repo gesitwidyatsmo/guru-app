@@ -24,3 +24,11 @@ export const getSheet = async () => {
 	await doc.loadInfo();
 	return doc;
 };
+
+export const getOrCreateSheet = async (doc, title, headerValues) => {
+	let sheet = doc.sheetsByTitle[title];
+	if (!sheet) {
+		sheet = await doc.addSheet({ title, headerValues });
+	}
+	return sheet;
+};
