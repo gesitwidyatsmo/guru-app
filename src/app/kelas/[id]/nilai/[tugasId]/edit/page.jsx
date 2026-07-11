@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function EditNilaiPage() {
 	const params = useParams();
@@ -18,6 +19,7 @@ export default function EditNilaiPage() {
 	const [nilaiSiswa, setNilaiSiswa] = useState({});
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
+	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// Fetch data tugas yang akan diedit
 	useEffect(() => {
@@ -25,35 +27,71 @@ export default function EditNilaiPage() {
 
 		const fetchDetailTugas = async () => {
 			try {
-				const response = await fetch(`/api/nilai?tugasId=${tugasId}`);
-				const data = await response.json();
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (!user) throw new Error('Unauthenticated');
 
-				console.log('Data fetched for edit:', data);
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const role = userData?.role;
+				const userId = userData?.id_user;
 
-				if (data && data.length > 0) {
-					const firstData = data[0];
+				let query = supabase.from('nilai_siswa').select(`
+					id,
+					tugas_id,
+					siswa_id,
+					nama_siswa,
+					nilai,
+					nilai_tugas!inner (
+						guru_id,
+						kategori,
+						type,
+						deskripsi,
+						kelas,
+						mapel,
+						tanggal
+					)
+				`).eq('tugas_id', tugasId);
 
-					// Set data tugas
+				if (role === 'Guru' && userId) {
+					query = query.eq('nilai_tugas.guru_id', userId);
+				}
+
+				const { data: rawData, error } = await query;
+				if (error) throw error;
+
+				if (rawData && rawData.length > 0) {
+					const firstData = rawData[0].nilai_tugas;
+					
 					setJudul(firstData.kategori);
 					setKelas(firstData.kelas);
 					setMapel(firstData.mapel);
 					setTanggal(firstData.tanggal);
 
-					// Set data siswa dan nilai
-					const siswaData = data.map((item) => ({
+					const siswaData = rawData.map((item) => ({
 						id: item.siswa_id,
 						nama_lengkap: item.nama_siswa,
 						nilai: item.nilai,
-						rowId: item.id, // ID row untuk update
+						rowId: item.id,
 					}));
 					setSiswaList(siswaData);
 
-					// Initialize nilai siswa
 					const initialNilai = {};
 					siswaData.forEach((siswa) => {
 						initialNilai[siswa.id] = siswa.nilai;
 					});
 					setNilaiSiswa(initialNilai);
+				} else {
+					// Fallback if no students inserted but task exists
+					const { data: tugasHead, error: errHead } = await supabase.from('nilai_tugas').select('*').eq('tugas_id', tugasId).single();
+					if (tugasHead) {
+						if (role === 'Guru' && tugasHead.guru_id !== userId) throw new Error('Akses Ditolak');
+						setJudul(tugasHead.kategori);
+						setKelas(tugasHead.kelas);
+						setMapel(tugasHead.mapel);
+						setTanggal(tugasHead.tanggal);
+						setSiswaList([]);
+						setNilaiSiswa({});
+					}
 				}
 			} catch (error) {
 				console.error('Error fetching tugas:', error);
@@ -100,45 +138,80 @@ export default function EditNilaiPage() {
 		setSaving(true);
 
 		try {
-			// Prepare data untuk update
-			const updateData = {
-				tugasId,
-				judul,
-				kelas,
-				mapel,
-				tanggal,
-				nilai: siswaList.map((siswa) => ({
-					rowId: siswa.rowId,
-					siswa_id: siswa.id,
-					nilai: nilaiSiswa[siswa.id] || '0',
-				})),
-			};
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const role = userData?.role;
+			const userId = userData?.id_user;
 
-			const response = await fetch('/api/nilai', {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(updateData),
+			// Verify
+			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id').eq('tugas_id', tugasId).single();
+			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
+
+			if (role === 'Guru' && userId) {
+				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+					throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
+				}
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', kelas).eq('mapel', mapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
+			}
+
+			// Update Header
+			const updates = { kategori: judul, tanggal: tanggal };
+			const { error: updateError } = await supabase.from('nilai_tugas').update(updates).eq('tugas_id', tugasId);
+			if (updateError) throw updateError;
+
+			// Update students
+			const { data: existingGrades } = await supabase.from('nilai_siswa').select('siswa_id').eq('tugas_id', tugasId);
+			const existingIds = new Set((existingGrades || []).map(g => g.siswa_id));
+			
+			const siswaIdsToUpdate = siswaList.map(s => s.id).filter(id => {
+				const n = nilaiSiswa[id];
+				return n && String(n).trim() !== '';
 			});
 
-			const data = await response.json();
-
-			if (response.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil!',
-					text: `${data.count} nilai berhasil diperbarui`,
-					confirmButtonColor: '#4F46E5',
-					timer: 2000,
-					timerProgressBar: true,
-				});
-
-				// Redirect ke detail nilai
-				router.push(`/kelas/${id}/nilai/${tugasId}`);
-			} else {
-				throw new Error(data.error || 'Gagal memperbarui nilai');
+			const newSiswaIds = siswaIdsToUpdate.filter(id => !existingIds.has(id));
+			let siswaMap = new Map();
+			if (newSiswaIds.length > 0) {
+				const { data: siswaData } = await supabase.from('siswa').select('id, nama_lengkap').in('id', newSiswaIds);
+				siswaMap = new Map((siswaData || []).map(s => [s.id, s.nama_lengkap]));
 			}
+
+			let updatedCount = 0;
+			for (const siswa of siswaList) {
+				const idSiswa = siswa.id;
+				const n = nilaiSiswa[idSiswa];
+				const hasValidScore = n && String(n).trim() !== '';
+
+				if (hasValidScore) {
+					if (existingIds.has(idSiswa)) {
+						await supabase.from('nilai_siswa').update({ nilai: n }).eq('tugas_id', tugasId).eq('siswa_id', idSiswa);
+					} else if (siswaMap.has(idSiswa)) {
+						await supabase.from('nilai_siswa').insert({
+							tugas_id: tugasId,
+							siswa_id: idSiswa,
+							nama_siswa: siswaMap.get(idSiswa),
+							nilai: n
+						});
+					}
+					updatedCount++;
+				} else {
+					if (existingIds.has(idSiswa)) {
+						await supabase.from('nilai_siswa').delete().eq('tugas_id', tugasId).eq('siswa_id', idSiswa);
+					}
+				}
+			}
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil!',
+				text: `${updatedCount} nilai berhasil diperbarui`,
+				confirmButtonColor: '#4F46E5',
+				timer: 2000,
+				timerProgressBar: true,
+			});
+
+			router.push(`/kelas/${id}/nilai/${tugasId}`);
 		} catch (error) {
 			console.error('Error updating nilai:', error);
 			Swal.fire({
@@ -151,6 +224,8 @@ export default function EditNilaiPage() {
 			setSaving(false);
 		}
 	};
+
+	const filteredSiswa = siswaList.filter((s) => (s.nama_lengkap?.toLowerCase() || '').includes(searchSiswa.toLowerCase()) || (s.nis?.toLowerCase() || '').includes(searchSiswa.toLowerCase()));
 
 	if (loading) {
 		return (
@@ -279,9 +354,24 @@ export default function EditNilaiPage() {
 						<span className='text-xs text-gray-500'>Edit Nilai (0-100)</span>
 					</div>
 
+					<div className='mb-4 relative'>
+						<input
+							type='text'
+							placeholder='Cari nama atau NIS siswa...'
+							value={searchSiswa}
+							onChange={(e) => setSearchSiswa(e.target.value)}
+							className='w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm transition-all'
+						/>
+						<div className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400'>
+							<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='1.5' stroke='currentColor' className='w-5 h-5'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z' />
+							</svg>
+						</div>
+					</div>
+
 					<div className='space-y-3 max-h-[400px] overflow-y-auto'>
-						{siswaList.length > 0 ? (
-							siswaList.map((siswa, index) => (
+						{filteredSiswa.length > 0 ? (
+							filteredSiswa.map((siswa, index) => (
 								<div
 									key={siswa.id}
 									className='flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors'>

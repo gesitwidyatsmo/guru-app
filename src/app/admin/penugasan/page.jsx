@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function PenugasanPage() {
 	const [penugasanList, setPenugasanList] = useState([]);
@@ -21,13 +22,43 @@ export default function PenugasanPage() {
 	const fetchAllData = async () => {
 		try {
 			setLoading(true);
-			const [resKBM, resUsers, resKelas, resMapel] = await Promise.all([fetch('/api/kbm'), fetch('/api/users?role=Guru'), fetch('/api/kelas'), fetch('/api/mapel')]);
+			const supabase = createClient();
 
-			if (!resKBM.ok) throw new Error('Akses KBM Ditolak.');
-			setPenugasanList(await resKBM.json());
-			if (resUsers.ok) setGuruList(await resUsers.json());
-			if (resKelas.ok) setKelasList(await resKelas.json());
-			if (resMapel.ok) setMapelList(await resMapel.json());
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error('Sesi telah habis, silakan login ulang.');
+			
+			const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
+			if (profile?.role !== 'Admin') throw new Error('Akses KBM Ditolak.');
+
+			// KBM
+			const { data: kbmData, error: kbmError } = await supabase.from('guru_kbm').select(`
+				id_kbm, id_user, kelas, mapel, users!guru_kbm_id_user_fkey(username, nama_lengkap)
+			`);
+			if (kbmError) throw kbmError;
+			
+			const formattedKBM = (kbmData || []).map((r) => ({
+				id_kbm: r.id_kbm,
+				id_user: r.id_user,
+				username: r.users?.username || 'Akun Terhapus',
+				nama_guru: r.users?.nama_lengkap || 'Akun Terhapus',
+				kelas: r.kelas,
+				mapel: r.mapel,
+			})).sort((a, b) => a.nama_guru.localeCompare(b.nama_guru));
+			
+			setPenugasanList(formattedKBM);
+
+			// Guru
+			const { data: guruData } = await supabase.from('users').select('*').eq('role', 'Guru');
+			if (guruData) setGuruList(guruData);
+
+			// Kelas
+			const { data: kelasData } = await supabase.from('kelas').select('*').order('nama_kelas', { ascending: true });
+			if (kelasData) setKelasList(kelasData);
+
+			// Mapel
+			const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
+			if (mapelData) setMapelList(mapelData);
+
 		} catch (error) {
 			Swal.fire('Terjadi Kesalahan', error.message, 'error');
 		} finally {
@@ -52,16 +83,17 @@ export default function PenugasanPage() {
 		}
 
 		try {
-			const res = await fetch('/api/kbm', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(formData),
-			});
+			const supabase = createClient();
+			const newKBM = {
+				id_kbm: 'KBM-' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase(),
+				id_user: formData.id_user,
+				kelas: formData.kelas,
+				mapel: formData.mapel
+			};
+			const { error } = await supabase.from('guru_kbm').insert([newKBM]);
+			if (error) throw error;
 
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error);
-
-			Swal.fire('Ditugaskan!', data.message, 'success');
+			Swal.fire('Ditugaskan!', 'Jadwal mengajar telah berhasil diformalkan.', 'success');
 			setIsModalOpen(false);
 			fetchAllData();
 		} catch (error) {
@@ -82,11 +114,10 @@ export default function PenugasanPage() {
 
 		if (result.isConfirmed) {
 			try {
-				const res = await fetch(`/api/kbm?id_kbm=${kbmId}`, { method: 'DELETE' });
-				if (!res.ok) {
-					const fault = await res.json();
-					throw new Error(fault.error);
-				}
+				const supabase = createClient();
+				const { error } = await supabase.from('guru_kbm').delete().eq('id_kbm', kbmId);
+				if (error) throw error;
+				
 				Swal.fire('Dicabut', 'Tugas berhasil dihentikan.', 'success');
 				fetchAllData();
 			} catch (error) {

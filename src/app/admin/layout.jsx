@@ -4,35 +4,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 
+import { useLogout } from '@/hooks/useLogout';
+
 export default function AdminLayout({ children }) {
 	const pathname = usePathname();
 	const router = useRouter();
-
-	const handleLogout = async () => {
-		const result = await Swal.fire({
-			title: 'Keluar Portal?',
-			text: 'Sesi Admin akan diakhiri.',
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonColor: '#4f46e5',
-			cancelButtonColor: '#ef4444',
-			confirmButtonText: 'Ya, Keluar!',
-			cancelButtonText: 'Batal',
-		});
-
-		if (result.isConfirmed) {
-			try {
-				const res = await fetch('/api/logout', { method: 'POST' });
-				if (res.ok) {
-					window.location.href = '/login';
-				} else {
-					Swal.fire('Gagal', 'Terjadi kesalahan saat logout', 'error');
-				}
-			} catch (error) {
-				Swal.fire('Error', 'Sistem sedang sibuk.', 'error');
-			}
-		}
-	};
+	const { handleLogout } = useLogout();
 
 	return (
 		<div className='min-h-screen bg-slate-50 flex flex-col'>
@@ -77,6 +54,13 @@ export default function AdminLayout({ children }) {
 									pathname === '/admin/penugasan' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
 								}`}>
 								Data Penugasan KBM
+							</Link>
+							<Link
+								href='/admin/pengumuman'
+								className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+									pathname === '/admin/pengumuman' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+								}`}>
+								Kirim Pengumuman
 							</Link>
 						</nav>
 

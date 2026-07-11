@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
-import { createToken, comparePassword, hashPassword } from '@/lib/auth';
-
-const SHEET_USERS = 'MASTER_USERS';
-const SHEET_KBM = 'GURU_KBM';
+import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export async function POST(req) {
 	try {
@@ -13,79 +10,43 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Username dan Password wajib diisi.' }, { status: 400 });
 		}
 
-		// Ambil data doc dari Google Sheets
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle[SHEET_USERS];
+		const supabase = await createClient();
+		
+		// Gunakan dummy email format karena Supabase Auth butuh format email
+		const email = `${username}@guruapp.com`;
 
-		// AUTO-SEED: Jika Sheet MASTER_USERS tidak ditemukan, maka inisialisasi Setup Awal
-		if (!sheet) {
-			sheet = await doc.addSheet({
-				title: SHEET_USERS,
-				headerValues: ['id_user', 'username', 'password_hash', 'nama_lengkap', 'role'],
-			});
+		const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+			email,
+			password,
+		});
 
-			const defaultHash = await hashPassword('admin123'); // Password Default
-
-			await sheet.addRow({
-				id_user: 'UID-000',
-				username: 'admin',
-				password_hash: defaultHash,
-				nama_lengkap: 'Super Admin',
-				role: 'Admin',
-			});
-
-			// Sekalian buat GURU_KBM jika belum ada
-			if (!doc.sheetsByTitle[SHEET_KBM]) {
-				await doc.addSheet({
-					title: SHEET_KBM,
-					headerValues: ['id_user', 'kelas', 'mapel'],
-				});
-			}
-
-			// Lakukan reload untuk membaca data yang baru ditambahkan
-			await doc.loadInfo();
-			sheet = doc.sheetsByTitle[SHEET_USERS];
-		}
-
-		const rows = await sheet.getRows();
-		const mappedUsers = rows.map((r) => ({
-			id_user: r.get('id_user'),
-			username: r.get('username'),
-			password_hash: r.get('password_hash'),
-			nama_lengkap: r.get('nama_lengkap'),
-			role: r.get('role'),
-		}));
-
-		// Cari user (Case-insensitive)
-		const user = mappedUsers.find((u) => u.username?.toLowerCase() === username.toLowerCase());
-
-		if (!user) {
-			return NextResponse.json({ error: 'Pengguna tidak ditemukan.' }, { status: 401 });
-		}
-
-		// Gunakan bcrypt compare (Pastikan formating hash benar di Google Sheets, bukan plaintext)
-		const isPasswordValid = await comparePassword(password, user.password_hash);
-
-		// Fallback (Sementara jika ada dev yang masih isi plaintext di Sheets)
-		// Jika password_hash belum ter-hash (masih plaintext) - Ini opsi pelonggaran
-		const isPlainMatch = password === user.password_hash;
-
-		if (!isPasswordValid && !isPlainMatch) {
+		if (authError || !authData.user) {
+			console.error('Supabase Auth Error:', authError?.message);
 			return NextResponse.json({ error: 'Kredensial Anda salah.' }, { status: 401 });
 		}
 
-		// Berhasil Login, persiapkan payload token
+		// Ambil profil dari tabel public.users
+		const { data: userProfile, error: profileError } = await supabaseAdmin
+			.from('users')
+			.select('id_user, username, nama_lengkap, role')
+			.eq('auth_id', authData.user.id)
+			.single();
+
+		if (profileError || !userProfile) {
+			console.error('Profile Fetch Error:', profileError?.message);
+			// Fallback log
+			return NextResponse.json({ error: 'Profil tidak ditemukan.' }, { status: 401 });
+		}
+
 		const tokenPayload = {
-			id: user.id_user,
-			username: user.username,
-			nama_lengkap: user.nama_lengkap,
-			role: user.role, // Admin | Guru
+			id: userProfile.id_user,
+			username: userProfile.username,
+			nama_lengkap: userProfile.nama_lengkap,
+			role: userProfile.role,
 		};
 
-		// Cetak JWT
-		const token = await createToken(tokenPayload);
-
-		// Sematkan JWT ke Cookie Browser (HttpOnly untuk keamanan dari XSS)
+		// Supabase Auth SSR mengatur cookies secara otomatis melalui metode setAll di server client
+		// Hapus legacy 'token' cookie agar tidak bentrok
 		const response = NextResponse.json(
 			{
 				message: 'Login sukses',
@@ -94,14 +55,7 @@ export async function POST(req) {
 			{ status: 200 },
 		);
 
-		// Set cookie
-		response.cookies.set('token', token, {
-			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24, // 24 Jam
-			path: '/',
-		});
+		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
 
 		return response;
 	} catch (error) {

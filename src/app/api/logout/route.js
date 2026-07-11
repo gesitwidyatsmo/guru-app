@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
-export async function GET() {
-	// Buat respons sukses logout
-	const response = NextResponse.json({ message: 'Berhasil logout' }, { status: 200 });
+async function logoutHandler() {
+	try {
+		const supabase = await createClient();
+		
+		// Logout dari sesi Supabase Auth
+		await supabase.auth.signOut();
 
-	// Timpa/Hapus cookie bernama 'token'
-	response.cookies.set('token', '', {
-		httpOnly: true,
-		secure: process.env.NODE_ENV === 'production',
-		sameSite: 'lax',
-		expires: new Date(0), // Set kadaluarsa ke masa lampau
-		path: '/',
-	});
+		const response = NextResponse.json({ message: 'Berhasil logout' }, { status: 200 });
 
-	return response;
+		// Bersihkan juga cookie legacy 'token' jika masih tersisa
+		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
+
+		return response;
+	} catch (error) {
+		console.error('Logout error:', error);
+		return NextResponse.json({ error: 'Gagal logout' }, { status: 500 });
+	}
 }
+
+export const GET = logoutHandler;
+export const POST = logoutHandler;

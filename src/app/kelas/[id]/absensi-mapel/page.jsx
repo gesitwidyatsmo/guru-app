@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 
 export default function AbsensiMapelPage() {
@@ -61,50 +62,42 @@ export default function AbsensiMapelPage() {
 
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resStatus, resSiswa, resMapel, resPoin] = await Promise.all([
-					fetch('/api/kelas'),
-					fetch('/api/status-absensi'),
-					fetch('/api/siswa'),
-					fetch('/api/mapel'),
-					fetch('/api/poin'),
+				const supabase = createClient();
+				
+				const [
+					{ data: dataKelas },
+					{ data: dataStatus },
+					{ data: dataSiswa },
+					{ data: dataMapel },
+					{ data: dataPoin }
+				] = await Promise.all([
+					supabase.from('kelas').select('*'),
+					supabase.from('status_absensi').select('*').order('id', { ascending: true }),
+					supabase.from('siswa').select('*'),
+					supabase.from('mapel').select('*'),
+					supabase.from('poin_siswa').select('*')
 				]);
 
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const dataStatus = resStatus.ok ? await resStatus.json() : [];
-				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-				const dataMapel = resMapel.ok ? await resMapel.json() : [];
-				const dataPoin = resPoin.ok ? await resPoin.json() : [];
-
 				const poinMap = {};
-				dataPoin.forEach((p) => {
+				(dataPoin || []).forEach((p) => {
 					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
 					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
 					if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
 				});
 
-				const siswaDataUpdated = dataSiswa.map((s) => ({
+				const siswaDataUpdated = (dataSiswa || []).map((s) => ({
 					...s,
 					poinPositif: poinMap[s.id]?.positif || 0,
 					poinNegatif: poinMap[s.id]?.negatif || 0,
 				}));
 
-				const kelas = dataKelas.find((k) => String(k.id) === String(id)) || null;
+				const kelas = (dataKelas || []).find((k) => String(k.id) === String(id)) || null;
 				setKelasDetail(kelas);
-				setStatusList(dataStatus);
-				setMapelList(dataMapel);
+				setStatusList(dataStatus || []);
+				setMapelList(dataMapel || []);
 				setSiswaList(siswaDataUpdated.filter((s) => s.status === 'Aktif'));
 			} catch (err) {
 				console.error(err);
-				// Fallback ke cache jika terjadi error
-				const dataKelas = getCache('kelas') || [];
-				const dataStatus = getCache('status-absensi') || [];
-				const dataSiswa = getCache('siswa') || [];
-				const dataMapel = getCache('mapel') || [];
-				const kelas = dataKelas.find((k) => String(k.id) === String(id)) || null;
-				setKelasDetail(kelas);
-				setStatusList(dataStatus);
-				setMapelList(dataMapel);
-				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
 			} finally {
 				setLoading(false);
 				setLoadingPage(false);
@@ -136,22 +129,10 @@ export default function AbsensiMapelPage() {
 			try {
 				if (active) setCekLoading(true);
 
-				const url = `/api/absensi-mapel?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}&tanggal=${tanggal}&jam_ke=${jamKe}`;
-				const res = await fetch(url);
-
-				if (!res.ok) {
-					console.error('Gagal fetch absensi', res.status);
-					if (active) setSudahAdaAbsensi(false);
-					return;
-				}
-
-				const data = await res.json();
+				const supabase = createClient();
+				const { data } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggal).eq('jam_ke', jamKe).single();
 				if (active) {
-					if (data && data.length > 0) {
-						setSudahAdaAbsensi(true);
-					} else {
-						setSudahAdaAbsensi(false);
-					}
+					setSudahAdaAbsensi(!!data);
 				}
 			} catch (err) {
 				console.error('Error cek absensi:', err);
@@ -179,16 +160,14 @@ export default function AbsensiMapelPage() {
 		const fetchAbsensi = async () => {
 			try {
 				setLoadingAbsensi(true);
-				const url = `/api/absensi-mapel?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}&tanggal=${tanggal}&jam_ke=${jamKe}`;
-				const res = await fetch(url);
-
-				if (!res.ok) {
-					console.error('Gagal fetch absensi detail');
-					return;
+				const supabase = createClient();
+				const { data: sesi } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggal).eq('jam_ke', jamKe).single();
+				if (sesi) {
+					const { data: details } = await supabase.from('absensi_mapel_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
+					setDataAbsensiTersimpan(details || []);
+				} else {
+					setDataAbsensiTersimpan([]);
 				}
-
-				const data = await res.json();
-				setDataAbsensiTersimpan(data);
 			} catch (err) {
 				console.error('Error fetch absensi:', err);
 			} finally {
@@ -277,31 +256,36 @@ export default function AbsensiMapelPage() {
 			keterangan: absensi[s.id]?.keterangan || '',
 		}));
 
-		const payload = {
-			tanggal,
-			jam_ke: jamKe,
-			kelas: namaKelas,
-			mapel: selectedMapel,
-			data: data_absensi,
-		};
-
 		try {
 			setSaving(true);
+			const supabase = createClient();
 
-			const res = await fetch('/api/absensi-mapel', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
+			const { data: existingSesi } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggal).eq('jam_ke', jamKe).single();
+			
+			let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-M-${Math.random().toString(36).slice(2, 11)}`;
 
-			if (!res.ok) {
-				const err = await res.json().catch(() => ({}));
-				await Swal.fire({
-					icon: 'error',
-					title: 'Gagal',
-					text: err.error || `Gagal menyimpan absensi (status ${res.status})`,
+			if (existingSesi) {
+				await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			} else {
+				const { error: insertError } = await supabase.from('absensi_mapel').insert({
+					sesi_id: sesiId,
+					kelas: namaKelas,
+					mapel: selectedMapel,
+					tanggal: tanggal,
+					jam_ke: jamKe
 				});
-				return;
+				if (insertError) throw insertError;
+			}
+
+			if (data_absensi.length > 0) {
+				const rowsToInsert = data_absensi.map(item => ({
+					sesi_id: sesiId,
+					siswa_id: item.siswa_id,
+					status: item.status,
+					keterangan: item.keterangan || ''
+				}));
+				const { error: detailError } = await supabase.from('absensi_mapel_siswa').insert(rowsToInsert);
+				if (detailError) throw detailError;
 			}
 
 			await Swal.fire({

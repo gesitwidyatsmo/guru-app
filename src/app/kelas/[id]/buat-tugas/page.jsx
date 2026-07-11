@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 export default function BuatTugasPage() {
 	const params = useParams();
@@ -22,6 +23,7 @@ export default function BuatTugasPage() {
 	const [nilaiSiswa, setNilaiSiswa] = useState({});
 	const [loading, setLoading] = useState(false);
 	const [loadingPage, setLoadingPage] = useState(true);
+	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// Fetch data kelas dan siswa
 	useEffect(() => {
@@ -29,21 +31,16 @@ export default function BuatTugasPage() {
 
 		const fetchData = async () => {
 			try {
-				// Fetch kelas
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = await resKelas.json();
-				const kelas = dataKelas.find((k) => k.id === id);
+				const supabase = createClient();
+				const { data: kelas } = await supabase.from('kelas').select('*').eq('id', id).single();
 
 				if (kelas) {
-					setNamaKelas(kelas.kelas);
+					setNamaKelas(kelas.nama_kelas);
 
-					// Fetch siswa berdasarkan nama kelas
-					const resSiswa = await fetch('/api/siswa');
-					const dataSiswa = await resSiswa.json();
-					const siswaKelas = dataSiswa.filter((siswa) => siswa.kelas === kelas.kelas && siswa.status === 'Aktif');
+					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('kelas', kelas.nama_kelas).eq('status', 'Aktif');
+					const siswaKelas = dataSiswa || [];
 					setSiswaList(siswaKelas);
 
-					// Initialize nilai siswa dengan 0
 					const initialNilai = {};
 					siswaKelas.forEach((siswa) => {
 						initialNilai[siswa.id] = '';
@@ -51,10 +48,8 @@ export default function BuatTugasPage() {
 					setNilaiSiswa(initialNilai);
 				}
 
-				// Fetch mapel
-				const resMapel = await fetch('/api/mapel');
-				const dataMapel = await resMapel.json();
-				setMapelList(dataMapel);
+				const { data: dataMapel } = await supabase.from('mapel').select('*');
+				setMapelList(dataMapel || []);
 			} catch (error) {
 				console.error('Error fetching data:', error);
 			} finally {
@@ -96,44 +91,63 @@ export default function BuatTugasPage() {
 		setLoading(true);
 
 		try {
-			const tugasData = {
-				judul,
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const userId = userData?.id_user;
+			const role = userData?.role;
+
+			// Validate
+			if (role === 'Guru' && userId) {
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', namaKelas).eq('mapel', selectedMapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak mengajar mapel ini di kelas tersebut.');
+			}
+
+			// Generate ID
+			const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+			const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert({
+				tugas_id: tugasId,
+				guru_id: userId,
+				kategori: judul,
 				type,
 				deskripsi,
-				mapel: selectedMapel,
 				kelas: namaKelas,
-				tanggal,
-				nilai: Object.entries(nilaiSiswa).map(([siswaId, nilai]) => ({
-					siswa_id: siswaId,
-					nilai: nilai || '0',
-				})),
-			};
+				mapel: selectedMapel,
+				tanggal
+			});
+			if (insertHeaderError) throw insertHeaderError;
 
-			const response = await fetch('/api/nilai', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(tugasData),
+			// Insert scores
+			const siswaMap = new Map();
+			siswaList.forEach(s => siswaMap.set(s.id, s.nama_lengkap));
+
+			const validGrades = Object.entries(nilaiSiswa).filter(([id, n]) => n && String(n).trim() !== '').map(([id, n]) => ({
+				tugas_id: tugasId,
+				siswa_id: id,
+				nama_siswa: siswaMap.get(id) || 'Unknown',
+				nilai: n
+			}));
+
+			if (validGrades.length > 0) {
+				const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
+				if (insertScoreError) {
+					await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
+					throw insertScoreError;
+				}
+			}
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil!',
+				text: `Tugas berhasil disimpan untuk ${validGrades.length} siswa`,
+				confirmButtonColor: '#4F46E5',
+				timer: 2000,
+				timerProgressBar: true,
 			});
 
-			const result = await response.json();
-
-			if (response.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil!',
-					text: `Tugas berhasil disimpan untuk ${result.count} siswa`,
-					confirmButtonColor: '#4F46E5',
-					timer: 2000,
-					timerProgressBar: true,
-				});
-
-				// Redirect ke halaman detail nilai dengan tugasId
-				router.push(`/kelas/${id}/nilai/${result.tugasId}`);
-			} else {
-				throw new Error(result.error || 'Gagal menyimpan tugas');
-			}
+			// Redirect ke halaman detail nilai dengan tugasId
+			router.push(`/kelas/${id}/nilai/${tugasId}`);
 		} catch (error) {
 			console.error('Error saving tugas:', error);
 			Swal.fire({
@@ -146,6 +160,8 @@ export default function BuatTugasPage() {
 			setLoading(false);
 		}
 	};
+
+	const filteredSiswa = siswaList.filter((s) => (s.nama_lengkap?.toLowerCase() || '').includes(searchSiswa.toLowerCase()) || (s.nis?.toLowerCase() || '').includes(searchSiswa.toLowerCase()));
 
 	if (loadingPage) {
 		return (
@@ -286,9 +302,24 @@ export default function BuatTugasPage() {
 						<span className='text-xs text-gray-500'>Input Nilai (0-100)</span>
 					</div>
 
+					<div className='mb-4 relative'>
+						<input
+							type='text'
+							placeholder='Cari nama atau NIS siswa...'
+							value={searchSiswa}
+							onChange={(e) => setSearchSiswa(e.target.value)}
+							className='w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-sm transition-all'
+						/>
+						<div className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400'>
+							<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='1.5' stroke='currentColor' className='w-5 h-5'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z' />
+							</svg>
+						</div>
+					</div>
+
 					<div className='space-y-3 max-h-[400px] overflow-y-auto'>
-						{siswaList.length > 0 ? (
-							siswaList.map((siswa, index) => (
+						{filteredSiswa.length > 0 ? (
+							filteredSiswa.map((siswa, index) => (
 								<div
 									key={siswa.id}
 									className='flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors'>

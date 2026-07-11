@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheet, getOrCreateSheet } from '@/lib/sheets';
 import { uploadFileToSupabase } from '@/lib/supabase';
-
-const SUBMIT_HEADERS = ['Waktu', 'PIN', 'Kelas', 'Nama_Siswa', 'No_Absen', 'Jawaban_Teks', 'Link_File', 'Nilai'];
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export async function POST(request) {
 	try {
@@ -15,6 +13,7 @@ export async function POST(request) {
 		const tipeSoal = formData.get('tipeSoal') || '';
 		const jawabanPGStr = formData.get('jawabanPG') || '{}';
 		const file = formData.get('file');
+		const siswaId = formData.get('siswa_id');
 
 		if (!pin || !namaSiswa || !noAbsen) {
 			return NextResponse.json({ error: 'Data wajib (PIN, Nama, Absen) tidak lengkap' }, { status: 400 });
@@ -33,23 +32,31 @@ export async function POST(request) {
 			linkFile = await uploadFileToSupabase('tugas-siswa', filePath, file, file.type);
 		}
 
-		const doc = await getSheet();
+		const supabase = supabaseAdmin;
 
 		let finalJawabanTeks = jawabanTeks;
-		let finalNilai = '';
+		let finalNilai = null;
 		let calculatedScore = null;
 
-		if (tipeSoal === 'PG') {
-			// Auto-grading logic
-			const taskSheet = await getOrCreateSheet(doc, 'Data_Tugas', ['ID', 'PIN', 'Judul', 'Mapel', 'Materi', 'Tipe_Soal', 'Soal', 'CreatedAt', 'CreatedBy']);
-			const taskRows = await taskSheet.getRows();
-			const taskRow = taskRows.find(r => r.get('PIN') === pin.toUpperCase());
+		// Fetch Tugas Data for grading and syncing
+		const { data: taskRow, error: taskError } = await supabase
+			.from('tugas_online')
+			.select('*')
+			.eq('pin', pin.toUpperCase())
+			.single();
 
-			if (taskRow) {
-				const soalJson = taskRow.get('Soal');
+		const taskMapel = taskRow?.mapel || '-';
+		const taskJudul = taskRow?.judul || `Tugas ${pin}`;
+		const taskKategori = taskRow?.kategori || 'Formatif';
+		const taskType = taskRow?.type || 'Tugas Online';
+
+		if (tipeSoal === 'PG') {
+			if (!taskError && taskRow) {
+				const soalJson = taskRow.soal;
 				let parsedSoal = [];
 				try {
-					parsedSoal = JSON.parse(soalJson);
+					parsedSoal = typeof soalJson === 'string' ? JSON.parse(soalJson) : soalJson;
+					if (parsedSoal && parsedSoal._wrapper) parsedSoal = parsedSoal.data;
 				} catch(e) {}
 
 				let jawabanPG = {};
@@ -59,12 +66,11 @@ export async function POST(request) {
 
 				let totalPoints = 0;
 				const totalSoal = parsedSoal.length;
-				let detailJawabanArr = []; // Array untuk menampung riwayat jawaban
+				let detailJawabanArr = [];
 
 				parsedSoal.forEach((soal, index) => {
 					const studentAnswers = jawabanPG[soal.id] || [];
 					
-					// Merekam pilihan siswa (mengubah 0 jadi A, 1 jadi B, dsb)
 					if (studentAnswers.length === 0) {
 						detailJawabanArr.push(`${index + 1}: Kosong`);
 					} else {
@@ -82,31 +88,23 @@ export async function POST(request) {
 					const totalCorrect = correctAnswers.length;
 					
 					if (totalCorrect === 0) {
-						totalPoints += 1; // Jika anomali soal tanpa kunci, berikan poin gratis
+						totalPoints += 1;
 						return;
 					}
 
 					let selectedCorrectly = 0;
-
 					studentAnswers.forEach(ans => {
-						if (correctAnswers.includes(ans)) {
-							selectedCorrectly++;
-						}
+						if (correctAnswers.includes(ans)) selectedCorrectly++;
 					});
 
 					const numSelected = studentAnswers.length;
 					let excessPenalty = 0;
 					
-					// Jika siswa mencentang LEBIH BANYAK opsi dari jumlah kunci, 
-					// maka kelebihan centangan tersebut akan menjadi penalti
 					if (numSelected > totalCorrect) {
 						excessPenalty = numSelected - totalCorrect;
 					}
 
-					// Rumus: (Benar - Penalti Kelebihan) / Total Kunci
 					let questionScore = (selectedCorrectly - excessPenalty) / totalCorrect;
-					
-					// Batasi agar nilai soal ini tidak minus (minimal 0)
 					if (questionScore < 0) questionScore = 0;
 
 					totalPoints += questionScore;
@@ -114,28 +112,129 @@ export async function POST(request) {
 
 				if (totalSoal > 0) {
 					calculatedScore = Math.round((totalPoints / totalSoal) * 100);
-					finalNilai = calculatedScore.toString();
-					
-					// Teks jawaban yang disimpan di Sheets adalah jejak pilihan siswa
+					finalNilai = calculatedScore;
 					finalJawabanTeks = detailJawabanArr.join(' | ');
 				}
 			}
+		} else if (tipeSoal === 'Essai') {
+			let parsedSoal = [];
+			if (taskRow && taskRow.soal) {
+				try {
+					parsedSoal = typeof taskRow.soal === 'string' ? JSON.parse(taskRow.soal) : taskRow.soal;
+					if (parsedSoal && parsedSoal._wrapper) parsedSoal = parsedSoal.data;
+				} catch(e) {}
+			}
+
+			let jawabanEssai = {};
+			try {
+				jawabanEssai = JSON.parse(formData.get('jawabanEssai') || '{}');
+			} catch(e) {}
+
+			let detailJawabanArr = [];
+			parsedSoal.forEach((soal, index) => {
+				const ans = jawabanEssai[soal.id] || 'Kosong';
+				detailJawabanArr.push(`[No. ${index + 1}]\n${ans}`);
+			});
+			
+			finalJawabanTeks = detailJawabanArr.join('\n\n');
+		} else if (tipeSoal === 'Gabungan') {
+			let parsedPG = [];
+			let parsedEssai = [];
+			if (taskRow && taskRow.soal) {
+				try {
+					const soalJson = typeof taskRow.soal === 'string' ? JSON.parse(taskRow.soal) : taskRow.soal;
+					const dataSoal = (soalJson && soalJson._wrapper) ? soalJson.data : soalJson;
+					parsedPG = dataSoal.pg || [];
+					parsedEssai = dataSoal.essai || [];
+				} catch(e) {}
+			}
+
+			let jawabanPG = {};
+			let jawabanEssai = {};
+			try {
+				jawabanPG = JSON.parse(jawabanPGStr);
+				jawabanEssai = JSON.parse(formData.get('jawabanEssai') || '{}');
+			} catch(e) {}
+
+			let totalPoints = 0;
+			const totalSoal = parsedPG.length;
+			let detailJawabanArrPG = [];
+
+			parsedPG.forEach((soal, index) => {
+				const studentAnswers = jawabanPG[soal.id] || [];
+				if (studentAnswers.length === 0) {
+					detailJawabanArrPG.push(`${index + 1}: Kosong`);
+				} else {
+					const selectedLetters = [...studentAnswers]
+						.sort()
+						.map(idx => String.fromCharCode(65 + idx))
+						.join(', ');
+					detailJawabanArrPG.push(`${index + 1}: ${selectedLetters}`);
+				}
+
+				const correctAnswers = Array.isArray(soal.jawabanBenar) ? soal.jawabanBenar : (soal.jawabanBenar !== undefined && soal.jawabanBenar !== null ? [soal.jawabanBenar] : []);
+				const totalCorrect = correctAnswers.length;
+				
+				if (totalCorrect === 0) {
+					totalPoints += 1;
+					return;
+				}
+
+				let selectedCorrectly = 0;
+				studentAnswers.forEach(ans => { if (correctAnswers.includes(ans)) selectedCorrectly++; });
+				let excessPenalty = studentAnswers.length > totalCorrect ? studentAnswers.length - totalCorrect : 0;
+				let questionScore = (selectedCorrectly - excessPenalty) / totalCorrect;
+				if (questionScore < 0) questionScore = 0;
+				totalPoints += questionScore;
+			});
+
+			if (totalSoal > 0) {
+				calculatedScore = Math.round((totalPoints / totalSoal) * 100);
+			} else {
+				calculatedScore = 0;
+			}
+
+			let detailJawabanArrEssai = [];
+			parsedEssai.forEach((soal, index) => {
+				const ans = jawabanEssai[soal.id] || 'Kosong';
+				detailJawabanArrEssai.push(`[Essai No. ${index + 1}]\n${ans}`);
+			});
+
+			finalJawabanTeks = `[NILAI PG: ${calculatedScore}]\n\n--- Jawaban Pilihan Ganda ---\n${detailJawabanArrPG.join(' | ')}\n\n--- Jawaban Essai ---\n${detailJawabanArrEssai.join('\n\n')}`;
+			finalNilai = null; // Menunggu guru mengkoreksi totalnya
 		}
 
-		const sheet = await getOrCreateSheet(doc, 'Pengumpulan_Tugas', SUBMIT_HEADERS);
+		const { error } = await supabase.from('pengumpulan_tugas').insert({
+			pin: pin.toUpperCase(),
+			kelas: kelas,
+			nama_siswa: namaSiswa,
+			no_absen: String(noAbsen),
+			siswa_id: siswaId || null,
+			jawaban_teks: finalJawabanTeks,
+			link_file: linkFile,
+			nilai: finalNilai,
+		});
 
-		const newRow = {
-			Waktu: new Date().toLocaleString('id-ID'),
-			PIN: pin.toUpperCase(),
-			Kelas: kelas,
-			Nama_Siswa: namaSiswa,
-			No_Absen: noAbsen,
-			Jawaban_Teks: finalJawabanTeks,
-			Link_File: linkFile,
-			Nilai: finalNilai,
-		};
+		if (error) {
+			console.error('Supabase Insert Error:', error);
+			throw error;
+		}
 
-		await sheet.addRow(newRow);
+		// Auto Sync Nilai to nilai_tugas if PG and we have siswaId
+		if (siswaId && finalNilai !== null) {
+			const { error: upsertError } = await supabase.from('nilai_tugas').upsert({
+				siswa_id: siswaId,
+				kelas: kelas,
+				mapel: taskMapel,
+				judul_tugas: taskJudul,
+				kategori: taskKategori,
+				type: taskType,
+				nilai: finalNilai
+			}, {
+				onConflict: 'siswa_id, kelas, mapel, judul_tugas'
+			});
+			if (upsertError) console.error('Gagal sinkron nilai_tugas:', upsertError);
+		}
 
 		if (calculatedScore !== null) {
 			return NextResponse.json({ success: true, message: 'Tugas berhasil dikumpulkan!', nilai: calculatedScore });

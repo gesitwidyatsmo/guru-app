@@ -5,6 +5,8 @@ import SectionHeader from '../../../components/SectionHeader';
 import * as XLSX from 'xlsx';
 import { useParams } from 'next/navigation';
 import { useRouter } from 'next/router';
+import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LaporanAbsensiMapelPage() {
 	const params = useParams();
@@ -42,13 +44,13 @@ export default function LaporanAbsensiMapelPage() {
 	// Fetch daftar kelas
 	useEffect(() => {
 		const fetchKelas = async () => {
+			if (!id) return;
 			try {
-				const response = await fetch('/api/kelas');
-				if (!response.ok) throw new Error('Gagal mengambil data kelas');
-				const dataKelas = await response.json();
-				const kelas = dataKelas.find((k) => k.id === id);
-				if (kelas) {
-					setNamaKelas(kelas.kelas);
+				const supabase = createClient();
+				const { data: dataKelas, error } = await supabase.from('kelas').select('*').eq('id', id).single();
+				if (error) throw error;
+				if (dataKelas) {
+					setNamaKelas(dataKelas.nama_kelas);
 				}
 			} catch (error) {
 				console.error('Error fetching kelas:', error);
@@ -58,10 +60,10 @@ export default function LaporanAbsensiMapelPage() {
 
 		const fetchMapel = async () => {
 			try {
-				const res = await fetch('/api/mapel');
-				if (res.ok) {
-					const data = await res.json();
-					setMapelList(data);
+				const supabase = createClient();
+				const { data: dataMapel } = await supabase.from('mapel').select('*');
+				if (dataMapel) {
+					setMapelList(dataMapel);
 				}
 			} catch (err) {
 				console.error('Gagal fetch mapel:', err);
@@ -75,27 +77,136 @@ export default function LaporanAbsensiMapelPage() {
 	// Fetch rekap absensi
 	const fetchRekap = async () => {
 		if (!selectedBulan || !selectedMapel) {
-			alert('Pilih Mapel & Periode terlebih dahulu');
+			Swal.fire('Oops', 'Pilih Mapel & Periode terlebih dahulu', 'warning');
 			return;
 		}
 
 		setLoading(true);
 		setError(null);
 		try {
-			const params = new URLSearchParams({
-				kelas: namaKelas,
-				bulan: selectedBulan,
-				tahun: new Date().getFullYear(),
+			const supabase = createClient();
+			const tahun = new Date().getFullYear();
+
+			// 1. Ambil data siswa
+			const { data: siswaData, error: siswaError } = await supabase
+				.from('siswa')
+				.select('id, nis, nama_lengkap, kelas')
+				.eq('kelas', namaKelas)
+				.eq('status', 'Aktif');
+
+			if (siswaError) throw siswaError;
+
+			const siswaDiKelas = siswaData || [];
+			
+			const namaBulanMap = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+			const periode = selectedBulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulanMap[parseInt(selectedBulan) - 1]} ${tahun}`;
+
+			if (siswaDiKelas.length === 0) {
+				setRekapData({
+					kelas: namaKelas,
+					periode,
+					tanggalList: [],
+					siswa: [],
+					totalSiswa: 0,
+				});
+				return;
+			}
+
+			// 2. Ambil data absensi mapel (sesi)
+			let querySesi = supabase.from('absensi_mapel').select('sesi_id, tanggal').eq('kelas', namaKelas).eq('mapel', selectedMapel);
+
+			if (selectedBulan !== 'all') {
+				const startDate = new Date(tahun, parseInt(selectedBulan) - 1, 1).toISOString();
+				const endDate = new Date(tahun, parseInt(selectedBulan), 0, 23, 59, 59).toISOString();
+				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
+			} else {
+				const startDate = new Date(tahun, 0, 1).toISOString();
+				const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
+			}
+
+			const { data: sesiData, error: sesiError } = await querySesi;
+			if (sesiError) throw sesiError;
+
+			const sessions = sesiData || [];
+			const tanggalSet = new Set();
+			sessions.forEach(s => {
+				if (s.tanggal) tanggalSet.add(String(s.tanggal).slice(0, 10));
+			});
+			const tanggalList = Array.from(tanggalSet).sort();
+
+			if (sessions.length === 0) {
+				const rekapSiswa = siswaDiKelas.map((siswa) => ({
+					...siswa,
+					absensi: {},
+					ringkasan: { H: 0, I: 0, S: 0, A: 0 },
+				}));
+
+				setRekapData({
+					kelas: namaKelas,
+					periode,
+					tanggalList: [],
+					siswa: rekapSiswa,
+					totalSiswa: rekapSiswa.length,
+				});
+				return;
+			}
+
+			const sesiIds = sessions.map(s => s.sesi_id);
+
+			// 3. Ambil detail absensi siswa
+			const { data: detailData, error: detailError } = await supabase
+				.from('absensi_mapel_siswa')
+				.select('sesi_id, siswa_id, status, keterangan')
+				.in('sesi_id', sesiIds);
+
+			if (detailError) throw detailError;
+			const absensiDetails = detailData || [];
+
+			const sesiTanggalMap = {};
+			sessions.forEach(s => {
+				sesiTanggalMap[s.sesi_id] = String(s.tanggal).slice(0, 10);
 			});
 
-			params.append('mapel', selectedMapel);
-			let url = `/api/absensi/rekap-mapel?${params}`;
+			// 4. Proses rekap per siswa
+			const rekapSiswa = siswaDiKelas.map((siswa) => {
+				const absensiSiswa = {};
+				const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 };
 
-			const response = await fetch(url);
-			if (!response.ok) throw new Error('Gagal mengambil data rekap');
+				const studentAbsensi = absensiDetails.filter(d => String(d.siswa_id) === String(siswa.id));
 
-			const data = await response.json();
-			setRekapData(data);
+				studentAbsensi.forEach(detail => {
+					const tanggal = sesiTanggalMap[detail.sesi_id];
+					if (!tanggal) return;
+
+					const status = detail.status || '';
+					const keterangan = detail.keterangan || '';
+					
+					absensiSiswa[tanggal] = { status, keterangan };
+
+					const s = status.toLowerCase();
+					if (s === 'hadir' || s === 'h') ringkasan.H++;
+					else if (s === 'izin' || s === 'i') ringkasan.I++;
+					else if (s === 'sakit' || s === 's') ringkasan.S++;
+					else if (s === 'alpa' || s === 'a' || s === 'alpha' || s === 'alfa') ringkasan.A++;
+					else if (s === 'terlambat' || s === 't') ringkasan.T++;
+					else if (s === 'cabut' || s === 'c') ringkasan.C++;
+				});
+
+				return {
+					...siswa,
+					absensi: absensiSiswa,
+					ringkasan,
+				};
+			});
+
+			setRekapData({
+				kelas: namaKelas,
+				periode,
+				tanggalList,
+				siswa: rekapSiswa,
+				totalSiswa: rekapSiswa.length,
+			});
 		} catch (error) {
 			console.error('Error fetching rekap:', error);
 			setError(error.message);

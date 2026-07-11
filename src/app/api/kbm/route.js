@@ -1,8 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
-
-const SHEET_KBM = 'GURU_KBM';
-const SHEET_USERS = 'MASTER_USERS';
+import { createClient } from '@/utils/supabase/server';
 
 function generateKBMId() {
 	return 'KBM-' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -13,45 +10,34 @@ function generateKBMId() {
 // ---------------------------------------------------------------------------
 export async function GET(req) {
 	try {
-		// Validasi Proteksi Middleware Tambahan: Pastikan Admin
 		const role = req.headers.get('x-user-role');
 		if (role !== 'Admin') {
 			return NextResponse.json({ error: 'Akses Ditolak: Khusus Entitas Admin.' }, { status: 403 });
 		}
 
-		const doc = await getSheet();
-		const kbmSheet = doc.sheetsByTitle[SHEET_KBM];
-		const userSheet = doc.sheetsByTitle[SHEET_USERS];
+		const supabase = await createClient();
+		
+		const { data: kbmData, error } = await supabase
+			.from('guru_kbm')
+			.select(`
+				id_kbm,
+				id_user,
+				kelas,
+				mapel,
+				users!guru_kbm_id_user_fkey(username, nama_lengkap)
+			`);
 
-		if (!kbmSheet) return NextResponse.json([]); // Masih kosong
+		if (error) throw error;
 
-		const kbmRows = await kbmSheet.getRows();
-		const userRows = userSheet ? await userSheet.getRows() : [];
+		const result = (kbmData || []).map((r) => ({
+			id_kbm: r.id_kbm,
+			id_user: r.id_user,
+			username: r.users?.username || 'Akun Terhapus',
+			nama_guru: r.users?.nama_lengkap || 'Akun Terhapus',
+			kelas: r.kelas,
+			mapel: r.mapel,
+		}));
 
-		// Persiapkan Lookup (Penelusuran) Tabel User ID => Nama Lengkap & Username
-		const userDict = {};
-		userRows.forEach((u) => {
-			userDict[u.get('id_user')] = {
-				username: u.get('username'),
-				nama_lengkap: u.get('nama_lengkap'),
-			};
-		});
-
-		const result = kbmRows.map((r) => {
-			const guruId = r.get('id_user');
-			const userInfo = userDict[guruId] || { username: 'Akun Terhapus', nama_lengkap: 'Akun Terhapus' };
-
-			return {
-				id_kbm: r.get('id_kbm') || r.rowIndex, // Fallback jika id di masa lalu kosong
-				id_user: guruId,
-				username: userInfo.username,
-				nama_guru: userInfo.nama_lengkap,
-				kelas: r.get('kelas'),
-				mapel: r.get('mapel'),
-			};
-		});
-
-		// Sortir/Urutkan berdasarkan Nama Guru
 		result.sort((a, b) => a.nama_guru.localeCompare(b.nama_guru));
 
 		return NextResponse.json(result, { status: 200 });
@@ -71,7 +57,6 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Akses Ditolak: Khusus Entitas Admin.' }, { status: 403 });
 		}
 
-		// Body dapat berupa 1 objek assign tunggal, atau batch array
 		const body = await req.json();
 		const assignments = Array.isArray(body) ? body : [body];
 
@@ -79,16 +64,8 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Data penugasan tidak terbaca.' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle[SHEET_KBM];
-		if (!sheet) {
-			sheet = await doc.addSheet({
-				title: SHEET_KBM,
-				headerValues: ['id_kbm', 'id_user', 'kelas', 'mapel'],
-			});
-		}
+		const supabase = await createClient();
 
-		// Karena Google Sheets menerima format flat array of JSON
 		const rowsToInsert = assignments.map((task) => ({
 			id_kbm: generateKBMId(),
 			id_user: task.id_user,
@@ -96,7 +73,8 @@ export async function POST(req) {
 			mapel: task.mapel,
 		}));
 
-		await sheet.addRows(rowsToInsert);
+		const { error } = await supabase.from('guru_kbm').insert(rowsToInsert);
+		if (error) throw error;
 
 		return NextResponse.json({ success: true, message: `${rowsToInsert.length} jadwal mengajar telah berhasil diformalkan.` }, { status: 201 });
 	} catch (error) {
@@ -116,26 +94,17 @@ export async function DELETE(req) {
 		}
 
 		const { searchParams } = new URL(req.url);
-
-		// Kita akan coba hapus memakai id_kbm (unique) atau row_index fallback sebagai alternatif
 		const id_kbm = searchParams.get('id_kbm');
 
 		if (!id_kbm) {
 			return NextResponse.json({ error: 'ID penugasan / Row tak ditemukan.' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_KBM];
-		if (!sheet) return NextResponse.json({ error: 'Data KBM belum terbuat.' }, { status: 404 });
-
-		const rows = await sheet.getRows();
-		const targetRow = rows.find((r) => r.get('id_kbm') === id_kbm || String(r.rowIndex) === id_kbm);
-
-		if (!targetRow) {
-			return NextResponse.json({ error: 'Baris penugasan yang dimaksud tidak terlacak.' }, { status: 404 });
-		}
-
-		await targetRow.delete();
+		const supabase = await createClient();
+		
+		const { error } = await supabase.from('guru_kbm').delete().eq('id_kbm', id_kbm);
+		
+		if (error) throw error;
 
 		return NextResponse.json({ success: true, message: 'Hak mengajar kelas ini berhasil dicabut.' }, { status: 200 });
 	} catch (error) {

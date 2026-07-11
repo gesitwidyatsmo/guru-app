@@ -1,55 +1,48 @@
-import { getSheet } from '@/lib/sheets';
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET() {
 	try {
-		const doc = await getSheet();
+		const supabase = await createClient();
 
-		// Daftar sheet utama yang ingin dibackup
-		const targetSheets = [
-			// 'MASTER_MAPEL',
-			'MASTER_MAPEL',
-			'MASTER_KELAS',
-			'MASTER_JADWAL',
-			'MASTER_SISWA',
-			'MASTER_ABSENSI_HARIAN',
-			'MASTER_ABSENSI_MAPEL',
-			'MASTER_ABSENSI',
-			'MASTER_JURNAL',
-			'MASTER_POIN',
-			'daftar_kategori_positif',
-			'daftar_kategori_minus',
-			'badge_poin',
-			'MASTER_NILAI',
-			'MASTER_GRUP',
-			'MASTER_STATUS_ABSENSI',
+		// Daftar tabel utama di Supabase yang ingin dibackup
+		const targetTables = [
+			'users',
+			'kelas',
+			'mapel',
+			'siswa',
+			'guru_kbm',
+			'jadwal',
+			'jurnal',
+			'nilai_tugas',
+			'nilai_siswa',
+			'absensi_harian',
+			'absensi_harian_siswa',
+			'absensi_mapel',
+			'absensi_mapel_siswa',
+			'poin',
+			'grup',
+			'tugas_online',
+			'pengumpulan_tugas'
 		];
 
 		const backupData = {};
 
-		// Loop dan ambil isi tiap sheet
-		for (const title of targetSheets) {
-			const sheet = doc.sheetsByTitle[title];
-			if (sheet) {
-				const rows = await sheet.getRows();
-				// Simpan raw data objek baris sebagai literal object
-				backupData[title] = rows.map((row) => {
-					// Gunakan .toObject() asli dari node-google-spreadsheet jika tersedia,
-					// Atau destructure object row. Coba gunakan metode aman:
-					const rawObj = {};
-					sheet.headerValues.forEach((header) => {
-						rawObj[header] = row.get(header) || '';
-					});
-					return rawObj;
-				});
+		// Loop dan ambil isi tiap tabel
+		for (const table of targetTables) {
+			const { data, error } = await supabase.from(table).select('*');
+			
+			if (error) {
+				console.error(`Backup warning: Failed to fetch ${table}:`, error);
+				backupData[table] = [];
 			} else {
-				// Sheet tidak ditemukan, beri array kosong
-				backupData[title] = [];
+				backupData[table] = data || [];
 			}
 		}
 
-		return Response.json(backupData, { status: 200 });
+		return NextResponse.json(backupData, { status: 200 });
 	} catch (error) {
 		console.error('❌ Error API Backup:', error);
-		return Response.json({ error: 'Gagal melakukan backup database', details: error.message }, { status: 500 });
+		return NextResponse.json({ error: 'Gagal melakukan backup database', details: error.message }, { status: 500 });
 	}
 }

@@ -1,28 +1,28 @@
 'use client';
 
-export default function Modal({ open, onClose, title, children }) {
+export default function Modal({ open, onClose, title, children, className = '' }) {
 	if (!open) return null;
 
-	// Handler agar klik dalam konten modal tidak menutup modal
 	const handleModalClick = (e) => {
 		e.stopPropagation();
 	};
 
 	return (
 		<div
-			className='fixed inset-0 z-40 flex items-center justify-center bg-black/40 transition-colors duration-200'
-			onClick={onClose} // klik overlay (di luar modal) akan menutup modal
+			className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity'
+			onClick={onClose}
 		>
 			<div
-				className='bg-gray-800 rounded-lg shadow-lg max-w-md w-full mx-4'
-				onClick={handleModalClick} // klik isi modal tidak menutup modal
+				className={`bg-white w-full max-w-md rounded-2xl shadow-2xl transform transition-all flex flex-col ${className}`}
+				style={{ maxHeight: '90vh' }}
+				onClick={handleModalClick}
 			>
 				{/* Header */}
-				<div className='flex items-center justify-between px-4 py-3 border-b'>
-					<span className='text-2xl font-bold text-gray-200'>{title}</span>
+				<div className='p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center rounded-t-2xl shrink-0'>
+					<h3 className='text-lg font-bold text-gray-800'>{title}</h3>
 					<button
 						onClick={onClose}
-						className='text-gray-400 hover:scale-110 transition-transform'>
+						className='text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1 rounded-lg transition-colors'>
 						<svg
 							width='24'
 							height='24'
@@ -38,7 +38,9 @@ export default function Modal({ open, onClose, title, children }) {
 					</button>
 				</div>
 				{/* Isi Konten Modal */}
-				<div className='px-4 py-4'>{children}</div>
+				<div className='p-5 overflow-y-auto grow custom-scrollbar'>
+					{children}
+				</div>
 			</div>
 		</div>
 	);

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
 
@@ -380,6 +382,84 @@ export default function LaporanPage() {
 		XLSX.writeFile(workbook, `Laporan_${activeTab}_${selectedKelas}_${selectedMapel}_${bulan}.xlsx`);
 	};
 
+	const handleExportPDF = () => {
+		if (activeTab === 'absensi' && pivotedAbsensi) {
+			const doc = new jsPDF({ orientation: 'landscape' });
+			doc.text(`Rekap Absensi - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
+			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
+
+			const head = [['No', 'Nama Siswa', ...pivotedAbsensi.kolomTanggal.map(p => p.label), 'H', 'I', 'S', 'A', '%']];
+			const body = pivotedAbsensi.barisSiswa.map((row, idx) => [
+				idx + 1,
+				row.nama,
+				...pivotedAbsensi.kolomTanggal.map(p => row.kehadiran[p.id] || '-'),
+				row.stats.H || 0,
+				row.stats.I || 0,
+				row.stats.S || 0,
+				row.stats.A || 0,
+				`${row.persentase}%`
+			]);
+
+			autoTable(doc, {
+				startY: 30,
+				head: head,
+				body: body,
+				theme: 'grid',
+				headStyles: { fillColor: [79, 70, 229] },
+			});
+
+			doc.save(`Rekap_Absensi_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
+		} else if (activeTab === 'nilai' && dataRekap?.data) {
+			const pivotedNilai = pivotNilai(dataRekap.data);
+			const doc = new jsPDF({ orientation: 'landscape' });
+			doc.text(`Rekap Nilai - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
+			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
+
+			const head = [['No', 'NIS', 'Nama Siswa', ...pivotedNilai.kolomTugas.map(t => t.judul), 'Rata-rata']];
+			const body = pivotedNilai.barisSiswa.map((row, idx) => [
+				idx + 1,
+				row.nis || '-',
+				row.nama_lengkap || '-',
+				...pivotedNilai.kolomTugas.map(t => row.nilaiByTugas[t.key] !== undefined ? row.nilaiByTugas[t.key] : '-'),
+				row.rataRata
+			]);
+
+			autoTable(doc, {
+				startY: 30,
+				head: head,
+				body: body,
+				theme: 'grid',
+				headStyles: { fillColor: [79, 70, 229] },
+			});
+
+			doc.save(`Rekap_Nilai_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
+		} else if (activeTab === 'jurnal' && dataRekap?.data) {
+			const doc = new jsPDF();
+			doc.text(`Rekap Jurnal Mengajar - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
+			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
+
+			const head = [['Tanggal', 'Jam', 'Pert', 'Materi', 'Kegiatan', 'Status']];
+			const body = dataRekap.data.map((j) => [
+				new Date(j.tanggal).toLocaleDateString('id-ID'),
+				j.jam_ke || '-',
+				j.pertemuan_ke || '-',
+				j.materi || '-',
+				j.kegiatan || '-',
+				j.tuntas ? 'Tuntas' : 'Belum Tuntas'
+			]);
+
+			autoTable(doc, {
+				startY: 30,
+				head: head,
+				body: body,
+				theme: 'grid',
+				headStyles: { fillColor: [79, 70, 229] },
+			});
+
+			doc.save(`Rekap_Jurnal_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
+		}
+	};
+
 	const tabs = [
 		{ id: 'absensi', name: 'Absensi', icon: '📋' },
 		{ id: 'nilai', name: 'Nilai', icon: '📝' },
@@ -423,6 +503,11 @@ export default function LaporanPage() {
 								onClick={() => window.print()}
 								className='bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl font-semibold transition-colors'>
 								Print
+							</button>
+							<button
+								onClick={handleExportPDF}
+								className='bg-white text-rose-600 hover:bg-rose-50 px-4 py-2 rounded-xl font-bold transition-colors shadow-lg'>
+								Export PDF
 							</button>
 							<button
 								onClick={handleExportExcel}

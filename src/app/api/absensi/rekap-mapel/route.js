@@ -1,14 +1,5 @@
-import { getSheet } from '@/lib/sheets';
-
-function normalizeDate(value) {
-	if (!value) return '';
-	if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-		return String(value);
-	}
-	const d = new Date(value);
-	if (isNaN(d.getTime())) return String(value);
-	return d.toISOString().slice(0, 10);
-}
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request) {
 	try {
@@ -19,108 +10,120 @@ export async function GET(request) {
 		const tahun = searchParams.get('tahun') || new Date().getFullYear();
 
 		if (!kelas || !mapel || !bulan) {
-			return Response.json({ error: 'Parameter kelas, mapel, dan bulan harus diisi' }, { status: 400 });
+			return NextResponse.json({ error: 'Parameter kelas, mapel, dan bulan harus diisi' }, { status: 400 });
 		}
 
-		console.log(`REKAP MAPEL: ${kelas} - ${mapel} - ${bulan}/${tahun}`);
+		const supabase = await createClient();
 
-		const doc = await getSheet();
+		// 1. Ambil Data Siswa Aktif
+		const { data: siswaData, error: siswaError } = await supabase
+			.from('siswa')
+			.select('id, nis, nama_lengkap, kelas')
+			.eq('kelas', kelas)
+			.eq('status', 'Aktif');
 
-		// 1. Ambil Data Siswa (sama seperti rekap harian)
-		const siswaSheet = doc.sheetsByTitle['MASTER_SISWA'];
-		if (!siswaSheet) return Response.json({ error: 'Sheet Siswa 404' }, { status: 404 });
+		if (siswaError) throw siswaError;
+
+		const siswaDiKelas = siswaData || [];
 		
-		const siswaRows = await siswaSheet.getRows();
-		const siswaDiKelas = siswaRows
-			.filter((row) => String(row.get('kelas')).trim() === kelas && row.get('status') === 'Aktif')
-			.map((row) => ({
-				id: String(row.get('id')),
-				nis: String(row.get('nis')),
-				nama_lengkap: String(row.get('nama_lengkap')),
-				kelas: String(row.get('kelas')),
-			}));
+		const namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+		const periode = bulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulan[parseInt(bulan) - 1]} ${tahun}`;
 
 		if (siswaDiKelas.length === 0) {
-			return Response.json({
+			return NextResponse.json({
 				kelas,
-				periode: `Bulan ${bulan} ${tahun}`,
+				periode,
+				mapel,
 				tanggalList: [],
 				siswa: [],
+				totalSiswa: 0
 			});
 		}
 
-		// 2. Ambil Data Absensi Mapel
-		const mapelSheet = doc.sheetsByTitle['MASTER_ABSENSI_MAPEL'];
-		if (!mapelSheet) return Response.json({ error: 'Sheet Absensi Mapel 404' }, { status: 404 });
+		// 2. Ambil Data Absensi Mapel (Sesi)
+		let querySesi = supabase.from('absensi_mapel').select('sesi_id, tanggal, jam_ke').eq('kelas', kelas).eq('mapel', mapel);
 
-		const mapelRows = await mapelSheet.getRows();
+		if (bulan !== 'all') {
+			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
+			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
+		} else {
+			const startDate = new Date(tahun, 0, 1).toISOString();
+			const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
+		}
 
-		// Filter Sesi (Pertemuan)
-		const sesiFiltered = mapelRows.filter(row => {
-			const rKelas = String(row.get('kelas')).trim();
-			const rMapel = String(row.get('mapel')).trim();
-			const rTanggal = normalizeDate(row.get('tanggal'));
+		const { data: sesiData, error: sesiError } = await querySesi;
+		if (sesiError) throw sesiError;
 
-			if (rKelas !== kelas) return false;
-			if (rMapel !== mapel) return false;
-			if (!rTanggal) return false;
-
-			const d = new Date(rTanggal);
-			if (bulan !== 'all') {
-				if (d.getMonth() + 1 !== parseInt(bulan)) return false;
-				if (d.getFullYear() !== parseInt(tahun)) return false;
-			} else {
-				if (d.getFullYear() !== parseInt(tahun)) return false;
-			}
-			return true;
-		});
-
-		// 3. Proses Data
-		// Kita akan map sesi ke tanggal. Jika ada multiple sesi per hari, kita ambil yang terakhir atau merge (simplifikasi: ambil list tanggal unik)
+		const sessions = sesiData || [];
+		
 		const tanggalSet = new Set();
-		const absensiMap = {}; // Key: siswaId_tanggal => { status }
-
-		sesiFiltered.forEach(row => {
-			const tanggal = normalizeDate(row.get('tanggal'));
-			tanggalSet.add(tanggal);
-
-			let dataAbsensi = [];
-			try {
-				dataAbsensi = JSON.parse(row.get('data_absensi') || '[]');
-			} catch (e) {
-				dataAbsensi = [];
-			}
-
-			if (Array.isArray(dataAbsensi)) {
-				dataAbsensi.forEach(item => {
-					// item: { siswa_id, status, keterangan }
-					const key = `${item.siswa_id}_${tanggal}`;
-					absensiMap[key] = {
-						status: item.status,
-						keterangan: item.keterangan || ''
-					};
-				});
-			}
+		sessions.forEach(s => {
+			if (s.tanggal) tanggalSet.add(String(s.tanggal).slice(0, 10));
 		});
-
 		const tanggalList = Array.from(tanggalSet).sort();
+
+		if (sessions.length === 0) {
+			const rekapSiswa = siswaDiKelas.map((siswa) => ({
+				...siswa,
+				absensi: {},
+				ringkasan: { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 },
+			}));
+
+			return NextResponse.json({
+				kelas,
+				periode,
+				mapel,
+				tanggalList: [],
+				siswa: rekapSiswa,
+				totalSiswa: rekapSiswa.length
+			});
+		}
+
+		const sesiIds = sessions.map(s => s.sesi_id);
+
+		// 3. Ambil Detail Absensi Siswa
+		const { data: detailData, error: detailError } = await supabase
+			.from('absensi_mapel_siswa')
+			.select('sesi_id, siswa_id, status, keterangan')
+			.in('sesi_id', sesiIds);
+
+		if (detailError) throw detailError;
+		
+		const absensiDetails = detailData || [];
+
+		// Map sesi_id ke tanggal
+		const sesiTanggalMap = {};
+		sessions.forEach(s => {
+			sesiTanggalMap[s.sesi_id] = String(s.tanggal).slice(0, 10);
+		});
 
 		// 4. Build Result
 		const rekapSiswa = siswaDiKelas.map(siswa => {
 			const absensiSiswa = {};
-			const ringkasan = { H: 0, I: 0, S: 0, A: 0 };
+			const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 };
 
-			tanggalList.forEach(tgl => {
-				const key = `${siswa.id}_${tgl}`;
-				const data = absensiMap[key];
-				if (data) {
-					absensiSiswa[tgl] = data;
-					const s = data.status;
-					if (s === 'Hadir') ringkasan.H++;
-					else if (s === 'Izin') ringkasan.I++;
-					else if (s === 'Sakit') ringkasan.S++;
-					else if (s === 'Alpha') ringkasan.A++;
-				}
+			const studentAbsensi = absensiDetails.filter(d => String(d.siswa_id) === String(siswa.id));
+
+			studentAbsensi.forEach(detail => {
+				const tanggal = sesiTanggalMap[detail.sesi_id];
+				if (!tanggal) return;
+
+				const status = detail.status || '';
+				const keterangan = detail.keterangan || '';
+				
+				// Handle multiple sessions in same day if exists by overriding or just accepting the last one
+				absensiSiswa[tanggal] = { status, keterangan };
+
+				// Hitung ringkasan
+				const s = status.toLowerCase();
+				if (s === 'hadir' || s === 'h') ringkasan.H++;
+				else if (s === 'izin' || s === 'i') ringkasan.I++;
+				else if (s === 'sakit' || s === 's') ringkasan.S++;
+				else if (s === 'alpa' || s === 'a' || s === 'alpha') ringkasan.A++;
+				else if (s === 'terlambat' || s === 't') ringkasan.T++;
+				else if (s === 'cabut' || s === 'c') ringkasan.C++;
 			});
 
 			return {
@@ -130,10 +133,7 @@ export async function GET(request) {
 			};
 		});
 
-		const namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-		const periode = bulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulan[parseInt(bulan) - 1]} ${tahun}`;
-
-		return Response.json({
+		return NextResponse.json({
 			kelas,
 			periode,
 			mapel,
@@ -141,9 +141,8 @@ export async function GET(request) {
 			siswa: rekapSiswa,
 			totalSiswa: rekapSiswa.length
 		});
-
 	} catch (error) {
 		console.error('Error rekap mapel:', error);
-		return Response.json({ error: error.message }, { status: 500 });
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
 }

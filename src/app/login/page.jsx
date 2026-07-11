@@ -48,9 +48,9 @@ export default function LoginPage() {
 
 				// Redirect ke Dashboard Home atau Portal Admin berdasarkan Role
 				if (data.user.role === 'Admin') {
-					window.location.href = '/admin/pengguna';
+					router.push('/admin/pengguna');
 				} else {
-					window.location.href = '/';
+					router.push('/');
 				}
 			} else {
 				Swal.fire('Gagal Masuk', data.error || 'Terjadi kesalahan.', 'error');

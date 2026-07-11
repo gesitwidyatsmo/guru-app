@@ -4,6 +4,7 @@ import SectionHeader from '../components/SectionHeader';
 import Modal from '../components/Modal';
 import Link from 'next/link';
 import Loader from '../components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 // inline modal seleksi kelas
 function ClassPickerModal({ isOpen, onClose, kelasList, onSelect }) {
@@ -203,11 +204,18 @@ export default function Page() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				const [resSiswa, resKelas, resPoin] = await Promise.all([fetch('/api/siswa'), fetch('/api/kelas'), fetch('/api/poin')]);
+				const supabase = createClient();
+				const [resSiswa, resKelas, resPoin] = await Promise.all([
+					fetch('/api/siswa').then((res) => res.json()),
+					fetch('/api/kelas?all=false').then((res) => res.json()),
+					supabase.from('poin').select('*')
+				]);
 
-				const dataSiswa = await resSiswa.json();
-				const dataKelas = await resKelas.json();
-				const dataPoin = resPoin.ok ? await resPoin.json() : [];
+				const dataSiswa = resSiswa || [];
+				
+				const dataKelas = resKelas || [];
+
+				const dataPoin = resPoin.data || [];
 
 				const poinMap = {};
 				dataPoin.forEach((p) => {
@@ -257,20 +265,38 @@ export default function Page() {
 	// Logic Simpan Siswa Baru
 	const handleSaveSiswa = async (newData) => {
 		try {
-			const res = await fetch('/api/siswa', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(newData),
+			const supabase = createClient();
+			const uniqueId = 'SIS-' + Date.now() + Math.floor(Math.random() * 100);
+			const { error } = await supabase.from('siswa').insert({
+				id: uniqueId,
+				nis: newData.nis || null,
+				nama_lengkap: newData.nama_lengkap,
+				kelas: newData.kelas,
+				jenis_kelamin: newData.jenis_kelamin || 'Laki-laki',
+				status: newData.status || 'Aktif',
 			});
 
-			if (res.ok) {
+			if (!error) {
 				alert('Siswa berhasil ditambahkan!');
 				// Refresh Data Otomatis
-				const resSiswa = await fetch('/api/siswa');
-				const dataSiswa = await resSiswa.json();
-				setSiswaList(dataSiswa);
+				const { data: dataSiswa } = await supabase.from('siswa').select('*').order('nama_lengkap', { ascending: true });
+				
+				const { data: resPoin } = await supabase.from('poin').select('*');
+				const dataPoin = resPoin || [];
+				const poinMap = {};
+				dataPoin.forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
+				const siswaWithPoin = (dataSiswa || []).map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
+				setSiswaList(siswaWithPoin);
 			} else {
-				alert('Gagal menyimpan siswa.');
+				alert('Gagal menyimpan siswa: ' + error.message);
 			}
 		} catch (error) {
 			console.error(error);
@@ -281,11 +307,18 @@ export default function Page() {
 	useEffect(() => {
 		const fetchAuth = async () => {
 			try {
-				const res = await fetch('/api/auth/me');
-				if (res.ok) {
-					const data = await res.json();
-					setUserName(data.user.nama_lengkap);
-					setUserRole(data.user.role);
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: profile } = await supabase
+						.from('users')
+						.select('nama_lengkap, role')
+						.eq('auth_id', user.id)
+						.single();
+					if (profile) {
+						setUserName(profile.nama_lengkap);
+						setUserRole(profile.role);
+					}
 				}
 			} catch (err) {}
 		};

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 export default function RiwayatNilaiPage() {
 	const params = useParams();
@@ -26,18 +27,16 @@ export default function RiwayatNilaiPage() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				// Fetch kelas
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = await resKelas.json();
-				const kelas = dataKelas.find((k) => k.id === id);
-				if (kelas) {
-					setNamaKelas(kelas.kelas);
+				const supabase = createClient();
+				const { data: dataKelas } = await supabase.from('kelas').select('*').eq('id', id).single();
+				if (dataKelas) {
+					setNamaKelas(dataKelas.nama_kelas);
 				}
 
-				// Fetch mapel
-				const resMapel = await fetch('/api/mapel');
-				const dataMapel = await resMapel.json();
-				setMapelList(dataMapel);
+				const dataMapel = await fetch('/api/mapel?all=false').then(res => res.json());
+				if (dataMapel) {
+					setMapelList(dataMapel);
+				}
 			} catch (error) {
 				console.error('Error fetching data:', error);
 			} finally {
@@ -55,34 +54,30 @@ export default function RiwayatNilaiPage() {
 		const fetchTugas = async () => {
 			setLoading(true);
 			try {
-				const params = new URLSearchParams({
-					kelas: namaKelas,
-				});
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const role = userData?.role;
+				const userId = userData?.id_user;
+
+				let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, mapel, tanggal, kelas').eq('kelas', namaKelas);
 
 				if (selectedMapel) {
-					params.append('mapel', selectedMapel);
+					query = query.eq('mapel', selectedMapel);
 				}
 
-				const response = await fetch(`/api/nilai?${params}`);
-				const data = await response.json();
+				if (role === 'Guru' && userId) {
+					query = query.eq('guru_id', userId);
+				}
 
-				// Filter berdasarkan bulan dan tahun
-				const filtered = data.filter((tugas) => {
+				const { data } = await query;
+				
+				const filtered = (data || []).filter((tugas) => {
 					const tanggalTugas = new Date(tugas.tanggal);
 					return tanggalTugas.getMonth() === currentMonth && tanggalTugas.getFullYear() === currentYear;
 				});
 
-				// Group by tugas_id dan ambil data pertama untuk setiap grup
-				const tugasMap = new Map();
-				filtered.forEach((tugas) => {
-					if (!tugasMap.has(tugas.tugas_id)) {
-						tugasMap.set(tugas.tugas_id, tugas);
-					}
-				});
-
-				// Convert ke array dan sort by tanggal
-				const uniqueTugas = Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
-
+				const uniqueTugas = filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
 				setTugasList(uniqueTugas);
 			} catch (error) {
 				console.error('Error fetching tugas:', error);

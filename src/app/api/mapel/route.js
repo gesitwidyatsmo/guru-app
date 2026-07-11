@@ -1,120 +1,137 @@
-import { getSheet } from '@/lib/sheets'; // pastikan path dan fungsi sudah benar
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 export async function GET(request) {
-	const doc = await getSheet();
-	// Pastikan tab Google Sheets namanya MASTER_MAPEL (huruf besar!)
-	const sheet = doc.sheetsByTitle['MASTER_MAPEL'];
-	const role = request.headers.get('x-user-role');
-	const userId = request.headers.get('x-user-id');
-	const { searchParams } = new URL(request.url);
-	const showAll = searchParams.get('all') === 'true';
+	try {
+		const supabase = await createClient();
+		const role = request.headers.get('x-user-role');
+		const userId = request.headers.get('x-user-id');
+		const { searchParams } = new URL(request.url);
+		const showAll = searchParams.get('all') === 'true';
 
-	let allowedMapels = null;
-	if (showAll || role === 'Admin') {
-		allowedMapels = null;
-	} else if (role === 'Guru' && userId) {
-		const kbmSheet = doc.sheetsByTitle['GURU_KBM'];
-		if (kbmSheet) {
-			const kbmRows = await kbmSheet.getRows();
-			const list = kbmRows.filter((r) => String(r.get('id_user')) === String(userId)).map((r) => r.get('mapel'));
-			allowedMapels = [...new Set(list)];
+		let allowedMapels = null;
+
+		if (showAll || role === 'Admin') {
+			allowedMapels = null; // Semua mapel
+		} else if (role === 'Guru' && userId) {
+			const { data: kbmData } = await supabase
+				.from('guru_kbm')
+				.select('mapel')
+				.eq('id_user', userId);
+			
+			if (kbmData) {
+				allowedMapels = [...new Set(kbmData.map(r => r.mapel))];
+			} else {
+				allowedMapels = [];
+			}
 		} else {
 			allowedMapels = [];
 		}
-	} else if (role !== 'Admin') {
-		allowedMapels = [];
-	}
 
-	const rows = await sheet.getRows();
+		let query = supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true });
 
-	// Ubah data sheet menjadi array objek { id, mapel }
-	const data = [];
-	for (const row of rows) {
-		const namaMapel = row.get('mapel');
-		if (allowedMapels === null || allowedMapels.includes(namaMapel)) {
-			data.push({
-				id: row.get('id'),
-				mapel: namaMapel,
-			});
+		if (allowedMapels !== null) {
+			if (allowedMapels.length === 0) {
+				return NextResponse.json([]); // No mapel allowed
+			}
+			query = query.in('mapel', allowedMapels);
 		}
-	}
 
-	return Response.json(data);
+		const { data: mapelData, error } = await query;
+
+		if (error) throw error;
+
+		return NextResponse.json(mapelData);
+	} catch (error) {
+		console.error('Error GET Mapel:', error);
+		return NextResponse.json({ error: error.message }, { status: 500 });
+	}
 }
 
-// Fungsi untuk generate id baru (sederhana)
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
 export async function POST(request) {
-	if (request.headers.get('x-user-role') === 'Guru') {
-		return Response.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	if (request.headers.get('x-user-role') !== 'Admin') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
-	const body = await request.json();
-	const { mapel } = body; // Ambil properti dari form
+	try {
+		const body = await request.json();
+		const { mapel } = body;
 
-	if (!mapel) {
-		return Response.json({ error: 'Nama mapel wajib diisi' }, { status: 400 });
+		if (!mapel) {
+			return NextResponse.json({ error: 'Nama mapel wajib diisi' }, { status: 400 });
+		}
+
+		const supabase = await createClient();
+		
+		const { error } = await supabase.from('mapel').insert({
+			id: generateId(),
+			mapel,
+		});
+
+		if (error) {
+			if (error.code === '23505') {
+				return NextResponse.json({ error: 'Nama mapel sudah ada' }, { status: 409 });
+			}
+			throw error;
+		}
+
+		return NextResponse.json({ success: true });
+	} catch (error) {
+		console.error('Error POST Mapel:', error);
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
-
-	const doc = await getSheet();
-	const sheet = doc.sheetsByTitle['MASTER_MAPEL'];
-
-	// Buat baris baru
-	await sheet.addRow({
-		id: generateId(),
-		mapel,
-	});
-
-	return Response.json({ success: true });
 }
 
 export async function PUT(request) {
-	if (request.headers.get('x-user-role') === 'Guru') {
-		return Response.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	if (request.headers.get('x-user-role') !== 'Admin') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
-	const body = await request.json();
-	const { id, mapel } = body;
+	try {
+		const body = await request.json();
+		const { id, mapel } = body;
 
-	if (!id || !mapel) {
-		return Response.json({ error: 'ID dan nama mapel wajib diisi' }, { status: 400 });
-	}
+		if (!id || !mapel) {
+			return NextResponse.json({ error: 'ID dan nama mapel wajib diisi' }, { status: 400 });
+		}
 
-	const doc = await getSheet();
-	const sheet = doc.sheetsByTitle['MASTER_MAPEL'];
-	const rows = await sheet.getRows();
+		const supabase = await createClient();
+		
+		const { error } = await supabase.from('mapel').update({ mapel }).eq('id', id);
 
-	// Cari row dengan id yang cocok
-	const row = rows.find((r) => r.get('id') === id);
+		if (error) {
+			if (error.code === '23505') {
+				return NextResponse.json({ error: 'Nama mapel sudah ada' }, { status: 409 });
+			}
+			throw error;
+		}
 
-	if (row) {
-		row.set('mapel', mapel);
-		await row.save();
-		return Response.json({ success: true });
-	} else {
-		return Response.json({ error: 'ID tidak ditemukan' }, { status: 404 });
+		return NextResponse.json({ success: true });
+	} catch (error) {
+		console.error('Error PUT Mapel:', error);
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
 }
 
 export async function DELETE(request) {
-	if (request.headers.get('x-user-role') === 'Guru') {
-		return Response.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	if (request.headers.get('x-user-role') !== 'Admin') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
-	const { id } = await request.json();
-	if (!id) {
-		return Response.json({ error: 'ID wajib diisi.' }, { status: 400 });
-	}
+	try {
+		const { id } = await request.json();
+		if (!id) {
+			return NextResponse.json({ error: 'ID wajib diisi.' }, { status: 400 });
+		}
 
-	const doc = await getSheet();
-	const sheet = doc.sheetsByTitle['MASTER_MAPEL'];
-	const rows = await sheet.getRows();
+		const supabase = await createClient();
+		
+		const { error } = await supabase.from('mapel').delete().eq('id', id);
 
-	// Cari dan hapus row
-	const row = rows.find((r) => r.get('id') === id);
+		if (error) throw error;
 
-	if (row) {
-		await row.delete();
-		return Response.json({ success: true });
-	} else {
-		return Response.json({ error: 'ID tidak ditemukan' }, { status: 404 });
+		return NextResponse.json({ success: true });
+	} catch (error) {
+		console.error('Error DELETE Mapel:', error);
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
 }

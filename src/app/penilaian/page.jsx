@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 export default function PenilaianPage() {
 	const router = useRouter();
@@ -37,21 +38,21 @@ export default function PenilaianPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resMapel, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/siswa')]);
+				const supabase = createClient();
+				const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
+					fetch('/api/kelas?all=false').then(res => res.json()),
+					fetch('/api/mapel?all=false').then(res => res.json()),
+					fetch('/api/siswa?status=Aktif').then(res => res.json())
+				]);
 
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const dataMapel = resMapel.ok ? await resMapel.json() : [];
-				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+				setKelasList(dataKelas || []);
+				setMapelList(dataMapel || []);
+				setSiswaList(dataSiswa || []);
 
-				setKelasList(dataKelas);
-				setMapelList(dataMapel);
-				setSiswaList(dataSiswa.filter((s) => s.status === 'Aktif'));
-
-				// Set default selection
-				if (dataKelas.length > 0) {
+				if (dataKelas && dataKelas.length > 0) {
 					setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
 				}
-				if (dataMapel.length > 0) {
+				if (dataMapel && dataMapel.length > 0) {
 					setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
 				}
 			} catch (err) {
@@ -82,28 +83,41 @@ export default function PenilaianPage() {
 		const fetchTugas = async () => {
 			try {
 				setLoadingTugas(true);
-				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
-					// Grouping data raw menjadi daftar tugas unik
-					const tugasMap = new Map();
-					data.forEach((item) => {
-						if (!tugasMap.has(item.tugas_id)) {
-							tugasMap.set(item.tugas_id, {
-								tugas_id: item.tugas_id,
-								judul: item.kategori,
-								tanggal: item.tanggal,
-								kelas: item.kelas,
-								mapel: item.mapel,
-								jumlahSiswa: 1,
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const userId = userData?.id_user;
+				const role = userData?.role;
+
+				let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);
+				if (role === 'Guru' && userId) {
+					query = query.eq('guru_id', userId);
+				}
+
+				const { data: tugasData } = await query;
+				
+				if (tugasData) {
+					const tugasIds = tugasData.map(t => t.tugas_id);
+					let counts = {};
+					if (tugasIds.length > 0) {
+						const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+						if (siswaData) {
+							siswaData.forEach(s => {
+								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
 							});
-						} else {
-							tugasMap.get(item.tugas_id).jumlahSiswa++;
 						}
-					});
-					// Sort descending by date
-					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+					}
+
+					const mappedTugas = tugasData.map(t => ({
+						tugas_id: t.tugas_id,
+						judul: t.kategori,
+						tanggal: t.tanggal,
+						kelas: t.kelas,
+						mapel: t.mapel,
+						jumlahSiswa: counts[t.tugas_id] || 0
+					}));
+
+					setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 				}
 			} catch (err) {
 				console.error('Error fetching tugas:', err);
@@ -128,27 +142,26 @@ export default function PenilaianPage() {
 
 		const loadNilaiTugas = async () => {
 			try {
-				const url = `/api/nilai?tugasId=${selectedTugasId}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
-					if (data.length > 0) {
-						setJudul(data[0].kategori);
-						setType(data[0].type || 'Formatif');
-						setDeskripsi(data[0].deskripsi || '');
-						setTanggal(data[0].tanggal);
+				const supabase = createClient();
+				
+				const { data: headerData } = await supabase.from('nilai_tugas').select('*').eq('tugas_id', selectedTugasId).single();
+				if (headerData) {
+					setJudul(headerData.kategori);
+					setType(headerData.type || 'Formatif');
+					setDeskripsi(headerData.deskripsi || '');
+					setTanggal(headerData.tanggal);
+				}
 
-						// Track siswa IDs yang sudah ada
-						const existingIds = data.map((item) => item.siswa_id);
-						setInitialSiswaIds(existingIds);
+				const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai').eq('tugas_id', selectedTugasId);
+				if (siswaData) {
+					const existingIds = siswaData.map((item) => item.siswa_id);
+					setInitialSiswaIds(existingIds);
 
-						// Map nilai ke state object
-						const nilaiMap = {};
-						data.forEach((item) => {
-							nilaiMap[item.siswa_id] = item.nilai;
-						});
-						setNilai(nilaiMap);
-					}
+					const nilaiMap = {};
+					siswaData.forEach((item) => {
+						nilaiMap[item.siswa_id] = item.nilai;
+					});
+					setNilai(nilaiMap);
 				}
 			} catch (err) {
 				console.error('Error loading nilai tugas:', err);
@@ -197,23 +210,21 @@ export default function PenilaianPage() {
 	const refreshCurrentTugasData = async (tugasId) => {
 		if (!tugasId) return;
 		try {
-			const url = `/api/nilai?tugasId=${tugasId}`;
-			const res = await fetch(url);
-			if (!res.ok) return;
-			const data = await res.json();
-			if (!Array.isArray(data) || data.length === 0) return;
+			const supabase = createClient();
+			const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai').eq('tugas_id', tugasId);
+			if (siswaData) {
+				const existingIds = siswaData.map((item) => item.siswa_id);
+				setInitialSiswaIds(existingIds);
 
-			const existingIds = data.map((item) => item.siswa_id);
-			setInitialSiswaIds(existingIds);
-
-			const nilaiMap = {};
-			data.forEach((item) => {
-				nilaiMap[item.siswa_id] = item.nilai;
-			});
-			setNilai((prev) => ({
-				...prev,
-				...nilaiMap,
-			}));
+				const nilaiMap = {};
+				siswaData.forEach((item) => {
+					nilaiMap[item.siswa_id] = item.nilai;
+				});
+				setNilai((prev) => ({
+					...prev,
+					...nilaiMap,
+				}));
+			}
 		} catch (err) {
 			console.error('Error refreshing current tugas data:', err);
 		}
@@ -277,7 +288,7 @@ export default function PenilaianPage() {
 
 		// Jika tidak ada koneksi, simpan ke antrian lokal
 		if (!navigator.onLine) {
-			addToQueue('nilai', payload, 'POST', '/api/nilai');
+			addToQueue('nilai', payload, 'POST', '/api/nilai_local_queue');
 			await Swal.fire({
 				icon: 'info',
 				title: 'Disimpan Sementara',
@@ -290,31 +301,63 @@ export default function PenilaianPage() {
 		}
 
 		try {
-			// POST ke API create baru
-			const res = await fetch('/api/nilai', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const userId = userData?.id_user;
+			const role = userData?.role;
+
+			// Validate
+			if (role === 'Guru' && userId) {
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', selectedKelas).eq('mapel', selectedMapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak mengajar mapel ini di kelas tersebut.');
+			}
+
+			// Generate ID
+			const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+			const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert({
+				tugas_id: tugasId,
+				guru_id: userId,
+				kategori: judul,
+				type,
+				deskripsi,
+				kelas: selectedKelas,
+				mapel: selectedMapel,
+				tanggal
+			});
+			if (insertHeaderError) throw insertHeaderError;
+
+			// Insert scores
+			const validGrades = payload.nilai.filter(n => n.nilai && String(n.nilai).trim() !== '' && String(n.nilai) !== '0').map(n => {
+				const siswa = getSiswaById(n.siswa_id);
+				return {
+					tugas_id: tugasId,
+					siswa_id: n.siswa_id,
+					nama_siswa: siswa?.nama_lengkap || 'Unknown',
+					nilai: n.nilai
+				};
 			});
 
-			const data = await res.json();
-			if (res.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil!',
-					text: 'Tugas baru berhasil dibuat',
-					timer: 1500,
-					showConfirmButton: false,
-				});
-
-				// Refresh daftar tugas dan pilih tugas yang baru dibuat
-				const tugasBaruId = data.tugasId;
-				// Trigger refetch daftar tugas via dependency effect
-				// Tapi kita force select tugas baru agar masuk mode edit
-				setSelectedTugasId(tugasBaruId);
-			} else {
-				throw new Error(data.error || 'Gagal menyimpan');
+			if (validGrades.length > 0) {
+				const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
+				if (insertScoreError) {
+					await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
+					throw insertScoreError;
+				}
 			}
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil!',
+				text: 'Tugas baru berhasil dibuat',
+				timer: 1500,
+				showConfirmButton: false,
+			});
+
+			// Trigger refetch daftar tugas via dependency effect
+			// Tapi kita force select tugas baru agar masuk mode edit
+			setSelectedTugasId(tugasId);
 		} catch (error) {
 			console.error(error);
 			Swal.fire({
@@ -371,37 +414,47 @@ export default function PenilaianPage() {
 
 		if (newNilai) {
 			try {
-				// Gunakan method PUT untuk update
-				const payload = {
-					tugasId: selectedTugasId,
-					judul: judul, // Kirim judul saat ini (bisa diedit di header)
-					type: type,
-					deskripsi: deskripsi,
-					kelas: selectedKelas,
-					mapel: selectedMapel,
-					tanggal: tanggal,
-					nilai: [{ siswa_id: siswaId, nilai: newNilai }],
-				};
+				const supabase = createClient();
+				
+				// Validate
+				const { data: { user } } = await supabase.auth.getUser();
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const role = userData?.role;
+				const userId = userData?.id_user;
 
-				const res = await fetch('/api/nilai', {
-					method: 'PUT',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
-				});
+				const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
+				if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
 
-				if (res.ok) {
-					Swal.fire({
-						icon: 'success',
-						title: 'Tersimpan',
-						text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${newNilai}`,
-						timer: 1000,
-						showConfirmButton: false,
-					});
-					// Refresh data lokal
-					refreshCurrentTugasData(selectedTugasId);
-				} else {
-					throw new Error('Gagal update nilai');
+				if (role === 'Guru' && userId) {
+					if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+						throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
+					}
+					const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+					if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
 				}
+
+				// Check existing
+				const { data: existingNilai } = await supabase.from('nilai_siswa').select('id').eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId).single();
+				if (existingNilai) {
+					await supabase.from('nilai_siswa').update({ nilai: newNilai }).eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId);
+				} else {
+					await supabase.from('nilai_siswa').insert({
+						tugas_id: selectedTugasId,
+						siswa_id: siswaId,
+						nama_siswa: siswa.nama_lengkap,
+						nilai: newNilai
+					});
+				}
+
+				Swal.fire({
+					icon: 'success',
+					title: 'Tersimpan',
+					text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${newNilai}`,
+					timer: 1000,
+					showConfirmButton: false,
+				});
+				// Refresh data lokal
+				refreshCurrentTugasData(selectedTugasId);
 			} catch (err) {
 				console.error(err);
 				Swal.fire('Error', 'Gagal mengupdate nilai', 'error');
@@ -437,54 +490,72 @@ export default function PenilaianPage() {
 
 		setSaving(true);
 		try {
-			const res = await fetch(`/api/nilai?tugasId=${selectedTugasId}`, {
-				method: 'DELETE',
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const role = userData?.role;
+			const userId = userData?.id_user;
+
+			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
+			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
+
+			if (role === 'Guru' && userId) {
+				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+					throw new Error('Akses Ditolak: Dilarang menghapus riwayat penilaian kepunyaan rekan Guru Anda.');
+				}
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak berhak menghapus tugas dari kelas eksternal.');
+			}
+
+			const { error: deleteError } = await supabase.from('nilai_tugas').delete().eq('tugas_id', selectedTugasId);
+			if (deleteError) throw deleteError;
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil Dihapus!',
+				text: `Data nilai berhasil dihapus`,
+				timer: 1500,
+				showConfirmButton: false,
 			});
 
-			const data = await res.json();
+			// Reset ke mode "Tugas Baru"
+			setSelectedTugasId('');
+			setJudul('');
+			setType('Formatif');
+			setDeskripsi('');
+			setNilai({});
+			setInitialSiswaIds([]);
+			setTanggal(new Date().toISOString().slice(0, 10));
 
-			if (res.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil Dihapus!',
-					text: `${data.count} data nilai berhasil dihapus`,
-					timer: 1500,
-					showConfirmButton: false,
-				});
+			// Refresh daftar tugas
+			let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);
+			if (role === 'Guru' && userId) {
+				query = query.eq('guru_id', userId);
+			}
 
-				// Reset ke mode "Tugas Baru"
-				setSelectedTugasId('');
-				setJudul('');
-				setType('Formatif');
-				setDeskripsi('');
-				setNilai({});
-				setInitialSiswaIds([]);
-				setTanggal(new Date().toISOString().slice(0, 10));
-
-				// Refresh daftar tugas
-				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const refreshRes = await fetch(url);
-				if (refreshRes.ok) {
-					const refreshData = await refreshRes.json();
-					const tugasMap = new Map();
-					refreshData.forEach((item) => {
-						if (!tugasMap.has(item.tugas_id)) {
-							tugasMap.set(item.tugas_id, {
-								tugas_id: item.tugas_id,
-								judul: item.kategori,
-								tanggal: item.tanggal,
-								kelas: item.kelas,
-								mapel: item.mapel,
-								jumlahSiswa: 1,
-							});
-						} else {
-							tugasMap.get(item.tugas_id).jumlahSiswa++;
-						}
-					});
-					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+			const { data: tugasData } = await query;
+			if (tugasData) {
+				const tugasIds = tugasData.map(t => t.tugas_id);
+				let counts = {};
+				if (tugasIds.length > 0) {
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+					if (siswaData) {
+						siswaData.forEach(s => {
+							counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+						});
+					}
 				}
-			} else {
-				throw new Error(data.error || 'Gagal menghapus tugas');
+
+				const mappedTugas = tugasData.map(t => ({
+					tugas_id: t.tugas_id,
+					judul: t.kategori,
+					tanggal: t.tanggal,
+					kelas: t.kelas,
+					mapel: t.mapel,
+					jumlahSiswa: counts[t.tugas_id] || 0
+				}));
+
+				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 			}
 		} catch (error) {
 			console.error(error);
@@ -509,61 +580,68 @@ export default function PenilaianPage() {
 
 		setSaving(true);
 		try {
-			const payload = {
-				tugasId: selectedTugasId,
-				judul: judul,
-				type: type,
-				deskripsi: deskripsi,
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				tanggal: tanggal,
-				nilai: [], // Kosongkan nilai agar backend hanya update judul/tanggal
-			};
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const role = userData?.role;
+			const userId = userData?.id_user;
 
-			const res = await fetch('/api/nilai', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
+			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
+			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
+
+			if (role === 'Guru' && userId) {
+				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+					throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
+				}
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
+			}
+
+			const updates = { kategori: judul, tanggal: tanggal, deskripsi, type };
+			const { error: updateError } = await supabase.from('nilai_tugas').update(updates).eq('tugas_id', selectedTugasId);
+			if (updateError) throw updateError;
+
+			const Toast = Swal.mixin({
+				toast: true,
+				position: 'top-end',
+				showConfirmButton: false,
+				timer: 3000,
+				timerProgressBar: true,
+			});
+			Toast.fire({
+				icon: 'success',
+				title: 'Informasi tugas diperbarui',
 			});
 
-			if (res.ok) {
-				const Swal = require('sweetalert2');
-				const Toast = Swal.mixin({
-					toast: true,
-					position: 'top-end',
-					showConfirmButton: false,
-					timer: 3000,
-					timerProgressBar: true,
-				});
-				Toast.fire({
-					icon: 'success',
-					title: 'Informasi tugas diperbarui',
-				});
+			// Refresh sidebar
+			let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);
+			if (role === 'Guru' && userId) {
+				query = query.eq('guru_id', userId);
+			}
 
-				// Refresh sidebar untuk judul/tanggal
-				const url = `/api/nilai?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-				const refreshRes = await fetch(url);
-				if (refreshRes.ok) {
-					const refreshData = await refreshRes.json();
-					const tugasMap = new Map();
-					refreshData.forEach((item) => {
-						if (!tugasMap.has(item.tugas_id)) {
-							tugasMap.set(item.tugas_id, {
-								tugas_id: item.tugas_id,
-								judul: item.kategori,
-								tanggal: item.tanggal,
-								kelas: item.kelas,
-								mapel: item.mapel,
-								jumlahSiswa: 1,
-							});
-						} else {
-							tugasMap.get(item.tugas_id).jumlahSiswa++;
-						}
-					});
-					setDaftarTugas(Array.from(tugasMap.values()).sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+			const { data: tugasData } = await query;
+			if (tugasData) {
+				const tugasIds = tugasData.map(t => t.tugas_id);
+				let counts = {};
+				if (tugasIds.length > 0) {
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+					if (siswaData) {
+						siswaData.forEach(s => {
+							counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+						});
+					}
 				}
-			} else {
-				throw new Error('Gagal update informasi tugas');
+
+				const mappedTugas = tugasData.map(t => ({
+					tugas_id: t.tugas_id,
+					judul: t.kategori,
+					tanggal: t.tanggal,
+					kelas: t.kelas,
+					mapel: t.mapel,
+					jumlahSiswa: counts[t.tugas_id] || 0
+				}));
+
+				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 			}
 		} catch (err) {
 			console.error(err);

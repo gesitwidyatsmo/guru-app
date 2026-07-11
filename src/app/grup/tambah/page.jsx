@@ -6,6 +6,7 @@ import Loader from '@/app/components/loading';
 import DragDropBoard from '@/app/components/DragDropBoard';
 import ButtonBack from '@/app/components/button/ButtonBack';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function CreateGroupPage() {
 	const router = useRouter();
@@ -36,15 +37,14 @@ export default function CreateGroupPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const res = await fetch('/api/kelas');
-				const resMapel = await fetch('/api/mapel');
-				if (!res.ok || !resMapel.ok) throw new Error('Gagal mengambil data kelas');
+				const supabase = createClient();
+				const [{ data: dataKelas }, { data: mapelData }] = await Promise.all([
+					supabase.from('kelas').select('*'),
+					supabase.from('mapel').select('*')
+				]);
 
-				const data = await res.json();
-				const mapelData = await resMapel.json();
-
-				setKelasList(data);
-				setMapelList(mapelData);
+				setKelasList(dataKelas || []);
+				setMapelList(mapelData || []);
 			} catch (err) {
 				console.error('Error fetching kelas:', err);
 			} finally {
@@ -63,42 +63,70 @@ export default function CreateGroupPage() {
 		const fetchSiswa = async () => {
 			setLoading(true);
 			try {
-				// Gunakan rekap untuk menyedot info .avg secara eager
-				const mapelQuery = form.mapel ? `&mapel=${encodeURIComponent(form.mapel)}` : '';
-				const url = `/api/nilai/rekap?kelas=${encodeURIComponent(form.kelas)}&bulan=all${mapelQuery}`;
-				console.log('Fetching siswa from:', url);
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				const { data: userData } = await supabase.from('users').select('id_user, role').eq('auth_id', user?.id).single();
+				const userId = userData?.id_user;
+				const role = userData?.role;
 
-				const res = await fetch(url);
+				// Fetch siswa
+				const { data: siswaDataRaw } = await supabase.from('siswa').select('id, nis, nama_lengkap, status, kelas').eq('kelas', form.kelas).eq('status', 'Aktif');
+				let siswaData = siswaDataRaw || [];
 
-				if (!res.ok) {
-					const errorData = await res.json();
-					throw new Error(errorData.error || 'Gagal mengambil data siswa');
-				}
-
-				const data = await res.json();
-				// data berisi object rekapan, kita ambil murni data.siswa nya
-				if (!data.siswa || !Array.isArray(data.siswa)) {
-					throw new Error('Format rekap siswa tidak valid');
-				}
-
-				// Fetch Poin Aktif
-				const resPoin = await fetch(`/api/poin?kelas=${encodeURIComponent(form.kelas)}`);
-				const dataPoin = resPoin.ok ? await resPoin.json() : [];
-
+				// Fetch poin aktif
+				const { data: poinData } = await supabase.from('poin_siswa').select('siswa_id, tipe, poin').eq('kelas', form.kelas);
 				const poinMap = {};
-				dataPoin.forEach((p) => {
+				(poinData || []).forEach(p => {
 					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = 0;
 					if (p.tipe === 'positif') poinMap[p.siswa_id] += p.poin || 0;
 					if (p.tipe === 'negatif') poinMap[p.siswa_id] -= p.poin || 0;
 				});
 
-				const siswaDataUpdated = data.siswa.map((s) => ({
-					...s,
-					netPoin: poinMap[s.id] || 0,
-				}));
+				// Fetch tugas (to get the list of assignments)
+				let tugasQuery = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, mapel').eq('kelas', form.kelas);
+				if (form.mapel) tugasQuery = tugasQuery.eq('mapel', form.mapel);
+				if (role === 'Guru' && userId) tugasQuery = tugasQuery.eq('guru_id', userId);
+				const { data: tugasData } = await tugasQuery;
+				const tugasList = tugasData || [];
+
+				// Fetch nilai
+				const tugasIds = tugasList.map(t => t.tugas_id);
+				let nilaiMap = {};
+				let countNilaiMap = {};
+				if (tugasIds.length > 0) {
+					const { data: allNilai } = await supabase.from('nilai_siswa').select('siswa_id, tugas_id, nilai').in('tugas_id', tugasIds);
+					if (allNilai) {
+						allNilai.forEach(n => {
+							if (!nilaiMap[n.siswa_id]) nilaiMap[n.siswa_id] = {};
+							nilaiMap[n.siswa_id][n.tugas_id] = parseFloat(n.nilai) || 0;
+
+							if (!countNilaiMap[n.siswa_id]) countNilaiMap[n.siswa_id] = 0;
+							countNilaiMap[n.siswa_id]++;
+						});
+					}
+				}
+
+				const siswaDataUpdated = siswaData.map(s => {
+					let total = 0;
+					let avg = 0;
+					const nMap = nilaiMap[s.id] || {};
+					const cCount = countNilaiMap[s.id] || 0;
+					if (tugasList.length > 0) {
+						total = Object.values(nMap).reduce((sum, val) => sum + val, 0);
+						avg = total / tugasList.length; // as per getScoreAvg logic
+					}
+
+					return {
+						...s,
+						netPoin: poinMap[s.id] || 0,
+						nilai: nMap,
+						countNilai: cCount,
+						avg: avg
+					};
+				});
 
 				setSiswaList(siswaDataUpdated);
-				setTugasList(data.tugasList || []);
+				setTugasList(tugasList);
 
 				if (siswaDataUpdated.length === 0) {
 					Swal.fire('Informasi', `Tidak ada siswa aktif di kelas ${form.kelas}`, 'info');

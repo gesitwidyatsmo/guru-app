@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Loader from '@/app/components/loading';
 import SectionHeader from '@/app/components/SectionHeader';
 import ButtonBack from '@/app/components/button/ButtonBack';
+import { createClient } from '@/utils/supabase/client';
 
 // --- Ikon SVG (Sama seperti sebelumnya) ---
 const IconCalendar = ({ className }) => (
@@ -148,21 +149,40 @@ export default function RiwayatAbsensiSiswaPage() {
 		const run = async () => {
 			try {
 				setLoading(true);
+				const supabase = createClient();
 
 				// 1. Fetch Data Siswa
-				const siswaRes = await fetch('/api/siswa');
-				const siswaList = await siswaRes.json();
-				const found = Array.isArray(siswaList) ? siswaList.find((x) => String(x.id) === String(id)) : null;
-				setSiswa(found || null);
+				const { data: siswaData } = await supabase.from('siswa').select('*').eq('id', id).single();
+				setSiswa(siswaData || null);
 
-				// 2. Fetch Absensi Mapel (Existing)
-				const mapelReq = fetch(`/api/riwayat-absensi-mapel?siswa_id=${encodeURIComponent(String(id))}`).then((res) => res.json());
+				// 2. Fetch Absensi Mapel
+				const { data: mapelDataRaw } = await supabase.from('absensi_mapel_siswa').select(`
+					status,
+					absensi_mapel!inner(sesi_id, tanggal, jam_ke, kelas, mapel)
+				`).eq('siswa_id', id);
+				
+				const cleanMapel = (mapelDataRaw || []).map((r) => ({
+					pertemuan_id: r.absensi_mapel.sesi_id,
+					tanggal: String(r.absensi_mapel.tanggal).slice(0, 10),
+					jam_ke: r.absensi_mapel.jam_ke,
+					kelas: r.absensi_mapel.kelas,
+					mapel: r.absensi_mapel.mapel,
+					status: r.status,
+				}));
 
-				// 3. Fetch Absensi Kelas (NEW)
-				const kelasReq = fetch(`/api/riwayat-absensi-kelas?siswa_id=${encodeURIComponent(String(id))}`).then((res) => res.json());
-				const [mapelData, kelasData] = await Promise.all([mapelReq, kelasReq]);
-				const cleanMapel = Array.isArray(mapelData) ? mapelData : [];
-				const cleanKelas = Array.isArray(kelasData) ? kelasData.map((item) => ({ ...item, mapel: '-' })) : [];
+				// 3. Fetch Absensi Kelas
+				const { data: kelasDataRaw } = await supabase.from('absensi_harian_siswa').select(`
+					id, status, keterangan, absensi_harian!inner(tanggal)
+				`).eq('siswa_id', id);
+
+				const cleanKelas = (kelasDataRaw || []).map((r) => ({
+					id: r.id,
+					tanggal: String(r.absensi_harian.tanggal).slice(0, 10),
+					status: r.status,
+					keterangan: r.keterangan || 'Harian',
+					mapel: '-'
+				}));
+
 				const combined = [...cleanKelas, ...cleanMapel];
 				combined.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
 

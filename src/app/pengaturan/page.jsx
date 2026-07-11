@@ -5,31 +5,28 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 
-const SPREADSHEET_KEY = 'SPREADSHEET_ID';
-const SHEET_NAME_KEY = 'SHEET_NAME';
-
 export default function PengaturanPage() {
-	const [spreadsheetId, setSpreadsheetId] = useState('');
-	const [sheetName, setSheetName] = useState('');
-	const [saved, setSaved] = useState(false);
-	const [activeTab, setActiveTab] = useState('koneksi');
+	const [userRole, setUserRole] = useState(null);
+	const [activeTab, setActiveTab] = useState('tentang');
 	const [isBackingUp, setIsBackingUp] = useState(false);
 
 	useEffect(() => {
-		if (typeof window !== 'undefined') {
-			setSpreadsheetId(localStorage.getItem(SPREADSHEET_KEY) || '');
-			setSheetName(localStorage.getItem(SHEET_NAME_KEY) || '');
-		}
+		const checkRole = async () => {
+			try {
+				const resAuth = await fetch('/api/auth/me');
+				if (resAuth.ok) {
+					const dataAuth = await resAuth.json();
+					setUserRole(dataAuth.user.role);
+					if (dataAuth.user.role === 'Admin') {
+						setActiveTab('backup');
+					}
+				}
+			} catch (err) {
+				console.error(err);
+			}
+		};
+		checkRole();
 	}, []);
-
-	const handleSave = () => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(SPREADSHEET_KEY, spreadsheetId.trim());
-			localStorage.setItem(SHEET_NAME_KEY, sheetName.trim());
-		}
-		setSaved(true);
-		setTimeout(() => setSaved(false), 3000);
-	};
 
 	const handleBackup = async () => {
 		try {
@@ -64,7 +61,7 @@ export default function PengaturanPage() {
 		{ label: 'Nama Aplikasi', value: 'GuruApp' },
 		{ label: 'Versi', value: '1.0.0' },
 		{ label: 'Framework', value: 'Next.js 14' },
-		{ label: 'Backend', value: 'Google Sheets API' },
+		{ label: 'Backend', value: 'Supabase' },
 	];
 
 	const menuLinks = [
@@ -98,12 +95,12 @@ export default function PengaturanPage() {
 		},
 	];
 
-	const tabs = [
-		{ id: 'koneksi', label: 'Koneksi Data', emoji: '🔗' },
-		{ id: 'backup', label: 'Backup Data', emoji: '💾' },
-		{ id: 'navigasi', label: 'Navigasi', emoji: '🗺️' },
-		{ id: 'tentang', label: 'Tentang', emoji: 'ℹ️' },
-	];
+	const tabs = [];
+	if (userRole === 'Admin') {
+		tabs.push({ id: 'backup', label: 'Backup Data', emoji: '💾' });
+		tabs.push({ id: 'navigasi', label: 'Navigasi', emoji: '🗺️' });
+	}
+	tabs.push({ id: 'tentang', label: 'Tentang', emoji: 'ℹ️' });
 
 	return (
 		<main className='min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50'>
@@ -149,106 +146,8 @@ export default function PengaturanPage() {
 					))}
 				</div>
 
-				{/* TAB: Koneksi Data */}
-				{activeTab === 'koneksi' && (
-					<div className='bg-white rounded-2xl shadow-xl border border-gray-100 p-6'>
-						<div className='flex items-center gap-3 mb-6'>
-							<div className='w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white'>
-								<svg
-									className='w-5 h-5'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
-									/>
-								</svg>
-							</div>
-							<div>
-								<h2 className='text-lg font-bold text-gray-800'>Koneksi Google Sheets</h2>
-								<p className='text-sm text-gray-500'>Konfigurasi sumber data aplikasi</p>
-							</div>
-						</div>
-
-						<div className='space-y-4'>
-							<div>
-								<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Spreadsheet ID</label>
-								<input
-									type='text'
-									value={spreadsheetId}
-									onChange={(e) => setSpreadsheetId(e.target.value)}
-									placeholder='Contoh: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms'
-									className='w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm font-mono bg-gray-50'
-								/>
-								<p className='text-xs text-gray-400 mt-1'>
-									Temukan ID di URL Google Sheets Anda:{' '}
-									<code className='bg-gray-100 px-1 rounded'>
-										docs.google.com/spreadsheets/d/<span className='text-indigo-500 font-bold'>[ID]</span>/edit
-									</code>
-								</p>
-							</div>
-
-							<div>
-								<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Nama Sheet (opsional)</label>
-								<input
-									type='text'
-									value={sheetName}
-									onChange={(e) => setSheetName(e.target.value)}
-									placeholder='Contoh: Data Siswa'
-									className='w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm bg-gray-50'
-								/>
-							</div>
-
-							<div className='pt-2'>
-								<button
-									onClick={handleSave}
-									className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 flex items-center justify-center gap-2 ${
-										saved ? 'bg-green-500 scale-[0.99]' : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:shadow-lg hover:scale-[1.01]'
-									}`}>
-									{saved ? (
-										<>
-											<svg
-												className='w-5 h-5'
-												fill='none'
-												stroke='currentColor'
-												viewBox='0 0 24 24'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M5 13l4 4L19 7'
-												/>
-											</svg>
-											Tersimpan!
-										</>
-									) : (
-										<>
-											<svg
-												className='w-5 h-5'
-												fill='none'
-												stroke='currentColor'
-												viewBox='0 0 24 24'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4'
-												/>
-											</svg>
-											Simpan Pengaturan
-										</>
-									)}
-								</button>
-							</div>
-						</div>
-					</div>
-				)}
-
 				{/* TAB: Backup Data */}
-				{activeTab === 'backup' && (
+				{activeTab === 'backup' && userRole === 'Admin' && (
 					<div className='bg-white rounded-2xl shadow-xl border border-gray-100 p-6 animate-in fade-in slide-in-from-bottom-2'>
 						<div className='flex items-center gap-3 mb-6'>
 							<div className='w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white'>
@@ -312,7 +211,7 @@ export default function PengaturanPage() {
 				)}
 
 				{/* TAB: Navigasi */}
-				{activeTab === 'navigasi' && (
+				{activeTab === 'navigasi' && userRole === 'Admin' && (
 					<div className='bg-white rounded-2xl shadow-xl border border-gray-100 p-6'>
 						<div className='flex items-center gap-3 mb-6'>
 							<div className='w-10 h-10 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white'>

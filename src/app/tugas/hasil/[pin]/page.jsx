@@ -16,6 +16,37 @@ export default function HasilTugas({ params }) {
 	// Untuk modal teks panjang
 	const [selectedText, setSelectedText] = useState(null);
 
+	// Untuk grading manual
+	const [savingNilaiId, setSavingNilaiId] = useState(null);
+
+	const handleSaveNilai = async (id, nilai, siswa_id, kelas) => {
+		setSavingNilaiId(id);
+		try {
+			const res = await fetch('/api/tugas-online/nilai', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id_pengumpulan: id,
+					pin: pin,
+					siswa_id: siswa_id,
+					kelas: kelas,
+					nilai: nilai
+				})
+			});
+			const data = await res.json();
+			if (!res.ok) {
+				console.error(data.error);
+			} else {
+				// Update state locally
+				setSubmissions(prev => prev.map(s => s.id === id ? { ...s, nilai: nilai } : s));
+			}
+		} catch (e) {
+			console.error(e);
+		} finally {
+			setSavingNilaiId(null);
+		}
+	};
+
 	useEffect(() => {
 		const fetchHasil = async () => {
 			try {
@@ -89,7 +120,7 @@ export default function HasilTugas({ params }) {
 										<th className="p-4 font-semibold">Nama Siswa</th>
 										<th className="p-4 font-semibold">Kelas</th>
 										<th className="p-4 font-semibold">Waktu Kumpul</th>
-										{submissions.some(s => s.nilai) && <th className="p-4 font-semibold text-center w-24 text-indigo-700">Nilai</th>}
+										<th className="p-4 font-semibold text-center w-32 text-indigo-700">Nilai</th>
 										<th className="p-4 font-semibold">Jawaban Teks</th>
 										<th className="p-4 font-semibold text-center w-32">File Lampiran</th>
 									</tr>
@@ -112,17 +143,27 @@ export default function HasilTugas({ params }) {
 												<Clock className="w-4 h-4 text-gray-400" />
 												{sub.waktu}
 											</td>
-											{submissions.some(s => s.nilai) && (
-												<td className="p-4 text-center">
-													{sub.nilai ? (
-														<span className="inline-flex items-center justify-center font-bold text-lg text-indigo-700 bg-indigo-50 w-12 h-12 rounded-xl">
-															{sub.nilai}
-														</span>
-													) : (
-														<span className="text-gray-400">-</span>
+											<td className="p-4 text-center">
+												<div className="relative flex items-center justify-center">
+													<input
+														type="number"
+														min="0"
+														max="100"
+														defaultValue={sub.nilai || ''}
+														onBlur={(e) => {
+															const newVal = e.target.value;
+															if (newVal !== String(sub.nilai || '')) {
+																handleSaveNilai(sub.id, newVal, sub.siswa_id, sub.kelas);
+															}
+														}}
+														disabled={savingNilaiId === sub.id}
+														className="w-16 h-10 text-center font-bold text-lg text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all disabled:opacity-50"
+													/>
+													{savingNilaiId === sub.id && (
+														<div className="absolute right-[-10px] w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
 													)}
-												</td>
-											)}
+												</div>
+											</td>
 											<td className="p-4">
 												{sub.teks ? (
 													<div className="max-w-xs sm:max-w-md">

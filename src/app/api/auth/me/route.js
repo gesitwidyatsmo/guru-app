@@ -1,33 +1,43 @@
 import { NextResponse } from 'next/server';
-import { verifyAuth } from '@/lib/auth';
+import { createClient } from '@/utils/supabase/server';
 
-export async function GET(req) {
+export async function GET() {
 	try {
-		// Ambil token dari cookie (NextJS v13+)
-		const token = req.cookies.get('token')?.value;
+		const supabase = await createClient();
+		
+		// Dapatkan user dari sesi saat ini
+		const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-		if (!token) {
+		if (authError || !user) {
 			return NextResponse.json({ error: 'Belum login', user: null }, { status: 401 });
 		}
 
-		// Verifikasi JWT token
-		const payload = await verifyAuth(token);
+		// Ambil data profil dari public.users
+		const { data: userProfile, error: profileError } = await supabase
+			.from('users')
+			.select('id_user, username, nama_lengkap, role')
+			.eq('auth_id', user.id)
+			.single();
+
+		if (profileError || !userProfile) {
+			return NextResponse.json({ error: 'Profil tidak valid', user: null }, { status: 401 });
+		}
 
 		// Jika lolos, kirim profil user
 		return NextResponse.json(
 			{
 				message: 'Terautentikasi',
 				user: {
-					id: payload.id,
-					username: payload.username,
-					nama_lengkap: payload.nama_lengkap,
-					role: payload.role, // 'Admin' | 'Guru'
+					id: userProfile.id_user,
+					username: userProfile.username,
+					nama_lengkap: userProfile.nama_lengkap,
+					role: userProfile.role, // 'Admin' | 'Guru'
 				},
 			},
 			{ status: 200 },
 		);
 	} catch (error) {
-		// Token invalid atau kedaluwarsa
+		console.error('Error Auth Me:', error);
 		return NextResponse.json({ error: 'Sesi tidak valid', user: null }, { status: 401 });
 	}
 }

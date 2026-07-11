@@ -1,6 +1,6 @@
-import { getSheet } from '@/lib/sheets';
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx'; // Pastikan import ini ada
+import { createClient } from '@/utils/supabase/server';
+import * as XLSX from 'xlsx';
 
 // --- METHOD GET (Ambil Data) ---
 export async function GET(req) {
@@ -8,49 +8,41 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const kelas = searchParams.get('kelas');
 		const status = searchParams.get('status');
-
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_SISWA'];
-		if (!sheet) return Response.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
-
 		const role = req.headers.get('x-user-role');
 		const userId = req.headers.get('x-user-id');
 
+		const supabase = await createClient();
 		let allowedClasses = null;
+
 		if (role === 'Guru' && userId) {
-			const kbmSheet = doc.sheetsByTitle['GURU_KBM'];
-			if (kbmSheet) {
-				const kbmRows = await kbmSheet.getRows();
-				const list = kbmRows.filter((r) => String(r.get('id_user')) === String(userId)).map((r) => r.get('kelas'));
-				allowedClasses = [...new Set(list)];
+			const { data: kbmData } = await supabase
+				.from('guru_kbm')
+				.select('kelas')
+				.eq('id_user', userId);
+			if (kbmData) {
+				allowedClasses = [...new Set(kbmData.map(r => r.kelas))];
 			} else {
 				allowedClasses = [];
 			}
 		}
 
-		const rows = await sheet.getRows();
-		let siswaList = [];
-		for (const row of rows) {
-			const kls = row.get('kelas');
-			if (allowedClasses === null || allowedClasses.includes(kls)) {
-				siswaList.push({
-					id: row.get('id'),
-					nis: row.get('nis'),
-					nama_lengkap: row.get('nama_lengkap'),
-					kelas: kls,
-					jenis_kelamin: row.get('jenis_kelamin'),
-					status: row.get('status'),
-				});
-			}
+		let query = supabase.from('siswa').select('*').order('nama_lengkap', { ascending: true });
+
+		if (allowedClasses !== null) {
+			if (allowedClasses.length === 0) return NextResponse.json([]);
+			query = query.in('kelas', allowedClasses);
 		}
+		
+		if (kelas) query = query.eq('kelas', kelas);
+		if (status) query = query.eq('status', status);
 
-		if (kelas) siswaList = siswaList.filter((s) => s.kelas === kelas);
-		if (status) siswaList = siswaList.filter((s) => s.status === status);
+		const { data: siswaList, error } = await query;
+		if (error) throw error;
 
-		return Response.json(siswaList);
+		return NextResponse.json(siswaList || []);
 	} catch (error) {
 		console.error('GET Siswa Error:', error);
-		return Response.json({ error: 'Internal Server Error' }, { status: 500 });
+		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
 	}
 }
 
@@ -61,6 +53,7 @@ export async function POST(request) {
 	}
 	try {
 		const contentType = request.headers.get('content-type') || '';
+		const supabase = await createClient();
 
 		// === CASE 1: INPUT MANUAL (JSON) ===
 		if (contentType.includes('application/json')) {
@@ -71,26 +64,17 @@ export async function POST(request) {
 				return NextResponse.json({ error: 'Nama Lengkap dan Kelas wajib diisi' }, { status: 400 });
 			}
 
-			const doc = await getSheet();
-			let sheet = doc.sheetsByTitle['MASTER_SISWA'];
-
-			if (!sheet) {
-				sheet = await doc.addSheet({
-					title: 'MASTER_SISWA',
-					headerValues: ['id', 'nis', 'nama_lengkap', 'kelas', 'jenis_kelamin', 'status'],
-				});
-			}
-
 			const uniqueId = 'SIS-' + Date.now() + Math.floor(Math.random() * 100);
-			await sheet.addRow({
+			const { error } = await supabase.from('siswa').insert({
 				id: uniqueId,
-				nis: nis || '',
+				nis: nis || null,
 				nama_lengkap,
 				kelas,
 				jenis_kelamin: jenis_kelamin || 'Laki-laki',
 				status: status || 'Aktif',
 			});
 
+			if (error) throw error;
 			return NextResponse.json({ success: true, message: 'Berhasil menambah siswa baru' });
 		}
 
@@ -105,28 +89,33 @@ export async function POST(request) {
 		const arrayBuffer = await file.arrayBuffer();
 		const workbook = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer' });
 		const sheetName = workbook.SheetNames[0];
-		const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+		// range: 3 untuk skip baris 1-3 jika format excelnya menggunakan header di baris 4
+		let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { range: 3 });
+		
+		// Fallback jika kosong, coba tanpa range
+		if (jsonData.length === 0) {
+			jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+		}
 
 		if (jsonData.length === 0) return NextResponse.json({ error: 'File Excel kosong' }, { status: 400 });
 
 		const studentsToInsert = jsonData
 			.map((row) => ({
-				id: 'SIS-' + Date.now() + Math.floor(Math.random() * 10000),
+				id: 'SIS-' + Date.now() + Math.floor(Math.random() * 10000) + Math.random().toString(36).substring(7),
 				nis: String(row['NIS'] || row['nis'] || ''),
-				nama_lengkap: row['Nama Lengkap'] || row['nama_lengkap'] || '',
+				nama_lengkap: row['Nama Lengkap'] || row['nama_lengkap'] || row['Nama'] || '',
 				kelas: kelasTarget,
 				jenis_kelamin: row['Jenis Kelamin'] || row['jenis_kelamin'] || 'Laki-laki',
 				status: 'Aktif',
 			}))
 			.filter((s) => s.nama_lengkap);
 
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle['MASTER_SISWA'];
-		if (!sheet) {
-			sheet = await doc.addSheet({ title: 'MASTER_SISWA', headerValues: ['id', 'nis', 'nama_lengkap', 'kelas', 'jenis_kelamin', 'status'] });
+		if (studentsToInsert.length === 0) {
+			return NextResponse.json({ error: 'Data tidak valid. Pastikan kolom Nama terisi.' }, { status: 400 });
 		}
 
-		await sheet.addRows(studentsToInsert);
+		const { error } = await supabase.from('siswa').insert(studentsToInsert);
+		if (error) throw error;
 
 		return NextResponse.json({ success: true, message: 'Import berhasil', total: studentsToInsert.length });
 	} catch (error) {
@@ -144,20 +133,19 @@ export async function PUT(req) {
 		const body = await req.json();
 		const { id, nis, nama_lengkap, kelas, jenis_kelamin, status } = body;
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_SISWA'];
-		const rows = await sheet.getRows();
-		const row = rows.find((r) => String(r.get('id')) === String(id));
+		if (!id) return NextResponse.json({ error: 'ID tidak ditemukan' }, { status: 400 });
 
-		if (!row) return NextResponse.json({ error: 'Siswa tidak ditemukan' }, { status: 404 });
+		const supabase = await createClient();
+		const updates = {};
+		if (nis) updates.nis = nis;
+		if (nama_lengkap) updates.nama_lengkap = nama_lengkap;
+		if (kelas) updates.kelas = kelas;
+		if (jenis_kelamin) updates.jenis_kelamin = jenis_kelamin;
+		if (status) updates.status = status;
 
-		if (nis) row.set('nis', nis);
-		if (nama_lengkap) row.set('nama_lengkap', nama_lengkap);
-		if (kelas) row.set('kelas', kelas);
-		if (jenis_kelamin) row.set('jenis_kelamin', jenis_kelamin);
-		if (status) row.set('status', status);
+		const { error } = await supabase.from('siswa').update(updates).eq('id', id);
+		if (error) throw error;
 
-		await row.save();
 		return NextResponse.json({ success: true, message: 'Data berhasil diperbarui' });
 	} catch (error) {
 		console.error('PUT Error:', error);
@@ -176,14 +164,11 @@ export async function DELETE(req) {
 
 		if (!id) return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 });
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_SISWA'];
-		const rows = await sheet.getRows();
-		const row = rows.find((r) => String(r.get('id')) === String(id));
+		const supabase = await createClient();
+		const { error } = await supabase.from('siswa').delete().eq('id', id);
+		
+		if (error) throw error;
 
-		if (!row) return NextResponse.json({ error: 'Siswa tidak ditemukan' }, { status: 404 });
-
-		await row.delete();
 		return NextResponse.json({ success: true, message: 'Siswa berhasil dihapus' });
 	} catch (error) {
 		console.error('DELETE Error:', error);

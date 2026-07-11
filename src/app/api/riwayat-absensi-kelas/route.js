@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req) {
 	try {
@@ -10,23 +10,28 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'siswa_id wajib' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
-		if (!sheet) return NextResponse.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+		const supabase = await createClient();
 
-		const rows = await sheet.getRows();
+		const { data, error } = await supabase
+			.from('absensi_harian_siswa')
+			.select(`
+				id,
+				status,
+				keterangan,
+				absensi_harian!inner (
+					tanggal
+				)
+			`)
+			.eq('siswa_id', siswa_id);
 
-		// Filter rows milik siswa ini
-		const result = rows
-			.filter((r) => String(r.get('siswa_id')) === String(siswa_id))
-			.map((r) => ({
-				id: r.get('id'),
-				tanggal: String(r.get('tanggal')).slice(0, 10),
-				status: r.get('status'),
-				// Jika kolom mapel kosong di sheet ini, anggap ini absensi 'Harian'
-				// Jika ada isinya, sertakan saja
-				keterangan: r.get('mapel') || 'Harian',
-			}));
+		if (error) throw error;
+
+		const result = (data || []).map((r) => ({
+			id: r.id,
+			tanggal: String(r.absensi_harian.tanggal).slice(0, 10),
+			status: r.status,
+			keterangan: r.keterangan || 'Harian',
+		}));
 
 		// Sort terbaru -> terlama
 		result.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));

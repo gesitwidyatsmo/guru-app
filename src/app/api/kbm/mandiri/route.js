@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
-
-const SHEET_KBM = 'GURU_KBM';
+import { createClient } from '@/utils/supabase/server';
 
 function generateKBMId() {
 	return 'KBM-' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
-/**
- * Endpoint ini diciptakan khusus menangani aksi mencentang (Checkbox) Master
- * Kelas atau Mapel Mandiri oleh Guru (Self-Service).
- */
-
-// 1. GET: Ambil apa saja Kelas & Mapel yang sudah dia centang
+// 1. GET: Ambil baris penugasan kelas+mapel secara eksplisit
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
@@ -22,26 +15,25 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'Akses Ditolak: Hanya Guru yang dapat melihat Profil Ajarnya.' }, { status: 403 });
 		}
 
-		const doc = await getSheet();
-		const kbmSheet = doc.sheetsByTitle[SHEET_KBM];
-		if (!kbmSheet) {
-			return NextResponse.json({ kelas: [], mapel: [] }, { status: 200 });
-		}
+		const supabase = await createClient();
+		
+		const { data: myRows, error } = await supabase
+			.from('guru_kbm')
+			.select('id_kbm, kelas, mapel')
+			.eq('id_user', userId)
+			.order('kelas', { ascending: true })
+			.order('mapel', { ascending: true });
 
-		const kbmRows = await kbmSheet.getRows();
-		const myRows = kbmRows.filter((r) => String(r.get('id_user')) === String(userId));
+		if (error) throw error;
 
-		const myClasses = [...new Set(myRows.map((r) => r.get('kelas')).filter((val) => val && val.trim() !== ''))];
-		const myMapels = [...new Set(myRows.map((r) => r.get('mapel')).filter((val) => val && val.trim() !== ''))];
-
-		return NextResponse.json({ kelas: myClasses, mapel: myMapels }, { status: 200 });
+		return NextResponse.json(myRows || [], { status: 200 });
 	} catch (error) {
 		console.error('Error GET KBM Mandiri:', error);
 		return NextResponse.json({ error: 'Terjadi kegagalan penarikan data.' }, { status: 500 });
 	}
 }
 
-// 2. POST: Timpa pilihan Kelas ATAU Mapel yang baru. (Cartesian Product Logika)
+// 2. POST: Insert satu baris penugasan secara spesifik (Eksplisit)
 export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
@@ -52,75 +44,75 @@ export async function POST(req) {
 		}
 
 		const body = await req.json();
-		const { target, data } = body; // target = 'kelas' atau 'mapel'
+		const { kelas, mapel } = body;
 
-		if (!target || !Array.isArray(data)) {
-			return NextResponse.json({ error: 'Format Payload Cacat.' }, { status: 400 });
+		if (!kelas || !mapel) {
+			return NextResponse.json({ error: 'Kelas dan Mapel harus diisi lengkap.' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle[SHEET_KBM];
-		if (!sheet) {
-			sheet = await doc.addSheet({
-				title: SHEET_KBM,
-				headerValues: ['id_kbm', 'id_user', 'kelas', 'mapel'],
-			});
+		const supabase = await createClient();
+		
+		// Cek apakah kombinasi kelas+mapel sudah ada
+		const { data: existing } = await supabase
+			.from('guru_kbm')
+			.select('id_kbm')
+			.eq('id_user', userId)
+			.eq('kelas', kelas)
+			.eq('mapel', mapel)
+			.single();
+
+		if (existing) {
+			return NextResponse.json({ error: 'Anda sudah mendaftarkan mapel ini di kelas tersebut.' }, { status: 409 });
 		}
 
-		const kbmRows = await kbmSheetRows(sheet);
-		const myRows = kbmRows.filter((r) => String(r.get('id_user')) === String(userId));
+		const rowToInsert = {
+			id_kbm: generateKBMId(),
+			id_user: userId,
+			kelas: kelas,
+			mapel: mapel,
+		};
 
-		// Kumpulkan data masa lalu agar tidak hilang persilangannya
-		let currentClasses = [...new Set(myRows.map((r) => r.get('kelas')).filter((val) => val && val.trim() !== ''))];
-		let currentMapels = [...new Set(myRows.map((r) => r.get('mapel')).filter((val) => val && val.trim() !== ''))];
+		const { error: insertError } = await supabase.from('guru_kbm').insert([rowToInsert]);
+		
+		if (insertError) throw insertError;
 
-		if (target === 'kelas') {
-			currentClasses = data; // replace array kelas
-		} else if (target === 'mapel') {
-			currentMapels = data; // replace array mapel
-		}
-
-		// Bila Kosong sama sekali, masukkan array dummy [''] agar tak lenyap persilangannya
-		if (currentClasses.length === 0) currentClasses = [''];
-		if (currentMapels.length === 0) currentMapels = [''];
-
-		// Jika memang betul-betul user tidak mengajukan keduanya, kita anggap kosong mutlak (Batal)
-		if (currentClasses.length === 1 && currentClasses[0] === '' && currentMapels.length === 1 && currentMapels[0] === '') {
-			currentClasses = [];
-			currentMapels = [];
-		}
-
-		// STEP A: Delete baris historikal punya Guru ini
-		for (const row of myRows) {
-			await row.delete();
-		}
-
-		// STEP B: Generate Cartesian Product
-		const rowsToInsert = [];
-		for (const kelasVal of currentClasses) {
-			for (const mapelVal of currentMapels) {
-				rowsToInsert.push({
-					id_kbm: generateKBMId(),
-					id_user: userId,
-					kelas: kelasVal,
-					mapel: mapelVal,
-				});
-			}
-		}
-
-		// Insert ke Google Sheets jika ada
-		if (rowsToInsert.length > 0) {
-			await sheet.addRows(rowsToInsert);
-		}
-
-		return NextResponse.json({ success: true, message: 'Daftar yurisdiksi Anda berhasil di-sinkronisasi.' }, { status: 200 });
+		return NextResponse.json({ success: true, message: 'Penugasan berhasil ditambahkan.' }, { status: 201 });
 	} catch (error) {
 		console.error('Error POST KBM Mandiri:', error);
-		return NextResponse.json({ error: 'Kegagalan memperbarui data master penugasan.' }, { status: 500 });
+		return NextResponse.json({ error: 'Kegagalan menyimpan penugasan.' }, { status: 500 });
 	}
 }
 
-// helper wrapper karena `sheet.getRows()` tidak auto-refresh mutasi loop `delete()`
-async function kbmSheetRows(sheet) {
-	return await sheet.getRows();
+// 3. DELETE: Hapus spesifik satu baris penugasan
+export async function DELETE(req) {
+	try {
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
+
+		if (role !== 'Guru' || !userId) {
+			return NextResponse.json({ error: 'Akses Ditolak.' }, { status: 403 });
+		}
+
+		const { searchParams } = new URL(req.url);
+		const id_kbm = searchParams.get('id_kbm');
+
+		if (!id_kbm) {
+			return NextResponse.json({ error: 'ID penugasan tak ditemukan.' }, { status: 400 });
+		}
+
+		const supabase = await createClient();
+		
+		// Memastikan hanya bisa menghapus miliknya sendiri
+		const { error } = await supabase
+			.from('guru_kbm')
+			.delete()
+			.match({ id_kbm: id_kbm, id_user: userId });
+		
+		if (error) throw error;
+
+		return NextResponse.json({ success: true, message: 'Hak mengajar kelas ini berhasil dicabut.' }, { status: 200 });
+	} catch (error) {
+		console.error('Error DELETE KBM Mandiri:', error);
+		return NextResponse.json({ error: 'Pencabutan penugasan gagal.' }, { status: 500 });
+	}
 }

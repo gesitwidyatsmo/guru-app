@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheet, getOrCreateSheet } from '@/lib/sheets';
-
-const TUGAS_HEADERS = ['ID', 'PIN', 'Judul', 'Mapel', 'Materi', 'Tipe_Soal', 'Soal', 'CreatedAt', 'CreatedBy'];
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export async function POST(request) {
 	try {
@@ -11,24 +9,35 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'PIN diperlukan' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = await getOrCreateSheet(doc, 'Data_Tugas', TUGAS_HEADERS);
-		const rows = await sheet.getRows();
+		const supabase = supabaseAdmin;
+		
+		const { data: task, error } = await supabase
+			.from('tugas_online')
+			.select('judul, mapel, materi, tipe_soal, soal')
+			.eq('pin', pin.toUpperCase())
+			.single();
 
-		const task = rows.find((row) => row.get('PIN') === pin.toUpperCase());
-
-		if (!task) {
+		if (error || !task) {
 			return NextResponse.json({ error: 'PIN tidak valid atau tugas tidak ditemukan' }, { status: 404 });
+		}
+
+		let parsedSoal = task.soal;
+		if (typeof task.soal === 'string') {
+			try {
+				parsedSoal = JSON.parse(task.soal);
+			} catch(e) {
+				parsedSoal = task.soal;
+			}
 		}
 
 		return NextResponse.json({
 			success: true,
 			tugas: {
-				judul: task.get('Judul'),
-				mapel: task.get('Mapel'),
-				materi: task.get('Materi'),
-				tipe_soal: task.get('Tipe_Soal'),
-				soal: JSON.parse(task.get('Soal')), // Parse back to array/object if it's multiple cases
+				judul: task.judul,
+				mapel: task.mapel,
+				materi: task.materi,
+				tipe_soal: task.tipe_soal,
+				soal: parsedSoal,
 			},
 		});
 	} catch (error) {

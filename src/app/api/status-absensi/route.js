@@ -1,24 +1,16 @@
-import { getSheet } from '@/lib/sheets';
+import { NextResponse } from 'next/server';
+
+const defaultStatuses = [
+	{ id: '1', kode: 'H', label: 'Hadir', warna: 'green' }, // emerald-500
+	{ id: '2', kode: 'I', label: 'Izin', warna: 'blue' }, // blue-500
+	{ id: '3', kode: 'S', label: 'Sakit', warna: 'yellow' }, // amber-500
+	{ id: '4', kode: 'A', label: 'Alpa', warna: 'red' }, // red-500
+];
 
 export async function GET() {
 	try {
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_STATUS_ABSENSI'];
-
-		if (!sheet) {
-			return Response.json({ error: 'Sheet MASTER_STATUS_ABSENSI tidak ditemukan' }, { status: 404 });
-		}
-
-		const rows = await sheet.getRows();
-		const data = rows.map((row) => ({
-			id: row.get('id'),
-			kode: row.get('kode'),
-			label: row.get('label'),
-			warna: row.get('warna') || '',
-		}));
-
-		return Response.json(data);
+		return NextResponse.json(defaultStatuses);
 	} catch (error) {
-		return Response.json({ error: error.message }, { status: 500 });
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
 }

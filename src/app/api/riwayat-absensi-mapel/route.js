@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
-
-const SHEET_NAME = 'MASTER_ABSENSI_MAPEL';
-const norm = (v) => String(v ?? '').trim();
-const normDate = (v) => String(v ?? '').slice(0, 10);
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req) {
 	try {
@@ -18,47 +14,39 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'Parameter siswa_id wajib' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return NextResponse.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+		const supabase = await createClient();
 
-		const rows = await sheet.getRows();
+		let query = supabase.from('absensi_mapel_siswa').select(`
+			status,
+			absensi_mapel!inner (
+				sesi_id,
+				tanggal,
+				jam_ke,
+				kelas,
+				mapel
+			)
+		`).eq('siswa_id', siswa_id);
 
-		let filtered = rows;
-
-		if (kelas) filtered = filtered.filter((r) => norm(r.get('kelas')) === norm(kelas));
-		if (mapel) filtered = filtered.filter((r) => norm(r.get('mapel')) === norm(mapel));
+		if (kelas) query = query.eq('absensi_mapel.kelas', kelas);
+		if (mapel) query = query.eq('absensi_mapel.mapel', mapel);
 
 		if (bulan && tahun) {
-			filtered = filtered.filter((r) => {
-				const d = new Date(normDate(r.get('tanggal')));
-				return d.getMonth() + 1 === Number(bulan) && d.getFullYear() === Number(tahun);
-			});
+			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
+			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			query = query.gte('absensi_mapel.tanggal', startDate).lte('absensi_mapel.tanggal', endDate);
 		}
 
-		const out = [];
+		const { data, error } = await query;
+		if (error) throw error;
 
-		for (const r of filtered) {
-			let arr = [];
-			try {
-				arr = JSON.parse(r.get('data_absensi') || '[]');
-			} catch {
-				arr = [];
-			}
-
-			const hit = Array.isArray(arr) ? arr.find((x) => String(x?.siswa_id) === String(siswa_id)) : null;
-
-			if (hit) {
-				out.push({
-					pertemuan_id: r.get('id'),
-					tanggal: normDate(r.get('tanggal')),
-					jam_ke: r.get('jam_ke'),
-					kelas: r.get('kelas'),
-					mapel: r.get('mapel'),
-					status: hit.status,
-				});
-			}
-		}
+		const out = (data || []).map((r) => ({
+			pertemuan_id: r.absensi_mapel.sesi_id,
+			tanggal: String(r.absensi_mapel.tanggal).slice(0, 10),
+			jam_ke: r.absensi_mapel.jam_ke,
+			kelas: r.absensi_mapel.kelas,
+			mapel: r.absensi_mapel.mapel,
+			status: r.status,
+		}));
 
 		out.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
 		return NextResponse.json(out);

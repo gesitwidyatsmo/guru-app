@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function RekapNilaiPage() {
 	const [kelasList, setKelasList] = useState([]);
@@ -30,63 +34,150 @@ export default function RekapNilaiPage() {
 		{ value: '12', label: 'Desember' },
 	];
 
-	// Fetch daftar kelas
+	// Fetch master data (kelas & mapel)
 	useEffect(() => {
-		const fetchKelas = async () => {
+		const fetchAll = async () => {
 			try {
-				const response = await fetch('/api/kelas');
-				const data = await response.json();
-				setKelasList(Array.isArray(data) ? data : []);
-			} catch (error) {
-				console.error('Error fetching kelas:', error);
-			}
-		};
-		fetchKelas();
-	}, []);
+				const [resKelas, resMapel] = await Promise.all([
+					fetch('/api/kelas'),
+					fetch('/api/mapel')
+				]);
 
-	// Fetch daftar mapel
-	useEffect(() => {
-		const fetchMapel = async () => {
-			try {
-				const response = await fetch('/api/mapel');
-				const data = await response.json();
-				setMapelList(Array.isArray(data) ? data : []);
+				const dataKelas = resKelas.ok ? await resKelas.json() : [];
+				const dataMapel = resMapel.ok ? await resMapel.json() : [];
+
+				setKelasList(dataKelas || []);
+				setMapelList(dataMapel || []);
 			} catch (error) {
-				console.error('Error fetching mapel:', error);
+				console.error('Error fetching master data:', error);
+				Swal.fire({
+					icon: 'error',
+					title: 'Gagal',
+					text: 'Gagal memuat data kelas dan mata pelajaran',
+				});
 			}
 		};
-		fetchMapel();
+		fetchAll();
 	}, []);
 
 	// Fetch rekap nilai
 	const fetchRekap = async () => {
 		if (!selectedKelas || !selectedBulan) {
-			alert('Pilih kelas dan periode terlebih dahulu');
+			Swal.fire({
+				icon: 'warning',
+				title: 'Perhatian',
+				text: 'Pilih kelas dan periode terlebih dahulu'
+			});
 			return;
 		}
 
 		setLoading(true);
 		setError(null);
 		try {
-			const params = new URLSearchParams({
-				kelas: selectedKelas,
-				bulan: selectedBulan,
-				tahun: new Date().getFullYear(),
-			});
+			const supabase = createClient();
+			const tahun = new Date().getFullYear();
+
+			// 1. Ambil data siswa aktif di kelas
+			const { data: siswaDiKelas, error: siswaError } = await supabase
+				.from('siswa')
+				.select('id, nis, nama_lengkap, kelas')
+				.eq('kelas', selectedKelas)
+				.eq('status', 'Aktif');
+
+			if (siswaError) throw siswaError;
+
+			// 2. Ambil data tugas (header)
+			let queryTugas = supabase
+				.from('nilai_tugas')
+				.select('tugas_id, kategori, type, mapel, tanggal')
+				.eq('kelas', selectedKelas);
 
 			if (selectedMapel) {
-				params.append('mapel', selectedMapel);
+				queryTugas = queryTugas.eq('mapel', selectedMapel);
 			}
 
-			const response = await fetch(`/api/nilai/rekap?${params}`);
-			if (!response.ok) throw new Error('Gagal mengambil data rekap');
+			const { data: semuaTugas, error: tugasError } = await queryTugas;
+			if (tugasError) throw tugasError;
 
-			const data = await response.json();
-			setRekapData(data);
+			// Filter tugas by bulan/tahun
+			const tugasFiltered = (semuaTugas || []).filter((t) => {
+				if (!t.tanggal) return false;
+				const tanggalObj = new Date(t.tanggal);
+				const bulanTanggal = tanggalObj.getMonth() + 1;
+				const tahunTanggal = tanggalObj.getFullYear();
+
+				if (selectedBulan === 'all') {
+					return tahunTanggal === parseInt(tahun);
+				} else {
+					return bulanTanggal === parseInt(selectedBulan) && tahunTanggal === parseInt(tahun);
+				}
+			});
+
+			// 3. Jika ada tugas, ambil nilai-nilainya
+			let nilaiSiswaRaw = [];
+			if (tugasFiltered.length > 0) {
+				const tugasIds = tugasFiltered.map(t => t.tugas_id);
+				const { data: nilaiData, error: nilaiError } = await supabase
+					.from('nilai_siswa')
+					.select('tugas_id, siswa_id, nilai')
+					.in('tugas_id', tugasIds);
+					
+				if (nilaiError) throw nilaiError;
+				nilaiSiswaRaw = nilaiData || [];
+			}
+
+			// Sort tugas by tanggal
+			const tugasList = tugasFiltered.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+
+			// 4. Proses rekap per siswa (Matrix build)
+			const rekapSiswa = (siswaDiKelas || []).map((siswa) => {
+				const nilaiSiswa = {};
+				let totalNilai = 0;
+				let countNilai = 0;
+
+				const studentGrades = nilaiSiswaRaw.filter(n => String(n.siswa_id) === String(siswa.id));
+				
+				studentGrades.forEach((grade) => {
+					if (grade.nilai) {
+						const val = parseFloat(grade.nilai || 0);
+						nilaiSiswa[grade.tugas_id] = val;
+						totalNilai += val;
+						countNilai++;
+					}
+				});
+
+				const avg = countNilai > 0 ? totalNilai / countNilai : 0;
+
+				return {
+					...siswa,
+					nilai: nilaiSiswa,
+					avg: avg,
+					countNilai: countNilai,
+				};
+			});
+
+			// 5. Format periode
+			const namaBulanMap = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+			const periode = selectedBulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulanMap[parseInt(selectedBulan) - 1]} ${tahun}`;
+
+			setRekapData({
+				kelas: selectedKelas,
+				periode,
+				mapel: selectedMapel || 'Semua Mapel',
+				tugasList,
+				siswa: rekapSiswa,
+				totalSiswa: rekapSiswa.length,
+				totalTugas: tugasList.length,
+			});
 		} catch (error) {
 			console.error('Error fetching rekap:', error);
 			setError(error.message);
 			setRekapData(null);
+			Swal.fire({
+				icon: 'error',
+				title: 'Gagal',
+				text: error.message || 'Terjadi kesalahan saat mengambil rekap nilai',
+			});
 		} finally {
 			setLoading(false);
 		}
@@ -104,7 +195,7 @@ export default function RekapNilaiPage() {
 	// Fungsi Export ke Excel
 	const exportToExcel = () => {
 		if (!rekapData || !rekapData.siswa || rekapData.siswa.length === 0) {
-			alert('Tidak ada data untuk diekspor');
+			Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Tidak ada data untuk diekspor' });
 			return;
 		}
 
@@ -160,6 +251,48 @@ export default function RekapNilaiPage() {
 		const filename = `Rekap_Nilai_${rekapData.kelas}_${bulanLabel}_${new Date().getFullYear()}.xlsx`;
 
 		XLSX.writeFile(wb, filename);
+	};
+
+	// Fungsi Export ke PDF
+	const exportToPDF = () => {
+		if (!rekapData || !rekapData.siswa || rekapData.siswa.length === 0) {
+			Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Tidak ada data untuk diekspor' });
+			return;
+		}
+
+		const doc = new jsPDF({ orientation: 'landscape' });
+
+		doc.setFontSize(16);
+		doc.text(`REKAP NILAI - ${rekapData.kelas}`, 14, 16);
+		doc.setFontSize(11);
+		doc.text(`Periode: ${rekapData.periode}`, 14, 24);
+		doc.text(`Mata Pelajaran: ${selectedMapel || 'Semua Mapel'}`, 14, 31);
+
+		const head = [['No', 'Nama Siswa', ...rekapData.tugasList.map(t => {
+			const date = new Date(t.tanggal);
+			return `${t.kategori}\n${date.toLocaleDateString('id-ID')}`;
+		}), 'Rata-rata', 'Predikat']];
+
+		const body = rekapData.siswa.map((siswa, index) => {
+			const row = [index + 1, siswa.nama_lengkap];
+			rekapData.tugasList.forEach(tugas => {
+				row.push(siswa.nilai[tugas.tugas_id] ?? '-');
+			});
+			row.push(siswa.avg.toFixed(2), getPredikat(siswa.avg).label);
+			return row;
+		});
+
+		autoTable(doc, {
+			startY: 37,
+			head: head,
+			body: body,
+			theme: 'grid',
+			headStyles: { fillColor: [79, 70, 229], fontSize: 8 },
+			bodyStyles: { fontSize: 8 },
+		});
+
+		const bulanLabel = bulanOptions.find((b) => b.value === selectedBulan)?.label || 'Semua_Bulan';
+		doc.save(`Rekap_Nilai_${rekapData.kelas}_${bulanLabel}_${new Date().getFullYear()}.pdf`);
 	};
 
 	return (
@@ -288,25 +421,34 @@ export default function RekapNilaiPage() {
 									</p>
 								</div>
 
-								{/* Tombol Export */}
-								<button
-									onClick={exportToExcel}
-									className='flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-xl transition-all duration-200 hover:scale-105 border border-white/30 shadow-lg'>
-									<svg
-										xmlns='http://www.w3.org/2000/svg'
-										fill='none'
-										viewBox='0 0 24 24'
-										strokeWidth='2'
-										stroke='currentColor'
-										className='w-5 h-5'>
-										<path
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3'
-										/>
-									</svg>
-									<span className='font-semibold text-sm'>Export Excel</span>
-								</button>
+								<div className='flex items-center gap-2'>
+									<button
+										onClick={exportToPDF}
+										className='flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-xl transition-all duration-200 hover:scale-105 border border-white/30 shadow-lg'>
+										<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='2' stroke='currentColor' className='w-5 h-5'>
+											<path strokeLinecap='round' strokeLinejoin='round' d='M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z' />
+										</svg>
+										<span className='font-semibold text-sm'>Export PDF</span>
+									</button>
+									<button
+										onClick={exportToExcel}
+										className='flex items-center gap-2 px-5 py-3 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-xl transition-all duration-200 hover:scale-105 border border-white/30 shadow-lg'>
+										<svg
+											xmlns='http://www.w3.org/2000/svg'
+											fill='none'
+											viewBox='0 0 24 24'
+											strokeWidth='2'
+											stroke='currentColor'
+											className='w-5 h-5'>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												d='M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3'
+											/>
+										</svg>
+										<span className='font-semibold text-sm'>Export Excel</span>
+									</button>
+								</div>
 							</div>
 						</div>
 

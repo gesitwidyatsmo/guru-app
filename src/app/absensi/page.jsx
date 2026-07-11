@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
 import ButtonBack from '../components/button/ButtonBack';
@@ -261,6 +262,62 @@ export default function AbsensiMapelPage() {
 		}
 	};
 
+	const handleHapus = async () => {
+		const result = await Swal.fire({
+			title: 'Hapus Absensi?',
+			text: `Yakin ingin menghapus data absensi ${selectedMapel} kelas ${selectedKelas} jam ke-${jamKe}?`,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonColor: '#EF4444',
+			cancelButtonColor: '#6B7280',
+			confirmButtonText: 'Ya, Hapus',
+			cancelButtonText: 'Batal',
+		});
+
+		if (!result.isConfirmed) return;
+
+		try {
+			setLoading(true);
+			const params = new URLSearchParams({
+				kelas: selectedKelas,
+				mapel: selectedMapel,
+				tanggal: tanggal,
+				jam_ke: jamKe,
+			});
+			const res = await fetch(`/api/absensi-mapel?${params.toString()}`, {
+				method: 'DELETE',
+			});
+
+			if (res.ok) {
+				await Swal.fire('Terhapus!', 'Data absensi telah dihapus.', 'success');
+				// Reset data
+				const init = {};
+				siswaKelasIni.forEach((s) => {
+					init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+				});
+				setAbsensi(init);
+				setExistingId(null);
+				setMode('input');
+			} else {
+				throw new Error('Gagal menghapus data');
+			}
+		} catch (error) {
+			console.error(error);
+			Swal.fire('Error', 'Gagal menghapus data absensi', 'error');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const goToRiwayat = () => {
+		const kelasObj = kelasList.find(k => k.kelas === selectedKelas || k.nama_kelas === selectedKelas);
+		if (kelasObj && kelasObj.id) {
+			router.push(`/kelas/${kelasObj.id}/riwayat-absensi-mapel`);
+		} else {
+			Swal.fire('Info', 'Gagal menemukan ID Kelas untuk melihat riwayat', 'info');
+		}
+	};
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -285,6 +342,11 @@ export default function AbsensiMapelPage() {
 								)}
 							</div>
 						</div>
+						<button
+							onClick={() => router.push('/laporan')}
+							className='bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-sm border border-indigo-100'>
+							<span>📅</span> <span className='hidden sm:inline'>Rekap Bulanan</span>
+						</button>
 					</div>
 
 					{/* Filter Grid */}
@@ -367,11 +429,23 @@ export default function AbsensiMapelPage() {
 									{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
 								</p>
 							</div>
-							<button
-								onClick={() => setMode('edit')}
-								className='px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm'>
-								✏️ Edit Data
-							</button>
+							<div className='flex flex-wrap gap-2'>
+								<button
+									onClick={handleHapus}
+									className='px-3 py-2 bg-white border border-rose-200 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-all shadow-sm flex items-center gap-1'>
+									🗑️ <span className='hidden sm:inline'>Hapus</span>
+								</button>
+								<button
+									onClick={goToRiwayat}
+									className='px-3 py-2 bg-white border border-purple-200 rounded-xl text-sm font-bold text-purple-600 hover:bg-purple-50 hover:border-purple-300 transition-all shadow-sm flex items-center gap-1'>
+									🕒 <span className='hidden sm:inline'>Riwayat</span>
+								</button>
+								<button
+									onClick={() => setMode('edit')}
+									className='px-3 py-2 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm flex items-center gap-1'>
+									✏️ <span className='hidden sm:inline'>Edit</span>
+								</button>
+							</div>
 						</div>
 
 						<div className='overflow-x-auto'>

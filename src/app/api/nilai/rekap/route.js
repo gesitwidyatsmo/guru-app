@@ -1,14 +1,5 @@
-import { getSheet } from '@/lib/sheets';
-
-function normalizeDate(value) {
-	if (!value) return '';
-	if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-		return String(value);
-	}
-	const d = new Date(value);
-	if (isNaN(d.getTime())) return String(value);
-	return d.toISOString().slice(0, 10);
-}
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req) {
 	try {
@@ -18,60 +9,38 @@ export async function GET(req) {
 		const tahun = searchParams.get('tahun') || new Date().getFullYear();
 		const mapel = searchParams.get('mapel');
 
-		console.log('=== DEBUG REKAP NILAI ===');
-		console.log('Query kelas:', kelas);
-		console.log('Query bulan:', bulan);
-		console.log('Query tahun:', tahun);
-		console.log('Query mapel:', mapel);
-
 		if (!kelas || !bulan) {
-			return Response.json({ error: 'Parameter kelas dan bulan harus diisi' }, { status: 400 });
+			return NextResponse.json({ error: 'Parameter kelas dan bulan harus diisi' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
+		const supabase = await createClient();
 
-		// 1. Ambil data siswa berdasarkan kelas
-		const siswaSheet = doc.sheetsByTitle['MASTER_SISWA'];
-		if (!siswaSheet) {
-			return Response.json({ error: 'Sheet MASTER_SISWA tidak ditemukan' }, { status: 404 });
+		// 1. Ambil data siswa aktif di kelas
+		const { data: siswaDiKelas, error: siswaError } = await supabase
+			.from('siswa')
+			.select('id, nis, nama_lengkap, kelas')
+			.eq('kelas', kelas)
+			.eq('status', 'Aktif');
+
+		if (siswaError) throw siswaError;
+
+		// 2. Ambil data tugas (header)
+		let queryTugas = supabase
+			.from('nilai_tugas')
+			.select('tugas_id, kategori, type, mapel, tanggal')
+			.eq('kelas', kelas);
+
+		if (mapel) {
+			queryTugas = queryTugas.eq('mapel', mapel);
 		}
 
-		const siswaRows = await siswaSheet.getRows();
-		const siswaDiKelas = siswaRows
-			.filter((row) => {
-				const rowKelas = String(row.get('kelas') || '').trim();
-				const rowStatus = String(row.get('status') || '').trim();
-				return rowKelas === kelas && rowStatus === 'Aktif';
-			})
-			.map((row) => ({
-				id: String(row.get('id') || ''),
-				nis: String(row.get('nis') || ''),
-				nama_lengkap: String(row.get('nama_lengkap') || ''),
-				kelas: String(row.get('kelas') || ''),
-			}));
+		const { data: semuaTugas, error: tugasError } = await queryTugas;
+		if (tugasError) throw tugasError;
 
-		console.log('Total siswa di kelas:', siswaDiKelas.length);
-
-		// 2. Ambil data nilai
-		const nilaiSheet = doc.sheetsByTitle['MASTER_NILAI'];
-		if (!nilaiSheet) {
-			return Response.json({ error: 'Sheet MASTER_NILAI tidak ditemukan' }, { status: 404 });
-		}
-
-		const nilaiRows = await nilaiSheet.getRows();
-
-		// Filter nilai berdasarkan kelas, periode, dan mapel
-		const filteredNilai = nilaiRows.filter((row) => {
-			const rowKelas = String(row.get('kelas') || '').trim();
-			const rowTanggal = normalizeDate(row.get('tanggal'));
-			const rowMapel = String(row.get('mapel') || '').trim();
-
-			if (rowKelas !== kelas) return false;
-
-			// Filter mapel jika ada
-			if (mapel && rowMapel !== mapel) return false;
-
-			const tanggalObj = new Date(rowTanggal);
+		// Filter tugas by bulan/tahun
+		const tugasFiltered = (semuaTugas || []).filter((t) => {
+			if (!t.tanggal) return false;
+			const tanggalObj = new Date(t.tanggal);
 			const bulanTanggal = tanggalObj.getMonth() + 1;
 			const tahunTanggal = tanggalObj.getFullYear();
 
@@ -82,58 +51,36 @@ export async function GET(req) {
 			}
 		});
 
-		console.log('Total nilai ditemukan:', filteredNilai.length);
+		// 3. Jika ada tugas, ambil nilai-nilainya
+		let nilaiSiswaRaw = [];
+		if (tugasFiltered.length > 0) {
+			const tugasIds = tugasFiltered.map(t => t.tugas_id);
+			const { data: nilaiData, error: nilaiError } = await supabase
+				.from('nilai_siswa')
+				.select('tugas_id, siswa_id, nilai')
+				.in('tugas_id', tugasIds);
+				
+			if (nilaiError) throw nilaiError;
+			nilaiSiswaRaw = nilaiData || [];
+		}
 
-		// 3. Dapatkan daftar tugas unik
-		const tugasMap = new Map();
-		filteredNilai.forEach((row) => {
-			const tugasId = String(row.get('tugas_id') || '');
-			if (tugasId && !tugasMap.has(tugasId)) {
-				tugasMap.set(tugasId, {
-					tugas_id: tugasId,
-					kategori: String(row.get('kategori') || ''),
-					type: String(row.get('type') || ''),
-					mapel: String(row.get('mapel') || ''),
-					tanggal: normalizeDate(row.get('tanggal')),
-				});
-			}
-		});
+		// Sort tugas by tanggal
+		const tugasList = tugasFiltered.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 
-		const tugasList = Array.from(tugasMap.values()).sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
-
-		console.log('Total tugas:', tugasList.length);
-
-		// 4. Proses data per siswa
-		const rekapSiswa = siswaDiKelas.map((siswa) => {
+		// 4. Proses rekap per siswa (Matrix build)
+		const rekapSiswa = (siswaDiKelas || []).map((siswa) => {
 			const nilaiSiswa = {};
 			let totalNilai = 0;
 			let countNilai = 0;
 
-			filteredNilai.forEach((row) => {
-				const tugasId = String(row.get('tugas_id') || '');
-				if (!tugasId) return;
-
-				let data_nilai = [];
-				try {
-					data_nilai = JSON.parse(row.get('data_nilai') || '[]');
-				} catch (e) {
-					data_nilai = [];
-				}
-
-				// Fallback kompatibilitas format rekam baris terdahulu
-				if (data_nilai.length === 0 && row.get('siswa_id')) {
-					data_nilai.push({
-						siswa_id: row.get('siswa_id'),
-						nilai: row.get('nilai'),
-					});
-				}
-
-				const matchedSiswa = data_nilai.find((d) => String(d.siswa_id) === String(siswa.id));
-
-				if (matchedSiswa && matchedSiswa.nilai) {
-					const nilai = parseFloat(matchedSiswa.nilai || 0);
-					nilaiSiswa[tugasId] = nilai;
-					totalNilai += nilai;
+			// Filter nilai just for this student
+			const studentGrades = nilaiSiswaRaw.filter(n => String(n.siswa_id) === String(siswa.id));
+			
+			studentGrades.forEach((grade) => {
+				if (grade.nilai) {
+					const val = parseFloat(grade.nilai || 0);
+					nilaiSiswa[grade.tugas_id] = val;
+					totalNilai += val;
 					countNilai++;
 				}
 			});
@@ -148,14 +95,11 @@ export async function GET(req) {
 			};
 		});
 
-		// 5. Format periode untuk display
+		// 5. Format periode
 		const namaBulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
 		const periode = bulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulan[parseInt(bulan) - 1]} ${tahun}`;
 
-		console.log('✅ Rekap berhasil dibuat');
-
-		return Response.json({
+		return NextResponse.json({
 			kelas,
 			periode,
 			mapel: mapel || 'Semua Mapel',
@@ -166,6 +110,6 @@ export async function GET(req) {
 		});
 	} catch (error) {
 		console.error('❌ Error fetching rekap nilai:', error);
-		return Response.json({ error: 'Gagal mengambil data rekap', details: error.message }, { status: 500 });
+		return NextResponse.json({ error: 'Gagal mengambil data rekap', details: error.message }, { status: 500 });
 	}
 }

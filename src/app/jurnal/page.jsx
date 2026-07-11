@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -14,6 +15,7 @@ export default function JurnalPage() {
 	const [filterKelas, setFilterKelas] = useState('Semua');
 
 	const [userRole, setUserRole] = useState('');
+	const [userId, setUserId] = useState('');
 
 	// State Form Modal
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,20 +47,53 @@ export default function JurnalPage() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				const [resKelas, resMapel, resAuth] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/auth/me')]);
-
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const dataMapel = resMapel.ok ? await resMapel.json() : [];
-
-				if (resAuth.ok) {
-					const authData = await resAuth.json();
-					setUserRole(authData.user?.role || '');
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (!user) {
+					router.push('/login');
+					return;
 				}
+				
+				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+				let currentUserId = '';
+				let currentUserRole = '';
+				if (profile) {
+					currentUserId = profile.id_user;
+					currentUserRole = profile.role;
+					setUserId(currentUserId);
+					setUserRole(currentUserRole);
+				} else {
+					router.push('/login');
+					return;
+				}
+				
+				const { data: kelasData } = await supabase.from('kelas').select('*').order('nama_kelas', { ascending: true });
+				setKelasList(kelasData || []);
+				
+				const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
+				setMapelList(mapelData || []);
 
-				setKelasList(dataKelas);
-				setMapelList(dataMapel);
+				const fetchedJournals = await refreshJurnal(currentUserId, currentUserRole);
 
-				await refreshJurnal();
+				// Auto-open modal from query params
+				const searchParams = new URLSearchParams(window.location.search);
+				if (searchParams.get('action') === 'new') {
+					const qMapel = searchParams.get('mapel') || '';
+					const qKelas = searchParams.get('kelas') || '';
+					const qJam = searchParams.get('jam_ke') || '';
+
+					const existingCount = fetchedJournals.filter((j) => j.kelas === qKelas && j.mapel === qMapel).length;
+					const suggestion = existingCount + 1;
+
+					setFormData((prev) => ({
+						...prev,
+						mapel: qMapel,
+						kelas: qKelas,
+						jam_ke: qJam,
+						pertemuan_ke: suggestion.toString()
+					}));
+					setIsModalOpen(true);
+				}
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -68,16 +103,22 @@ export default function JurnalPage() {
 		fetchData();
 	}, []);
 
-	const refreshJurnal = async () => {
+	const refreshJurnal = async (uid = userId, role = userRole) => {
 		try {
-			const res = await fetch('/api/jurnal');
-			if (res.ok) {
-				const data = await res.json();
-				setJournals(data.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+			const supabase = createClient();
+			let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false });
+			if (role === 'Guru' && uid) {
+				query = query.eq('guru_id', uid);
+			}
+			const { data, error } = await query;
+			if (!error) {
+				setJournals(data || []);
+				return data || [];
 			}
 		} catch (error) {
 			console.error('Gagal memuat jurnal:', error);
 		}
+		return [];
 	};
 
 	// --- LOGIC AUTO-SUGGEST PERTEMUAN ---
@@ -124,13 +165,12 @@ export default function JurnalPage() {
 
 		if (result.isConfirmed) {
 			try {
-				const res = await fetch(`/api/jurnal?id=${id}`, { method: 'DELETE' });
-				if (res.ok) {
-					Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
-					refreshJurnal();
-				} else {
-					throw new Error('Gagal menghapus');
-				}
+				const supabase = createClient();
+				const { error } = await supabase.from('jurnal').delete().eq('id', id);
+				if (error) throw error;
+				
+				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
+				refreshJurnal();
 			} catch (err) {
 				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
 			}
@@ -142,26 +182,45 @@ export default function JurnalPage() {
 		setSaving(true);
 
 		try {
-			const method = isEditing ? 'PUT' : 'POST';
-			const res = await fetch('/api/jurnal', {
-				method: method,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(formData),
-			});
-
-			if (res.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil!',
-					text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
-					timer: 1500,
-					showConfirmButton: false,
-				});
-				setIsModalOpen(false);
-				refreshJurnal();
+			const supabase = createClient();
+			
+			if (isEditing) {
+				const { id, pertemuan_ke, ...others } = formData;
+				const updates = { ...others };
+				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
+				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
+				
+				const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				if (error) throw error;
 			} else {
-				throw new Error('Gagal menyimpan');
+				const newId = Math.random().toString(36).substring(2, 11);
+				const insertData = {
+					id: newId,
+					guru_id: userId || null,
+					tanggal: formData.tanggal,
+					jam_ke: formData.jam_ke || '',
+					pertemuan_ke: formData.pertemuan_ke || '',
+					kelas: formData.kelas,
+					mapel: formData.mapel,
+					materi: formData.materi,
+					kegiatan: formData.kegiatan || '',
+					hambatan: formData.hambatan || '',
+					solusi: formData.solusi || '',
+					tuntas: !!formData.tuntas,
+				};
+				const { error } = await supabase.from('jurnal').insert(insertData);
+				if (error) throw error;
 			}
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil!',
+				text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
+				timer: 1500,
+				showConfirmButton: false,
+			});
+			setIsModalOpen(false);
+			refreshJurnal();
 		} catch (err) {
 			Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
 		} finally {
@@ -226,6 +285,13 @@ export default function JurnalPage() {
 										d='M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'></path>
 								</svg>
 							</div>
+							<input
+								type='text'
+								placeholder='Cari jurnal...'
+								className='block w-full pl-10 pr-4 py-3 rounded-xl bg-orange-800/30 text-white placeholder-orange-200 border border-orange-500/30 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all'
+							/>
+						</div>
+						<div className='flex gap-2 w-full sm:w-auto'>
 							<select
 								value={filterKelas}
 								onChange={(e) => setFilterKelas(e.target.value)}

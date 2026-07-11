@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSheet, getOrCreateSheet } from '@/lib/sheets';
+import { createClient } from '@/utils/supabase/server';
 
-// Headers untuk sheet Data_Tugas
-const TUGAS_HEADERS = ['ID', 'PIN', 'Judul', 'Mapel', 'Materi', 'Tipe_Soal', 'Soal', 'CreatedAt', 'CreatedBy'];
-
-// Helper to check Auth from Headers
 const getAuthData = (request) => {
 	const role = request.headers.get('x-user-role');
 	const id = request.headers.get('x-user-id');
@@ -18,32 +14,50 @@ export async function GET(request) {
 	if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
 	try {
-		const doc = await getSheet();
-		const sheet = await getOrCreateSheet(doc, 'Data_Tugas', TUGAS_HEADERS);
-		const rows = await sheet.getRows();
-
-		const tasks = rows.map((row) => ({
-			id: row.get('ID'),
-			pin: row.get('PIN'),
-			judul: row.get('Judul'),
-			mapel: row.get('Mapel'),
-			materi: row.get('Materi'),
-			tipe_soal: row.get('Tipe_Soal'),
-			soal: row.get('Soal'),
-			createdAt: row.get('CreatedAt'),
-			createdBy: row.get('CreatedBy'),
-		}));
-
 		const { searchParams } = new URL(request.url);
 		const id = searchParams.get('id');
 
+		const supabase = await createClient();
+
 		if (id) {
-			const task = tasks.find((t) => t.id === id);
-			if (!task) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
-			return NextResponse.json(task);
+			const { data: task, error } = await supabase.from('tugas_online').select('*').eq('id', id).single();
+			
+			if (error || !task) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
+			
+			return NextResponse.json({
+				id: task.id,
+				pin: task.pin,
+				judul: task.judul,
+				mapel: task.mapel,
+				materi: task.materi,
+				tipe_soal: task.tipe_soal,
+				soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
+				kategori: task.kategori,
+				type: task.type,
+				createdAt: task.created_at,
+				createdBy: task.created_by,
+			});
 		}
 
-		return NextResponse.json(tasks.reverse());
+		// List all tasks (For Guru, maybe we want to list all or only theirs? The original listed all rows in Data_Tugas)
+		const { data: tasks, error } = await supabase.from('tugas_online').select('*').order('created_at', { ascending: false });
+		if (error) throw error;
+
+		const formattedTasks = (tasks || []).map(task => ({
+			id: task.id,
+			pin: task.pin,
+			judul: task.judul,
+			mapel: task.mapel,
+			materi: task.materi,
+			tipe_soal: task.tipe_soal,
+			soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
+			kategori: task.kategori,
+			type: task.type,
+			createdAt: task.created_at,
+			createdBy: task.created_by,
+		}));
+
+		return NextResponse.json(formattedTasks);
 	} catch (error) {
 		console.error('API Error:', error);
 		return NextResponse.json({ error: 'Gagal mengambil data tugas' }, { status: 500 });
@@ -56,7 +70,7 @@ export async function POST(request) {
 
 	try {
 		const body = await request.json();
-		const { judul, mapel, materi, tipe_soal, soal } = body;
+		const { judul, mapel, materi, tipe_soal, kategori, type, soal } = body;
 
 		if (!judul || !tipe_soal || !soal) {
 			return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
@@ -65,26 +79,26 @@ export async function POST(request) {
 		const pin = Math.random().toString(36).substring(2, 8).toUpperCase();
 		const newId = Date.now().toString();
 
-		const doc = await getSheet();
-		const sheet = await getOrCreateSheet(doc, 'Data_Tugas', TUGAS_HEADERS);
+		const supabase = await createClient();
 
-		const newRow = {
-			ID: newId,
-			PIN: pin,
-			Judul: judul,
-			Mapel: mapel || '',
-			Materi: materi || '',
-			Tipe_Soal: tipe_soal,
-			Soal: JSON.stringify(soal),
-			CreatedAt: new Date().toISOString(),
-			CreatedBy: auth.name || auth.id,
-		};
+		const { error } = await supabase.from('tugas_online').insert({
+			id: newId,
+			pin: pin,
+			judul: judul,
+			mapel: mapel || '',
+			materi: materi || '',
+			tipe_soal: tipe_soal,
+			kategori: kategori || 'Formatif',
+			type: type || 'Tugas Online',
+			soal: soal,
+			created_by: auth.name || auth.id,
+		});
 
-		await sheet.addRow(newRow);
+		if (error) throw error;
 
-		return NextResponse.json({ message: 'Tugas berhasil dibuat', pin });
+		return NextResponse.json({ message: 'Tugas berhasil dibuat', pin }, { status: 201 });
 	} catch (error) {
-		console.error('API Error:', error);
+		console.error('API Error POST:', error);
 		return NextResponse.json({ error: 'Gagal membuat tugas' }, { status: 500 });
 	}
 }
@@ -99,18 +113,18 @@ export async function DELETE(request) {
 
 		if (!id) return NextResponse.json({ error: 'ID tidak ditemukan' }, { status: 400 });
 
-		const doc = await getSheet();
-		const sheet = await getOrCreateSheet(doc, 'Data_Tugas', TUGAS_HEADERS);
-		const rows = await sheet.getRows();
+		const supabase = await createClient();
 
-		const rowToDelete = rows.find((row) => row.get('ID') === id);
-		if (!rowToDelete) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
+		// Optional: auth check if they can delete (The original didn't check ownership for delete, just id existence)
+		const { data: rowToDelete, error: fetchError } = await supabase.from('tugas_online').select('id').eq('id', id).single();
+		if (fetchError || !rowToDelete) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
 
-		await rowToDelete.delete();
+		const { error: deleteError } = await supabase.from('tugas_online').delete().eq('id', id);
+		if (deleteError) throw deleteError;
 
-		return NextResponse.json({ message: 'Tugas berhasil dihapus' });
+		return NextResponse.json({ message: 'Tugas berhasil dihapus' }, { status: 200 });
 	} catch (error) {
-		console.error('API Error:', error);
+		console.error('API Error DELETE:', error);
 		return NextResponse.json({ error: 'Gagal menghapus tugas' }, { status: 500 });
 	}
 }
@@ -121,30 +135,33 @@ export async function PUT(request) {
 
 	try {
 		const body = await request.json();
-		const { id, judul, mapel, materi, tipe_soal, soal } = body;
+		const { id, judul, mapel, materi, tipe_soal, kategori, type, soal } = body;
 
 		if (!id || !judul || !tipe_soal || !soal) {
 			return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = await getOrCreateSheet(doc, 'Data_Tugas', TUGAS_HEADERS);
-		const rows = await sheet.getRows();
+		const supabase = await createClient();
 
-		const rowToUpdate = rows.find((row) => row.get('ID') === id);
-		if (!rowToUpdate) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
+		const { data: rowToUpdate, error: fetchError } = await supabase.from('tugas_online').select('id').eq('id', id).single();
+		if (fetchError || !rowToUpdate) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
 
-		rowToUpdate.set('Judul', judul);
-		rowToUpdate.set('Mapel', mapel || '');
-		rowToUpdate.set('Materi', materi || '');
-		rowToUpdate.set('Tipe_Soal', tipe_soal);
-		rowToUpdate.set('Soal', JSON.stringify(soal));
+		const updates = {
+			judul: judul,
+			mapel: mapel || '',
+			materi: materi || '',
+			tipe_soal: tipe_soal,
+			kategori: kategori,
+			type: type,
+			soal: soal,
+		};
 
-		await rowToUpdate.save();
+		const { error: updateError } = await supabase.from('tugas_online').update(updates).eq('id', id);
+		if (updateError) throw updateError;
 
-		return NextResponse.json({ message: 'Tugas berhasil diperbarui' });
+		return NextResponse.json({ message: 'Tugas berhasil diperbarui' }, { status: 200 });
 	} catch (error) {
-		console.error('API Error:', error);
+		console.error('API Error PUT:', error);
 		return NextResponse.json({ error: 'Gagal memperbarui tugas' }, { status: 500 });
 	}
 }

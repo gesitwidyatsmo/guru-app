@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
-
-const SHEET_NAME = 'MASTER_ABSENSI_HARIAN';
+import { createClient } from '@/utils/supabase/server';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
-const norm = (v) => String(v ?? '').trim();
 const normDate = (v) => String(v ?? '').slice(0, 10);
 
-// GET: Ambil data absensi berdasarkan kelas (dan optional tanggal/bulan/tahun)
 export async function GET(req) {
 	try {
 		const { searchParams } = new URL(req.url);
@@ -20,73 +16,57 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'Parameter kelas wajib diisi' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) {
-			return NextResponse.json({ error: `Sheet ${SHEET_NAME} tidak ditemukan` }, { status: 404 });
-		}
-
+		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
-		const userName = decodeURIComponent(req.headers.get('x-user-name') || '');
+		const userId = req.headers.get('x-user-id');
 
-		let allowedClasses = null;
-		if (role === 'Guru' && userName) {
-			const kelasSheet = doc.sheetsByTitle['MASTER_KELAS'];
-			if (kelasSheet) {
-				const kbmRows = await kelasSheet.getRows();
-				const list = kbmRows.filter((r) => r.get('wali_kelas') === userName).map((r) => r.get('nama_kelas'));
-				allowedClasses = [...new Set(list)];
-			} else {
-				allowedClasses = [];
+		if (role === 'Guru' && userId) {
+			const { data: kbmData } = await supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId);
+			const allowedClasses = (kbmData || []).map(r => r.nama_kelas);
+			
+			if (!allowedClasses.includes(kelas)) {
+				return NextResponse.json([]); // Cegah pengintipan kelas lain
 			}
-		} else if (role !== 'Admin') {
-			allowedClasses = [];
 		}
 
-		// Validasi otorisasi Guru atas request parameter kelas
-		if (allowedClasses !== null && !allowedClasses.includes(kelas)) {
-			// Cegah pengintipan kelas lain
-			return NextResponse.json([]);
-		}
+		let query = supabase.from('absensi_harian').select('sesi_id, tanggal, kelas').eq('kelas', kelas);
 
-		const rows = await sheet.getRows();
-
-		// filter dasar kelas
-		let filtered = rows.filter((r) => norm(r.get('kelas')) === norm(kelas));
-
-		// mode detail pertemuan (untuk halaman form edit riwayat)
-		if (tanggal) {
-			const row = filtered.find((r) => normDate(r.get('tanggal')) === normDate(tanggal));
-			if (!row) return NextResponse.json([]); // belum ada pertemuan
-
-			let parsed = [];
-			try {
-				parsed = JSON.parse(row.get('data_absensi') || '[]'); // format: [{siswa_id, status, keterangan}, ...]
-			} catch {
-				parsed = [];
-			}
-
-			const data = Array.isArray(parsed) ? parsed : [];
-			return NextResponse.json(data);
-		}
-
-		// filter bulan/tahun (untuk laporan)
+		// Filter bulan & tahun
 		if (bulan && tahun) {
-			filtered = filtered.filter((r) => {
-				const d = new Date(normDate(r.get('tanggal')));
-				return d.getMonth() + 1 === Number(bulan) && d.getFullYear() === Number(tahun);
-			});
+			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
+			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			query = query.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 
-		// mode list pertemuan (untuk laporan & daftar sesi di riwayat)
-		const pertemuan = filtered.map((r) => ({
-			id: r.get('id'),
-			tanggal: normDate(r.get('tanggal')),
-			kelas: r.get('kelas'),
-			data_absensi: r.get('data_absensi') || '[]',
+		// Detail mode (tanggal spesifik)
+		if (tanggal) {
+			query = query.eq('tanggal', tanggal);
+			const { data: sesiData, error: sesiError } = await query.single();
+
+			if (sesiError || !sesiData) return NextResponse.json([]); // belum ada pertemuan
+
+			// Ambil detail siswa
+			const { data: detailData, error: detailError } = await supabase
+				.from('absensi_harian_siswa')
+				.select('siswa_id, status, keterangan')
+				.eq('sesi_id', sesiData.sesi_id);
+
+			if (detailError) throw detailError;
+			return NextResponse.json(detailData || []);
+		}
+
+		// List mode
+		const { data: sessions, error } = await query;
+		if (error) throw error;
+
+		const pertemuan = (sessions || []).map((r) => ({
+			id: r.sesi_id,
+			tanggal: normDate(r.tanggal),
+			kelas: r.kelas,
+			// frontend expect data_absensi JSON string or array, tapi biasanya ga butuh data_absensi utuh di list view
+			data_absensi: '[]', 
 		}));
 
-		// urutkan tanggal ascending
 		pertemuan.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 
 		return NextResponse.json(pertemuan);
@@ -96,12 +76,9 @@ export async function GET(req) {
 	}
 }
 
-// POST: Upsert (tambah/update) absensi 1 pertemuan penuh (menggantikan PUT bulk update)
 export async function POST(req) {
 	try {
 		const body = await req.json();
-		// API ini bisa menerima { oldTanggal, newTanggal, kelas, absensiList } dari halaman manage (riwayat)
-		// atau menerima format umum { tanggal, kelas, data } dari entri baru
 		const oldTanggal = body.oldTanggal || body.tanggal;
 		const newTanggal = body.newTanggal || body.tanggal;
 		const kelas = body.kelas;
@@ -111,65 +88,68 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Payload tidak lengkap' }, { status: 400 });
 		}
 
+		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
-		const userName = decodeURIComponent(req.headers.get('x-user-name') || '');
-
-		const doc = await getSheet();
+		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {
-			const kelasSheet = doc.sheetsByTitle['MASTER_KELAS'];
-			if (kelasSheet) {
-				const kRows = await kelasSheet.getRows();
-				const targetKls = kRows.find((r) => r.get('nama_kelas') === kelas);
-				if (!targetKls || targetKls.get('wali_kelas') !== userName) {
-					return NextResponse.json({ error: 'Akses Ditolak: Khusus Wali Kelas berwenang atas log absensi harian ini.' }, { status: 403 });
-				}
+			const { data: kelasData } = await supabase.from('kelas').select('id_wali_kelas').eq('nama_kelas', kelas).single();
+			if (!kelasData || kelasData.id_wali_kelas !== userId) {
+				return NextResponse.json({ error: 'Akses Ditolak: Khusus Wali Kelas berwenang atas log absensi harian ini.' }, { status: 403 });
 			}
 		}
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) {
-			return NextResponse.json({ error: `Sheet ${SHEET_NAME} tidak ditemukan` }, { status: 404 });
-		}
 
-		const rows = await sheet.getRows();
+		// Check existing
+		const { data: existingSesi } = await supabase
+			.from('absensi_harian')
+			.select('sesi_id')
+			.eq('kelas', kelas)
+			.eq('tanggal', oldTanggal)
+			.single();
 
-		const existing = rows.find((r) => {
-			return norm(r.get('kelas')) === norm(kelas) && normDate(r.get('tanggal')) === normDate(oldTanggal);
-		});
+		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-H-${generateId()}`;
 
-		const jsonString = JSON.stringify(data_absensi);
-
-		if (existing) {
-			// Update existing row
-			existing.set('data_absensi', jsonString);
+		if (existingSesi) {
 			if (oldTanggal !== newTanggal) {
-				existing.set('tanggal', normDate(newTanggal));
+				await supabase.from('absensi_harian').update({ tanggal: newTanggal }).eq('sesi_id', sesiId);
 			}
-			await existing.save();
-			return NextResponse.json({ success: true, id: existing.get('id'), mode: 'update', message: 'Sesi absensi diperbarui' }, { status: 200 });
+			// Delete old details
+			await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
 		} else {
-			// Insert new row
-			const newId = generateId();
-			await sheet.addRow({
-				id: newId,
-				tanggal: normDate(newTanggal),
-				kelas: norm(kelas),
-				data_absensi: jsonString,
+			await supabase.from('absensi_harian').insert({
+				sesi_id: sesiId,
+				kelas: kelas,
+				tanggal: newTanggal
 			});
-			return NextResponse.json({ success: true, id: newId, mode: 'insert', message: 'Sesi absensi dibuat' }, { status: 201 });
 		}
+
+		// Insert new details
+		if (data_absensi.length > 0) {
+			const rowsToInsert = data_absensi.map(item => ({
+				sesi_id: sesiId,
+				siswa_id: item.siswa_id,
+				status: item.status,
+				keterangan: item.keterangan || ''
+			}));
+			await supabase.from('absensi_harian_siswa').insert(rowsToInsert);
+		}
+
+		return NextResponse.json({ 
+			success: true, 
+			id: sesiId, 
+			mode: existingSesi ? 'update' : 'insert', 
+			message: `Sesi absensi ${existingSesi ? 'diperbarui' : 'dibuat'}` 
+		}, { status: existingSesi ? 200 : 201 });
 	} catch (error) {
 		console.error('Error POST absensi harian:', error);
 		return NextResponse.json({ error: error?.message || 'Terjadi kesalahan server' }, { status: 500 });
 	}
 }
 
-// PUT: Endpoint lama, di-redirect untuk compatibility dengan POST
 export async function PUT(req) {
 	return POST(req);
 }
 
-// DELETE: Hapus sesi absensi 1 pertemuan berdasarkan kelas & tanggal
 export async function DELETE(req) {
 	try {
 		const { searchParams } = new URL(req.url);
@@ -180,38 +160,27 @@ export async function DELETE(req) {
 			return NextResponse.json({ error: 'parameter kelas dan tanggal diperlukan' }, { status: 400 });
 		}
 
+		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
-		const userName = decodeURIComponent(req.headers.get('x-user-name') || '');
-
-		const doc = await getSheet();
+		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {
-			const kelasSheet = doc.sheetsByTitle['MASTER_KELAS'];
-			if (kelasSheet) {
-				const kRows = await kelasSheet.getRows();
-				const targetKls = kRows.find((r) => r.get('nama_kelas') === kelas);
-				if (!targetKls || targetKls.get('wali_kelas') !== userName) {
-					return NextResponse.json({ error: 'Akses Ditolak: Penghapusan catatan absensi harian hanya bisa dilakukan Wali Kelas yurisdiksi ini.' }, { status: 403 });
-				}
-			}
-		}
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) {
-			return NextResponse.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
-		}
-
-		const rows = await sheet.getRows();
-
-		let deletedCount = 0;
-		for (let i = rows.length - 1; i >= 0; i--) {
-			const row = rows[i];
-			if (norm(row.get('kelas')) === norm(kelas) && normDate(row.get('tanggal')) === normDate(tanggal)) {
-				await row.delete();
-				deletedCount++;
+			const { data: kelasData } = await supabase.from('kelas').select('id_wali_kelas').eq('nama_kelas', kelas).single();
+			if (!kelasData || kelasData.id_wali_kelas !== userId) {
+				return NextResponse.json({ error: 'Akses Ditolak: Penghapusan catatan absensi harian hanya bisa dilakukan Wali Kelas yurisdiksi ini.' }, { status: 403 });
 			}
 		}
 
-		return NextResponse.json({ success: true, message: `${deletedCount} sesi absen telah dihapus` }, { status: 200 });
+		const { data: deleted, error } = await supabase
+			.from('absensi_harian')
+			.delete()
+			.eq('kelas', kelas)
+			.eq('tanggal', tanggal)
+			.select();
+
+		if (error) throw error;
+
+		return NextResponse.json({ success: true, message: `${deleted?.length || 0} sesi absen telah dihapus` }, { status: 200 });
 	} catch (error) {
 		console.error('Error DELETE absensi:', error);
 		return NextResponse.json({ error: error?.message || 'Gagal menghapus absensi' }, { status: 500 });

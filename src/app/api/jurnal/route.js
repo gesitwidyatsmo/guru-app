@@ -1,6 +1,5 @@
-import { getSheet } from '@/lib/sheets';
-
-const SHEET_NAME = 'MASTER_JURNAL';
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -16,43 +15,25 @@ export async function GET(req) {
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return Response.json({ error: `Sheet ${SHEET_NAME} tidak ditemukan` }, { status: 404 });
-
-		const rows = await sheet.getRows();
-
-		let data = rows.map((row) => ({
-			id: row.get('id'),
-			guru_id: row.get('guru_id') || '',
-			tanggal: row.get('tanggal'),
-			jam_ke: row.get('jam_ke'),
-			pertemuan_ke: row.get('pertemuan_ke') || '',
-			kelas: row.get('kelas'),
-			mapel: row.get('mapel'),
-			materi: row.get('materi'),
-			kegiatan: row.get('kegiatan'),
-			hambatan: row.get('hambatan'),
-			solusi: row.get('solusi'),
-			tuntas: (row.get('tuntas') || '').toString().toLowerCase() === 'true',
-		}));
+		const supabase = await createClient();
+		let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false });
 
 		// 1. Filter Isolasi Hak Akses (Guru hanya melihat miliknya)
 		if (role === 'Guru' && userId) {
-			data = data.filter((d) => String(d.guru_id) === String(userId));
+			query = query.eq('guru_id', userId);
 		}
 
 		// 2. Filter dari Parameter URL
-		if (kelas) data = data.filter((d) => d.kelas === kelas);
-		if (mapel) data = data.filter((d) => d.mapel === mapel);
+		if (kelas) query = query.eq('kelas', kelas);
+		if (mapel) query = query.eq('mapel', mapel);
 
-		// Sort terbaru
-		data.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+		const { data, error } = await query;
+		if (error) throw error;
 
-		return Response.json(data, { status: 200 });
+		return NextResponse.json(data || [], { status: 200 });
 	} catch (error) {
 		console.error('❌ Error GET jurnal:', error);
-		return Response.json({ error: 'Gagal ambil data' }, { status: 500 });
+		return NextResponse.json({ error: 'Gagal ambil data' }, { status: 500 });
 	}
 }
 
@@ -63,21 +44,12 @@ export async function POST(req) {
 		const body = await req.json();
 		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas } = body;
 
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle[SHEET_NAME];
-		// Memastikan jika Master belum dibuat, Header baru dikonstruksi
-		if (!sheet) {
-			sheet = await doc.addSheet({
-				title: SHEET_NAME,
-				headerValues: ['id', 'guru_id', 'tanggal', 'jam_ke', 'pertemuan_ke', 'kelas', 'mapel', 'materi', 'kegiatan', 'hambatan', 'solusi', 'tuntas'],
-			});
-		}
-
+		const supabase = await createClient();
 		const id = generateId();
 
-		await sheet.addRow({
+		const { error } = await supabase.from('jurnal').insert({
 			id,
-			guru_id: userId || '', // Labeling pembuat jurnal
+			guru_id: userId || null,
 			tanggal,
 			jam_ke: jam_ke || '',
 			pertemuan_ke: pertemuan_ke || '',
@@ -87,13 +59,15 @@ export async function POST(req) {
 			kegiatan: kegiatan || '',
 			hambatan: hambatan || '',
 			solusi: solusi || '',
-			tuntas: tuntas ? 'TRUE' : 'FALSE',
+			tuntas: !!tuntas,
 		});
 
-		return Response.json({ success: true, id }, { status: 201 });
+		if (error) throw error;
+
+		return NextResponse.json({ success: true, id }, { status: 201 });
 	} catch (error) {
 		console.error('❌ Error POST jurnal:', error);
-		return Response.json({ error: 'Gagal simpan' }, { status: 500 });
+		return NextResponse.json({ error: 'Gagal simpan' }, { status: 500 });
 	}
 }
 
@@ -106,34 +80,31 @@ export async function PUT(req) {
 		const body = await req.json();
 		const { id, pertemuan_ke, ...others } = body;
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return Response.json({ error: 'Data Jurnal tidak eksis' }, { status: 404 });
-
-		const rows = await sheet.getRows();
-		const row = rows.find((r) => r.get('id') === id);
-
-		if (!row) return Response.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
-
-		// Proteksi: Guru dilarang mengedit karya orang lain
-		if (role === 'Guru' && String(row.get('guru_id')) !== String(userId)) {
-			return Response.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
+		const supabase = await createClient();
+		
+		// Verifikasi kepemilikan jika Guru
+		if (role === 'Guru') {
+			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).single();
+			if (!existingData) {
+				return NextResponse.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
+			}
+			if (existingData.guru_id !== userId) {
+				return NextResponse.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
+			}
 		}
 
-		if (pertemuan_ke !== undefined) row.set('pertemuan_ke', pertemuan_ke);
+		const updates = { ...others };
+		if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
+		if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
 
-		Object.keys(others).forEach((key) => {
-			if (key === 'tuntas') {
-				row.set('tuntas', others[key] ? 'TRUE' : 'FALSE');
-			} else {
-				row.set(key, others[key]);
-			}
-		});
+		const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+		
+		if (error) throw error;
 
-		await row.save();
-		return Response.json({ success: true });
+		return NextResponse.json({ success: true });
 	} catch (error) {
-		return Response.json({ error: 'Gagal update' }, { status: 500 });
+		console.error('PUT Jurnal Error:', error);
+		return NextResponse.json({ error: 'Gagal update' }, { status: 500 });
 	}
 }
 
@@ -146,24 +117,27 @@ export async function DELETE(req) {
 		const { searchParams } = new URL(req.url);
 		const id = searchParams.get('id');
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return Response.json({ error: 'Data Jurnal tidak eksis' }, { status: 404 });
+		if (!id) return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 });
 
-		const rows = await sheet.getRows();
-		const row = rows.find((r) => r.get('id') === id);
+		const supabase = await createClient();
 
-		if (!row) return Response.json({ error: 'Jurnal ini sudah tak ada di pangkalan data' }, { status: 404 });
-
-		// Proteksi Hapus: Hanya Pemilik (atau Admin) yang boleh menghapus
-		if (role === 'Guru' && String(row.get('guru_id')) !== String(userId)) {
-			return Response.json({ error: 'Akses Ditolak: Anda mencoba menghapus Jurnal kolega Anda.' }, { status: 403 });
+		// Verifikasi kepemilikan jika Guru
+		if (role === 'Guru') {
+			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).single();
+			if (!existingData) {
+				return NextResponse.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
+			}
+			if (existingData.guru_id !== userId) {
+				return NextResponse.json({ error: 'Akses Ditolak: Anda mencoba menghapus Jurnal kolega Anda.' }, { status: 403 });
+			}
 		}
 
-		await row.delete();
+		const { error } = await supabase.from('jurnal').delete().eq('id', id);
+		if (error) throw error;
 
-		return Response.json({ success: true });
+		return NextResponse.json({ success: true });
 	} catch (error) {
-		return Response.json({ error: 'Gagal hapus' }, { status: 500 });
+		console.error('DELETE Jurnal Error:', error);
+		return NextResponse.json({ error: 'Gagal hapus' }, { status: 500 });
 	}
 }

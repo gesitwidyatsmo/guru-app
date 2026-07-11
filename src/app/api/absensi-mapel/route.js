@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
+import { createClient } from '@/utils/supabase/server';
 
-const SHEET_NAME = 'MASTER_ABSENSI_MAPEL';
-
-const norm = (v) => String(v ?? '').trim();
-const normDate = (v) => String(v ?? '').slice(0, 10);
 const generateId = () => Math.random().toString(36).slice(2, 11);
+const normDate = (v) => String(v ?? '').slice(0, 10);
 
 // GET:
 export async function GET(req) {
@@ -25,63 +22,51 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'Parameter kelas & mapel wajib' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return NextResponse.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+		const supabase = await createClient();
+		let query = supabase.from('absensi_mapel').select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel').eq('kelas', kelas).eq('mapel', mapel);
 
-		const rows = await sheet.getRows();
+		if (role === 'Guru' && userId) {
+			query = query.eq('guru_id', userId);
+		}
 
-		// filter dasar & isolasi guru
-		let filtered = rows.filter((r) => {
-			const isMatchKelasMapel = norm(r.get('kelas')) === norm(kelas) && norm(r.get('mapel')) === norm(mapel);
-			// Isolasi Kepemilikan (Guru hanya melihat absensi miliknya)
-			if (role === 'Guru' && userId) {
-				return isMatchKelasMapel && String(r.get('guru_id')) === String(userId);
-			}
-			return isMatchKelasMapel;
-		});
-
-		// filter bulan/tahun untuk laporan (opsional)
 		if (bulan && tahun) {
-			filtered = filtered.filter((r) => {
-				const d = new Date(normDate(r.get('tanggal')));
-				return d.getMonth() + 1 === Number(bulan) && d.getFullYear() === Number(tahun);
-			});
+			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
+			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			query = query.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 
-		// mode detail pertemuan (untuk halaman input)
 		if (tanggal && jam_ke) {
-			const row = filtered.find((r) => normDate(r.get('tanggal')) === normDate(tanggal) && norm(r.get('jam_ke')) === norm(jam_ke));
-			if (!row) return NextResponse.json([]); // belum ada pertemuan
+			query = query.eq('tanggal', tanggal).eq('jam_ke', jam_ke);
+			const { data: sesiData, error: sesiError } = await query.single();
 
-			let parsed = [];
-			try {
-				parsed = JSON.parse(row.get('data_absensi') || '[]');
-			} catch {
-				parsed = [];
-			}
+			if (sesiError || !sesiData) return NextResponse.json([]);
 
-			// agar frontend bisa tahu id pertemuan untuk update
-			const id_row = row.get('id');
-			const data = Array.isArray(parsed) ? parsed.map((x) => ({ ...x, id_row })) : [];
+			const { data: detailData, error: detailError } = await supabase
+				.from('absensi_mapel_siswa')
+				.select('siswa_id, status, keterangan')
+				.eq('sesi_id', sesiData.sesi_id);
 
-			return NextResponse.json(data);
+			if (detailError) throw detailError;
+			
+			// Map id_row to support frontend's old format
+			const mappedData = (detailData || []).map(d => ({ ...d, id_row: sesiData.sesi_id }));
+			return NextResponse.json(mappedData);
 		}
 
-		// mode list pertemuan (untuk laporan)
-		const pertemuan = filtered.map((r) => ({
-			id: r.get('id'),
-			guru_id: r.get('guru_id') || '',
-			tanggal: normDate(r.get('tanggal')),
-			jam_ke: r.get('jam_ke'),
-			kelas: r.get('kelas'),
-			mapel: r.get('mapel'),
-			data_absensi: r.get('data_absensi') || '[]',
+		const { data: sessions, error } = await query;
+		if (error) throw error;
+
+		const pertemuan = (sessions || []).map((r) => ({
+			id: r.sesi_id,
+			guru_id: r.guru_id || '',
+			tanggal: normDate(r.tanggal),
+			jam_ke: r.jam_ke,
+			kelas: r.kelas,
+			mapel: r.mapel,
+			data_absensi: '[]',
 		}));
 
-		// urutkan tanggal
 		pertemuan.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
-
 		return NextResponse.json(pertemuan);
 	} catch (error) {
 		console.error('GET /absensi-mapel Error:', error);
@@ -89,7 +74,7 @@ export async function GET(req) {
 	}
 }
 
-// POST upsert: kalau pertemuan sudah ada -> update, kalau belum -> addRow
+// POST upsert
 export async function POST(req) {
 	try {
 		const userId = req.headers.get('x-user-id');
@@ -101,61 +86,58 @@ export async function POST(req) {
 		const oldJamKe = body.oldJam_ke || body.jam_ke;
 		const newJamKe = body.newJam_ke || body.jam_ke;
 		const { kelas, mapel } = body;
-		// Karena format di UI pakai absensiList
-		const data = body.absensiList || body.data;
+		const data_absensi = body.absensiList || body.data;
 
 		if (!oldTanggal || !oldJamKe || !kelas || !mapel) {
 			return NextResponse.json({ error: 'parameter wajib tidak lengkap' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		let sheet = doc.sheetsByTitle[SHEET_NAME];
+		const supabase = await createClient();
+		let query = supabase.from('absensi_mapel')
+			.select('sesi_id')
+			.eq('kelas', kelas)
+			.eq('mapel', mapel)
+			.eq('tanggal', oldTanggal)
+			.eq('jam_ke', oldJamKe);
 
-		if (!sheet) {
-			sheet = await doc.addSheet({
-				title: SHEET_NAME,
-				headerValues: ['id', 'guru_id', 'tanggal', 'jam_ke', 'kelas', 'mapel', 'data_absensi'],
+		if (role === 'Guru' && userId) {
+			query = query.eq('guru_id', userId);
+		}
+
+		const { data: existingSesi } = await query.single();
+		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-M-${generateId()}`;
+
+		if (existingSesi) {
+			const updates = {};
+			if (oldTanggal !== newTanggal) updates.tanggal = newTanggal;
+			if (oldJamKe !== newJamKe) updates.jam_ke = newJamKe;
+			
+			if (Object.keys(updates).length > 0) {
+				await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
+			}
+			await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+		} else {
+			await supabase.from('absensi_mapel').insert({
+				sesi_id: sesiId,
+				guru_id: userId || null,
+				tanggal: newTanggal,
+				jam_ke: newJamKe,
+				kelas: kelas,
+				mapel: mapel
 			});
 		}
 
-		const rows = await sheet.getRows();
-
-		const existing = rows.find((r) => {
-			const isMatch = norm(r.get('kelas')) === norm(kelas) && norm(r.get('mapel')) === norm(mapel) && normDate(r.get('tanggal')) === normDate(oldTanggal) && norm(r.get('jam_ke')) === norm(oldJamKe);
-			if (role === 'Guru' && userId) {
-				return isMatch && String(r.get('guru_id')) === String(userId);
-			}
-			return isMatch;
-		});
-
-		const jsonString = JSON.stringify(Array.isArray(data) ? data : []);
-
-		if (existing) {
-			// Proteksi tambahan (kalau-kalau Admin edit milik guru lain, tapi disini dibebaskan)
-			existing.set('data_absensi', jsonString);
-			if (oldTanggal !== newTanggal) existing.set('tanggal', normDate(newTanggal));
-			if (oldJamKe !== newJamKe) existing.set('jam_ke', norm(newJamKe));
-
-			// Jika belum punya guru_id (data legacy), assign ke user saat ini
-			if (!existing.get('guru_id') && userId) existing.set('guru_id', userId);
-
-			await existing.save();
-			return NextResponse.json({ success: true, id: existing.get('id'), mode: 'update' });
+		if (data_absensi && data_absensi.length > 0) {
+			const rowsToInsert = data_absensi.map(item => ({
+				sesi_id: sesiId,
+				siswa_id: item.siswa_id,
+				status: item.status,
+				keterangan: item.keterangan || ''
+			}));
+			await supabase.from('absensi_mapel_siswa').insert(rowsToInsert);
 		}
 
-		// Jika memang tidak ada baris terkait, buat baru
-		const newId = generateId();
-		await sheet.addRow({
-			id: newId,
-			guru_id: userId || '',
-			tanggal: normDate(newTanggal),
-			jam_ke: norm(newJamKe),
-			kelas: norm(kelas),
-			mapel: norm(mapel),
-			data_absensi: jsonString,
-		});
-
-		return NextResponse.json({ success: true, id: newId, mode: 'insert' });
+		return NextResponse.json({ success: true, id: sesiId, mode: existingSesi ? 'update' : 'insert' });
 	} catch (error) {
 		console.error('POST /absensi-mapel Error:', error);
 		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -178,31 +160,26 @@ export async function DELETE(req) {
 			return NextResponse.json({ error: 'parameter kurang' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle[SHEET_NAME];
-		if (!sheet) return NextResponse.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
+		const supabase = await createClient();
+		let query = supabase.from('absensi_mapel')
+			.delete()
+			.eq('kelas', kelas)
+			.eq('mapel', mapel)
+			.eq('tanggal', tanggal)
+			.eq('jam_ke', jam_ke);
 
-		const rows = await sheet.getRows();
-		let deleted = 0;
-		for (let i = rows.length - 1; i >= 0; i--) {
-			const r = rows[i];
-			const isMatch = norm(r.get('kelas')) === norm(kelas) && norm(r.get('mapel')) === norm(mapel) && normDate(r.get('tanggal')) === normDate(tanggal) && norm(r.get('jam_ke')) === norm(jam_ke);
-
-			if (isMatch) {
-				if (role === 'Guru' && String(r.get('guru_id')) !== String(userId)) {
-					// Lompati jika Guru mencoba menghapus absensi mapel orang lain
-					continue;
-				}
-				await r.delete();
-				deleted++;
-			}
+		if (role === 'Guru' && userId) {
+			query = query.eq('guru_id', userId);
 		}
 
-		if (deleted === 0) {
+		const { data: deleted, error } = await query.select();
+
+		if (error) throw error;
+		if (!deleted || deleted.length === 0) {
 			return NextResponse.json({ error: 'Data absensi tidak ditemukan / Akses Ditolak' }, { status: 403 });
 		}
 
-		return NextResponse.json({ success: true, deleted });
+		return NextResponse.json({ success: true, deleted: deleted.length });
 	} catch (error) {
 		console.error('DELETE /absensi-mapel Error:', error);
 		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

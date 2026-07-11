@@ -4,6 +4,7 @@ import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function DetailNilaiPage() {
 	const router = useRouter();
@@ -27,24 +28,19 @@ export default function DetailNilaiPage() {
 
 		const fetchDetailTugas = async () => {
 			try {
-				const params = new URLSearchParams({
-					kelas,
-					mapel,
-					kategori: judul,
-					tanggal,
-				}).toString();
-
-				const response = await fetch(`/api/nilai?${params}`);
-				const data = await response.json();
-
-				if (Array.isArray(data) && data.length > 0) {
-					const first = data[0];
+				const supabase = createClient();
+				
+				const { data: headerData } = await supabase.from('nilai_tugas').select('tugas_id, kategori, mapel, kelas, tanggal').eq('kelas', kelas).eq('mapel', mapel).eq('kategori', judul).eq('tanggal', tanggal).single();
+				
+				if (headerData) {
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nama_siswa, nilai').eq('tugas_id', headerData.tugas_id);
+					
 					setTugasData({
-						judul: first.kategori,
-						mapel: first.mapel,
-						kelas: first.kelas,
-						tanggal: first.tanggal,
-						siswa: data.map((item) => ({
+						judul: headerData.kategori,
+						mapel: headerData.mapel,
+						kelas: headerData.kelas,
+						tanggal: headerData.tanggal,
+						siswa: (siswaData || []).map((item) => ({
 							id: item.siswa_id,
 							nama_lengkap: item.nama_siswa,
 							nilai: item.nilai,

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSheet } from '@/lib/sheets';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req) {
 	try {
@@ -10,24 +10,34 @@ export async function GET(req) {
 			return NextResponse.json({ error: 'siswa_id wajib' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_NILAI'];
-		if (!sheet) return NextResponse.json([], { status: 404 });
+		const supabase = await createClient();
 
-		const rows = await sheet.getRows();
+		const { data: nilaiData, error } = await supabase
+			.from('nilai_siswa')
+			.select(`
+				id,
+				tugas_id,
+				nilai,
+				nilai_tugas!inner(
+					tanggal,
+					mapel,
+					kategori,
+					kelas
+				)
+			`)
+			.eq('siswa_id', siswa_id);
 
-		// Filter berdasarkan siswa_id
-		const nilaiSiswa = rows
-			.filter((r) => String(r.get('siswa_id')) === String(siswa_id))
-			.map((r) => ({
-				id: r.get('id'),
-				tugas_id: r.get('tugas_id'),
-				tanggal: r.get('tanggal'),
-				mapel: r.get('mapel'),
-				kategori: r.get('kategori'), // misal: "UH 1", "Tugas Harian"
-				nilai: Number(r.get('nilai')) || 0,
-				kelas: r.get('kelas'),
-			}));
+		if (error) throw error;
+
+		const nilaiSiswa = (nilaiData || []).map(r => ({
+			id: r.id,
+			tugas_id: r.tugas_id,
+			tanggal: r.nilai_tugas.tanggal,
+			mapel: r.nilai_tugas.mapel,
+			kategori: r.nilai_tugas.kategori,
+			nilai: Number(r.nilai) || 0,
+			kelas: r.nilai_tugas.kelas,
+		}));
 
 		// Sort: Terbaru ke terlama
 		nilaiSiswa.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));

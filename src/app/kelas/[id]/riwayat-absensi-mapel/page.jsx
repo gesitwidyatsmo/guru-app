@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
 import SectionHeader from '../../../components/SectionHeader';
+import { createClient } from '@/utils/supabase/client';
 
 export default function RiwayatAbsensiMapelPage() {
 	const params = useParams();
@@ -37,25 +38,19 @@ export default function RiwayatAbsensiMapelPage() {
 		const fetchInitial = async () => {
 			if (!id) return;
 			try {
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const kelas = dataKelas.find((k) => k.id === id);
+				const supabase = createClient();
+				const { data: dataKelas } = await supabase.from('kelas').select('*').eq('id', id).single();
+				
+				if (dataKelas) {
+					setKelasDetail(dataKelas);
+					setNamaKelas(dataKelas.nama_kelas);
 
-				if (kelas) {
-					setKelasDetail(kelas);
-					setNamaKelas(kelas.kelas);
-
-					// Ambil siswa untuk kelas ini
-					const resSiswa = await fetch('/api/siswa');
-					const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-					const siswaKelasIni = dataSiswa.filter((s) => s.status === 'Aktif' && s.kelas === kelas.kelas);
-					setSiswaList(siswaKelasIni);
+					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('status', 'Aktif').eq('kelas', dataKelas.nama_kelas);
+					setSiswaList(dataSiswa || []);
 				}
 
-				// Ambil referensi mapel
-				const resMapel = await fetch('/api/mapel');
-				const dataMapel = resMapel.ok ? await resMapel.json() : [];
-				setMapelList(dataMapel);
+				const dataMapel = await fetch('/api/mapel?all=false').then(res => res.json());
+				setMapelList(dataMapel || []);
 			} catch (err) {
 				console.error(err);
 				Swal.fire('Error', 'Gagal memuat data awal', 'error');
@@ -77,12 +72,10 @@ export default function RiwayatAbsensiMapelPage() {
 
 		try {
 			setLoadingSesi(true);
-			const url = `/api/absensi-mapel?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
-			const res = await fetch(url);
-			if (res.ok) {
-				const data = await res.json();
-
-				// Group by tanggal dan jam_ke
+			const supabase = createClient();
+			const { data } = await supabase.from('absensi_mapel').select('tanggal, jam_ke').eq('kelas', namaKelas).eq('mapel', selectedMapel);
+			
+			if (data) {
 				const sesiMap = new Map();
 				data.forEach((item) => {
 					const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
@@ -121,16 +114,15 @@ export default function RiwayatAbsensiMapelPage() {
 
 		const loadSesiDetail = async () => {
 			try {
-				const url = `/api/absensi-mapel?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}&tanggal=${selectedTanggal}&jam_ke=${encodeURIComponent(selectedJamKe)}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json(); // array [{siswa_id, status, keterangan}] format baru mapel
+				const supabase = createClient();
+				const { data: sesi } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe).single();
+				if (sesi) {
+					const { data: details } = await supabase.from('absensi_mapel_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
 					setTanggalEdit(selectedTanggal);
 					setJamKeEdit(selectedJamKe);
 
-					// Map ke state form
 					const map = {};
-					data.forEach((item) => {
+					(details || []).forEach((item) => {
 						map[item.siswa_id] = {
 							status: item.status,
 							keterangan: item.keterangan || '',
@@ -173,31 +165,33 @@ export default function RiwayatAbsensiMapelPage() {
 
 		setSaving(true);
 		try {
+			const supabase = createClient();
+			
+			const { data: existingSesi } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe).single();
+			if (!existingSesi) throw new Error('Sesi tidak ditemukan');
+
+			let sesiId = existingSesi.sesi_id;
+
+			if (selectedTanggal !== tanggalEdit || selectedJamKe !== jamKeEdit) {
+				// Check if new combo already exists
+				const { data: checkNew } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggalEdit).eq('jam_ke', jamKeEdit).single();
+				if (checkNew) {
+					throw new Error('Sesi untuk tanggal dan jam tersebut sudah ada');
+				}
+				await supabase.from('absensi_mapel').update({ tanggal: tanggalEdit, jam_ke: jamKeEdit }).eq('sesi_id', sesiId);
+			}
+
+			await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			
 			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
+				sesi_id: sesiId,
 				siswa_id: siswaId,
 				status: absensiMap[siswaId].status,
-				keterangan: absensiMap[siswaId].keterangan,
+				keterangan: absensiMap[siswaId].keterangan || '',
 			}));
-
-			const payload = {
-				oldTanggal: selectedTanggal,
-				newTanggal: tanggalEdit,
-				oldJam_ke: selectedJamKe,
-				newJam_ke: jamKeEdit,
-				kelas: namaKelas,
-				mapel: selectedMapel,
-				absensiList,
-			};
-
-			const res = await fetch('/api/absensi-mapel', {
-				method: 'POST', // di backend absensi-mapel sudah support update di POST
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
-
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err.error || 'Gagal menyimpan');
+			
+			if(absensiList.length > 0) {
+				await supabase.from('absensi_mapel_siswa').insert(absensiList);
 			}
 
 			Swal.fire({
@@ -240,14 +234,9 @@ export default function RiwayatAbsensiMapelPage() {
 
 		setSaving(true);
 		try {
-			const res = await fetch(
-				`/api/absensi-mapel?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}&tanggal=${selectedTanggal}&jam_ke=${encodeURIComponent(selectedJamKe)}`,
-				{
-					method: 'DELETE',
-				},
-			);
-
-			if (!res.ok) throw new Error('Gagal menghapus');
+			const supabase = createClient();
+			const { error } = await supabase.from('absensi_mapel').delete().eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe);
+			if (error) throw error;
 
 			Swal.fire('Terhapus!', 'Sesi absensi mapel berhasil dihapus.', 'success');
 			setSelectedTanggal('');

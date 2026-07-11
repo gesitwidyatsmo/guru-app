@@ -7,6 +7,7 @@ import Loader from '../components/loading';
 import Swal from 'sweetalert2'; // Import SweetAlert
 import { ClockIcon, PencilSquareIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
 import ButtonBack from '../components/button/ButtonBack';
+import { createClient } from '@/utils/supabase/client';
 
 const listHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 
@@ -23,16 +24,36 @@ export default function JadwalPage() {
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [editData, setEditData] = useState(null);
 
-	const fetchJadwal = useCallback(() => {
+	const fetchJadwal = useCallback(async () => {
 		setLoading(true);
-		fetch('/api/jadwal')
-			.then((res) => res.json())
-			.then((data) => {
-				const sorted = Array.isArray(data) ? data.sort((a, b) => a.jam_ke - b.jam_ke) : [];
-				setAllJadwal(sorted);
-			})
-			.catch((err) => console.error(err))
-			.finally(() => setLoading(false));
+		try {
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) {
+				setAllJadwal([]);
+				return;
+			}
+			const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+			
+			if (profile?.role === 'Admin') {
+				setAllJadwal([]);
+				return;
+			}
+			
+			const { data: jadwalArray, error } = await supabase
+				.from('jadwal')
+				.select('*')
+				.eq('id_user', profile.id_user)
+				.order('jam_ke', { ascending: true });
+
+			if (error) throw error;
+			const sorted = (jadwalArray || []).sort((a, b) => a.jam_ke - b.jam_ke);
+			setAllJadwal(sorted);
+		} catch (err) {
+			console.error(err);
+		} finally {
+			setLoading(false);
+		}
 	}, []);
 
 	// Init
@@ -45,7 +66,7 @@ export default function JadwalPage() {
 	// Filter Logic
 	useEffect(() => {
 		if (selectedHari && allJadwal.length > 0) {
-			const hasil = allJadwal.filter((item) => item.hari.toLowerCase() === selectedHari.toLowerCase());
+			const hasil = allJadwal.filter((item) => item.hari?.toLowerCase() === selectedHari.toLowerCase());
 			setFilteredJadwal(hasil);
 		} else {
 			setFilteredJadwal([]);
@@ -59,11 +80,6 @@ export default function JadwalPage() {
 
 	const handleSaveJadwal = async (formData) => {
 		try {
-			const url = '/api/jadwal';
-			const method = isEditMode ? 'PUT' : 'POST';
-			const payload = isEditMode ? { id: editData.id, ...formData } : formData;
-
-			// Loading indikator saat proses simpan
 			Swal.fire({
 				title: 'Menyimpan...',
 				text: 'Mohon tunggu sebentar',
@@ -73,18 +89,41 @@ export default function JadwalPage() {
 				},
 			});
 
-			const res = await fetch(url, {
-				method,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error('Unauthenticated');
+			const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
+			const userId = profile.id_user;
 
-			if (!res.ok) throw new Error('Gagal simpan');
+			if (isEditMode) {
+				const updates = {
+					mapel: formData.mapel,
+					kelas: formData.kelas,
+					hari: formData.hari,
+					jam_ke: formData.jam_ke,
+					jam_mulai: formData.jam_mulai,
+					jam_selesai: formData.jam_selesai,
+				};
+				const { error } = await supabase.from('jadwal').update(updates).eq('id', editData.id).eq('id_user', userId);
+				if (error) throw error;
+			} else {
+				const newJadwalItem = {
+					id: Math.floor(Math.random() * 100000).toString(),
+					id_user: userId,
+					mapel: formData.mapel,
+					kelas: formData.kelas,
+					hari: formData.hari,
+					jam_ke: formData.jam_ke || '',
+					jam_mulai: formData.jam_mulai,
+					jam_selesai: formData.jam_selesai,
+				};
+				const { error } = await supabase.from('jadwal').insert(newJadwalItem);
+				if (error) throw error;
+			}
 
 			setIsModalOpen(false);
 			await fetchJadwal(); // Refresh data
 
-			// Alert Sukses
 			Swal.fire({
 				icon: 'success',
 				title: 'Berhasil!',
@@ -118,31 +157,28 @@ export default function JadwalPage() {
 		if (!result.isConfirmed) return;
 
 		try {
-			// Loading saat menghapus
 			Swal.fire({
 				title: 'Menghapus...',
 				allowOutsideClick: false,
 				didOpen: () => Swal.showLoading(),
 			});
 
-			const res = await fetch('/api/jadwal', {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ id }),
-			});
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error('Unauthenticated');
+			const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
 
-			if (res.ok) {
-				await fetchJadwal(); // Refresh list
-				Swal.fire({
-					icon: 'success',
-					title: 'Terhapus!',
-					text: 'Jadwal telah dihapus.',
-					timer: 1500,
-					showConfirmButton: false,
-				});
-			} else {
-				throw new Error('Gagal menghapus');
-			}
+			const { error } = await supabase.from('jadwal').delete().eq('id', id).eq('id_user', profile.id_user);
+			if (error) throw error;
+
+			await fetchJadwal(); // Refresh list
+			Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: 'Jadwal telah dihapus.',
+				timer: 1500,
+				showConfirmButton: false,
+			});
 		} catch (err) {
 			console.error(err);
 			Swal.fire({

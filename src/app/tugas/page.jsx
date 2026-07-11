@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Loader from '../components/loading';
 import Swal from 'sweetalert2';
 import { ChevronLeft, Plus, Trash2, Link as LinkIcon, Users, Edit } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 export default function TugasDashboard() {
 	const [tasks, setTasks] = useState([]);
@@ -12,12 +13,26 @@ export default function TugasDashboard() {
 
 	const fetchTasks = async () => {
 		try {
-			const res = await fetch('/api/tugas-online');
-			if (res.ok) {
-				const data = await res.json();
-				setTasks(data);
-			} else {
-				console.error('Failed to fetch tasks');
+			const supabase = createClient();
+			// We can fetch tasks ordered by created_at desc
+			const { data: tasksData, error } = await supabase.from('tugas_online').select('*').order('created_at', { ascending: false });
+			if (error) throw error;
+			
+			if (tasksData) {
+				const formattedTasks = tasksData.map(task => ({
+					id: task.id,
+					pin: task.pin,
+					judul: task.judul,
+					mapel: task.mapel,
+					materi: task.materi,
+					tipe_soal: task.tipe_soal,
+					soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
+					kategori: task.kategori,
+					type: task.type,
+					createdAt: task.created_at,
+					createdBy: task.created_by,
+				}));
+				setTasks(formattedTasks);
 			}
 		} catch (error) {
 			console.error(error);
@@ -44,10 +59,10 @@ export default function TugasDashboard() {
 
 		if (result.isConfirmed) {
 			try {
-				const res = await fetch(`/api/tugas-online?id=${id}`, {
-					method: 'DELETE',
-				});
-				if (res.ok) {
+				const supabase = createClient();
+				const { error } = await supabase.from('tugas_online').delete().eq('id', id);
+				
+				if (!error) {
 					Swal.fire('Terhapus!', 'Tugas telah dihapus.', 'success');
 					fetchTasks();
 				} else {

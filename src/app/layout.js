@@ -1,9 +1,12 @@
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Plus_Jakarta_Sans, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import StyledComponentsRegistry from '@/lib/registry';
+import IdleTimerWrapper from './components/IdleTimerWrapper';
+import BottomNavigation from './components/BottomNavigation';
+import KbmBlocker from './components/KbmBlocker';
 
-const geistSans = Geist({
-	variable: '--font-geist-sans',
+const plusJakartaSans = Plus_Jakarta_Sans({
+	variable: '--font-plus-jakarta-sans',
 	subsets: ['latin'],
 });
 
@@ -13,15 +16,29 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-	title: 'Guru APP',
-	description: 'aplikasi yang memfasilitasi pembelajaran untuk guru',
+	title: 'Guru App',
+	description: 'Aplikasi yang memfasilitasi pembelajaran untuk guru',
+	manifest: '/manifest.json',
+};
+
+export const viewport = {
+	themeColor: '#4f46e5',
+	width: 'device-width',
+	initialScale: 1,
+	maximumScale: 1,
 };
 
 export default function RootLayout({ children }) {
 	return (
 		<html lang='en'>
-			<body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-				<StyledComponentsRegistry>{children}</StyledComponentsRegistry>
+			<body className={`${plusJakartaSans.variable} ${geistMono.variable} antialiased`}>
+				<IdleTimerWrapper>
+					<StyledComponentsRegistry>
+						{children}
+						<KbmBlocker />
+						<BottomNavigation />
+					</StyledComponentsRegistry>
+				</IdleTimerWrapper>
 			</body>
 		</html>
 	);

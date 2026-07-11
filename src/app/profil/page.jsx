@@ -3,9 +3,12 @@
 import { useState, useEffect } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import Loader from '../components/loading';
+import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function ProfilAjarPage() {
+	const router = useRouter();
 	const [loadingPage, setLoadingPage] = useState(true);
 	const [loadingSubmit, setLoadingSubmit] = useState(false);
 
@@ -28,27 +31,42 @@ export default function ProfilAjarPage() {
 	useEffect(() => {
 		const fetchProfil = async () => {
 			try {
-				const resAuth = await fetch('/api/auth/me');
-				if (resAuth.ok) {
-					const dataAuth = await resAuth.json();
-					setUserProfile(dataAuth.user || {});
-					setFormData((prev) => ({ ...prev, nama_lengkap: dataAuth.user?.nama_lengkap || '' }));
-
-					// Cegah Admin mengakses laman Profil Ajar khusus Guru
-					if (dataAuth.user?.role === 'Admin') {
-						window.location.href = '/';
-						return;
-					}
-				} else {
-					window.location.href = '/login';
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				
+				if (!user) {
+					router.push('/login');
 					return;
 				}
 
-				const resKBM = await fetch('/api/kbm/mandiri');
-				if (resKBM.ok) {
-					const dataKBM = await resKBM.json();
-					setMyClasses(dataKBM.kelas || []);
-					setMyMapels(dataKBM.mapel || []);
+				const { data: profile } = await supabase.from('users').select('*').eq('auth_id', user.id).single();
+				if (profile) {
+					const userData = {
+						id_user: profile.id_user,
+						username: profile.username,
+						nama_lengkap: profile.nama_lengkap,
+						role: profile.role
+					};
+					setUserProfile(userData);
+					setFormData((prev) => ({ ...prev, nama_lengkap: profile.nama_lengkap || '' }));
+
+					// Cegah Admin mengakses laman Profil Ajar khusus Guru
+					if (profile.role === 'Admin') {
+						router.push('/');
+						return;
+					}
+
+					// Ambil KBM
+					const { data: myData } = await supabase.from('guru_kbm').select('kelas, mapel').eq('id_user', profile.id_user);
+					if (myData) {
+						const myClassesSet = [...new Set(myData.map(r => r.kelas).filter(val => val && val.trim() !== ''))];
+						const myMapelsSet = [...new Set(myData.map(r => r.mapel).filter(val => val && val.trim() !== ''))];
+						
+						setMyClasses(myClassesSet);
+						setMyMapels(myMapelsSet);
+					}
+				} else {
+					router.push('/login');
 				}
 			} catch (error) {
 				console.error('Ada masalah saat mengambil data profil', error);
@@ -70,29 +88,34 @@ export default function ProfilAjarPage() {
 		setLoadingSubmit(true);
 
 		try {
-			const res = await fetch('/api/profil/akun', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(formData),
-			});
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error('Sesi tidak ditemukan. Silahkan login ulang.');
 
-			if (res.ok) {
-				const resData = await res.json();
-				Swal.fire({
-					icon: 'success',
-					title: 'Sukses Diperbarui',
-					text: resData.message || 'Profil Profil Anda berhasil disimpan!',
-					timer: 2000,
-					showConfirmButton: false,
+			// Update users table
+			const updates = { nama_lengkap: formData.nama_lengkap };
+			const { error: userError } = await supabase.from('users').update(updates).eq('auth_id', user.id);
+			if (userError) throw userError;
+
+			// Update password in Auth if provided
+			if (formData.password_baru && formData.password_baru.trim() !== '') {
+				const { error: authError } = await supabase.auth.updateUser({
+					password: formData.password_baru,
 				});
-				setUserProfile((prev) => ({ ...prev, nama_lengkap: formData.nama_lengkap }));
-				setFormData((prev) => ({ ...prev, password_baru: '' }));
-			} else {
-				const errorData = await res.json();
-				Swal.fire('Error', errorData.error || 'Gagal menyimpan profil', 'error');
+				if (authError) throw authError;
 			}
+
+			Swal.fire({
+				icon: 'success',
+				title: 'Sukses Diperbarui',
+				text: 'Profil Anda berhasil disimpan!',
+				timer: 2000,
+				showConfirmButton: false,
+			});
+			setUserProfile((prev) => ({ ...prev, nama_lengkap: formData.nama_lengkap }));
+			setFormData((prev) => ({ ...prev, password_baru: '' }));
 		} catch (error) {
-			Swal.fire('Error', 'Terjadi kesalahan sistem saat menghubungi server', 'error');
+			Swal.fire('Error', error.message || 'Terjadi kesalahan sistem', 'error');
 		} finally {
 			setLoadingSubmit(false);
 		}

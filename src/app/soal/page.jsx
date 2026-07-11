@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyRound, User, Hash, ArrowRight } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -8,13 +8,76 @@ import Swal from 'sweetalert2';
 export default function SoalPortal() {
 	const router = useRouter();
 	const [loading, setLoading] = useState(false);
+	
+	const [kelasList, setKelasList] = useState([]);
+	const [siswaList, setSiswaList] = useState([]);
+	const [fetchingSiswa, setFetchingSiswa] = useState(false);
 
 	const [form, setForm] = useState({
 		pin: '',
 		nama: '',
 		kelas: '',
 		absen: '',
+		siswa_id: '',
 	});
+
+	// Fetch daftar kelas saat komponen dimuat
+	useEffect(() => {
+		const fetchKelas = async () => {
+			try {
+				const res = await fetch('/api/kelas?all=true');
+				if (res.ok) {
+					const data = await res.json();
+					setKelasList(data);
+				}
+			} catch (error) {
+				console.error('Failed to fetch kelas', error);
+			}
+		};
+		fetchKelas();
+	}, []);
+
+	// Fetch daftar siswa saat kelas berubah
+	useEffect(() => {
+		if (!form.kelas) {
+			setSiswaList([]);
+			setForm(prev => ({ ...prev, nama: '', absen: '', siswa_id: '' }));
+			return;
+		}
+
+		const fetchSiswa = async () => {
+			setFetchingSiswa(true);
+			try {
+				const res = await fetch(`/api/siswa?kelas=${encodeURIComponent(form.kelas)}`);
+				if (res.ok) {
+					const data = await res.json();
+					setSiswaList(data);
+				}
+			} catch (error) {
+				console.error('Failed to fetch siswa', error);
+			} finally {
+				setFetchingSiswa(false);
+			}
+		};
+		fetchSiswa();
+	}, [form.kelas]);
+
+	const handleSiswaChange = (e) => {
+		const selectedNama = e.target.value;
+		const selectedSiswa = siswaList.find(s => s.nama_lengkap === selectedNama);
+		if (selectedSiswa) {
+			// Jika nomor absen tidak ada di DB, kita buat urutan sementara berdasarkan index (jika disortir abjad)
+			const index = siswaList.findIndex(s => s.nama_lengkap === selectedNama) + 1;
+			setForm(prev => ({ 
+				...prev, 
+				nama: selectedSiswa.nama_lengkap, 
+				siswa_id: selectedSiswa.id,
+				absen: selectedSiswa.absen || index.toString()
+			}));
+		} else {
+			setForm(prev => ({ ...prev, nama: '', absen: '', siswa_id: '' }));
+		}
+	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
@@ -36,10 +99,11 @@ export default function SoalPortal() {
 			const data = await res.json();
 
 			if (res.ok) {
-				// Simpan nama, kelas, dan absen di localStorage supaya di halaman kerjakan nggak usah ketik lagi
+				// Simpan nama, kelas, absen, dan siswa_id di localStorage supaya di halaman kerjakan nggak usah ketik lagi
 				localStorage.setItem('siswa_nama', form.nama);
 				localStorage.setItem('siswa_kelas', form.kelas);
 				localStorage.setItem('siswa_absen', form.absen);
+				localStorage.setItem('siswa_id', form.siswa_id);
 
 				router.push(`/soal/kerjakan/${form.pin.toUpperCase()}?absen=${form.absen}`);
 			} else {
@@ -92,55 +156,43 @@ export default function SoalPortal() {
 						</div>
 
 						<div>
-							<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Nama Lengkap</label>
-							<div className='relative'>
-								<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-									<User className='h-5 w-5 text-gray-400' />
-								</div>
-								<input
-									type='text'
-									required
-									value={form.nama}
-									onChange={(e) => setForm({ ...form, nama: e.target.value })}
-									placeholder='Nama Lengkap Anda'
-									className='w-full pl-11 pr-4 py-3 bg-gray-50/50 rounded-2xl border border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-800'
-								/>
-							</div>
-						</div>
-
-						<div>
 							<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Kelas</label>
 							<div className='relative'>
 								<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
 									<Hash className='h-5 w-5 text-gray-400' />
 								</div>
-								<input
-									type='text'
+								<select
 									required
 									value={form.kelas}
 									onChange={(e) => setForm({ ...form, kelas: e.target.value })}
-									placeholder='Contoh: XI 1'
-									className='w-full pl-11 pr-4 py-3 bg-gray-50/50 rounded-2xl border border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-800'
-								/>
+									className='w-full pl-11 pr-4 py-3 bg-gray-50/50 rounded-2xl border border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-800 appearance-none'
+								>
+									<option value="" disabled>Pilih Kelas</option>
+									{kelasList.map(k => (
+										<option key={k.id} value={k.kelas}>{k.kelas}</option>
+									))}
+								</select>
 							</div>
 						</div>
 
 						<div>
-							<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Nomor Absen</label>
+							<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Nama Lengkap</label>
 							<div className='relative'>
 								<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-									<Hash className='h-5 w-5 text-gray-400' />
+									<User className='h-5 w-5 text-gray-400' />
 								</div>
-								<input
-									type='number'
+								<select
 									required
-									min='1'
-									max='100'
-									value={form.absen}
-									onChange={(e) => setForm({ ...form, absen: e.target.value })}
-									placeholder='No. Absen'
-									className='w-full pl-11 pr-4 py-3 bg-gray-50/50 rounded-2xl border border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-800'
-								/>
+									disabled={!form.kelas || fetchingSiswa}
+									value={form.nama}
+									onChange={handleSiswaChange}
+									className='w-full pl-11 pr-4 py-3 bg-gray-50/50 rounded-2xl border border-gray-200 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-800 appearance-none disabled:opacity-50'
+								>
+									<option value="" disabled>{fetchingSiswa ? 'Memuat siswa...' : 'Pilih Nama Anda'}</option>
+									{siswaList.map(s => (
+										<option key={s.id} value={s.nama_lengkap}>{s.nama_lengkap}</option>
+									))}
+								</select>
 							</div>
 						</div>
 

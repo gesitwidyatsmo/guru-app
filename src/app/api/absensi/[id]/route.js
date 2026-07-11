@@ -1,111 +1,70 @@
-import { getSheet } from '@/lib/sheets';
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
-// ✅ PERBAIKAN: Await params di Next.js 13+
 export async function PUT(req, context) {
 	try {
-		// Next.js 13+ memerlukan await untuk params
 		const params = await context.params;
 		const { id } = params;
 		const body = await req.json();
 
-		console.log('=== UPDATE ABSENSI ===');
-		console.log('Params:', params);
-		console.log('ID:', id);
-		console.log('Body:', body);
-
 		if (!id) {
-			return Response.json({ error: 'ID tidak ditemukan' }, { status: 400 });
+			return NextResponse.json({ error: 'ID tidak ditemukan' }, { status: 400 });
 		}
 
 		if (!body.status) {
-			return Response.json({ error: 'Status wajib diisi' }, { status: 400 });
+			return NextResponse.json({ error: 'Status wajib diisi' }, { status: 400 });
 		}
 
-		const doc = await getSheet();
-		const sheet = doc.sheetsByTitle['MASTER_ABSENSI'];
+		const supabase = await createClient();
+		const role = req.headers.get('x-user-role');
+		const userId = req.headers.get('x-user-id');
 
-		if (!sheet) {
-			return Response.json({ error: 'Sheet tidak ditemukan' }, { status: 404 });
-		}
-
-		const rows = await sheet.getRows();
-		console.log('Total rows di sheet:', rows.length);
-
-		// Normalisasi ID
-		const normalizeId = (str) => {
-			if (!str) return '';
-			return String(str).trim().toLowerCase();
-		};
-
-		const searchId = normalizeId(id);
-		console.log('Search ID:', searchId);
-
-		// Cari row
-		const row = rows.find((r) => {
-			const rowId1 = normalizeId(r.get('id') || '');
-			const rowId2 = normalizeId(r.id || '');
-
-			if (rowId1 === searchId) {
-				console.log('✅ Match via get(id)');
-				return true;
+		if (role === 'Guru') {
+			// Get sesi_id of this record
+			const { data: recordData } = await supabase.from('absensi_harian_siswa').select('sesi_id').eq('id', id).single();
+			if (recordData) {
+				const { data: sesiData } = await supabase.from('absensi_harian').select('kelas').eq('sesi_id', recordData.sesi_id).single();
+				if (sesiData) {
+					const { data: kelasData } = await supabase.from('kelas').select('id_wali_kelas').eq('nama_kelas', sesiData.kelas).single();
+					if (!kelasData || kelasData.id_wali_kelas !== userId) {
+						return NextResponse.json({ error: 'Akses Ditolak: Anda bukan wali kelas.' }, { status: 403 });
+					}
+				}
 			}
-			if (rowId2 === searchId) {
-				console.log('✅ Match via .id');
-				return true;
-			}
-
-			return false;
-		});
-
-		if (!row) {
-			console.error('❌ Row tidak ditemukan!');
-			console.log(
-				'Sample IDs:',
-				rows.slice(0, 5).map((r) => ({
-					get: r.get('id'),
-					prop: r.id,
-				})),
-			);
-
-			return Response.json(
-				{
-					error: 'Data absensi tidak ditemukan',
-					searchId,
-					sampleIds: rows.slice(0, 5).map((r) => r.get('id')),
-				},
-				{ status: 404 },
-			);
 		}
 
-		console.log('✅ Row ditemukan!');
+		const { data, error } = await supabase
+			.from('absensi_harian_siswa')
+			.update({
+				status: body.status,
+				keterangan: body.keterangan || '',
+			})
+			.eq('id', id)
+			.select()
+			.single();
 
-		// Update
-		row.set('status', body.status);
-		row.set('keterangan', body.keterangan || '');
+		if (error) {
+			return NextResponse.json({ error: 'Data absensi tidak ditemukan', details: error.message }, { status: 404 });
+		}
 
-		await row.save();
-
-		console.log('✅ Update berhasil!');
-
-		return Response.json(
+		return NextResponse.json(
 			{
 				success: true,
 				data: {
-					id: row.get('id'),
-					status: row.get('status'),
-					keterangan: row.get('keterangan'),
+					id: data.id,
+					status: data.status,
+					keterangan: data.keterangan,
 				},
 			},
-			{ status: 200 },
+			{ status: 200 }
 		);
 	} catch (error) {
-		console.error('❌ Error PUT absensi:', error);
-		return Response.json(
+		console.error('❌ Error PUT absensi [id]:', error);
+		return NextResponse.json(
 			{
 				error: error?.message || 'Terjadi kesalahan server',
-				stack: error?.stack,
 			},
-			{ status: 500 },
+			{ status: 500 }
 		);
 	}
 }

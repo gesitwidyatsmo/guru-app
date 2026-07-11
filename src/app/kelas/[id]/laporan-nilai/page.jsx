@@ -5,6 +5,7 @@ import SectionHeader from '@/app/components/SectionHeader'; // Adjust path if ne
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LaporanPage() {
 	const params = useParams();
@@ -42,22 +43,21 @@ export default function LaporanPage() {
 	useEffect(() => {
 		const init = async () => {
 			try {
+				const supabase = createClient();
+				
 				// Fetch Kelas
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = await resKelas.json();
-				const k = dataKelas.find((x) => x.id === id);
-				setKelasInfo(k);
+				const { data: k } = await supabase.from('kelas').select('*').eq('id', id).single();
+				if (k) setKelasInfo(k);
 
 				// Fetch Mapel
-				const resMapel = await fetch('/api/mapel');
-				const dataMapel = await resMapel.json();
-				setMapelList(dataMapel);
+				const { data: dataMapel } = await supabase.from('mapel').select('*');
+				if (dataMapel) setMapelList(dataMapel);
 
 				let poinMap = {};
 				if (k) {
-					const resPoin = await fetch(`/api/poin?kelas=${encodeURIComponent(k.kelas || k.nama_kelas)}`);
-					const dataPoin = resPoin.ok ? await resPoin.json() : [];
-					dataPoin.forEach((p) => {
+					const namaKelas = k.kelas || k.nama_kelas;
+					const { data: dataPoin } = await supabase.from('poin_siswa').select('*').eq('kelas', namaKelas);
+					(dataPoin || []).forEach((p) => {
 						if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
 						if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
 						if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
@@ -66,15 +66,13 @@ export default function LaporanPage() {
 
 				// Fetch Siswa
 				if (k) {
-					const resSiswa = await fetch('/api/siswa');
-					const dataSiswa = await resSiswa.json();
-					const siswaKelas = dataSiswa
-						.filter((s) => s.kelas === (k.kelas || k.nama_kelas) && s.status === 'Aktif')
-						.map((s) => ({
-							...s,
-							poinPositif: poinMap[s.id]?.positif || 0,
-							poinNegatif: poinMap[s.id]?.negatif || 0,
-						}));
+					const namaKelas = k.kelas || k.nama_kelas;
+					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('kelas', namaKelas).eq('status', 'Aktif');
+					const siswaKelas = (dataSiswa || []).map((s) => ({
+						...s,
+						poinPositif: poinMap[s.id]?.positif || 0,
+						poinNegatif: poinMap[s.id]?.negatif || 0,
+					}));
 					setSiswaList(siswaKelas);
 				}
 			} catch (err) {
@@ -97,9 +95,55 @@ export default function LaporanPage() {
 			setLoading(true);
 			try {
 				const namaKelas = kelasInfo.kelas || kelasInfo.nama_kelas;
-				const res = await fetch(`/api/nilai?kelas=${encodeURIComponent(namaKelas)}&mapel=${encodeURIComponent(selectedMapel)}`);
-				const data = await res.json();
-				setNilaiList(data);
+				
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (!user) throw new Error('Unauthenticated');
+
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const role = userData?.role;
+				const userId = userData?.id_user;
+
+				let query = supabase.from('nilai_siswa').select(`
+					id,
+					tugas_id,
+					siswa_id,
+					nama_siswa,
+					nilai,
+					nilai_tugas!inner (
+						guru_id,
+						kategori,
+						type,
+						deskripsi,
+						kelas,
+						mapel,
+						tanggal
+					)
+				`).eq('nilai_tugas.kelas', namaKelas).eq('nilai_tugas.mapel', selectedMapel);
+
+				if (role === 'Guru' && userId) {
+					query = query.eq('nilai_tugas.guru_id', userId);
+				}
+
+				const { data: rawData, error } = await query;
+				if (error) throw error;
+
+				const formattedData = (rawData || []).map(row => ({
+					id: row.id + '_' + row.siswa_id,
+					guru_id: row.nilai_tugas.guru_id || '',
+					siswa_id: row.siswa_id,
+					nama_siswa: row.nama_siswa,
+					kelas: row.nilai_tugas.kelas,
+					mapel: row.nilai_tugas.mapel,
+					kategori: row.nilai_tugas.kategori,
+					type: row.nilai_tugas.type || '',
+					deskripsi: row.nilai_tugas.deskripsi || '',
+					nilai: row.nilai,
+					tanggal: row.nilai_tugas.tanggal,
+					tugas_id: row.tugas_id,
+				}));
+
+				setNilaiList(formattedData);
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -126,12 +170,25 @@ export default function LaporanPage() {
 					scores: [], // { siswa_id, nilai }
 					type: 'harian', // default
 				};
-				// Auto-detect type based on keyword
+				// Priority 1: Strict match based on 'type' from DB
+				const typeLower = (n.type || '').toLowerCase();
 				const titleLower = (n.kategori || '').toLowerCase();
-				if (titleLower.includes('uas') || titleLower.includes('pas')) {
+				
+				if (typeLower === 'sas' || typeLower === 'uas') {
 					groups[n.tugas_id].type = 'uas';
-				} else if (titleLower.includes('uts') || titleLower.includes('pts') || titleLower.includes('sumatif')) {
+				} else if (typeLower === 'sumatif') {
 					groups[n.tugas_id].type = 'sumatif';
+				} else if (typeLower === 'formatif' || typeLower === 'harian') {
+					groups[n.tugas_id].type = 'harian';
+				} else {
+					// Priority 2: Fallback for legacy data using title keyword matching
+					if (titleLower.includes('uas') || titleLower.includes('pas') || titleLower.includes('sas')) {
+						groups[n.tugas_id].type = 'uas';
+					} else if (titleLower.includes('uts') || titleLower.includes('pts') || titleLower.includes('sumatif')) {
+						groups[n.tugas_id].type = 'sumatif';
+					} else {
+						groups[n.tugas_id].type = 'harian';
+					}
 				}
 			}
 			groups[n.tugas_id].scores.push({ siswa_id: n.siswa_id, nilai: parseInt(n.nilai) || 0 });

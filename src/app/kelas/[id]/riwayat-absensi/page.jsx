@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
 import SectionHeader from '../../../components/SectionHeader';
+import { createClient } from '@/utils/supabase/client';
 
 export default function RiwayatAbsensiPage() {
 	const params = useParams();
@@ -33,19 +34,15 @@ export default function RiwayatAbsensiPage() {
 		const fetchInitial = async () => {
 			if (!id) return;
 			try {
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const kelas = dataKelas.find((k) => k.id === id);
+				const supabase = createClient();
+				const { data: dataKelas } = await supabase.from('kelas').select('*').eq('id', id).single();
+				
+				if (dataKelas) {
+					setKelasDetail(dataKelas);
+					setNamaKelas(dataKelas.nama_kelas);
 
-				if (kelas) {
-					setKelasDetail(kelas);
-					setNamaKelas(kelas.kelas);
-
-					// Ambil siswa untuk kelas ini
-					const resSiswa = await fetch('/api/siswa');
-					const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-					const siswaKelasIni = dataSiswa.filter((s) => s.status === 'Aktif' && s.kelas === kelas.kelas);
-					setSiswaList(siswaKelasIni);
+					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('status', 'Aktif').eq('kelas', dataKelas.nama_kelas);
+					setSiswaList(dataSiswa || []);
 				}
 			} catch (err) {
 				console.error(err);
@@ -62,25 +59,18 @@ export default function RiwayatAbsensiPage() {
 		if (!namaKelas) return;
 		try {
 			setLoadingSesi(true);
-			// Ambil semua absensi kelas tanpa filter tanggal
-			const url = `/api/absensi?kelas=${encodeURIComponent(namaKelas)}`;
-			const res = await fetch(url);
-			if (res.ok) {
-				const data = await res.json();
-
-				// Group by tanggal
+			const supabase = createClient();
+			const { data } = await supabase.from('absensi_harian').select('tanggal').eq('kelas', namaKelas);
+			
+			if (data) {
 				const sesiSet = new Set();
 				data.forEach((item) => {
-					// Ambil cuma tanggal YYYY-MM-DD
 					const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
 					if (tgl) sesiSet.add(tgl);
 				});
 
-				// Sort descending by date
 				const sesiArray = Array.from(sesiSet).sort((a, b) => new Date(b) - new Date(a));
 				setDaftarSesi(sesiArray);
-
-				// Optional: update absensiMap jika data sesi spesifik diperlukan
 			}
 		} catch (err) {
 			console.error('Error fetching sesi:', err);
@@ -103,15 +93,14 @@ export default function RiwayatAbsensiPage() {
 
 		const loadSesiDetail = async () => {
 			try {
-				const url = `/api/absensi?kelas=${encodeURIComponent(namaKelas)}&tanggal=${selectedTanggal}`;
-				const res = await fetch(url);
-				if (res.ok) {
-					const data = await res.json();
+				const supabase = createClient();
+				const { data: sesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).single();
+				if (sesi) {
+					const { data: details } = await supabase.from('absensi_harian_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
 					setTanggalEdit(selectedTanggal);
 
-					// Map ke state form
 					const map = {};
-					data.forEach((item) => {
+					(details || []).forEach((item) => {
 						map[item.siswa_id] = {
 							status: item.status,
 							keterangan: item.keterangan || '',
@@ -154,29 +143,35 @@ export default function RiwayatAbsensiPage() {
 
 		setSaving(true);
 		try {
-			// Persiapkan format yg diterima API
+			const supabase = createClient();
+			
+			const { data: existingSesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).single();
+			if (!existingSesi) throw new Error('Sesi tidak ditemukan');
+
+			let sesiId = existingSesi.sesi_id;
+
+			if (selectedTanggal !== tanggalEdit) {
+				// Check if new date already exists
+				const { data: checkNew } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggalEdit).single();
+				if (checkNew) {
+					throw new Error('Sesi untuk tanggal tersebut sudah ada');
+				}
+				await supabase.from('absensi_harian').update({ tanggal: tanggalEdit }).eq('sesi_id', sesiId);
+			}
+
+			// Update details
+			// easiest is delete and reinsert
+			await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
+			
 			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
+				sesi_id: sesiId,
 				siswa_id: siswaId,
 				status: absensiMap[siswaId].status,
-				keterangan: absensiMap[siswaId].keterangan,
+				keterangan: absensiMap[siswaId].keterangan || '',
 			}));
-
-			const payload = {
-				oldTanggal: selectedTanggal,
-				newTanggal: tanggalEdit,
-				kelas: namaKelas,
-				absensiList,
-			};
-
-			const res = await fetch('/api/absensi', {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
-
-			if (!res.ok) {
-				const err = await res.json();
-				throw new Error(err.error || 'Gagal menyimpan');
+			
+			if(absensiList.length > 0) {
+				await supabase.from('absensi_harian_siswa').insert(absensiList);
 			}
 
 			Swal.fire({
@@ -187,7 +182,6 @@ export default function RiwayatAbsensiPage() {
 				showConfirmButton: false,
 			});
 
-			// Refresh sesi, mungkin newTanggal berubah
 			await fetchRiwayatSesi();
 			if (tanggalEdit !== selectedTanggal) {
 				setSelectedTanggal(tanggalEdit);
@@ -219,11 +213,9 @@ export default function RiwayatAbsensiPage() {
 
 		setSaving(true);
 		try {
-			const res = await fetch(`/api/absensi?kelas=${encodeURIComponent(namaKelas)}&tanggal=${selectedTanggal}`, {
-				method: 'DELETE',
-			});
-
-			if (!res.ok) throw new Error('Gagal menghapus');
+			const supabase = createClient();
+			const { error } = await supabase.from('absensi_harian').delete().eq('kelas', namaKelas).eq('tanggal', selectedTanggal);
+			if (error) throw error;
 
 			Swal.fire('Terhapus!', 'Sesi absensi berhasil dihapus.', 'success');
 			setSelectedTanggal('');

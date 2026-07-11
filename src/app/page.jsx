@@ -1,9 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Loader from './components/loading';
+import Swal from 'sweetalert2';
+import { useLogout } from '@/hooks/useLogout';
+import StatistikCards from './components/dashboard/StatistikCards';
+import QuickActions from './components/dashboard/QuickActions';
+import MenuUtama from './components/dashboard/MenuUtama';
+import Leaderboard from './components/dashboard/Leaderboard';
+import JadwalWidget from './components/dashboard/JadwalWidget';
+import NotificationBell from './components/dashboard/NotificationBell';
+import DashboardCharts from './components/dashboard/DashboardCharts';
 
 export default function Home() {
 	const [stat, setStat] = useState({
@@ -23,11 +32,27 @@ export default function Home() {
 	});
 	const [loading, setLoading] = useState(true);
 
+	const [searchQuery, setSearchQuery] = useState('');
+	const [allSiswa, setAllSiswa] = useState([]);
+	const [isSearchOpen, setIsSearchOpen] = useState(false);
+	const searchRef = useRef(null);
+
 	const router = useRouter();
+	const { handleLogout } = useLogout();
 
 	// Nama hari dalam Bahasa Indonesia
 	const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 	const hariIni = namaHari[new Date().getDay()];
+
+	useEffect(() => {
+		function handleClickOutside(event) {
+			if (searchRef.current && !searchRef.current.contains(event.target)) {
+				setIsSearchOpen(false);
+			}
+		}
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
 	// FETCH DATA STATISTIK DAN JADWAL
 	useEffect(() => {
@@ -57,6 +82,7 @@ export default function Home() {
 				}
 
 				const siswaAktif = dataSiswa.filter((siswa) => siswa.status === 'Aktif');
+				setAllSiswa(siswaAktif);
 
 				// Filter jadwal hari ini
 				const jadwalFiltered = dataJadwal
@@ -110,68 +136,71 @@ export default function Home() {
 	}, [hariIni]);
 
 	// Quick Actions (Menu Utama - Sering dipakai)
-	const quickActions = [
-		{
-			label: 'Absensi',
-			icon: (
-				<svg
-					className='w-8 h-8'
-					fill='none'
-					stroke='currentColor'
-					viewBox='0 0 24 24'>
-					<path
-						strokeLinecap='round'
-						strokeLinejoin='round'
-						strokeWidth={2}
-						d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
-					/>
-				</svg>
-			),
-			route: '/absensi',
-			color: 'from-green-500 to-emerald-600',
-			description: 'Input absensi harian',
-		},
-		{
-			label: 'Penilaian',
-			icon: (
-				<svg
-					className='w-8 h-8'
-					fill='none'
-					stroke='currentColor'
-					viewBox='0 0 24 24'>
-					<path
-						strokeLinecap='round'
-						strokeLinejoin='round'
-						strokeWidth={2}
-						d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-					/>
-				</svg>
-			),
-			route: '/penilaian',
-			color: 'from-blue-500 to-indigo-600',
-			description: 'Input nilai siswa',
-		},
-		{
-			label: 'Laporan',
-			icon: (
-				<svg
-					className='w-8 h-8'
-					fill='none'
-					stroke='currentColor'
-					viewBox='0 0 24 24'>
-					<path
-						strokeLinecap='round'
-						strokeLinejoin='round'
-						strokeWidth={2}
-						d='M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
-					/>
-				</svg>
-			),
-			route: '/laporan',
-			color: 'from-purple-500 to-pink-600',
-			description: 'Rekap & statistik',
-		},
-	];
+	const quickActions = useMemo(
+		() => [
+			{
+				label: 'Absensi',
+				icon: (
+					<svg
+						className='w-8 h-8'
+						fill='none'
+						stroke='currentColor'
+						viewBox='0 0 24 24'>
+						<path
+							strokeLinecap='round'
+							strokeLinejoin='round'
+							strokeWidth={2}
+							d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'
+						/>
+					</svg>
+				),
+				route: '/absensi',
+				color: 'from-green-500 to-emerald-600',
+				description: 'Input absensi harian',
+			},
+			{
+				label: 'Penilaian',
+				icon: (
+					<svg
+						className='w-8 h-8'
+						fill='none'
+						stroke='currentColor'
+						viewBox='0 0 24 24'>
+						<path
+							strokeLinecap='round'
+							strokeLinejoin='round'
+							strokeWidth={2}
+							d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+						/>
+					</svg>
+				),
+				route: '/penilaian',
+				color: 'from-blue-500 to-indigo-600',
+				description: 'Input nilai siswa',
+			},
+			{
+				label: 'Laporan',
+				icon: (
+					<svg
+						className='w-8 h-8'
+						fill='none'
+						stroke='currentColor'
+						viewBox='0 0 24 24'>
+						<path
+							strokeLinecap='round'
+							strokeLinejoin='round'
+							strokeWidth={2}
+							d='M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+						/>
+					</svg>
+				),
+				route: '/laporan',
+				color: 'from-purple-500 to-pink-600',
+				description: 'Rekap & statistik',
+			},
+		],
+		[],
+	);
 
 	// Menu Reguler (Master Data)
 	const menuItems = [
@@ -360,6 +389,16 @@ export default function Home() {
 		return true;
 	});
 
+	const searchResults = useMemo(() => {
+		if (!searchQuery.trim()) return { menus: [], siswa: [] };
+		const q = searchQuery.toLowerCase();
+
+		const menus = [...quickActions, ...filteredMenuItems].filter((m) => m.label.toLowerCase().includes(q) || (m.description && m.description.toLowerCase().includes(q)));
+		const siswa = allSiswa.filter((s) => s.nama_lengkap.toLowerCase().includes(q) || (s.nis && s.nis.toLowerCase().includes(q))).slice(0, 5);
+
+		return { menus, siswa };
+	}, [searchQuery, allSiswa, filteredMenuItems, quickActions]);
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -368,9 +407,17 @@ export default function Home() {
 		<main className='min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8'>
 				{/* Header */}
-				<div className='mb-8 flex items-start justify-between gap-4'>
+				<div className='mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 					<div>
-						<h1 className='text-3xl sm:text-4xl font-bold text-gray-800 mb-2'>Selamat Datang{userName ? `, ${userName}` : ''}! 👋</h1>
+						<div className='flex flex-wrap items-center gap-1 text-3xl sm:text-4xl font-bold text-gray-800 mb-2'>
+							Selamat Datang
+							{userName && (
+								<>
+									, <span className=''>{userName}</span>
+								</>
+							)}
+							! 👋
+						</div>
 						<p className='text-gray-600 text-sm sm:text-base'>
 							{new Date().toLocaleDateString('id-ID', {
 								weekday: 'long',
@@ -380,15 +427,103 @@ export default function Home() {
 							})}
 						</p>
 					</div>
-					<div className='flex items-center gap-2'>
+					<div
+						className='flex items-center gap-2 w-full md:w-auto relative'
+						ref={searchRef}>
+						<div className={`relative flex items-center transition-all duration-300 ${isSearchOpen ? 'w-full md:w-64' : 'w-12 md:w-64'}`}>
+							<input
+								type='text'
+								placeholder='Cari menu atau siswa...'
+								className={`w-full bg-white border border-gray-200 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all ${!isSearchOpen && 'hidden md:block'}`}
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								onFocus={() => setIsSearchOpen(true)}
+							/>
+							<div
+								className={`absolute left-3 text-gray-400 ${!isSearchOpen && 'md:hidden cursor-pointer'}`}
+								onClick={() => setIsSearchOpen(!isSearchOpen)}>
+								<svg
+									className='w-5 h-5'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										strokeWidth='2'
+										d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path>
+								</svg>
+							</div>
+							<div className={`absolute left-3 text-gray-400 hidden md:block`}>
+								<svg
+									className='w-5 h-5'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										strokeWidth='2'
+										d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path>
+								</svg>
+							</div>
+
+							{/* Search Results Dropdown */}
+							{isSearchOpen && searchQuery.trim() !== '' && (
+								<div className='absolute top-full right-0 mt-2 w-full md:w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto'>
+									{searchResults.menus.length > 0 && (
+										<div className='p-2'>
+											<div className='text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2'>Menu & Aksi</div>
+											{searchResults.menus.map((menu, i) => (
+												<Link
+													key={`menu-${i}`}
+													href={menu.route}
+													className='flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors'
+													onClick={() => setIsSearchOpen(false)}>
+													<div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${menu.color}`}>{menu.icon}</div>
+													<div>
+														<div className='text-sm font-medium text-gray-700'>{menu.label}</div>
+														{menu.description && <div className='text-xs text-gray-500'>{menu.description}</div>}
+													</div>
+												</Link>
+											))}
+										</div>
+									)}
+
+									{searchResults.siswa.length > 0 && (
+										<div className='p-2 border-t border-gray-50'>
+											<div className='text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2'>Siswa Aktif</div>
+											{searchResults.siswa.map((siswa) => (
+												<Link
+													key={siswa.id}
+													href={`/siswa/${siswa.id}`}
+													className='flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors'
+													onClick={() => setIsSearchOpen(false)}>
+													<div>
+														<div className='text-sm font-medium text-gray-700'>{siswa.nama_lengkap}</div>
+														<div className='text-xs text-gray-500'>
+															{siswa.nis} • {siswa.kelas}
+														</div>
+													</div>
+													<div className='text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-600 rounded-md'>Lihat</div>
+												</Link>
+											))}
+										</div>
+									)}
+
+									{searchResults.menus.length === 0 && searchResults.siswa.length === 0 && (
+										<div className='p-4 text-center text-sm text-gray-500'>Tidak ada hasil ditemukan untuk &ldquo;{searchQuery}&rdquo;</div>
+									)}
+								</div>
+							)}
+						</div>
+
+						<NotificationBell />
+
 						<button
-							onClick={async () => {
-								await clearAll();
-								await fetch('/api/logout');
-								window.location.href = '/login';
-							}}
+							onClick={handleLogout}
 							title='Keluar Akun'
-							className='flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-500 transition-all duration-200 group'>
+							className={`flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-500 transition-all duration-200 group ${isSearchOpen && 'hidden md:block'}`}>
 							<svg
 								className='w-6 h-6 group-hover:-translate-x-0.5 transition-transform'
 								fill='none'
@@ -405,7 +540,7 @@ export default function Home() {
 						<Link
 							href='/pengaturan'
 							title='Pengaturan'
-							className='flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-gray-100 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 group'>
+							className={`flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-gray-100 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 group ${isSearchOpen && 'hidden md:block'}`}>
 							<svg
 								className='w-6 h-6 group-hover:rotate-45 transition-transform duration-300'
 								fill='none'
@@ -429,309 +564,25 @@ export default function Home() {
 				</div>
 
 				{/* Statistik Cards */}
-				<div className='grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8'>
-					{/* Siswa */}
-					<div className='bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
-						<div className='flex items-center justify-between mb-2'>
-							<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
-								<svg
-									className='w-6 h-6 sm:w-8 sm:h-8'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
-									/>
-								</svg>
-							</div>
-						</div>
-						<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.siswa}</p>
-						<p className='text-xs sm:text-sm text-blue-100'>Total Siswa Aktif</p>
-					</div>
-
-					{/* Mapel */}
-					<div className='bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
-						<div className='flex items-center justify-between mb-2'>
-							<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
-								<svg
-									className='w-6 h-6 sm:w-8 sm:h-8'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
-									/>
-								</svg>
-							</div>
-						</div>
-						<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.mapel}</p>
-						<p className='text-xs sm:text-sm text-purple-100'>Mata Pelajaran</p>
-					</div>
-
-					{/* Kelas */}
-					<div className='bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
-						<div className='flex items-center justify-between mb-2'>
-							<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
-								<svg
-									className='w-6 h-6 sm:w-8 sm:h-8'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
-									/>
-								</svg>
-							</div>
-						</div>
-						<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.kelas}</p>
-						<p className='text-xs sm:text-sm text-orange-100'>Total Kelas</p>
-					</div>
-
-					{/* Jurnal */}
-					<div className='bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
-						<div className='flex items-center justify-between mb-2'>
-							<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
-								<svg
-									className='w-6 h-6 sm:w-8 sm:h-8'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-									/>
-								</svg>
-							</div>
-						</div>
-						<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.jurnal}</p>
-						<p className='text-xs sm:text-sm text-teal-100'>Jurnal Terisi</p>
-					</div>
-				</div>
+				<StatistikCards stat={stat} />
 
 				{/* Quick Actions */}
-				<div className='mb-8'>
-					<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-						<span className='text-2xl'>⚡</span>
-						Aksi Cepat
-					</h2>
-					<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
-						{quickActions.map((action, idx) => (
-							<Link
-								key={idx}
-								href={action.route}
-								className={`bg-gradient-to-br ${action.color} rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-2xl cursor-pointer group`}>
-								<div className='flex items-center gap-4'>
-									<div className='bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:bg-white/30 transition-all'>{action.icon}</div>
-									<div className='flex-1'>
-										<h3 className='text-xl font-bold mb-1'>{action.label}</h3>
-										<p className='text-sm text-white/80'>{action.description}</p>
-									</div>
-									<svg
-										className='w-6 h-6 transform group-hover:translate-x-1 transition-transform'
-										fill='none'
-										stroke='currentColor'
-										viewBox='0 0 24 24'>
-										<path
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											strokeWidth={2}
-											d='M9 5l7 7-7 7'
-										/>
-									</svg>
-								</div>
-							</Link>
-						))}
-					</div>
-				</div>
+				<QuickActions quickActions={quickActions} />
 
 				{/* Menu Utama */}
-				<div className='mb-8'>
-					<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-						<span className='text-2xl'>📚</span>
-						Menu Utama
-					</h2>
-					<div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4'>
-						{filteredMenuItems.map((item, idx) => (
-							<Link
-								key={idx}
-								href={item.route}
-								className={`${item.color} rounded-2xl shadow-lg p-4 sm:p-6 text-white text-center cursor-pointer transform hover:scale-105 transition-all duration-300 hover:shadow-xl group`}>
-								<div className='flex flex-col items-center gap-2 sm:gap-3'>
-									<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3 group-hover:bg-white/30 transition-all'>{item.icon}</div>
-									<p className='font-semibold text-sm sm:text-base'>{item.label}</p>
-								</div>
-							</Link>
-						))}
-					</div>
-				</div>
+				<MenuUtama filteredMenuItems={filteredMenuItems} />
+
+				{/* Visualisasi Data / Chart */}
+				<DashboardCharts />
 
 				{/* Leaderboard Poin Siswa */}
-				<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8'>
-					{/* Top Positif */}
-					<div className='bg-white rounded-2xl shadow-xl p-6 border border-emerald-100 relative overflow-hidden'>
-						<div className='absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-bl-full -z-10 opacity-50'></div>
-						<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-							<span className='text-2xl'>🌟</span>
-							Bintang Kelas
-						</h2>
-						{leaderboard.topPositif.length > 0 ? (
-							<div className='space-y-3'>
-								{leaderboard.topPositif.map((siswa, idx) => (
-									<div
-										key={siswa.id}
-										className='flex items-center gap-3 p-3 bg-emerald-50/50 hover:bg-emerald-50 rounded-xl transition-colors border border-emerald-100/50'>
-										<div
-											className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-400 text-yellow-900' : idx === 1 ? 'bg-gray-300 text-gray-800' : idx === 2 ? 'bg-amber-600 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
-											{idx + 1}
-										</div>
-										<div className='flex-1'>
-											<Link
-												href={`/siswa/${siswa.id}`}
-												className='font-semibold text-gray-800 text-sm hover:text-indigo-600 transition-colors'>
-												{siswa.nama_lengkap}
-											</Link>
-											<p className='text-xs text-gray-500'>{siswa.kelas}</p>
-										</div>
-										<div className='bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-bold text-sm'>+{siswa.poinPositif}</div>
-									</div>
-								))}
-							</div>
-						) : (
-							<p className='text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-xl border border-gray-100'>Belum ada siswa dengan poin positif.</p>
-						)}
-					</div>
-
-					{/* Top Negatif */}
-					<div className='bg-white rounded-2xl shadow-xl p-6 border border-rose-100 relative overflow-hidden'>
-						<div className='absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-bl-full -z-10 opacity-50'></div>
-						<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-							<span className='text-2xl'>⚠️</span>
-							Perhatian Khusus
-						</h2>
-						{leaderboard.topNegatif.length > 0 ? (
-							<div className='space-y-3'>
-								{leaderboard.topNegatif.map((siswa, idx) => (
-									<div
-										key={siswa.id}
-										className='flex items-center gap-3 p-3 bg-rose-50/50 hover:bg-rose-50 rounded-xl transition-colors border border-rose-100/50'>
-										<div className='w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-rose-100 text-rose-700'>{idx + 1}</div>
-										<div className='flex-1'>
-											<Link
-												href={`/siswa/${siswa.id}`}
-												className='font-semibold text-gray-800 text-sm hover:text-indigo-600 transition-colors'>
-												{siswa.nama_lengkap}
-											</Link>
-											<p className='text-xs text-gray-500'>{siswa.kelas}</p>
-										</div>
-										<div className='bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-bold text-sm'>-{siswa.poinNegatif}</div>
-									</div>
-								))}
-							</div>
-						) : (
-							<p className='text-sm text-gray-500 italic text-center py-4 bg-gray-50 rounded-xl border border-gray-100'>Sempurna! Tidak ada siswa dengan pelanggaran.</p>
-						)}
-					</div>
-				</div>
+				<Leaderboard leaderboard={leaderboard} />
 
 				{/* Jadwal Hari Ini */}
-				<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
-					<div className='flex items-center justify-between mb-6'>
-						<h2 className='text-md sm:text-2xl font-bold text-gray-800 flex items-center gap-2'>
-							<span className='text-2xl '>📅</span>
-							Jadwal Hari Ini
-							<span className='text-base hidden lg:block font-normal text-gray-500'>({hariIni})</span>
-						</h2>
-						<Link
-							href='/jadwal'
-							className='text-indigo-600 hover:text-indigo-700 font-medium text-sm flex items-center gap-1'>
-							Lihat Semua
-							<svg
-								className='w-4 h-4'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M9 5l7 7-7 7'
-								/>
-							</svg>
-						</Link>
-					</div>
-
-					{loading ? (
-						<div className='flex items-center justify-center py-12'>
-							<div className='animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent'></div>
-						</div>
-					) : jadwalHariIni.length > 0 ? (
-						<div className='space-y-3'>
-							{jadwalHariIni.map((jadwal, idx) => (
-								<div
-									key={idx}
-									className='flex items-center gap-4 p-4 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl hover:shadow-md transition-all border border-indigo-100'>
-									<div className='bg-indigo-600 text-white rounded-xl p-3 text-center min-w-[70px]'>
-										<p className='text-xs font-medium'>Jam Ke</p>
-										<p className='text-xl font-bold'>{jadwal.jam_ke || '-'}</p>
-									</div>
-									<div className='flex-1'>
-										<h3 className='font-bold text-gray-800 text-base mb-1'>{jadwal.mapel || 'Tidak ada mapel'}</h3>
-										<p className='text-sm text-gray-600 flex items-center gap-2'>
-											<svg
-												className='w-4 h-4'
-												fill='none'
-												stroke='currentColor'
-												viewBox='0 0 24 24'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4'
-												/>
-											</svg>
-											{jadwal.kelas || '-'}
-										</p>
-									</div>
-									<div className='text-right'>
-										<p className='text-sm font-semibold text-indigo-600'>
-											{jadwal.jam_mulai || '00:00'} - {jadwal.jam_selesai || '00:00'}
-										</p>
-									</div>
-								</div>
-							))}
-						</div>
-					) : (
-						<div className='text-center py-12'>
-							<div className='inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4'>
-								<svg
-									className='w-10 h-10 text-gray-400'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
-									/>
-								</svg>
-							</div>
-							<p className='text-gray-500 font-medium'>Tidak ada jadwal hari ini</p>
-							<p className='text-sm text-gray-400 mt-2'>Nikmati waktu luang Anda! 😊</p>
-						</div>
-					)}
-				</div>
+				<JadwalWidget
+					jadwalHariIni={jadwalHariIni}
+					hariIni={hariIni}
+				/>
 			</div>
 		</main>
 	);

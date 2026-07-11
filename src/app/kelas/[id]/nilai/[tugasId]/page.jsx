@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
+import { createClient } from '@/utils/supabase/client';
 
 export default function DetailNilaiPage() {
 	const params = useParams();
@@ -19,24 +20,64 @@ export default function DetailNilaiPage() {
 
 		const fetchDetailTugas = async () => {
 			try {
-				const response = await fetch(`/api/nilai?tugasId=${tugasId}`);
-				const data = await response.json();
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (!user) throw new Error('Unauthenticated');
 
-				console.log('Data fetched:', data);
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const role = userData?.role;
+				const userId = userData?.id_user;
 
-				if (data && data.length > 0) {
-					const firstData = data[0];
+				let query = supabase.from('nilai_siswa').select(`
+					id,
+					tugas_id,
+					siswa_id,
+					nama_siswa,
+					nilai,
+					nilai_tugas!inner (
+						guru_id,
+						kategori,
+						type,
+						deskripsi,
+						kelas,
+						mapel,
+						tanggal
+					)
+				`).eq('tugas_id', tugasId);
+
+				if (role === 'Guru' && userId) {
+					query = query.eq('nilai_tugas.guru_id', userId);
+				}
+
+				const { data: rawData, error } = await query;
+				if (error) throw error;
+
+				if (rawData && rawData.length > 0) {
+					const firstData = rawData[0].nilai_tugas;
 					setTugasData({
 						judul: firstData.kategori,
 						mapel: firstData.mapel,
 						kelas: firstData.kelas,
 						tanggal: firstData.tanggal,
-						siswa: data.map((item) => ({
+						siswa: rawData.map((item) => ({
 							id: item.siswa_id,
 							nama_lengkap: item.nama_siswa,
 							nilai: item.nilai,
 						})),
 					});
+				} else {
+					// Fallback if no students inserted but task exists
+					const { data: tugasHead, error: errHead } = await supabase.from('nilai_tugas').select('*').eq('tugas_id', tugasId).single();
+					if (tugasHead) {
+						if (role === 'Guru' && tugasHead.guru_id !== userId) throw new Error('Akses Ditolak');
+						setTugasData({
+							judul: tugasHead.kategori,
+							mapel: tugasHead.mapel,
+							kelas: tugasHead.kelas,
+							tanggal: tugasHead.tanggal,
+							siswa: [],
+						});
+					}
 				}
 			} catch (error) {
 				console.error('Error fetching tugas:', error);
@@ -75,25 +116,35 @@ export default function DetailNilaiPage() {
 		if (!result.isConfirmed) return;
 
 		try {
-			const response = await fetch(`/api/nilai?tugasId=${tugasId}`, {
-				method: 'DELETE',
-			});
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const role = userData?.role;
+			const userId = userData?.id_user;
 
-			const data = await response.json();
+			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', tugasId).single();
+			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
 
-			if (response.ok) {
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil Dihapus!',
-					text: `${data.count} data nilai berhasil dihapus`,
-					confirmButtonColor: '#4F46E5',
-					timer: 2000,
-					timerProgressBar: true,
-				});
-				router.push(`/kelas/${id}`);
-			} else {
-				throw new Error(data.error || 'Gagal menghapus tugas');
+			if (role === 'Guru' && userId) {
+				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+					throw new Error('Akses Ditolak: Dilarang menghapus riwayat penilaian kepunyaan rekan Guru Anda.');
+				}
+				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak berhak menghapus tugas dari kelas eksternal.');
 			}
+
+			const { error: deleteError } = await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
+			if (deleteError) throw deleteError;
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil Dihapus!',
+				text: `Data nilai berhasil dihapus`,
+				confirmButtonColor: '#4F46E5',
+				timer: 2000,
+				timerProgressBar: true,
+			});
+			router.push(`/kelas/${id}`);
 		} catch (error) {
 			console.error('Error deleting tugas:', error);
 			Swal.fire({
