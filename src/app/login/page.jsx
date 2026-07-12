@@ -63,52 +63,88 @@ export default function LoginPage() {
 	};
 
 	return (
-		<div className='min-h-screen bg-slate-50 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8'>
+		<div className='min-h-screen bg-[#FFF5F0] flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 relative overflow-hidden'>
+			
+			{/* Decorative elements for brutalist vibe */}
+			<div className="absolute top-10 left-10 w-24 h-24 bg-yellow-300 border-[3px] border-black rounded-full shadow-[4px_4px_0px_0px_#0D0D0D] hidden md:block animate-[spin_10s_linear_infinite]"></div>
+			<div className="absolute bottom-10 right-10 w-32 h-32 bg-teal-400 border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] hidden md:block transform rotate-12"></div>
+
 			{/* Header Branding */}
-			<div className='sm:mx-auto sm:w-full sm:max-w-md text-center'>
-				<div className='flex justify-center mb-6'>
-					<div className='w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 transform rotate-3'>
+			<div className='relative sm:mx-auto sm:w-full sm:max-w-md text-center z-10 pt-4'>
+				
+				{/* Background Floating Elements */}
+				<div className="absolute inset-0 pointer-events-none -z-10">
+					{/* Small floating yellow star on left */}
+					<svg className="absolute -left-6 top-10 w-10 h-10 text-yellow-300 animate-[spin_10s_linear_infinite]" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" stroke="black" strokeWidth="2" strokeLinejoin="round"/>
+					</svg>
+
+					{/* Tiny dotted line on right */}
+					<svg className="absolute -right-6 top-16 w-12 h-12 text-black opacity-40" viewBox="0 0 50 50" fill="none">
+						<circle cx="10" cy="10" r="3" fill="black" />
+						<circle cx="30" cy="10" r="3" fill="black" />
+						<circle cx="10" cy="30" r="3" fill="black" />
+						<circle cx="30" cy="30" r="3" fill="black" />
+					</svg>
+
+					{/* Small teal square near bottom left */}
+					<div className="absolute left-4 bottom-4 w-6 h-6 bg-teal-400 border-2 border-black transform -rotate-12 shadow-[2px_2px_0px_0px_#0D0D0D]"></div>
+				</div>
+
+				<div className='flex justify-center mb-8 relative'>
+					{/* Simple offset square behind logo */}
+					<div className="absolute top-1/2 left-1/2 w-20 h-20 bg-orange-200 border-[3px] border-black rounded-xl -translate-x-4 -translate-y-4 -z-20 shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-3"></div>
+
+					<div className='w-20 h-20 rounded-xl bg-orange-500 border-[3px] border-black flex items-center justify-center shadow-[6px_6px_0px_0px_#0D0D0D] transform hover:-rotate-6 transition-transform cursor-pointer relative z-10'>
 						<svg
-							className='w-10 h-10 text-white transform -rotate-3'
+							className='w-12 h-12 text-black'
 							fill='none'
 							stroke='currentColor'
-							viewBox='0 0 24 24'>
+							viewBox='0 0 24 24'
+							strokeWidth='2.5'>
 							<path
 								strokeLinecap='round'
 								strokeLinejoin='round'
-								strokeWidth='2'
 								d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
 							/>
 						</svg>
 					</div>
 				</div>
-				<h2 className='text-3xl font-extrabold text-slate-900 tracking-tight'>Guru-App Space</h2>
-				<p className='mt-2 text-sm text-slate-600 font-medium'>Sistem Manajemen Akademika Digital</p>
+				
+				<h2 className='text-4xl sm:text-5xl font-black text-black tracking-tight uppercase'>
+					Guru-App
+				</h2>
+				
+				<div className="mt-6 mb-2">
+					<p className='text-xs sm:text-sm text-black font-bold border-[3px] border-black bg-white inline-block px-4 py-1.5 rounded-full shadow-[4px_4px_0px_0px_#0D0D0D]'>
+						Sistem Manajemen Akademika Digital
+					</p>
+				</div>
 			</div>
 
 			{/* Login Box */}
-			<div className='mt-8 sm:mx-auto sm:w-full sm:max-w-md'>
-				<div className='bg-white py-8 px-4 shadow-xl shadow-slate-200/50 sm:rounded-3xl sm:px-10 border border-slate-100'>
+			<div className='mt-10 sm:mx-auto sm:w-full sm:max-w-md z-10'>
+				<div className='bg-white py-8 px-4 border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] sm:rounded-2xl sm:px-10'>
 					<form
 						className='space-y-6'
 						onSubmit={handleSubmit}>
 						<div>
 							<label
 								htmlFor='username'
-								className='block text-sm font-semibold text-slate-700'>
+								className='block text-base font-bold text-black uppercase tracking-wider mb-2'>
 								Username / Email
 							</label>
-							<div className='mt-2 relative'>
-								<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+							<div className='relative'>
+								<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
 									<svg
-										className='h-5 w-5 text-slate-400'
+										className='h-6 w-6 text-black'
 										fill='none'
 										viewBox='0 0 24 24'
 										stroke='currentColor'>
 										<path
 											strokeLinecap='round'
 											strokeLinejoin='round'
-											strokeWidth='2'
+											strokeWidth='2.5'
 											d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
 										/>
 									</svg>
@@ -121,29 +157,29 @@ export default function LoginPage() {
 									value={formData.username}
 									onChange={handleChange}
 									autoComplete='username'
-									className='appearance-none block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all'
-									placeholder='ID Guru Pendamping'
+									className='appearance-none block w-full pl-12 pr-4 py-3 border-[3px] border-black rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-none focus:translate-x-[4px] focus:translate-y-[4px] outline-none text-black font-bold placeholder-gray-400 sm:text-base transition-all bg-yellow-50 focus:bg-white'
+									placeholder='ID GURU PENDAMPING'
 								/>
 							</div>
 						</div>
 
-						<div>
+						<div className="mt-6">
 							<label
 								htmlFor='password'
-								className='block text-sm font-semibold text-slate-700'>
+								className='block text-base font-bold text-black uppercase tracking-wider mb-2'>
 								Kata Sandi
 							</label>
-							<div className='mt-2 relative'>
-								<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+							<div className='relative'>
+								<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
 									<svg
-										className='h-5 w-5 text-slate-400'
+										className='h-6 w-6 text-black'
 										fill='none'
 										viewBox='0 0 24 24'
 										stroke='currentColor'>
 										<path
 											strokeLinecap='round'
 											strokeLinejoin='round'
-											strokeWidth='2'
+											strokeWidth='2.5'
 											d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'
 										/>
 									</svg>
@@ -156,21 +192,21 @@ export default function LoginPage() {
 									value={formData.password}
 									onChange={handleChange}
 									autoComplete='current-password'
-									className='appearance-none block w-full pl-10 pr-10 py-3 border border-slate-300 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all'
+									className='appearance-none block w-full pl-12 pr-12 py-3 border-[3px] border-black rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-none focus:translate-x-[4px] focus:translate-y-[4px] outline-none text-black font-bold placeholder-gray-400 sm:text-base transition-all bg-yellow-50 focus:bg-white tracking-widest'
 									placeholder='••••••••'
 								/>
 								<button
 									type='button'
 									onClick={() => setShowPswd(!showPswd)}
-									className='absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-indigo-600 focus:outline-none'>
+									className='absolute inset-y-0 right-0 pr-4 flex items-center text-black hover:text-blue-600 focus:outline-none'>
 									{showPswd ? (
 										<svg
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={1.5}
+											strokeWidth={2}
 											stroke='currentColor'
-											className='w-5 h-5'>
+											className='w-6 h-6'>
 											<path
 												strokeLinecap='round'
 												strokeLinejoin='round'
@@ -182,9 +218,9 @@ export default function LoginPage() {
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={1.5}
+											strokeWidth={2}
 											stroke='currentColor'
-											className='w-5 h-5'>
+											className='w-6 h-6'>
 											<path
 												strokeLinecap='round'
 												strokeLinejoin='round'
@@ -201,43 +237,48 @@ export default function LoginPage() {
 							</div>
 						</div>
 
-						<div className='flex items-center justify-between'>
-							<div className='flex items-center'>
-								<input
-									id='remember-me'
-									name='remember-me'
-									type='checkbox'
-									className='h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded'
-								/>
+						<div className='flex items-center justify-between mt-6 mb-8'>
+							<div className='flex items-center cursor-pointer group'>
+								<div className="relative flex items-center">
+									<input
+										id='remember-me'
+										name='remember-me'
+										type='checkbox'
+										className='peer appearance-none h-6 w-6 border-2 border-black rounded bg-white checked:bg-black transition-colors cursor-pointer'
+									/>
+									<svg className="absolute w-4 h-4 text-white left-1 pointer-events-none hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
+										<path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+									</svg>
+								</div>
 								<label
 									htmlFor='remember-me'
-									className='ml-2 block text-sm text-slate-900'>
-									Simpan Sesi Masuk
+									className='ml-3 block text-sm font-bold text-black uppercase cursor-pointer group-hover:underline decoration-2 underline-offset-4'>
+									Simpan Sesi
 								</label>
 							</div>
 
 							<div className='text-sm'>
 								<a
 									href='#'
-									className='font-semibold text-indigo-600 hover:text-indigo-500'>
+									className='font-bold text-black uppercase hover:bg-yellow-300 px-2 py-1 rounded border-2 border-transparent hover:border-black transition-all'>
 									Lupa Sandi?
 								</a>
 							</div>
 						</div>
 
-						<div>
+						<div className="mt-8">
 							<button
 								type='submit'
 								disabled={loading}
-								className={`w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white transition-all transform hover:-translate-y-0.5 ${
+								className={`w-full flex justify-center items-center gap-2 py-4 px-4 border-[3px] border-black rounded-xl text-lg font-black uppercase tracking-widest transition-all ${
 									loading
-										? 'bg-indigo-400 cursor-wait'
-										: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 hover:shadow-lg'
+										? 'bg-gray-300 text-gray-500 cursor-wait shadow-[4px_4px_0px_0px_#0D0D0D]'
+										: 'bg-blue-500 text-white shadow-[6px_6px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px]'
 								}`}>
 								{loading ? (
 									<>
 										<svg
-											className='animate-spin h-5 w-5 text-white'
+											className='animate-spin h-6 w-6 text-gray-500'
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'>
@@ -253,7 +294,7 @@ export default function LoginPage() {
 												fill='currentColor'
 												d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
 										</svg>
-										Otentikasi...
+										Memuat...
 									</>
 								) : (
 									'Masuk Dasbor'
@@ -264,9 +305,12 @@ export default function LoginPage() {
 				</div>
 
 				{/* Footer Copy */}
-				<p className='mt-8 text-center text-xs text-slate-500 font-medium'>
-					&copy; {new Date().getFullYear()} Hak Akses Terbatas. <br /> Hanya untuk Lingkungan Tenaga Pendidik.
-				</p>
+				<div className="mt-8 relative inline-block mx-auto">
+					<div className="absolute inset-0 bg-yellow-300 border-2 border-black rounded-lg transform translate-x-1.5 translate-y-1.5"></div>
+					<div className="relative bg-white border-2 border-black rounded-lg px-6 py-3 font-bold text-black text-xs sm:text-sm uppercase text-center">
+						&copy; {new Date().getFullYear()} Hak Akses Terbatas. <br className="sm:hidden"/> Lingkungan Tenaga Pendidik.
+					</div>
+				</div>
 			</div>
 		</div>
 	);
