@@ -1,8 +1,26 @@
 @import 'tailwindcss';
 
 :root {
-	--background: #ffffff;
-	--foreground: #171717;
+	--background: #FFF5F0;
+	--foreground: #0D0D0D;
+	--neo-cream: #FFF5F0;
+	--neo-white: #FFFFFF;
+	--neo-black: #0D0D0D;
+	--neo-orange: #E8451A;
+	--neo-yellow: #F5C518;
+	--neo-teal: #00A693;
+	--neo-blue: #2F80ED;
+	--neo-peach: #FFE8DC;
+	
+	--shadow-xs: 2px 2px 0px 0px #0D0D0D;
+	--shadow-sm: 3px 3px 0px 0px #0D0D0D;
+	--shadow-md: 4px 4px 0px 0px #0D0D0D;
+	--shadow-lg: 6px 6px 0px 0px #0D0D0D;
+
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-full: 999px;
 }
 
 @theme inline {
@@ -14,8 +32,8 @@
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--background: #0a0a0a;
-		--foreground: #ededed;
+		--background: #FFF5F0; /* Keep light mode colors for neo brutalism for now, or use dark variants if specified */
+		--foreground: #0D0D0D;
 	}
 }
 
@@ -23,6 +41,162 @@ body {
 	background: var(--background);
 	color: var(--foreground);
 	font-family: var(--font-sans);
+}
+
+/* Neobrutalism Base Styles */
+.neo-card {
+  background: var(--neo-white);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.neo-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-card-orange {
+  background: var(--neo-orange);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--neo-white);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card-orange:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-card-yellow {
+  background: var(--neo-yellow);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--neo-black);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card-yellow:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-card-teal {
+  background: var(--neo-teal);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--neo-white);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card-teal:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-card-blue {
+  background: var(--neo-blue);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--neo-white);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card-blue:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-card-peach {
+  background: var(--neo-peach);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--neo-black);
+  padding: 1.25rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.neo-card-peach:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.neo-btn-primary {
+  background: var(--neo-black);
+  color: var(--neo-white);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.neo-btn-primary:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-md);
+}
+
+.neo-btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.neo-btn-outline {
+  background: var(--neo-white);
+  color: var(--neo-black);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.neo-btn-outline:hover {
+  background: var(--neo-black);
+  color: var(--neo-white);
+}
+
+.neo-btn-outline:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.neo-input {
+  background: var(--neo-white);
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  width: 100%;
+  transition: box-shadow 0.15s ease;
+  box-shadow: var(--shadow-sm);
+  color: var(--neo-black);
+}
+
+.neo-input:focus {
+  outline: none;
+  box-shadow: 4px 4px 0px 0px var(--neo-orange);
+  border-color: var(--neo-orange);
+}
+
+.neo-badge {
+  border: 2px solid var(--neo-black);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-xs);
 }
 
 /* app/globals.css */
@@ -107,4 +281,111 @@ body {
 .prose li > ol, .prose li > ul {
 	margin-top: 0.25em;
 	margin-bottom: 0.25em;
+}
+
+/* ------------------------------------ */
+/* SweetAlert2 Neobrutalism Overrides   */
+/* ------------------------------------ */
+body .swal2-container .swal2-popup {
+	background-color: #ffffff !important;
+	border: 3px solid #000000 !important;
+	box-shadow: 8px 8px 0px 0px #000000 !important;
+	border-radius: 1rem !important;
+	padding: 2rem !important;
+	color: #000000 !important;
+}
+
+body .swal2-container .swal2-title {
+	font-size: 1.5rem !important;
+	font-weight: 900 !important;
+	text-transform: uppercase !important;
+	color: #000000 !important;
+	letter-spacing: 0.05em !important;
+}
+
+body .swal2-container .swal2-html-container {
+	font-size: 1rem !important;
+	font-weight: 700 !important;
+	color: #1f2937 !important;
+	margin-bottom: 1.5rem !important;
+}
+
+body .swal2-container .swal2-actions {
+	gap: 1rem !important;
+}
+
+body .swal2-container button.swal2-confirm {
+	background-color: #000000 !important;
+	color: #ffffff !important;
+	border: 2px solid #000000 !important;
+	font-weight: 800 !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.05em !important;
+	padding: 0.75rem 2rem !important;
+	border-radius: 0.75rem !important;
+	box-shadow: 4px 4px 0px 0px #000000 !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	margin: 0 !important;
+}
+
+body .swal2-container button.swal2-confirm:hover,
+body .swal2-container button.swal2-confirm:focus {
+	box-shadow: 0px 0px 0px 0px #000000 !important;
+	transform: translate(4px, 4px) !important;
+	background-color: #1a1a1a !important;
+	background-image: none !important;
+}
+
+body .swal2-container button.swal2-cancel {
+	background-color: #e5e7eb !important;
+	color: #000000 !important;
+	border: 2px solid #000000 !important;
+	font-weight: 800 !important;
+	text-transform: uppercase !important;
+	letter-spacing: 0.05em !important;
+	padding: 0.75rem 2rem !important;
+	border-radius: 0.75rem !important;
+	box-shadow: 4px 4px 0px 0px #000000 !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	margin: 0 !important;
+}
+
+body .swal2-container button.swal2-cancel:hover,
+body .swal2-container button.swal2-cancel:focus {
+	box-shadow: 0px 0px 0px 0px #000000 !important;
+	transform: translate(4px, 4px) !important;
+	background-color: #d1d5db !important;
+	background-image: none !important;
+}
+
+body .swal2-container .swal2-icon {
+	border: 3px solid #000000 !important;
+}
+
+body .swal2-container .swal2-icon.swal2-success {
+	border-color: #000000 !important;
+	color: #00A693 !important;
+}
+body .swal2-container .swal2-icon.swal2-success [class^='swal2-success-line'] {
+	background-color: #000000 !important;
+}
+body .swal2-container .swal2-icon.swal2-success .swal2-success-ring {
+	border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+body .swal2-container .swal2-icon.swal2-error {
+	border-color: #000000 !important;
+	color: #E8451A !important;
+}
+body .swal2-container .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {
+	background-color: #000000 !important;
+}
+
+body .swal2-container .swal2-icon.swal2-warning {
+	border-color: #000000 !important;
+	color: #F5C518 !important;
+}
+body .swal2-container .swal2-icon.swal2-info {
+	border-color: #000000 !important;
+	color: #2F80ED !important;
 }

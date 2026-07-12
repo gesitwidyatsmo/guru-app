@@ -99,7 +99,7 @@ export default function DashboardCharts() {
 
 	if (isLoading) {
 		return (
-			<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100 flex items-center justify-center min-h-[300px] mb-8'>
+			<div className='neo-card flex items-center justify-center min-h-[300px] mb-8'>
 				<div className='animate-pulse flex flex-col items-center gap-4'>
 					<div className='w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin'></div>
 					<p className='text-gray-400 font-medium'>Memuat Visualisasi Data...</p>
@@ -111,7 +111,7 @@ export default function DashboardCharts() {
 	return (
 		<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8'>
 			{/* Chart 1: Poin per Kelas */}
-			<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
+			<div className='neo-card'>
 				<div className='mb-6'>
 					<h2 className='text-xl font-bold text-gray-800 flex items-center gap-2'>
 						<span className='text-2xl'>📊</span>
@@ -136,7 +136,7 @@ export default function DashboardCharts() {
 							</BarChart>
 						</ResponsiveContainer>
 					) : (
-						<div className='h-full flex items-center justify-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200'>
+						<div className='h-full flex items-center justify-center text-black bg-white rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] font-bold'>
 							Belum ada data poin siswa
 						</div>
 					)}
@@ -144,7 +144,7 @@ export default function DashboardCharts() {
 			</div>
 
 			{/* Chart 2: Tren Jurnal */}
-			<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
+			<div className='neo-card'>
 				<div className='mb-6'>
 					<h2 className='text-xl font-bold text-gray-800 flex items-center gap-2'>
 						<span className='text-2xl'>📈</span>

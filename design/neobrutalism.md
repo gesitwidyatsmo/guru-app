@@ -17,16 +17,16 @@ Neobrutalism adalah reaksi terhadap desain yang terlalu "halus" dan generik. Ia 
 
 ## Palet Warna
 
-| Nama | Hex | Penggunaan |
-|---|---|---|
-| **Cream / Off-White** | `#FFF5F0` | Latar belakang utama, kartu netral |
-| **Warm White** | `#FFFFFF` | Permukaan kartu, input, modal |
-| **Jet Black** | `#0D0D0D` | Teks utama, border, shadow |
-| **Signal Orange** | `#E8451A` | Aksi utama (CTA), highlight penting |
-| **Golden Yellow** | `#F5C518` | Aksen sekunder, badge, harga |
-| **Teal / Emerald** | `#00A693` | Status positif, ilustrasi, card aksen |
-| **Sky Blue** | `#2F80ED` | Link, tombol sosial media, info |
-| **Soft Peach** | `#FFE8DC` | Latar kartu pastel, area on/off state |
+| Nama                  | Hex       | Penggunaan                            |
+| --------------------- | --------- | ------------------------------------- |
+| **Cream / Off-White** | `#FFF5F0` | Latar belakang utama, kartu netral    |
+| **Warm White**        | `#FFFFFF` | Permukaan kartu, input, modal         |
+| **Jet Black**         | `#0D0D0D` | Teks utama, border, shadow            |
+| **Signal Orange**     | `#E8451A` | Aksi utama (CTA), highlight penting   |
+| **Golden Yellow**     | `#F5C518` | Aksen sekunder, badge, harga          |
+| **Teal / Emerald**    | `#00A693` | Status positif, ilustrasi, card aksen |
+| **Sky Blue**          | `#2F80ED` | Link, tombol sosial media, info       |
+| **Soft Peach**        | `#FFE8DC` | Latar kartu pastel, area on/off state |
 
 ### Aturan Penggunaan Warna
 
@@ -54,13 +54,13 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 
 ### Skala Tipografi
 
-| Peran | Size | Weight | Karakteristik |
-|---|---|---|---|
-| Hero / Display | `2rem–3rem` | 800–900 | Tebal, letter-spacing negatif |
-| Judul Kartu | `1.25rem–1.5rem` | 700 | Bold, warna hitam atau putih |
-| Subjudul / Label | `0.875rem` | 600 | Uppercase kadang, semibold |
-| Body | `1rem` | 400–500 | Bersih, line-height 1.5 |
-| Caption / Meta | `0.75rem` | 400 | Abu-abu muted, info sekunder |
+| Peran            | Size             | Weight  | Karakteristik                 |
+| ---------------- | ---------------- | ------- | ----------------------------- |
+| Hero / Display   | `2rem–3rem`      | 800–900 | Tebal, letter-spacing negatif |
+| Judul Kartu      | `1.25rem–1.5rem` | 700     | Bold, warna hitam atau putih  |
+| Subjudul / Label | `0.875rem`       | 600     | Uppercase kadang, semibold    |
+| Body             | `1rem`           | 400–500 | Bersih, line-height 1.5       |
+| Caption / Meta   | `0.75rem`        | 400     | Abu-abu muted, info sekunder  |
 
 ### Aturan Tipografi
 
@@ -75,70 +75,107 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 ### 1. Card (Kartu)
 
 #### Card Netral (Default)
+
 ```css
 .card {
-  background: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
-  padding: 1.25rem;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+	background: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	padding: 1.25rem;
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.15s ease;
 }
 
 .card:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0px 0px #0D0D0D;
+	transform: translate(-2px, -2px);
+	box-shadow: 6px 6px 0px 0px #0d0d0d;
 }
 ```
 
 #### Card Berwarna (Accent)
+
 ```css
 .card-orange {
-  background: #E8451A;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
-  color: #FFFFFF;
+	background: #e8451a;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #ffffff;
 }
 
 .card-yellow {
-  background: #F5C518;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
-  color: #0D0D0D;
+	background: #f5c518;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #0d0d0d;
 }
 
 .card-teal {
-  background: #00A693;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
-  color: #FFFFFF;
+	background: #00a693;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #ffffff;
+}
+
+.card-pink {
+	background: #ff90e8; /* Pink cerah khas neo-brutalism */
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #0d0d0d;
+}
+
+.card-blue {
+	background: #3b82f6;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #ffffff;
+}
+
+.card-lime {
+	background: #a3e635; /* Hijau neon */
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #0d0d0d;
+}
+
+.card-purple {
+	background: #8b5cf6;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	color: #ffffff;
 }
 ```
 
 #### Card Harga (Pricing Card)
+
 ```css
 .card-pricing {
-  background: #E8451A;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
-  padding: 2rem;
-  text-align: center;
+	background: #e8451a;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
+	padding: 2rem;
+	text-align: center;
 }
 
 .price-amount {
-  font-size: 3rem;
-  font-weight: 900;
-  color: #FFFFFF;
-  letter-spacing: -0.04em;
+	font-size: 3rem;
+	font-weight: 900;
+	color: #ffffff;
+	letter-spacing: -0.04em;
 }
 
 .price-label {
-  font-size: 0.875rem;
-  color: rgba(255,255,255,0.85);
+	font-size: 0.875rem;
+	color: rgba(255, 255, 255, 0.85);
 }
 ```
 
@@ -147,230 +184,248 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 ### 2. Tombol (Button)
 
 #### Tombol Utama (CTA)
+
 ```css
 .btn-primary {
-  background: #0D0D0D;
-  color: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 12px;
-  padding: 0.75rem 1.5rem;
-  font-weight: 700;
-  font-size: 0.9375rem;
-  box-shadow: 3px 3px 0px 0px rgba(0,0,0,0.5);
-  transition: all 0.15s ease;
-  cursor: pointer;
+	background: #0d0d0d;
+	color: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px;
+	padding: 0.75rem 1.5rem;
+	font-weight: 700;
+	font-size: 0.9375rem;
+	box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 0.5);
+	transition: all 0.15s ease;
+	cursor: pointer;
 }
 
 .btn-primary:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.5);
+	transform: translate(-1px, -1px);
+	box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.5);
 }
 
 .btn-primary:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+	transform: translate(2px, 2px);
+	box-shadow: none;
 }
 ```
 
 #### Tombol Outline
+
 ```css
 .btn-outline {
-  background: transparent;
-  color: #0D0D0D;
-  border: 2px solid #0D0D0D;
-  border-radius: 12px;
-  padding: 0.75rem 1.5rem;
-  font-weight: 600;
-  box-shadow: 3px 3px 0px 0px #0D0D0D;
-  transition: all 0.15s ease;
+	background: transparent;
+	color: #0d0d0d;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px;
+	padding: 0.75rem 1.5rem;
+	font-weight: 600;
+	box-shadow: 3px 3px 0px 0px #0d0d0d;
+	transition: all 0.15s ease;
 }
 
 .btn-outline:hover {
-  background: #0D0D0D;
-  color: #FFFFFF;
+	background: #0d0d0d;
+	color: #ffffff;
 }
 ```
 
 #### Tombol Sosial Media
+
 ```css
-.btn-email    { background: #0D0D0D; color: #FFF; }
-.btn-facebook { background: #1877F2; color: #FFF; }
-.btn-twitter  { background: #1DA1F2; color: #FFF; }
+.btn-email {
+	background: #0d0d0d;
+	color: #fff;
+}
+.btn-facebook {
+	background: #1877f2;
+	color: #fff;
+}
+.btn-twitter {
+	background: #1da1f2;
+	color: #fff;
+}
 
 .btn-social {
-  border: 2px solid #0D0D0D;
-  border-radius: 12px;
-  box-shadow: 3px 3px 0px 0px #0D0D0D;
-  padding: 0.75rem 1.5rem;
-  font-weight: 600;
-  width: 100%;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px;
+	box-shadow: 3px 3px 0px 0px #0d0d0d;
+	padding: 0.75rem 1.5rem;
+	font-weight: 600;
+	width: 100%;
 }
 ```
 
 #### Tombol Follow / Badge Kecil
+
 ```css
 .btn-follow {
-  background: #F5C518;
-  color: #0D0D0D;
-  border: 2px solid #0D0D0D;
-  border-radius: 8px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  box-shadow: 2px 2px 0px 0px #0D0D0D;
+	background: #f5c518;
+	color: #0d0d0d;
+	border: 2px solid #0d0d0d;
+	border-radius: 8px;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.8125rem;
+	font-weight: 700;
+	box-shadow: 2px 2px 0px 0px #0d0d0d;
 }
 ```
 
 ---
 
 ### 3. Toggle / Switch
+
 ```css
 .toggle-track {
-  width: 48px;
-  height: 26px;
-  background: #E8E8E8;
-  border: 2px solid #0D0D0D;
-  border-radius: 999px;
-  position: relative;
-  cursor: pointer;
-  transition: background 0.2s;
+	width: 48px;
+	height: 26px;
+	background: #e8e8e8;
+	border: 2px solid #0d0d0d;
+	border-radius: 999px;
+	position: relative;
+	cursor: pointer;
+	transition: background 0.2s;
 }
 
 .toggle-track.active {
-  background: #E8451A;
+	background: #e8451a;
 }
 
 .toggle-thumb {
-  width: 18px;
-  height: 18px;
-  background: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 50%;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.2s;
-  box-shadow: 2px 2px 0px 0px #0D0D0D;
+	width: 18px;
+	height: 18px;
+	background: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 50%;
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	transition: transform 0.2s;
+	box-shadow: 2px 2px 0px 0px #0d0d0d;
 }
 
 .toggle-track.active .toggle-thumb {
-  transform: translateX(22px);
+	transform: translateX(22px);
 }
 ```
 
 ---
 
 ### 4. Input & Form
+
 ```css
 .input-field {
-  background: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
-  font-weight: 500;
-  width: 100%;
-  transition: box-shadow 0.15s ease;
-  box-shadow: 3px 3px 0px 0px #0D0D0D;
+	background: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px;
+	padding: 0.75rem 1rem;
+	font-size: 1rem;
+	font-weight: 500;
+	width: 100%;
+	transition: box-shadow 0.15s ease;
+	box-shadow: 3px 3px 0px 0px #0d0d0d;
 }
 
 .input-field:focus {
-  outline: none;
-  box-shadow: 4px 4px 0px 0px #E8451A;
-  border-color: #E8451A;
+	outline: none;
+	box-shadow: 4px 4px 0px 0px #e8451a;
+	border-color: #e8451a;
 }
 
 .input-label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: #0D0D0D;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.5rem;
-  display: block;
+	font-size: 0.8125rem;
+	font-weight: 700;
+	color: #0d0d0d;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin-bottom: 0.5rem;
+	display: block;
 }
 ```
 
 ---
 
 ### 5. Avatar & Profile Card
+
 ```css
 .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 2px solid #0D0D0D;
-  box-shadow: 2px 2px 0px 0px #0D0D0D;
-  overflow: hidden;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: 2px solid #0d0d0d;
+	box-shadow: 2px 2px 0px 0px #0d0d0d;
+	overflow: hidden;
 }
 
 .profile-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 16px;
-  padding: 0.75rem 1rem;
-  box-shadow: 4px 4px 0px 0px #0D0D0D;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	background: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 16px;
+	padding: 0.75rem 1rem;
+	box-shadow: 4px 4px 0px 0px #0d0d0d;
 }
 
 .profile-name {
-  font-weight: 700;
-  font-size: 1rem;
-  color: #0D0D0D;
+	font-weight: 700;
+	font-size: 1rem;
+	color: #0d0d0d;
 }
 
 .profile-sub {
-  font-size: 0.8125rem;
-  color: #555;
+	font-size: 0.8125rem;
+	color: #555;
 }
 ```
 
 ---
 
 ### 6. Info Row / Data Display
+
 ```css
 .info-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  background: #FFFFFF;
-  border: 2px solid #0D0D0D;
-  border-radius: 12px;
-  padding: 0.75rem 1rem;
-  box-shadow: 3px 3px 0px 0px #0D0D0D;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	background: #ffffff;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px;
+	padding: 0.75rem 1rem;
+	box-shadow: 3px 3px 0px 0px #0d0d0d;
 }
 
 .info-label {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: #0D0D0D;
+	font-size: 0.9375rem;
+	font-weight: 700;
+	color: #0d0d0d;
 }
 
 .info-value {
-  font-family: 'Space Mono', monospace;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #0D0D0D;
+	font-family: 'Space Mono', monospace;
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: #0d0d0d;
 }
 ```
 
 ---
 
 ### 7. Message Bubble (Chat)
+
 ```css
 .message-bubble {
-  background: #F5C518;
-  border: 2px solid #0D0D0D;
-  border-radius: 12px 12px 12px 2px;
-  padding: 0.625rem 0.875rem;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #0D0D0D;
-  box-shadow: 3px 3px 0px 0px #0D0D0D;
-  display: inline-block;
-  margin-bottom: 0.5rem;
+	background: #f5c518;
+	border: 2px solid #0d0d0d;
+	border-radius: 12px 12px 12px 2px;
+	padding: 0.625rem 0.875rem;
+	font-weight: 600;
+	font-size: 0.875rem;
+	color: #0d0d0d;
+	box-shadow: 3px 3px 0px 0px #0d0d0d;
+	display: inline-block;
+	margin-bottom: 0.5rem;
 }
 ```
 
@@ -381,22 +436,22 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 Semua bayangan di sistem ini bersifat **hard / offset shadow** — tidak ada blur.
 
 ```css
---shadow-xs: 2px 2px 0px 0px #0D0D0D;
---shadow-sm: 3px 3px 0px 0px #0D0D0D;
---shadow-md: 4px 4px 0px 0px #0D0D0D;
---shadow-lg: 6px 6px 0px 0px #0D0D0D;
+--shadow-xs: 2px 2px 0px 0px #0d0d0d;
+--shadow-sm: 3px 3px 0px 0px #0d0d0d;
+--shadow-md: 4px 4px 0px 0px #0d0d0d;
+--shadow-lg: 6px 6px 0px 0px #0d0d0d;
 ```
 
 ---
 
 ## Border Radius System
 
-| Token | Value | Digunakan pada |
-|---|---|---|
-| `--radius-sm` | `8px` | Badge, tag kecil |
-| `--radius-md` | `12px` | Tombol, input, row data |
-| `--radius-lg` | `16px` | Kartu, modal |
-| `--radius-full` | `999px` | Toggle, avatar, chip |
+| Token           | Value   | Digunakan pada          |
+| --------------- | ------- | ----------------------- |
+| `--radius-sm`   | `8px`   | Badge, tag kecil        |
+| `--radius-md`   | `12px`  | Tombol, input, row data |
+| `--radius-lg`   | `16px`  | Kartu, modal            |
+| `--radius-full` | `999px` | Toggle, avatar, chip    |
 
 **Aturan**: Satu layar menggunakan **satu** ukuran radius secara konsisten.
 
@@ -410,13 +465,13 @@ Semua bayangan di sistem ini bersifat **hard / offset shadow** — tidak ada blu
 --ease-neo: cubic-bezier(0.4, 0, 0.2, 1);
 
 .interactive:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-lg);
+	transform: translate(-2px, -2px);
+	box-shadow: var(--shadow-lg);
 }
 
 .interactive:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
+	transform: translate(2px, 2px);
+	box-shadow: none;
 }
 ```
 
@@ -426,21 +481,25 @@ Semua bayangan di sistem ini bersifat **hard / offset shadow** — tidak ada blu
 
 ```css
 .grid-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.25rem;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 1.25rem;
 }
 
 .page-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1.5rem;
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 1.5rem;
 }
 
---space-1: 0.25rem;  --space-2: 0.5rem;
---space-3: 0.75rem;  --space-4: 1rem;
---space-5: 1.25rem;  --space-6: 1.5rem;
---space-8: 2rem;     --space-10: 2.5rem;
+--space-1: 0.25rem;
+--space-2: 0.5rem;
+--space-3: 0.75rem;
+--space-4: 1rem;
+--space-5: 1.25rem;
+--space-6: 1.5rem;
+--space-8: 2rem;
+--space-10: 2.5rem;
 ```
 
 ---
@@ -474,4 +533,4 @@ Semua bayangan di sistem ini bersifat **hard / offset shadow** — tidak ada blu
 
 ---
 
-*Dokumen ini adalah referensi desain hidup. Perbarui saat menambahkan komponen baru ke sistem.*
+_Dokumen ini adalah referensi desain hidup. Perbarui saat menambahkan komponen baru ke sistem._

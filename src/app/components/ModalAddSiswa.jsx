@@ -243,22 +243,22 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 	return (
 		<div className='fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 sm:p-6'>
 			<div
-				className='fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity'
+				className='fixed inset-0 bg-black/60 transition-opacity'
 				onClick={onClose}
 			/>
 
-			<div className='relative w-full max-w-lg transform rounded-t-2xl sm:rounded-2xl bg-white p-6 shadow-xl transition-all animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'>
+			<div className='relative w-full max-w-lg transform rounded-t-2xl sm:rounded-2xl border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] bg-white overflow-hidden transition-all animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'>
 				{/* Header */}
-				<div className='mb-6 flex items-center justify-between'>
-					<h3 className='text-xl font-bold text-gray-900'>Tambah Siswa Baru</h3>
+				<div className='p-4 border-b-[3px] border-black bg-yellow-300 flex items-center justify-between'>
+					<h3 className='text-xl font-black text-black uppercase tracking-wider'>Tambah Siswa Baru</h3>
 					<button
 						onClick={onClose}
-						className='rounded-full p-2 text-gray-400 hover:bg-gray-100 transition-colors'>
+						className='text-black bg-white border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[0px_0px_0px_0px_#0D0D0D] hover:translate-x-[2px] hover:translate-y-[2px] p-1 rounded-md transition-all font-bold'>
 						<svg
 							className='h-6 w-6'
 							fill='none'
 							viewBox='0 0 24 24'
-							strokeWidth='1.5'
+							strokeWidth='3'
 							stroke='currentColor'>
 							<path
 								strokeLinecap='round'
@@ -268,6 +268,8 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 						</svg>
 					</button>
 				</div>
+
+				<div className="p-6">
 
 				{/* Tab Switcher */}
 				<div className='mb-6 flex rounded-xl bg-gray-100 p-1'>
@@ -333,18 +335,18 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 							</div>
 						</div>
 
-						<div className='flex gap-3 pt-4'>
+						<div className='mt-6 flex justify-end gap-3'>
 							<button
 								type='button'
 								onClick={onClose}
-								className='flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50'>
+								className='px-6 py-2 border-2 border-black bg-gray-200 text-black font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all'>
 								Batal
 							</button>
 							<button
 								type='submit'
 								disabled={loading}
-								className='flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-70'>
-								{loading ? 'Menyimpan...' : 'Simpan'}
+								className='px-6 py-2 border-2 border-black bg-blue-500 text-white font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-50 flex items-center'>
+								{loading ? 'Menyimpan...' : 'Simpan Siswa'}
 							</button>
 						</div>
 					</form>
@@ -355,13 +357,15 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 					<form
 						onSubmit={handleSubmitBulk}
 						className='space-y-5'>
-						<div className='rounded-xl border border-blue-100 bg-blue-50 p-4'>
-							<h4 className='text-sm font-bold text-blue-800'>Panduan Upload</h4>
-							<ul className='mt-2 list-disc pl-4 text-xs text-blue-600 space-y-1'>
+						<div className='rounded-xl border-2 border-blue-500 bg-blue-100 p-4 shadow-[4px_4px_0px_0px_#3b82f6]'>
+							<h4 className='text-sm font-bold text-blue-900 uppercase'>Panduan Upload</h4>
+							<ul className='mt-2 list-disc pl-4 text-xs font-semibold text-blue-800 space-y-1'>
 								<li>Download template excel dibawah ini.</li>
 								<li>Isi NIS dan Nama Lengkap siswa.</li>
-								<li>Upload file yang sudah diisi.</li>
+								<li>Jangan ubah format baris pertama (Header).</li>
+								<li>Simpan file, lalu upload kembali ke sini.</li>
 							</ul>
+						</div>
 
 							{/* TOMBOL DOWNLOAD TEMPLATE */}
 							<button
@@ -371,7 +375,6 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 								<IconFileSpreadsheet className='h-4 w-4' />
 								Download Template {currentKelas}
 							</button>
-						</div>
 
 						<div className='relative'>
 							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>Upload File Excel</label>

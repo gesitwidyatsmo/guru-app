@@ -70,7 +70,7 @@ export default function NotificationBell() {
 			<button
 				onClick={() => setIsOpen(!isOpen)}
 				title='Notifikasi'
-				className='relative p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-gray-100 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200'>
+				className='relative p-3 neo-card flex items-center justify-center hover:bg-yellow-400 transition-all duration-200'>
 				<svg
 					className='w-6 h-6'
 					fill='none'
@@ -92,10 +92,10 @@ export default function NotificationBell() {
 
 			{/* Dropdown Menu */}
 			{isOpen && (
-				<div className='absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 transform origin-top-right transition-all'>
-					<div className='p-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/50'>
-						<h3 className='font-bold text-gray-800 text-lg'>Notifikasi</h3>
-						{unreadCount > 0 && <span className='bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-md'>{unreadCount} Baru</span>}
+				<div className='absolute right-0 mt-3 w-80 sm:w-96 neo-card p-0 overflow-hidden z-50 transform origin-top-right transition-all'>
+					<div className='p-4 border-b-2 border-black flex items-center justify-between bg-yellow-50'>
+						<h3 className='font-bold text-black text-lg'>Notifikasi</h3>
+						{unreadCount > 0 && <span className='bg-black text-white text-xs font-bold px-2 py-1 rounded-md'>{unreadCount} Baru</span>}
 					</div>
 
 					<div className='max-h-[60vh] overflow-y-auto'>
@@ -109,14 +109,14 @@ export default function NotificationBell() {
 									<div
 										key={notif.id}
 										onClick={() => markAsRead(notif.id, notif.action_url)}
-										className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors flex gap-4 ${!notif.is_read ? 'bg-indigo-50/30' : ''}`}>
+										className={`p-4 cursor-pointer hover:bg-gray-100 border-b-2 border-black last:border-b-0 transition-colors flex gap-4 ${!notif.is_read ? 'bg-blue-50' : ''}`}>
 										<div className='flex-shrink-0 mt-1'>
 											{notif.tipe === 'reminder_jurnal' ? (
-												<div className='w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center'>
+												<div className='w-10 h-10 rounded-xl border-2 border-black bg-yellow-400 text-black flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
 													<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
 												</div>
 											) : (
-												<div className='w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center'>
+												<div className='w-10 h-10 rounded-xl border-2 border-black bg-blue-400 text-black flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
 													<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
 												</div>
 											)}

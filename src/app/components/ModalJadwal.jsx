@@ -73,14 +73,15 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 	};
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity duration-300'>
-			<div className='bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden transform transition-all scale-100'>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-300'>
+			<div className='bg-white w-full max-w-lg rounded-2xl border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] overflow-hidden transform transition-all scale-100'>
 				{/* HEADER */}
-				<div className='bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex justify-between items-center'>
-					<h3 className='text-xl font-bold text-white'>{isEditMode ? 'Edit Jadwal' : 'Tambah Jadwal'}</h3>
+				<div className='bg-yellow-300 border-b-[3px] border-black px-6 py-4 flex justify-between items-center'>
+					<h3 className='text-xl font-black text-black uppercase tracking-wider'>{isEditMode ? 'Edit Jadwal' : 'Tambah Jadwal'}</h3>
 					<button
+						type="button"
 						onClick={onClose}
-						className='text-white/80 hover:text-white'>
+						className='text-black bg-white border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[0px_0px_0px_0px_#0D0D0D] hover:translate-x-[2px] hover:translate-y-[2px] p-1 px-3 rounded-md transition-all font-bold'>
 						✕
 					</button>
 				</div>
@@ -178,13 +179,13 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 						<button
 							type='button'
 							onClick={onClose}
-							className='px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl'>
+							className='px-6 py-2 border-2 border-black bg-gray-200 text-black font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all'>
 							Batal
 						</button>
 						<button
 							type='submit'
 							disabled={loading}
-							className='px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md'>
+							className='px-6 py-2 border-2 border-black bg-blue-500 text-white font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-50 flex items-center'>
 							{loading ? 'Menyimpan...' : isEditMode ? 'Update' : 'Simpan'}
 						</button>
 					</div>

@@ -2,9 +2,9 @@ export default function StatistikCards({ stat }) {
 	return (
 		<div className='grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8'>
 			{/* Siswa */}
-			<div className='bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
+			<div className='neo-card-blue flex flex-col justify-between'>
 				<div className='flex items-center justify-between mb-2'>
-					<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
+					<div className='bg-white/20 border-2 border-transparent rounded-xl p-2 sm:p-3'>
 						<svg
 							className='w-6 h-6 sm:w-8 sm:h-8'
 							fill='none'
@@ -20,13 +20,13 @@ export default function StatistikCards({ stat }) {
 					</div>
 				</div>
 				<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.siswa}</p>
-				<p className='text-xs sm:text-sm text-blue-100'>Total Siswa Aktif</p>
+				<p className='text-xs sm:text-sm text-white/90'>Total Siswa Aktif</p>
 			</div>
 
 			{/* Mapel */}
-			<div className='bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
+			<div className='neo-card-yellow flex flex-col justify-between'>
 				<div className='flex items-center justify-between mb-2'>
-					<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
+					<div className='bg-black/10 border-2 border-transparent rounded-xl p-2 sm:p-3 text-black'>
 						<svg
 							className='w-6 h-6 sm:w-8 sm:h-8'
 							fill='none'
@@ -41,14 +41,14 @@ export default function StatistikCards({ stat }) {
 						</svg>
 					</div>
 				</div>
-				<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.mapel}</p>
-				<p className='text-xs sm:text-sm text-purple-100'>Mata Pelajaran</p>
+				<p className='text-2xl sm:text-4xl font-bold mb-1 text-black'>{stat.mapel}</p>
+				<p className='text-xs sm:text-sm text-black/80'>Mata Pelajaran</p>
 			</div>
 
 			{/* Kelas */}
-			<div className='bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
+			<div className='neo-card-orange flex flex-col justify-between'>
 				<div className='flex items-center justify-between mb-2'>
-					<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
+					<div className='bg-white/20 border-2 border-transparent rounded-xl p-2 sm:p-3'>
 						<svg
 							className='w-6 h-6 sm:w-8 sm:h-8'
 							fill='none'
@@ -64,13 +64,13 @@ export default function StatistikCards({ stat }) {
 					</div>
 				</div>
 				<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.kelas}</p>
-				<p className='text-xs sm:text-sm text-orange-100'>Total Kelas</p>
+				<p className='text-xs sm:text-sm text-white/90'>Total Kelas</p>
 			</div>
 
 			{/* Jurnal */}
-			<div className='bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-lg p-4 sm:p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-xl'>
+			<div className='neo-card-teal flex flex-col justify-between'>
 				<div className='flex items-center justify-between mb-2'>
-					<div className='bg-white/20 backdrop-blur-sm rounded-xl p-2 sm:p-3'>
+					<div className='bg-white/20 border-2 border-transparent rounded-xl p-2 sm:p-3'>
 						<svg
 							className='w-6 h-6 sm:w-8 sm:h-8'
 							fill='none'
@@ -86,7 +86,7 @@ export default function StatistikCards({ stat }) {
 					</div>
 				</div>
 				<p className='text-2xl sm:text-4xl font-bold mb-1'>{stat.jurnal}</p>
-				<p className='text-xs sm:text-sm text-teal-100'>Jurnal Terisi</p>
+				<p className='text-xs sm:text-sm text-white/90'>Jurnal Terisi</p>
 			</div>
 		</div>
 	);

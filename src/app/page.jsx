@@ -155,7 +155,7 @@ export default function Home() {
 					</svg>
 				),
 				route: '/absensi',
-				color: 'from-green-500 to-emerald-600',
+				color: 'neo-card-teal',
 				description: 'Input absensi harian',
 			},
 			{
@@ -175,7 +175,7 @@ export default function Home() {
 					</svg>
 				),
 				route: '/penilaian',
-				color: 'from-blue-500 to-indigo-600',
+				color: 'neo-card-blue',
 				description: 'Input nilai siswa',
 			},
 			{
@@ -195,7 +195,7 @@ export default function Home() {
 					</svg>
 				),
 				route: '/laporan',
-				color: 'from-purple-500 to-pink-600',
+				color: 'neo-card-orange',
 				description: 'Rekap & statistik',
 			},
 		],
@@ -221,7 +221,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/kelas',
-			color: 'bg-gradient-to-br from-orange-400 to-red-500',
+			color: 'neo-card-orange',
 		},
 		{
 			label: 'Siswa',
@@ -240,7 +240,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/siswa',
-			color: 'bg-gradient-to-br from-cyan-400 to-blue-500',
+			color: 'neo-card-yellow',
 		},
 		{
 			label: 'Mapel',
@@ -259,7 +259,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/mapel',
-			color: 'bg-gradient-to-br from-yellow-400 to-orange-500',
+			color: 'neo-card-teal',
 		},
 		{
 			label: 'Jadwal',
@@ -278,7 +278,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/jadwal',
-			color: 'bg-gradient-to-br from-pink-400 to-rose-500',
+			color: 'neo-card-blue',
 		},
 		{
 			label: 'Jurnal',
@@ -297,7 +297,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/jurnal',
-			color: 'bg-gradient-to-br from-teal-400 to-cyan-500',
+			color: 'neo-card-peach',
 		},
 		{
 			label: 'Grup',
@@ -316,7 +316,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/grup',
-			color: 'bg-gradient-to-br from-violet-400 to-purple-500',
+			color: 'neo-card-orange',
 		},
 		{
 			label: 'Profil Ajar',
@@ -335,7 +335,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/profil',
-			color: 'bg-gradient-to-br from-indigo-500 to-blue-600',
+			color: 'neo-card-yellow',
 		},
 		{
 			label: 'Tugas Online',
@@ -354,7 +354,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/tugas',
-			color: 'bg-gradient-to-br from-amber-500 to-orange-600',
+			color: 'neo-card-blue',
 		},
 		{
 			label: 'Game',
@@ -374,7 +374,7 @@ export default function Home() {
 				</svg>
 			),
 			route: '/game',
-			color: 'bg-gradient-to-br from-green-400 to-green-500',
+			color: 'neo-card-orange',
 		},
 	];
 
@@ -404,21 +404,21 @@ export default function Home() {
 	}
 
 	return (
-		<main className='min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50'>
+		<main className='min-h-screen bg-[var(--background)]'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8'>
 				{/* Header */}
 				<div className='mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 					<div>
-						<div className='flex flex-wrap items-center gap-1 text-3xl sm:text-4xl font-bold text-gray-800 mb-2'>
+						<div className='flex flex-wrap items-center gap-1 text-3xl sm:text-4xl font-bold text-black mb-4'>
 							Selamat Datang
 							{userName && (
 								<>
-									, <span className=''>{userName}</span>
+									, <span className='bg-yellow-300 border-2 border-black px-3 py-1 shadow-[4px_4px_0px_0px_#0D0D0D] rotate-[-2deg] inline-block ml-2'>{userName}</span>
 								</>
 							)}
-							! 👋
+							!
 						</div>
-						<p className='text-gray-600 text-sm sm:text-base'>
+						<p className='text-gray-900 font-bold border-2 border-black bg-white inline-block px-3 py-1 rounded-md shadow-[2px_2px_0px_0px_#0D0D0D] text-sm sm:text-base'>
 							{new Date().toLocaleDateString('id-ID', {
 								weekday: 'long',
 								year: 'numeric',
@@ -430,17 +430,17 @@ export default function Home() {
 					<div
 						className='flex items-center gap-2 w-full md:w-auto relative'
 						ref={searchRef}>
-						<div className={`relative flex items-center transition-all duration-300 ${isSearchOpen ? 'w-full md:w-64' : 'w-12 md:w-64'}`}>
+						<div className={`relative flex items-center transition-all duration-300 ${isSearchOpen ? 'w-full md:w-64' : 'w-auto md:w-64'}`}>
 							<input
 								type='text'
 								placeholder='Cari menu atau siswa...'
-								className={`w-full bg-white border border-gray-200 rounded-2xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition-all ${!isSearchOpen && 'hidden md:block'}`}
+								className={`w-full neo-input !pl-10 ${!isSearchOpen && 'hidden md:block'}`}
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 								onFocus={() => setIsSearchOpen(true)}
 							/>
 							<div
-								className={`absolute left-3 text-gray-400 ${!isSearchOpen && 'md:hidden cursor-pointer'}`}
+								className={`cursor-pointer ${!isSearchOpen ? 'md:hidden neo-card p-3 flex items-center justify-center hover:bg-yellow-400 transition-all' : 'absolute left-3 text-gray-500'}`}
 								onClick={() => setIsSearchOpen(!isSearchOpen)}>
 								<svg
 									className='w-5 h-5'
@@ -454,7 +454,7 @@ export default function Home() {
 										d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path>
 								</svg>
 							</div>
-							<div className={`absolute left-3 text-gray-400 hidden md:block`}>
+							<div className={`absolute left-3 text-gray-500 hidden md:block`}>
 								<svg
 									className='w-5 h-5'
 									fill='none'
@@ -470,20 +470,20 @@ export default function Home() {
 
 							{/* Search Results Dropdown */}
 							{isSearchOpen && searchQuery.trim() !== '' && (
-								<div className='absolute top-full right-0 mt-2 w-full md:w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto'>
+								<div className='absolute top-full right-0 mt-2 w-full md:w-80 neo-card overflow-hidden z-50 max-h-[60vh] overflow-y-auto p-0'>
 									{searchResults.menus.length > 0 && (
-										<div className='p-2'>
-											<div className='text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2'>Menu & Aksi</div>
+										<div className='p-0'>
+											<div className='text-xs font-bold text-black uppercase tracking-wider px-3 py-2 border-b-2 border-black bg-yellow-300'>Menu & Aksi</div>
 											{searchResults.menus.map((menu, i) => (
 												<Link
 													key={`menu-${i}`}
 													href={menu.route}
-													className='flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors'
+													className='flex items-center gap-3 px-3 py-3 hover:bg-yellow-50 border-b-2 border-black last:border-b-0 transition-colors'
 													onClick={() => setIsSearchOpen(false)}>
-													<div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${menu.color}`}>{menu.icon}</div>
+													<div className={`w-8 h-8 flex items-center justify-center bg-black text-white shadow-[2px_2px_0px_0px_#0D0D0D]`}>{menu.icon}</div>
 													<div>
-														<div className='text-sm font-medium text-gray-700'>{menu.label}</div>
-														{menu.description && <div className='text-xs text-gray-500'>{menu.description}</div>}
+														<div className='text-sm font-bold text-black'>{menu.label}</div>
+														{menu.description && <div className='text-xs text-gray-600 font-medium'>{menu.description}</div>}
 													</div>
 												</Link>
 											))}
@@ -491,28 +491,28 @@ export default function Home() {
 									)}
 
 									{searchResults.siswa.length > 0 && (
-										<div className='p-2 border-t border-gray-50'>
-											<div className='text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2'>Siswa Aktif</div>
+										<div className='p-0'>
+											<div className='text-xs font-bold text-black uppercase tracking-wider px-3 py-2 border-y-2 border-black bg-yellow-300'>Siswa Aktif</div>
 											{searchResults.siswa.map((siswa) => (
 												<Link
 													key={siswa.id}
 													href={`/siswa/${siswa.id}`}
-													className='flex items-center justify-between px-3 py-2 hover:bg-gray-50 rounded-lg transition-colors'
+													className='flex items-center justify-between px-3 py-3 hover:bg-yellow-50 border-b-2 border-black last:border-b-0 transition-colors'
 													onClick={() => setIsSearchOpen(false)}>
 													<div>
-														<div className='text-sm font-medium text-gray-700'>{siswa.nama_lengkap}</div>
-														<div className='text-xs text-gray-500'>
+														<div className='text-sm font-bold text-black'>{siswa.nama_lengkap}</div>
+														<div className='text-xs text-gray-600 font-medium'>
 															{siswa.nis} • {siswa.kelas}
 														</div>
 													</div>
-													<div className='text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-600 rounded-md'>Lihat</div>
+													<div className='text-xs font-bold px-2 py-1 bg-black text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>Lihat</div>
 												</Link>
 											))}
 										</div>
 									)}
 
 									{searchResults.menus.length === 0 && searchResults.siswa.length === 0 && (
-										<div className='p-4 text-center text-sm text-gray-500'>Tidak ada hasil ditemukan untuk &ldquo;{searchQuery}&rdquo;</div>
+										<div className='p-4 text-center text-sm font-bold text-black bg-yellow-50'>Tidak ada hasil ditemukan untuk &ldquo;{searchQuery}&rdquo;</div>
 									)}
 								</div>
 							)}
@@ -523,7 +523,7 @@ export default function Home() {
 						<button
 							onClick={handleLogout}
 							title='Keluar Akun'
-							className={`flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-rose-100 text-rose-500 hover:text-white hover:bg-rose-500 transition-all duration-200 group ${isSearchOpen && 'hidden md:block'}`}>
+							className={`flex-shrink-0 p-3 neo-card flex items-center justify-center hover:bg-rose-400 transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
 							<svg
 								className='w-6 h-6 group-hover:-translate-x-0.5 transition-transform'
 								fill='none'
@@ -540,7 +540,7 @@ export default function Home() {
 						<Link
 							href='/pengaturan'
 							title='Pengaturan'
-							className={`flex-shrink-0 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg border border-gray-100 text-gray-500 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 group ${isSearchOpen && 'hidden md:block'}`}>
+							className={`flex-shrink-0 p-3 neo-card flex items-center justify-center hover:bg-yellow-400 transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
 							<svg
 								className='w-6 h-6 group-hover:rotate-45 transition-transform duration-300'
 								fill='none'

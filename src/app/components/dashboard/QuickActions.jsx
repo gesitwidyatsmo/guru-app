@@ -12,12 +12,12 @@ export default function QuickActions({ quickActions }) {
 					<Link
 						key={idx}
 						href={action.route}
-						className={`bg-gradient-to-br ${action.color} rounded-2xl shadow-lg p-6 text-white transform hover:scale-105 transition-all duration-300 hover:shadow-2xl cursor-pointer group`}>
+						className={`${action.color} cursor-pointer group`}>
 						<div className='flex items-center gap-4'>
-							<div className='bg-white/20 backdrop-blur-sm rounded-xl p-3 group-hover:bg-white/30 transition-all'>{action.icon}</div>
+							<div className='bg-black/10 border-2 border-transparent rounded-xl p-3 text-current transition-all'>{action.icon}</div>
 							<div className='flex-1'>
 								<h3 className='text-xl font-bold mb-1'>{action.label}</h3>
-								<p className='text-sm text-white/80'>{action.description}</p>
+								<p className='text-sm opacity-90'>{action.description}</p>
 							</div>
 							<svg
 								className='w-6 h-6 transform group-hover:translate-x-1 transition-transform'
