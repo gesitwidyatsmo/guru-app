@@ -191,7 +191,7 @@ export default function KelasDetail() {
 	const isWaliKelas = kelasDetail?.wali_kelas === userName || userRole === 'Admin';
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-20 font-sans'>
+		<div className='min-h-screen pb-20 font-sans'>
 			<SectionHeader
 				title={kelasDetail ? kelasDetail.kelas : 'Detail Kelas'}
 				leftIcon={
@@ -214,7 +214,7 @@ export default function KelasDetail() {
 							xmlns='http://www.w3.org/2000/svg'
 							fill='none'
 							viewBox='0 0 24 24'
-							strokeWidth='1.5'
+							strokeWidth='2'
 							stroke='currentColor'
 							className='size-6'>
 							<path
@@ -231,27 +231,40 @@ export default function KelasDetail() {
 			<div className='max-w-6xl mx-auto px-4 sm:px-8 mt-8 space-y-10'>
 				{/* --- 1. HERO HEADER --- */}
 				{kelasDetail ? (
-					<div className='bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2rem] p-8 md:p-10 text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden'>
-						{/* Background Decorative SVG */}
-						<div className='absolute -top-10 -right-10 opacity-10 pointer-events-none'>
-							<svg
-								width='300'
-								height='300'
-								viewBox='0 0 24 24'
-								fill='currentColor'>
-								<path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' />
+					<div className='bg-[#2F80ED] border-[3px] border-black rounded-3xl p-8 md:p-10 text-white shadow-[8px_8px_0px_0px_#0D0D0D] relative overflow-hidden'>
+						{/* Background Decorative SVG - Neobrutalism */}
+						<div className='absolute -bottom-12 -right-10 opacity-20 pointer-events-none transform rotate-12'>
+							<svg width="250" height="250" viewBox="0 0 100 100" fill="currentColor">
+								<path d="M50 0 L58 42 L100 50 L58 58 L50 100 L42 58 L0 50 L42 42 Z" />
 							</svg>
+						</div>
+						<div className='absolute top-10 right-40 opacity-20 pointer-events-none'>
+							<svg width="80" height="80" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="8">
+								<circle cx="50" cy="50" r="40" />
+							</svg>
+						</div>
+						<div className='absolute -top-6 -left-6 opacity-20 pointer-events-none transform -rotate-12'>
+							<svg width="150" height="150" viewBox="0 0 100 100" fill="currentColor">
+								<path d="M40 0 H60 V40 H100 V60 H60 V100 H40 V60 H0 V40 H40 Z" />
+							</svg>
+						</div>
+
+						{/* Sticker Decoration */}
+						<div className='absolute top-6 right-6 md:top-8 md:right-8 transform rotate-12 z-20 hidden md:flex'>
+							<div className='bg-[#F5C518] text-black border-2 border-black rounded-full w-24 h-24 flex items-center justify-center font-black text-center shadow-[4px_4px_0px_0px_#0D0D0D] text-sm leading-tight hover:rotate-45 transition-transform duration-300'>
+								KELAS<br/>AKTIF
+							</div>
 						</div>
 
 						<div className='relative z-10 flex flex-col md:flex-row justify-between md:items-end gap-6'>
 							<div>
-								<div className='text-indigo-200 text-xs font-bold tracking-widest uppercase mb-2'>Dashboard Kelas</div>
-								<h1 className='text-4xl md:text-5xl font-extrabold tracking-tight mb-6'>{kelasDetail.kelas}</h1>
-								<div className='flex flex-wrap items-center gap-3 text-sm font-semibold'>
-									<div className='flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10'>
+								<div className='text-white font-black tracking-widest uppercase mb-2 border-2 border-black inline-block px-3 py-1 rounded-md bg-black/20'>Dashboard Kelas</div>
+								<h1 className='text-4xl md:text-5xl font-black font-["Space_Grotesk"] uppercase tracking-tight mb-6 mt-2' style={{ textShadow: '2px 2px 0 #000' }}>{kelasDetail.kelas}</h1>
+								<div className='flex flex-wrap items-center gap-3 text-sm font-bold'>
+									<div className='flex items-center gap-2 bg-white text-black border-2 border-black px-4 py-2 rounded-xl shadow-[3px_3px_0px_0px_#0D0D0D]'>
 										<span>👤</span> Wali Kelas: {kelasDetail.wali_kelas}
 									</div>
-									<div className='flex items-center gap-2 bg-white/20 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10'>
+									<div className='flex items-center gap-2 bg-white text-black border-2 border-black px-4 py-2 rounded-xl shadow-[3px_3px_0px_0px_#0D0D0D]'>
 										<span>🎓</span> {jumlahSiswa} Siswa Terdaftar
 									</div>
 								</div>
@@ -260,12 +273,12 @@ export default function KelasDetail() {
 							{isWaliKelas && (
 								<button
 									onClick={() => setIsAddOpen(true)}
-									className='bg-white text-indigo-600 hover:bg-indigo-50 hover:scale-[0.98] active:scale-95 px-6 py-3.5 rounded-2xl font-bold transition-all shadow-md flex items-center justify-center gap-2'>
+									className='bg-white text-black border-[3px] border-black shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none px-6 py-3.5 rounded-2xl font-black uppercase tracking-wide transition-all flex items-center justify-center gap-2'>
 									<svg
 										xmlns='http://www.w3.org/2000/svg'
 										fill='none'
 										viewBox='0 0 24 24'
-										strokeWidth='2.5'
+										strokeWidth='3'
 										stroke='currentColor'
 										className='w-5 h-5'>
 										<path
@@ -280,9 +293,9 @@ export default function KelasDetail() {
 						</div>
 					</div>
 				) : (
-					<div className='bg-white p-12 rounded-[2rem] text-center text-gray-500 shadow-sm border border-gray-100'>
-						<div className='text-4xl mb-4'>📭</div>
-						<p className='font-medium text-lg'>Kelas tidak ditemukan</p>
+					<div className='neo-card text-center py-12'>
+						<div className='text-5xl mb-4'>📭</div>
+						<p className='font-black text-xl uppercase tracking-wide'>Kelas tidak ditemukan</p>
 					</div>
 				)}
 
@@ -292,19 +305,19 @@ export default function KelasDetail() {
 						{/* BENTO GRID: Aksi Utama */}
 						<section>
 							<div className='flex items-center justify-between mb-4 px-2'>
-								<h2 className='text-xl font-bold text-gray-800 tracking-tight'>Aksi Harian</h2>
+								<h2 className='text-xl font-black uppercase tracking-wider text-black'>Aksi Harian</h2>
 							</div>
 							<div className='grid grid-cols-2 sm:grid-cols-4 gap-4'>
 								{isWaliKelas && (
 									<Link
 										href={`/kelas/${id}/absensi`}
-										className='bg-white p-6 rounded-[1.5rem] shadow-sm hover:shadow-lg border border-gray-100 hover:border-indigo-200 hover:-translate-y-1 transition-all group flex flex-col items-center text-center gap-4'>
-										<div className='bg-indigo-50 text-indigo-600 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300'>
+										className='neo-card flex flex-col items-center text-center gap-4 group cursor-pointer hover:bg-[#F5C518]'>
+										<div className='bg-indigo-300 border-2 border-black text-black w-14 h-14 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D] group-hover:bg-white transition-colors duration-300'>
 											<svg
 												xmlns='http://www.w3.org/2000/svg'
 												fill='none'
 												viewBox='0 0 24 24'
-												strokeWidth={2}
+												strokeWidth={2.5}
 												stroke='currentColor'
 												className='w-7 h-7'>
 												<path
@@ -314,19 +327,19 @@ export default function KelasDetail() {
 												/>
 											</svg>
 										</div>
-										<span className='font-bold text-[13px] text-gray-700 group-hover:text-indigo-700 leading-snug'>Absensi Wali Kelas</span>
+										<span className='font-black uppercase tracking-wide text-xs text-black leading-snug'>Absensi Wali Kelas</span>
 									</Link>
 								)}
 
 								<Link
 									href={`/kelas/${id}/absensi-mapel`}
-									className='bg-white p-6 rounded-[1.5rem] shadow-sm hover:shadow-lg border border-gray-100 hover:border-purple-200 hover:-translate-y-1 transition-all group flex flex-col items-center text-center gap-4'>
-									<div className='bg-purple-50 text-purple-600 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300'>
+									className='neo-card flex flex-col items-center text-center gap-4 group cursor-pointer hover:bg-[#F5C518]'>
+									<div className='bg-purple-300 border-2 border-black text-black w-14 h-14 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D] group-hover:bg-white transition-colors duration-300'>
 										<svg
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={2}
+											strokeWidth={2.5}
 											stroke='currentColor'
 											className='w-7 h-7'>
 											<path
@@ -336,18 +349,18 @@ export default function KelasDetail() {
 											/>
 										</svg>
 									</div>
-									<span className='font-bold text-[13px] text-gray-700 group-hover:text-purple-700 leading-snug'>Absensi Mapel</span>
+									<span className='font-black uppercase tracking-wide text-xs text-black leading-snug'>Absensi Mapel</span>
 								</Link>
 
 								<Link
 									href={`/kelas/${id}/buat-tugas`}
-									className='bg-white p-6 rounded-[1.5rem] shadow-sm hover:shadow-lg border border-gray-100 hover:border-blue-200 hover:-translate-y-1 transition-all group flex flex-col items-center text-center gap-4'>
-									<div className='bg-blue-50 text-blue-600 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300'>
+									className='neo-card flex flex-col items-center text-center gap-4 group cursor-pointer hover:bg-[#F5C518]'>
+									<div className='bg-[#2F80ED] border-2 border-black text-black w-14 h-14 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D] group-hover:bg-white transition-colors duration-300'>
 										<svg
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={2}
+											strokeWidth={2.5}
 											stroke='currentColor'
 											className='w-7 h-7'>
 											<path
@@ -357,18 +370,18 @@ export default function KelasDetail() {
 											/>
 										</svg>
 									</div>
-									<span className='font-bold text-[13px] text-gray-700 group-hover:text-blue-700 leading-snug'>Buat Tugas Baru</span>
+									<span className='font-black uppercase tracking-wide text-xs text-black leading-snug'>Buat Tugas Baru</span>
 								</Link>
 
 								<Link
 									href={`/kelas/${id}/jurnal`}
-									className='bg-white p-6 rounded-[1.5rem] shadow-sm hover:shadow-lg border border-gray-100 hover:border-emerald-200 hover:-translate-y-1 transition-all group flex flex-col items-center text-center gap-4'>
-									<div className='bg-emerald-50 text-emerald-600 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300'>
+									className='neo-card flex flex-col items-center text-center gap-4 group cursor-pointer hover:bg-[#F5C518]'>
+									<div className='bg-[#00A693] border-2 border-black text-black w-14 h-14 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D] group-hover:bg-white transition-colors duration-300'>
 										<svg
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={2}
+											strokeWidth={2.5}
 											stroke='currentColor'
 											className='w-7 h-7'>
 											<path
@@ -378,18 +391,18 @@ export default function KelasDetail() {
 											/>
 										</svg>
 									</div>
-									<span className='font-bold text-[13px] text-gray-700 group-hover:text-emerald-700 leading-snug'>Catat Jurnal</span>
+									<span className='font-black uppercase tracking-wide text-xs text-black leading-snug'>Catat Jurnal</span>
 								</Link>
 
 								<Link
 									href={`/kelas/${id}/poin`}
-									className='bg-white p-6 rounded-[1.5rem] shadow-sm hover:shadow-lg border border-gray-100 hover:border-amber-200 hover:-translate-y-1 transition-all group flex flex-col items-center text-center gap-4'>
-									<div className='bg-amber-50 text-amber-600 w-14 h-14 rounded-2xl flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300'>
+									className='neo-card flex flex-col items-center text-center gap-4 group cursor-pointer hover:bg-[#F5C518]'>
+									<div className='bg-[#E8451A] border-2 border-black text-black w-14 h-14 rounded-xl flex items-center justify-center shadow-[2px_2px_0px_0px_#0D0D0D] group-hover:bg-white transition-colors duration-300'>
 										<svg
 											xmlns='http://www.w3.org/2000/svg'
 											fill='none'
 											viewBox='0 0 24 24'
-											strokeWidth={2}
+											strokeWidth={2.5}
 											stroke='currentColor'
 											className='w-7 h-7'>
 											<path
@@ -399,7 +412,7 @@ export default function KelasDetail() {
 											/>
 										</svg>
 									</div>
-									<span className='font-bold text-[13px] text-gray-700 group-hover:text-amber-700 leading-snug'>Catat Poin Master</span>
+									<span className='font-black uppercase tracking-wide text-xs text-black leading-snug'>Catat Poin Master</span>
 								</Link>
 							</div>
 						</section>
@@ -409,22 +422,22 @@ export default function KelasDetail() {
 							{/* Riwayat */}
 							<section>
 								<div className='flex items-center justify-between mb-4 px-2'>
-									<h2 className='text-xl font-bold text-gray-800 tracking-tight'>Riwayat Data</h2>
+									<h2 className='text-xl font-black uppercase tracking-wider text-black'>Riwayat Data</h2>
 								</div>
-								<div className='bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden'>
-									<ul className='divide-y divide-gray-50'>
+								<div className='border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] bg-white overflow-hidden'>
+									<ul className='divide-y-2 divide-black'>
 										{isWaliKelas && (
 											<li>
 												<Link
 													href={`/kelas/${id}/riwayat-absensi`}
-													className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-													<div className='bg-indigo-50 text-indigo-500 p-2.5 rounded-xl group-hover:bg-indigo-100 transition-colors'>
+													className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+													<div className='bg-indigo-300 border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 														<svg
 															className='w-5 h-5'
 															fill='none'
 															viewBox='0 0 24 24'
 															stroke='currentColor'
-															strokeWidth={2}>
+															strokeWidth={2.5}>
 															<path
 																strokeLinecap='round'
 																strokeLinejoin='round'
@@ -433,8 +446,8 @@ export default function KelasDetail() {
 														</svg>
 													</div>
 													<div className='flex flex-col'>
-														<span className='font-bold text-sm text-gray-800'>Riwayat Absensi Harian</span>
-														<span className='text-xs text-gray-400 font-medium'>Lihat data kehadiran harian</span>
+														<span className='font-black uppercase tracking-wide text-sm text-black'>Riwayat Absensi Harian</span>
+														<span className='text-xs text-black font-bold'>Lihat data kehadiran harian</span>
 													</div>
 												</Link>
 											</li>
@@ -442,14 +455,14 @@ export default function KelasDetail() {
 										<li>
 											<Link
 												href={`/kelas/${id}/riwayat-absensi-mapel`}
-												className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-												<div className='bg-purple-50 text-purple-500 p-2.5 rounded-xl group-hover:bg-purple-100 transition-colors'>
+												className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+												<div className='bg-purple-300 border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 													<svg
 														className='w-5 h-5'
 														fill='none'
 														viewBox='0 0 24 24'
 														stroke='currentColor'
-														strokeWidth={2}>
+														strokeWidth={2.5}>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
@@ -458,22 +471,22 @@ export default function KelasDetail() {
 													</svg>
 												</div>
 												<div className='flex flex-col'>
-													<span className='font-bold text-sm text-gray-800'>Riwayat Absensi Mapel</span>
-													<span className='text-xs text-gray-400 font-medium'>Kehadiran per mata pelajaran</span>
+													<span className='font-black uppercase tracking-wide text-sm text-black'>Riwayat Absensi Mapel</span>
+													<span className='text-xs text-black font-bold'>Kehadiran per mata pelajaran</span>
 												</div>
 											</Link>
 										</li>
 										<li>
 											<Link
 												href={`/kelas/${id}/riwayat-nilai`}
-												className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-												<div className='bg-blue-50 text-blue-500 p-2.5 rounded-xl group-hover:bg-blue-100 transition-colors'>
+												className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+												<div className='bg-blue-300 border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 													<svg
 														className='w-5 h-5'
 														fill='none'
 														viewBox='0 0 24 24'
 														stroke='currentColor'
-														strokeWidth={2}>
+														strokeWidth={2.5}>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
@@ -482,8 +495,8 @@ export default function KelasDetail() {
 													</svg>
 												</div>
 												<div className='flex flex-col'>
-													<span className='font-bold text-sm text-gray-800'>Riwayat Nilai</span>
-													<span className='text-xs text-gray-400 font-medium'>Daftar nilai tugas siswa</span>
+													<span className='font-black uppercase tracking-wide text-sm text-black'>Riwayat Nilai</span>
+													<span className='text-xs text-black font-bold'>Daftar nilai tugas siswa</span>
 												</div>
 											</Link>
 										</li>
@@ -494,22 +507,22 @@ export default function KelasDetail() {
 							{/* Laporan */}
 							<section>
 								<div className='flex items-center justify-between mb-4 px-2'>
-									<h2 className='text-xl font-bold text-gray-800 tracking-tight'>Export Laporan</h2>
+									<h2 className='text-xl font-black uppercase tracking-wider text-black'>Export Laporan</h2>
 								</div>
-								<div className='bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden'>
-									<ul className='divide-y divide-gray-50'>
+								<div className='border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] bg-white overflow-hidden'>
+									<ul className='divide-y-2 divide-black'>
 										{isWaliKelas && (
 											<li>
 												<Link
 													href={`/kelas/${id}/laporan-absensi`}
-													className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-													<div className='bg-emerald-50 text-emerald-500 p-2.5 rounded-xl group-hover:bg-emerald-100 transition-colors'>
+													className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+													<div className='bg-[#00A693] border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 														<svg
 															className='w-5 h-5'
 															fill='none'
 															viewBox='0 0 24 24'
 															stroke='currentColor'
-															strokeWidth={2}>
+															strokeWidth={2.5}>
 															<path
 																strokeLinecap='round'
 																strokeLinejoin='round'
@@ -518,8 +531,8 @@ export default function KelasDetail() {
 														</svg>
 													</div>
 													<div className='flex flex-col'>
-														<span className='font-bold text-sm text-gray-800'>Laporan Absen Harian</span>
-														<span className='text-xs text-gray-400 font-medium'>Rekapitulasi absensi harian</span>
+														<span className='font-black uppercase tracking-wide text-sm text-black'>Laporan Absen Harian</span>
+														<span className='text-xs text-black font-bold'>Rekapitulasi absensi harian</span>
 													</div>
 												</Link>
 											</li>
@@ -527,14 +540,14 @@ export default function KelasDetail() {
 										<li>
 											<Link
 												href={`/kelas/${id}/laporan-absensi-mapel`}
-												className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-												<div className='bg-purple-50 text-purple-500 p-2.5 rounded-xl group-hover:bg-purple-100 transition-colors'>
+												className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+												<div className='bg-purple-300 border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 													<svg
 														className='w-5 h-5'
 														fill='none'
 														viewBox='0 0 24 24'
 														stroke='currentColor'
-														strokeWidth={2}>
+														strokeWidth={2.5}>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
@@ -543,22 +556,22 @@ export default function KelasDetail() {
 													</svg>
 												</div>
 												<div className='flex flex-col'>
-													<span className='font-bold text-sm text-gray-800'>Laporan Absen Mapel</span>
-													<span className='text-xs text-gray-400 font-medium'>Rekapitulasi absensi mapel</span>
+													<span className='font-black uppercase tracking-wide text-sm text-black'>Laporan Absen Mapel</span>
+													<span className='text-xs text-black font-bold'>Rekapitulasi absensi mapel</span>
 												</div>
 											</Link>
 										</li>
 										<li>
 											<Link
 												href={`/kelas/${id}/laporan-nilai`}
-												className='flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors group'>
-												<div className='bg-blue-50 text-blue-500 p-2.5 rounded-xl group-hover:bg-blue-100 transition-colors'>
+												className='flex items-center gap-4 p-4 hover:bg-[#F5C518] transition-colors group'>
+												<div className='bg-[#2F80ED] border-2 border-black text-black p-2.5 rounded-xl group-hover:bg-white shadow-[2px_2px_0px_0px_#0D0D0D] transition-colors'>
 													<svg
 														className='w-5 h-5'
 														fill='none'
 														viewBox='0 0 24 24'
 														stroke='currentColor'
-														strokeWidth={2}>
+														strokeWidth={2.5}>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
@@ -567,8 +580,8 @@ export default function KelasDetail() {
 													</svg>
 												</div>
 												<div className='flex flex-col'>
-													<span className='font-bold text-sm text-gray-800'>Laporan Nilai Kelas</span>
-													<span className='text-xs text-gray-400 font-medium'>Export buku nilai siswa</span>
+													<span className='font-black uppercase tracking-wide text-sm text-black'>Laporan Nilai Kelas</span>
+													<span className='text-xs text-black font-bold'>Export buku nilai siswa</span>
 												</div>
 											</Link>
 										</li>
@@ -580,49 +593,51 @@ export default function KelasDetail() {
 
 					{/* --- SETTINGS COLUMN --- */}
 					<div className='space-y-8 lg:col-span-1'>
-						{/* Pengaturan / Danger Zone */}
+						{/* Pengaturan Column */}
 						{isWaliKelas && (
-							<section>
-								<div className='bg-white rounded-3xl shadow-sm border border-gray-100 p-6 space-y-3'>
-									<h2 className='text-xs font-bold text-gray-400 uppercase tracking-widest mb-4'>Pengaturan Kelas</h2>
-									<button
-										onClick={handleOpenEdit}
-										className='w-full flex items-center justify-center gap-2 p-3 rounded-xl hover:bg-gray-50 text-gray-700 font-bold text-sm transition-all border border-gray-200 hover:border-gray-300'>
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-4 h-4'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10'
-											/>
-										</svg>
-										Edit Profil Kelas
-									</button>
-									<button
-										onClick={handleDeleteKelas}
-										className='w-full flex items-center justify-center gap-2 p-3 rounded-xl hover:bg-rose-50 text-rose-600 font-bold text-sm transition-all border border-transparent hover:border-rose-200'>
-										<svg
-											xmlns='http://www.w3.org/2000/svg'
-											fill='none'
-											viewBox='0 0 24 24'
-											strokeWidth='2'
-											stroke='currentColor'
-											className='w-4 h-4'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												d='m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0'
-											/>
-										</svg>
-										Hapus Kelas
-									</button>
-								</div>
-							</section>
+							<div className='flex flex-col gap-6'>
+								<section>
+									<h2 className='text-sm font-black uppercase tracking-wider text-black mb-4'>Pengaturan Kelas</h2>
+									<div className='neo-card space-y-4'>
+										<button
+											onClick={handleOpenEdit}
+											className='w-full neo-btn-outline flex items-center justify-center gap-2 transition-all'>
+											<svg
+												xmlns='http://www.w3.org/2000/svg'
+												fill='none'
+												viewBox='0 0 24 24'
+												strokeWidth={2}
+												stroke='currentColor'
+												className='w-5 h-5'>
+												<path
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													d='M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125'
+												/>
+											</svg>
+											Edit Profil Kelas
+										</button>
+										<button
+											onClick={handleDeleteKelas}
+											className='w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-white text-[#E8451A] font-bold text-sm transition-all border-2 border-black shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-x-[2px] hover:-translate-y-[2px] hover:shadow-[5px_5px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white'>
+											<svg
+												xmlns='http://www.w3.org/2000/svg'
+												fill='none'
+												viewBox='0 0 24 24'
+												strokeWidth={2}
+												stroke='currentColor'
+												className='w-5 h-5'>
+												<path
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													d='M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0'
+												/>
+											</svg>
+											Hapus Kelas
+										</button>
+									</div>
+								</section>
+							</div>
 						)}
 					</div>
 				</div>
@@ -631,86 +646,88 @@ export default function KelasDetail() {
 				<div className='w-full'>
 					{/* Daftar Siswa */}
 					<section>
-						<div className='bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col w-full'>
-							<div className='px-6 py-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center sticky top-0 z-10'>
-								<h2 className='font-bold text-gray-800 text-lg tracking-tight'>Daftar Siswa</h2>
-								<span className='bg-indigo-100 text-indigo-700 text-xs font-extrabold px-3 py-1 rounded-full'>{siswaList.length}</span>
-							</div>
-
-							<div className='p-2'>
-								<ul className='divide-y divide-gray-50'>
-									{siswaList.length > 0 ? (
-										siswaList.map((siswa) => (
-											<li key={siswa.id}>
-												<Link
-													href={`/siswa/${siswa.id}`}
-													className='flex gap-4 items-center p-3 hover:bg-indigo-50/50 rounded-2xl transition-colors group'>
-													<div className='bg-gray-100 text-gray-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors'>
-														<svg
-															xmlns='http://www.w3.org/2000/svg'
-															fill='none'
-															viewBox='0 0 24 24'
-															strokeWidth={2}
-															stroke='currentColor'
-															className='w-5 h-5'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																d='M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z'
-															/>
-														</svg>
-													</div>
-													<div className='flex flex-col flex-grow truncate'>
-														<div className='flex items-center gap-2'>
-															<span className={`text-sm font-bold truncate ${siswa.status === 'Aktif' ? 'text-gray-800 group-hover:text-indigo-800' : 'text-red-400 line-through'}`}>{siswa.nama_lengkap}</span>
-														</div>
-														<div className='flex items-center gap-2 mt-0.5'>
-															<span className='text-[11px] text-gray-500 font-medium'>NIS: {siswa.nis}</span>
-
-															{/* Poin Badges (Simplified) */}
-															{(() => {
-																const points = poinList.filter((p) => p.siswa_id === siswa.id);
-																const positif = points.filter((p) => p.tipe === 'positif').reduce((sum, p) => sum + p.poin, 0);
-																const negatif = points.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
-
-																if (positif === 0 && negatif === 0) return null;
-
-																return (
-																	<div className='flex gap-1 ml-auto'>
-																		{positif > 0 && <span className='text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-md font-bold'>+{positif}</span>}
-																		{negatif > 0 && <span className='text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md font-bold'>-{negatif}</span>}
-																	</div>
-																);
-															})()}
-														</div>
-													</div>
-													<div className='text-gray-300 group-hover:text-indigo-400 transition-colors shrink-0'>
-														<svg
-															xmlns='http://www.w3.org/2000/svg'
-															fill='none'
-															viewBox='0 0 24 24'
-															strokeWidth={2.5}
-															stroke='currentColor'
-															className='w-4 h-4'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																d='m8.25 4.5 7.5 7.5-7.5 7.5'
-															/>
-														</svg>
-													</div>
-												</Link>
-											</li>
-										))
-									) : (
-										<div className='text-center py-10 px-4'>
-											<div className='text-3xl mb-2'>📭</div>
-											<div className='text-gray-400 text-sm font-medium'>Belum ada siswa di kelas ini.</div>
-										</div>
-									)}
-								</ul>
+						<div className='flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4'>
+							<div className='flex items-center gap-4'>
+								<div className='bg-[#F5C518] border-[3px] border-black text-black p-3 rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] hidden sm:block'>
+									<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth={2.5} stroke='currentColor' className='w-6 h-6'>
+										<path strokeLinecap='round' strokeLinejoin='round' d='M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z' />
+									</svg>
+								</div>
+								<div>
+									<h2 className='text-2xl font-black uppercase tracking-wider text-black'>Daftar Siswa</h2>
+									<p className='text-sm text-black font-bold border-2 border-black inline-block px-2 py-0.5 rounded-md shadow-[2px_2px_0px_0px_#0D0D0D] bg-white mt-1'>{siswaList.length} Siswa Terdaftar</p>
+								</div>
 							</div>
 						</div>
+
+						{/* List Siswa as Grid */}
+						{siswaList.length === 0 ? (
+							<div className='py-16 text-center flex flex-col items-center justify-center bg-white border-[3px] border-black rounded-3xl shadow-[6px_6px_0px_0px_#0D0D0D]'>
+								<div className='w-20 h-20 bg-[#F5C518] border-2 border-black rounded-full flex items-center justify-center mb-4 shadow-[4px_4px_0px_0px_#0D0D0D]'>
+									<span className='text-4xl'>📭</span>
+								</div>
+								<h3 className='text-xl font-black uppercase text-black mb-1'>Belum Ada Siswa</h3>
+								<p className='text-black font-bold text-sm'>Kelas ini belum memiliki siswa yang terdaftar.</p>
+							</div>
+						) : (
+							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+								{siswaList.map((siswa, index) => (
+									<Link
+										href={`/siswa/${siswa.id}`}
+										key={siswa.id}
+										className='bg-white border-[3px] border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] p-4 flex items-center gap-4 hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all group'>
+										<div className='w-12 h-12 rounded-xl bg-[#FFE8DC] border-2 border-black text-black flex items-center justify-center font-black text-lg shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0 group-hover:bg-[#F5C518] transition-colors'>
+											{siswa.nama_lengkap.charAt(0).toUpperCase()}
+										</div>
+
+										<div className='flex-1 min-w-0'>
+											<div className='flex flex-wrap items-center gap-2 mb-1'>
+												<span className='font-black uppercase text-black line-clamp-1 text-sm group-hover:underline' title={siswa.nama_lengkap}>{siswa.nama_lengkap}</span>
+											</div>
+											<div className='flex flex-wrap items-center gap-2 mt-1.5'>
+												<p className='text-[10px] text-black font-bold bg-gray-100 border border-black px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_#0D0D0D]'>NIS: {siswa.nis}</p>
+												{siswa.status === 'Aktif' ? (
+													<span className='bg-[#00A693] text-white border border-black shadow-[1px_1px_0px_0px_#0D0D0D] px-1.5 py-0.5 rounded font-bold text-[10px]'>AKTIF</span>
+												) : (
+													<span className='bg-[#E8451A] text-white border border-black shadow-[1px_1px_0px_0px_#0D0D0D] px-1.5 py-0.5 rounded font-bold text-[10px] uppercase'>{siswa.status}</span>
+												)}
+												
+												{/* Poin Badges */}
+												{(() => {
+													const points = poinList.filter((p) => p.siswa_id === siswa.id);
+													const positif = points.filter((p) => p.tipe === 'positif').reduce((sum, p) => sum + p.poin, 0);
+													const negatif = points.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
+
+													if (positif === 0 && negatif === 0) return null;
+
+													return (
+														<div className='flex gap-1'>
+															{positif > 0 && <span className='text-[10px] bg-[#F5C518] text-black border border-black px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_#0D0D0D] font-black'>+{positif}</span>}
+															{negatif > 0 && <span className='text-[10px] bg-[#E8451A] text-white border border-black px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_#0D0D0D] font-black'>-{negatif}</span>}
+														</div>
+													);
+												})()}
+											</div>
+										</div>
+										<div className='text-black opacity-0 group-hover:opacity-100 transition-opacity shrink-0'>
+											<svg
+												xmlns='http://www.w3.org/2000/svg'
+												fill='none'
+												viewBox='0 0 24 24'
+												strokeWidth={3}
+												stroke='currentColor'
+												className='w-5 h-5'>
+												<path
+													strokeLinecap='round'
+													strokeLinejoin='round'
+													d='m8.25 4.5 7.5 7.5-7.5 7.5'
+												/>
+											</svg>
+										</div>
+									</Link>
+								))}
+							</div>
+						)}
 					</section>
 				</div>
 			</div>
@@ -728,10 +745,10 @@ export default function KelasDetail() {
 						onClick={() => setIsModalOpen(false)}></div>
 
 					<div className='flex min-h-full items-center justify-center p-4 text-center sm:p-0'>
-						<div className='relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg'>
+						<div className='relative transform overflow-hidden rounded-2xl border-[3px] border-black bg-white text-left shadow-[8px_8px_0px_0px_#0D0D0D] transition-all sm:my-8 sm:w-full sm:max-w-lg'>
 							<div className='bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4'>
 								<h3
-									className='text-lg font-semibold leading-6 text-slate-900 mb-4'
+									className='text-xl font-black uppercase tracking-wider text-black mb-4'
 									id='modal-title'>
 									{isEditMode ? 'Edit Siswa' : 'Tambah Siswa Baru'}
 								</h3>
@@ -741,11 +758,11 @@ export default function KelasDetail() {
 									onSubmit={handleSubmit}
 									className='space-y-4'>
 									<div>
-										<label className='block text-sm font-medium leading-6 text-slate-900'>Nama Lengkap</label>
+										<label className='block text-sm font-black uppercase tracking-wide text-black'>Nama Lengkap</label>
 										<input
 											required
 											type='text'
-											className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+											className='neo-input mt-1'
 											value={formData.nama_lengkap}
 											onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
 										/>
@@ -753,19 +770,19 @@ export default function KelasDetail() {
 
 									<div className='grid grid-cols-2 gap-4'>
 										<div>
-											<label className='block text-sm font-medium leading-6 text-slate-900'>NIS</label>
+											<label className='block text-sm font-black uppercase tracking-wide text-black'>NIS</label>
 											<input
 												type='text'
-												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												className='neo-input mt-1'
 												value={formData.nis}
 												onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
 											/>
 										</div>
 										<div>
-											<label className='block text-sm font-medium leading-6 text-slate-900'>Kelas</label>
+											<label className='block text-sm font-black uppercase tracking-wide text-black'>Kelas</label>
 											<select
 												required
-												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												className='neo-input mt-1'
 												value={formData.kelas}
 												onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
 												<option value=''>Pilih Kelas</option>
@@ -782,9 +799,9 @@ export default function KelasDetail() {
 
 									<div className='grid grid-cols-2 gap-4'>
 										<div>
-											<label className='block text-sm font-medium leading-6 text-slate-900'>Jenis Kelamin</label>
+											<label className='block text-sm font-black uppercase tracking-wide text-black'>Jenis Kelamin</label>
 											<select
-												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												className='neo-input mt-1'
 												value={formData.jenis_kelamin}
 												onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}>
 												<option value='Laki-laki'>Laki-laki</option>
@@ -792,9 +809,9 @@ export default function KelasDetail() {
 											</select>
 										</div>
 										<div>
-											<label className='block text-sm font-medium leading-6 text-slate-900'>Status</label>
+											<label className='block text-sm font-black uppercase tracking-wide text-black'>Status</label>
 											<select
-												className='block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-slate-600 sm:text-sm sm:leading-6'
+												className='neo-input mt-1'
 												value={formData.status}
 												onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
 												<option value='Aktif'>Aktif</option>
@@ -807,16 +824,16 @@ export default function KelasDetail() {
 								</form>
 							</div>
 
-							<div className='bg-slate-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6'>
+							<div className='bg-white border-t-2 border-black px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 gap-3'>
 								<button
 									type='submit'
 									form='siswaForm'
-									className='inline-flex w-full justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 sm:ml-3 sm:w-auto'>
+									className='neo-btn-primary w-full sm:w-auto'>
 									Simpan
 								</button>
 								<button
 									type='button'
-									className='mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 sm:mt-0 sm:w-auto'
+									className='neo-btn-outline w-full sm:w-auto mt-3 sm:mt-0'
 									onClick={() => setIsModalOpen(false)}>
 									Batal
 								</button>
@@ -835,30 +852,30 @@ export default function KelasDetail() {
 			{/* --- MODAL EDIT KELAS --- */}
 			{isEditModalOpen && (
 				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm'>
-					<div className='w-full max-w-md rounded-2xl bg-white p-6 shadow-xl'>
-						<h3 className='text-lg font-bold text-gray-900 mb-4'>Edit Data Kelas</h3>
+					<div className='w-full max-w-md rounded-2xl border-[3px] border-black bg-white p-6 shadow-[8px_8px_0px_0px_#0D0D0D]'>
+						<h3 className='text-xl font-black uppercase tracking-wider text-black mb-4'>Edit Data Kelas</h3>
 						<form
 							onSubmit={handleEditSubmit}
 							className='space-y-4'>
 							<div>
-								<label className='block text-sm font-medium text-gray-700'>Nama Kelas</label>
+								<label className='block text-sm font-black uppercase tracking-wide text-black'>Nama Kelas</label>
 								<input
 									type='text'
 									required
 									value={editFormData.kelas}
 									onChange={(e) => setEditFormData({ ...editFormData, kelas: e.target.value })}
-									className='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500'
+									className='neo-input mt-1'
 								/>
 							</div>
 
 							<div>
-								<label className='block text-sm font-medium text-gray-700'>Wali Kelas</label>
+								<label className='block text-sm font-black uppercase tracking-wide text-black'>Wali Kelas</label>
 								<input
 									type='text'
 									required
 									value={editFormData.wali_kelas}
 									onChange={(e) => setEditFormData({ ...editFormData, wali_kelas: e.target.value })}
-									className='mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500'
+									className='neo-input mt-1'
 								/>
 							</div>
 
@@ -876,12 +893,12 @@ export default function KelasDetail() {
 								<button
 									type='button'
 									onClick={() => setIsEditModalOpen(false)}
-									className='flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50'>
+									className='flex-1 neo-btn-outline'>
 									Batal
 								</button>
 								<button
 									type='submit'
-									className='flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700'>
+									className='flex-1 neo-btn-primary'>
 									Simpan Perubahan
 								</button>
 							</div>

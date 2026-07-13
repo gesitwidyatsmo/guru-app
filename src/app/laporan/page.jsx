@@ -126,7 +126,7 @@ export default function LaporanPage() {
 				if (statusRaw === 'Hadir') kode = 'H';
 				else if (statusRaw === 'Sakit') kode = 'S';
 				else if (statusRaw === 'Izin') kode = 'I';
-				else if (statusRaw === 'Alpha') kode = 'A';
+				else if (statusRaw === 'Alpha' || statusRaw === 'Alpa') kode = 'A';
 
 				row.kehadiran[p.id] = kode;
 
@@ -471,60 +471,64 @@ export default function LaporanPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-16 font-sans'>
-			{/* Header Gradient */}
-			<div className='bg-gradient-to-r from-indigo-600 to-purple-700 py-8 px-4 sm:px-8 rounded-b-[2.5rem] shadow-2xl'>
+		<div className='min-h-screen bg-[#FFF5F0] pb-16 font-sans'>
+			{/* Header Neobrutalism */}
+			<div className='bg-[#F5C518] border-b-[4px] border-black py-8 px-4 sm:px-8 shadow-[0_8px_0px_0px_#0D0D0D] mb-8 relative'>
 				<div className='max-w-7xl mx-auto'>
 					<div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
-						<div className='flex items-center gap-3'>
+						<div className='flex items-center gap-4'>
 							<button
 								onClick={() => router.back()}
-								className='p-2 bg-white/15 hover:bg-white/25 text-white rounded-xl transition-colors'>
+								className='p-2 bg-white text-black border-[3px] border-black rounded-xl hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-none transition-all'>
 								<svg
-									className='w-5 h-5'
+									className='w-6 h-6'
 									fill='none'
 									stroke='currentColor'
 									viewBox='0 0 24 24'>
 									<path
 										strokeLinecap='round'
 										strokeLinejoin='round'
-										strokeWidth={2}
+										strokeWidth={3}
 										d='M15 19l-7-7 7-7'
 									/>
 								</svg>
 							</button>
 							<div>
-								<h1 className='text-2xl sm:text-3xl font-bold text-white'>Laporan</h1>
-								<p className='text-indigo-100 text-sm'>Rekapitulasi {tabs.find((t) => t.id === activeTab)?.name} Bulanan</p>
+								<h1 className='text-2xl sm:text-4xl font-black text-black uppercase tracking-widest'>Laporan</h1>
+								<p className='text-black font-bold text-sm bg-white border-2 border-black inline-block px-2 py-0.5 rounded shadow-[2px_2px_0px_0px_#0D0D0D] mt-1'>Rekapitulasi {tabs.find((t) => t.id === activeTab)?.name} Bulanan</p>
 							</div>
 						</div>
-						<div className='flex gap-2'>
+						<div className='grid grid-cols-2 md:flex gap-3 mt-4 md:mt-0 w-full md:w-auto'>
 							<button
 								onClick={() => window.print()}
-								className='bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl font-semibold transition-colors'>
+								className='bg-white text-black border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center'>
 								Print
 							</button>
 							<button
 								onClick={handleExportPDF}
-								className='bg-white text-rose-600 hover:bg-rose-50 px-4 py-2 rounded-xl font-bold transition-colors shadow-lg'>
+								className='bg-[#E8451A] text-white border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center text-center'>
 								Export PDF
 							</button>
 							<button
 								onClick={handleExportExcel}
-								className='bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-xl font-bold transition-colors shadow-lg'>
+								className='col-span-2 md:col-auto bg-[#00A693] text-white border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center text-center'>
 								Export Excel
 							</button>
 						</div>
 					</div>
 
 					{/* Tabs */}
-					<div className='mt-8 flex gap-2 flex-wrap'>
-						{tabs.map((t) => (
+					<div className='mt-8 grid grid-cols-2 md:flex gap-3 w-full md:w-auto'>
+						{tabs.map((t, index) => (
 							<button
 								key={t.id}
 								onClick={() => setActiveTab(t.id)}
-								className={`px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 ${
-									activeTab === t.id ? 'bg-white text-indigo-700 shadow-xl scale-105' : 'bg-white/10 text-white hover:bg-white/20'
+								className={`px-5 py-2.5 rounded-xl font-black uppercase tracking-wide border-[3px] border-black transition-all flex items-center justify-center gap-2 ${
+									tabs.length === 3 && index === 2 ? 'col-span-2 md:col-auto' : ''
+								} ${
+									activeTab === t.id 
+										? 'bg-[#2F80ED] text-white translate-y-[2px] translate-x-[2px] shadow-none' 
+										: 'bg-white text-black hover:-translate-y-[2px] hover:-translate-x-[2px] shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-[6px_6px_0px_0px_#0D0D0D]'
 								}`}>
 								<span>{t.icon}</span>
 								{t.name}
@@ -533,14 +537,14 @@ export default function LaporanPage() {
 					</div>
 
 					{/* Filters */}
-					<div className='mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3'>
+					<div className='mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
 						{/* Filter Kelas */}
-						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
-							<p className='text-xs text-indigo-100 mb-1 font-medium'>Kelas</p>
+						<div className='bg-white border-[3px] border-black rounded-2xl p-3 shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest mb-1'>Kelas</p>
 							<select
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
-								className='w-full rounded-xl px-3 py-2 font-bold text-gray-800 bg-white/90 outline-none cursor-pointer hover:bg-white'>
+								className='w-full rounded-xl border-2 border-black px-3 py-2 font-bold text-black bg-white outline-none cursor-pointer focus:border-[#E8451A]'>
 								{kelasList.map((k) => (
 									<option
 										key={k.id}
@@ -551,12 +555,12 @@ export default function LaporanPage() {
 							</select>
 						</div>
 						{/* Filter Mapel */}
-						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
-							<p className='text-xs text-indigo-100 mb-1 font-medium'>Mapel</p>
+						<div className='bg-white border-[3px] border-black rounded-2xl p-3 shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest mb-1'>Mapel</p>
 							<select
 								value={selectedMapel}
 								onChange={(e) => setSelectedMapel(e.target.value)}
-								className='w-full rounded-xl px-3 py-2 font-bold text-gray-800 bg-white/90 outline-none cursor-pointer hover:bg-white'>
+								className='w-full rounded-xl border-2 border-black px-3 py-2 font-bold text-black bg-white outline-none cursor-pointer focus:border-[#E8451A]'>
 								{mapelList.map((m) => (
 									<option
 										key={m.id}
@@ -567,12 +571,12 @@ export default function LaporanPage() {
 							</select>
 						</div>
 						{/* Filter Bulan */}
-						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
-							<p className='text-xs text-indigo-100 mb-1 font-medium'>Bulan</p>
+						<div className='bg-white border-[3px] border-black rounded-2xl p-3 shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest mb-1'>Bulan</p>
 							<select
 								value={bulan}
 								onChange={(e) => setBulan(e.target.value)}
-								className='w-full rounded-xl px-3 py-2 font-bold text-gray-800 bg-white/90 outline-none cursor-pointer hover:bg-white'>
+								className='w-full rounded-xl border-2 border-black px-3 py-2 font-bold text-black bg-white outline-none cursor-pointer focus:border-[#E8451A]'>
 								<option value='all'>Semua Bulan</option>
 								<option value='01'>Januari</option>
 								<option value='02'>Februari</option>
@@ -589,12 +593,12 @@ export default function LaporanPage() {
 							</select>
 						</div>
 						{/* Filter Tahun */}
-						<div className='bg-white/10 border border-white/15 rounded-2xl p-3'>
-							<p className='text-xs text-indigo-100 mb-1 font-medium'>Tahun</p>
+						<div className='bg-white border-[3px] border-black rounded-2xl p-3 shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest mb-1'>Tahun</p>
 							<select
 								value={tahun}
 								onChange={(e) => setTahun(e.target.value)}
-								className='w-full rounded-xl px-3 py-2 font-bold text-gray-800 bg-white/90 outline-none cursor-pointer hover:bg-white'>
+								className='w-full rounded-xl border-2 border-black px-3 py-2 font-bold text-black bg-white outline-none cursor-pointer focus:border-[#E8451A]'>
 								{[2024, 2025, 2026].map((t) => (
 									<option
 										key={t}
@@ -612,57 +616,57 @@ export default function LaporanPage() {
 			<div className='max-w-7xl mx-auto px-4 sm:px-8 mt-8'>
 				{/* STATS CARD ABSENSI */}
 				{activeTab === 'absensi' && stats.totalSiswa && (
-					<div className='grid grid-cols-2 md:grid-cols-4 gap-4 mb-6'>
-						<div className='bg-white p-4 rounded-2xl shadow-sm border border-gray-100'>
-							<p className='text-xs text-gray-500 font-bold uppercase'>Total Pertemuan</p>
-							<p className='text-2xl font-bold text-indigo-600'>
-								{stats.totalPertemuan} <span className='text-sm text-gray-400'>Jam</span>
+					<div className='grid grid-cols-2 md:grid-cols-4 gap-4 mb-8'>
+						<div className='bg-[#FFE8DC] p-5 rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-black transition-transform hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest'>Total Pertemuan</p>
+							<p className='text-4xl font-black text-black mt-2'>
+								{stats.totalPertemuan} <span className='text-lg font-bold'>Jam</span>
 							</p>
 						</div>
-						<div className='bg-white p-4 rounded-2xl shadow-sm border border-gray-100'>
-							<p className='text-xs text-gray-500 font-bold uppercase'>Kehadiran Kelas</p>
-							<p className='text-2xl font-bold text-emerald-500'>{stats.persentaseHadir}%</p>
+						<div className='bg-[#C4F0EB] p-5 rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-black transition-transform hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D]'>
+							<p className='text-xs text-black font-black uppercase tracking-widest'>Kehadiran Kelas</p>
+							<p className='text-4xl font-black text-[#00A693] mt-2' style={{ textShadow: '2px 2px 0px #0D0D0D' }}>{stats.persentaseHadir}%</p>
 						</div>
 					</div>
 				)}
 
 				{loadingRekap ? (
-					<div className='bg-white rounded-3xl shadow-xl p-12 text-center'>
-						<div className='animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto mb-4'></div>
-						<p className='text-gray-500 font-medium'>Sedang merekap data...</p>
+					<div className='bg-white rounded-3xl shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-black p-12 text-center'>
+						<div className='animate-spin rounded-none h-12 w-12 border-4 border-black border-t-[#F5C518] mx-auto mb-4'></div>
+						<p className='text-black font-black uppercase tracking-widest'>Sedang merekap data...</p>
 					</div>
 				) : (
-					<div className='bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden'>
+					<div className='bg-white rounded-3xl shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-black overflow-hidden'>
 						{/* --- TABEL ABSENSI MAPEL --- */}
 						{activeTab === 'absensi' && pivotedAbsensi && (
 							<div className='overflow-x-auto'>
 								<table className='w-full min-w-[1000px]'>
-									<thead className='bg-gray-50 border-b border-gray-200'>
+									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
 										<tr>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase sticky left-0 bg-gray-50 z-10'>No</th>
-											<th className='px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase lg:sticky left-12 bg-gray-50 z-10 w-64'>Nama Siswa</th>
+											<th className='px-4 py-4 text-left text-sm font-black text-black uppercase sticky left-0 bg-[#F5C518] z-10 border-r-[3px] border-black'>No</th>
+											<th className='px-4 py-4 text-left text-sm font-black text-black uppercase lg:sticky left-12 bg-[#F5C518] z-10 w-64 border-r-[3px] border-black'>Nama Siswa</th>
 											{/* Header Pertemuan */}
 											{pivotedAbsensi.kolomTanggal.map((p) => (
 												<th
 													key={p.id}
-													className='px-2 py-3 text-center text-xs font-bold text-gray-500 border-l border-gray-100 min-w-[60px]'>
-													<div className='text-indigo-600'>{p.label}</div>
-													<div className='text-[10px] text-gray-400'>{p.jam_ke}</div>
+													className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black min-w-[60px]'>
+													<div>{p.label}</div>
+													<div className='text-[10px]'>{p.jam_ke}</div>
 												</th>
 											))}
-											<th className='px-2 py-3 text-center text-xs font-bold text-gray-500 bg-gray-100 border-l'>H</th>
-											<th className='px-2 py-3 text-center text-xs font-bold text-gray-500 bg-gray-100'>I</th>
-											<th className='px-2 py-3 text-center text-xs font-bold text-gray-500 bg-gray-100'>S</th>
-											<th className='px-2 py-3 text-center text-xs font-bold text-gray-500 bg-gray-100'>A</th>
-											<th className='px-2 py-3 text-center text-xs font-bold text-gray-500 bg-gray-100'>%</th>
+											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#C4F0EB]'>H</th>
+											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#E2D4F0]'>I</th>
+											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFE8DC]'>S</th>
+											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFD6D6]'>A</th>
+											<th className='px-2 py-3 text-center text-sm font-black text-black bg-[#F5C518]'>%</th>
 										</tr>
 									</thead>
-									<tbody className='divide-y divide-gray-100'>
+									<tbody className='divide-y-[3px] divide-black'>
 										{pivotedAbsensi.barisSiswa.length === 0 ? (
 											<tr>
 												<td
 													colSpan='100'
-													className='p-8 text-center text-gray-400'>
+													className='p-8 text-center text-black font-bold uppercase'>
 													Belum ada data absensi bulan ini
 												</td>
 											</tr>
@@ -670,35 +674,35 @@ export default function LaporanPage() {
 											pivotedAbsensi.barisSiswa.map((row, idx) => (
 												<tr
 													key={row.id}
-													className='hover:bg-gray-50/50 transition-colors'>
-													<td className='px-4 py-3 text-sm text-gray-400 sticky left-0 bg-white'>{idx + 1}</td>
-													<td className='px-4 py-3 lg:sticky left-12 bg-white border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]'>
-														<p className='text-sm font-bold text-gray-700 truncate w-60'>{row.nama}</p>
-														<p className='text-[10px] text-gray-400 font-mono'>{row.nis}</p>
+													className='hover:bg-gray-100 transition-colors'>
+													<td className='px-4 py-3 text-sm font-bold text-black sticky left-0 bg-white border-r-[3px] border-black'>{idx + 1}</td>
+													<td className='px-4 py-3 lg:sticky left-12 bg-white border-r-[3px] border-black shadow-[4px_0_0px_0px_rgba(0,0,0,0.1)]'>
+														<p className='text-sm font-black text-black truncate w-60'>{row.nama}</p>
+														<p className='text-[10px] font-bold text-black font-mono'>{row.nis}</p>
 													</td>
 													{/* Status per pertemuan */}
 													{pivotedAbsensi.kolomTanggal.map((p) => {
 														const kode = row.kehadiran[p.id];
-														let colorClass = 'text-gray-300';
-														if (kode === 'H') colorClass = 'text-emerald-500 font-bold';
-														if (kode === 'S') colorClass = 'text-amber-500 font-bold';
-														if (kode === 'I') colorClass = 'text-blue-500 font-bold';
-														if (kode === 'A') colorClass = 'text-rose-500 font-bold';
+														let colorClass = 'text-black';
+														if (kode === 'H') colorClass = 'text-[#00A693] font-black text-lg';
+														if (kode === 'S') colorClass = 'text-[#F5C518] font-black text-lg';
+														if (kode === 'I') colorClass = 'text-[#2F80ED] font-black text-lg';
+														if (kode === 'A') colorClass = 'text-[#E8451A] font-black text-lg';
 
 														return (
 															<td
 																key={p.id}
-																className='px-2 py-3 text-center border-l border-gray-50'>
-																<span className={`text-sm ${colorClass}`}>{kode}</span>
+																className='px-2 py-3 text-center border-r-[3px] border-black'>
+																<span className={colorClass}>{kode}</span>
 															</td>
 														);
 													})}
 													{/* Ringkasan */}
-													<td className='px-2 py-3 text-center font-bold text-emerald-600 bg-gray-50/50 border-l'>{row.stats.H}</td>
-													<td className='px-2 py-3 text-center font-bold text-blue-600 bg-gray-50/50'>{row.stats.I}</td>
-													<td className='px-2 py-3 text-center font-bold text-amber-600 bg-gray-50/50'>{row.stats.S}</td>
-													<td className='px-2 py-3 text-center font-bold text-rose-600 bg-gray-50/50'>{row.stats.A}</td>
-													<td className='px-2 py-3 text-center font-black text-gray-700 bg-gray-100 border-l'>{row.persentase}%</td>
+													<td className='px-2 py-3 text-center font-black text-[#00A693] border-r-[3px] border-black bg-[#C4F0EB]/30'>{row.stats.H}</td>
+													<td className='px-2 py-3 text-center font-black text-[#2F80ED] border-r-[3px] border-black bg-[#E2D4F0]/30'>{row.stats.I}</td>
+													<td className='px-2 py-3 text-center font-black text-[#F5C518] border-r-[3px] border-black bg-[#FFE8DC]/30'>{row.stats.S}</td>
+													<td className='px-2 py-3 text-center font-black text-[#E8451A] border-r-[3px] border-black bg-[#FFD6D6]/30'>{row.stats.A}</td>
+													<td className='px-2 py-3 text-center font-black text-black bg-[#F5C518]/20'>{row.persentase}%</td>
 												</tr>
 											))
 										)}
@@ -710,34 +714,32 @@ export default function LaporanPage() {
 						{/* --- TABEL NILAI (Logic Lama) --- */}
 						{activeTab === 'nilai' && dataRekap?.data && (
 							<div className='overflow-x-auto'>
-								{/* Render Tabel Nilai di sini (sama seperti kode Anda sebelumnya) */}
-								{/* Saya singkat agar muat, silakan copy paste bagian table nilai dari kode lama jika perlu, atau gunakan logic pivotNilai di atas */}
-								<table className='w-full'>
-									<thead className='bg-gray-50 border-b border-gray-200'>
+								<table className='w-full min-w-[800px]'>
+									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
 										<tr>
-											<th className='px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase'>Nama Siswa</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Nama Siswa</th>
 											{pivotNilai(dataRekap.data).kolomTugas.map((t) => (
 												<th
 													key={t.key}
-													className='px-4 py-3 text-center text-xs font-bold text-gray-500'>
+													className='px-4 py-4 text-center text-sm font-black text-black border-r-[3px] border-black'>
 													{t.judul}
 												</th>
 											))}
-											<th className='px-4 py-3 text-center text-xs font-bold text-gray-500'>Rata2</th>
+											<th className='px-4 py-4 text-center text-sm font-black text-black bg-[#C4F0EB]'>Rata2</th>
 										</tr>
 									</thead>
-									<tbody className='divide-y divide-gray-100'>
+									<tbody className='divide-y-[3px] divide-black'>
 										{pivotNilai(dataRekap.data).barisSiswa.map((row) => (
-											<tr key={row.siswa_id}>
-												<td className='px-6 py-3 font-bold text-gray-700'>{row.nama_lengkap}</td>
+											<tr key={row.siswa_id} className='hover:bg-gray-100 transition-colors'>
+												<td className='px-6 py-3 font-black text-black border-r-[3px] border-black'>{row.nama_lengkap}</td>
 												{pivotNilai(dataRekap.data).kolomTugas.map((t) => (
 													<td
 														key={t.key}
-														className='px-4 py-3 text-center text-gray-600'>
+														className='px-4 py-3 text-center font-bold text-black border-r-[3px] border-black'>
 														{row.nilaiByTugas[t.key] || '-'}
 													</td>
 												))}
-												<td className='px-4 py-3 text-center font-bold text-indigo-600'>{row.rataRata}</td>
+												<td className='px-4 py-3 text-center font-black text-[#00A693] bg-[#C4F0EB]/30'>{row.rataRata}</td>
 											</tr>
 										))}
 									</tbody>
@@ -748,20 +750,20 @@ export default function LaporanPage() {
 						{/* --- TABEL JURNAL (Logic Lama) --- */}
 						{activeTab === 'jurnal' && dataRekap?.data && (
 							<div className='overflow-x-auto'>
-								<table className='w-full'>
-									<thead className='bg-gray-50 border-b border-gray-200'>
+								<table className='w-full min-w-[600px]'>
+									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
 										<tr>
-											<th className='px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase'>Tanggal</th>
-											<th className='px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase'>Materi</th>
-											<th className='px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase'>Kegiatan</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Tanggal</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Materi</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase'>Kegiatan</th>
 										</tr>
 									</thead>
-									<tbody className='divide-y divide-gray-100'>
+									<tbody className='divide-y-[3px] divide-black'>
 										{dataRekap.data.map((row, i) => (
-											<tr key={i}>
-												<td className='px-6 py-3 text-sm text-gray-600'>{new Date(row.tanggal).toLocaleDateString('id-ID')}</td>
-												<td className='px-6 py-3 text-sm text-gray-800 font-medium'>{row.materi}</td>
-												<td className='px-6 py-3 text-sm text-gray-600'>{row.kegiatan}</td>
+											<tr key={i} className='hover:bg-gray-100 transition-colors'>
+												<td className='px-6 py-3 text-sm font-black text-black border-r-[3px] border-black w-32'>{new Date(row.tanggal).toLocaleDateString('id-ID')}</td>
+												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black'>{row.materi}</td>
+												<td className='px-6 py-3 text-sm font-bold text-black'>{row.kegiatan}</td>
 											</tr>
 										))}
 									</tbody>

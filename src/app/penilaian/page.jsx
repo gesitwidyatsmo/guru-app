@@ -100,10 +100,12 @@ export default function PenilaianPage() {
 					const tugasIds = tugasData.map(t => t.tugas_id);
 					let counts = {};
 					if (tugasIds.length > 0) {
-						const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+						const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
 						if (siswaData) {
 							siswaData.forEach(s => {
-								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+								if (s.nilai && parseInt(s.nilai) > 0) {
+									counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+								}
 							});
 						}
 					}
@@ -114,7 +116,8 @@ export default function PenilaianPage() {
 						tanggal: t.tanggal,
 						kelas: t.kelas,
 						mapel: t.mapel,
-						jumlahSiswa: counts[t.tugas_id] || 0
+						jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
+						totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
 					}));
 
 					setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
@@ -177,13 +180,13 @@ export default function PenilaianPage() {
 	};
 
 	const getNilaiColor = (nilaiValue) => {
-		if (!nilaiValue || nilaiValue === '') return 'from-gray-400 to-gray-500';
+		if (!nilaiValue || nilaiValue === '') return 'bg-[#E8E8E8] text-[#0D0D0D]';
 		const n = parseFloat(nilaiValue);
-		if (n >= 90) return 'from-green-500 to-green-600';
-		if (n >= 80) return 'from-blue-500 to-blue-600';
-		if (n >= 70) return 'from-yellow-500 to-yellow-600';
-		if (n >= 60) return 'from-orange-500 to-orange-600';
-		return 'from-red-500 to-red-600';
+		if (n >= 90) return 'bg-[#00A693] text-white';
+		if (n >= 80) return 'bg-[#2F80ED] text-white';
+		if (n >= 70) return 'bg-[#F5C518] text-[#0D0D0D]';
+		if (n >= 60) return 'bg-[#E8451A] text-white';
+		return 'bg-[#0D0D0D] text-white';
 	};
 
 	const getPredikat = (nilaiValue) => {
@@ -329,7 +332,7 @@ export default function PenilaianPage() {
 			if (insertHeaderError) throw insertHeaderError;
 
 			// Insert scores
-			const validGrades = payload.nilai.filter(n => n.nilai && String(n.nilai).trim() !== '' && String(n.nilai) !== '0').map(n => {
+			const validGrades = payload.nilai.map(n => {
 				const siswa = getSiswaById(n.siswa_id);
 				return {
 					tugas_id: tugasId,
@@ -377,19 +380,19 @@ export default function PenilaianPage() {
 		if (!siswa) return;
 
 		const { value: newNilai } = await Swal.fire({
-			title: `<h3 class="text-xl font-bold text-gray-800">Edit Nilai</h3>`,
+			title: `<h3 class="text-2xl font-black text-[#0D0D0D] uppercase tracking-tight">Edit Nilai</h3>`,
 			html: `
-        <div class="text-left bg-gray-50 p-4 rounded-xl mb-4 border border-gray-100">
-          <p class="text-sm text-gray-500 mb-1">Nama Siswa</p>
-          <p class="font-bold text-gray-800 text-lg">${siswa.nama_lengkap}</p>
-          <p class="text-xs text-gray-400">NIS: ${siswa.nis || '-'}</p>
+        <div class="text-left bg-[#FFF5F0] p-4 mb-6 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]">
+          <p class="text-xs font-bold text-[#0D0D0D] mb-1 uppercase tracking-wider">Siswa</p>
+          <p class="font-black text-[#0D0D0D] text-lg leading-tight mb-2">${siswa.nama_lengkap}</p>
+          <p class="text-[10px] font-bold font-mono text-[#0D0D0D] bg-white border-2 border-[#0D0D0D] inline-block px-2 py-0.5 shadow-[2px_2px_0px_0px_#0D0D0D]">NIS: ${siswa.nis || '-'}</p>
         </div>
-        <div class="mb-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Nilai (0-100)</label>
+        <div class="mb-2 text-left">
+          <label class="block text-sm font-black text-[#0D0D0D] mb-2 uppercase tracking-widest">Input Nilai</label>
           <input 
             id="swal-input-nilai" 
             type="number" 
-            class="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-lg text-center font-bold text-indigo-600 transition-all outline-none"
+            class="w-full px-4 py-3 border-4 border-[#0D0D0D] bg-white text-3xl text-center font-black text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] outline-none focus:bg-[#F5C518] transition-colors"
             min="0" 
             max="100" 
             value="${currentNilai || 0}"
@@ -398,10 +401,15 @@ export default function PenilaianPage() {
         </div>
       `,
 			showCancelButton: true,
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#EF4444',
-			confirmButtonText: 'Simpan Perubahan',
-			cancelButtonText: 'Batal',
+			confirmButtonText: 'SIMPAN',
+			cancelButtonText: 'BATAL',
+			buttonsStyling: false,
+			customClass: {
+				popup: 'border-4 border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+				title: 'pt-4',
+				confirmButton: 'bg-[#00A693] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
+				cancelButton: 'bg-[#E8451A] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
+			},
 			focusConfirm: false,
 			preConfirm: () => {
 				const val = document.getElementById('swal-input-nilai').value;
@@ -538,10 +546,12 @@ export default function PenilaianPage() {
 				const tugasIds = tugasData.map(t => t.tugas_id);
 				let counts = {};
 				if (tugasIds.length > 0) {
-					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
 					if (siswaData) {
 						siswaData.forEach(s => {
-							counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+							if (s.nilai && parseInt(s.nilai) > 0) {
+								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+							}
 						});
 					}
 				}
@@ -552,7 +562,8 @@ export default function PenilaianPage() {
 					tanggal: t.tanggal,
 					kelas: t.kelas,
 					mapel: t.mapel,
-					jumlahSiswa: counts[t.tugas_id] || 0
+					jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
+					totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
 				}));
 
 				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
@@ -624,10 +635,12 @@ export default function PenilaianPage() {
 				const tugasIds = tugasData.map(t => t.tugas_id);
 				let counts = {};
 				if (tugasIds.length > 0) {
-					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id').in('tugas_id', tugasIds);
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
 					if (siswaData) {
 						siswaData.forEach(s => {
-							counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+							if (s.nilai && parseInt(s.nilai) > 0) {
+								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+							}
 						});
 					}
 				}
@@ -638,7 +651,8 @@ export default function PenilaianPage() {
 					tanggal: t.tanggal,
 					kelas: t.kelas,
 					mapel: t.mapel,
-					jumlahSiswa: counts[t.tugas_id] || 0
+					jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
+					totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
 				}));
 
 				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
@@ -665,107 +679,108 @@ export default function PenilaianPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-20'>
+		<div className='min-h-screen bg-[var(--background)] pb-32'>
 			{/* Header Gradient */}
-			<div className='bg-gradient-to-r from-blue-600 to-indigo-700 pb-20 pt-8 px-4 sm:px-8 rounded-b-[3rem] shadow-2xl'>
+			<div className='bg-[#F5C518] border-b-4 border-[#0D0D0D] pb-12 pt-8 px-4 sm:px-8 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)]'>
 				<div className='max-w-6xl mx-auto'>
 					<div className='flex items-center gap-4 mb-6'>
 						<button
 							onClick={() => router.back()}
-							className='p-2 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/30 transition-all'>
+							className='neo-btn-outline bg-white flex items-center justify-center p-2 rounded-xl text-[#0D0D0D]'>
 							<svg
 								className='w-6 h-6'
 								fill='none'
 								stroke='currentColor'
-								viewBox='0 0 24 24'>
+								viewBox='0 0 24 24'
+								strokeWidth={3}>
 								<path
 									strokeLinecap='round'
 									strokeLinejoin='round'
-									strokeWidth={2}
 									d='M15 19l-7-7 7-7'
 								/>
 							</svg>
 						</button>
-						<h1 className='text-3xl font-bold text-white'>Input Penilaian</h1>
+						<h1 className='text-3xl font-black text-[#0D0D0D] uppercase tracking-tight'>Input Penilaian</h1>
 					</div>
 
 					{/* Filter Section */}
 					<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-						<div className='bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20'>
-							<label className='text-blue-100 text-sm mb-2 block'>Kelas</label>
-							<select
-								value={selectedKelas}
-								onChange={(e) => setSelectedKelas(e.target.value)}
-								className='w-full bg-white/90 border-0 rounded-xl px-4 py-3 text-gray-800 font-semibold focus:ring-2 focus:ring-blue-400'>
-								{kelasList.map((k) => (
-									<option
-										key={k.id}
-										value={k.kelas || k.nama_kelas}>
-										{k.kelas || k.nama_kelas}
-									</option>
-								))}
-							</select>
+						<div className='neo-card bg-white p-4'>
+							<label className='font-bold text-[#0D0D0D] text-sm mb-2 block uppercase tracking-tight'>Kelas</label>
+							<div className='relative'>
+								<select
+									value={selectedKelas}
+									onChange={(e) => setSelectedKelas(e.target.value)}
+									className='neo-input appearance-none bg-white pr-10 cursor-pointer w-full'>
+									{kelasList.map((k) => (
+										<option
+											key={k.id}
+											value={k.kelas || k.nama_kelas}>
+											{k.kelas || k.nama_kelas}
+										</option>
+									))}
+								</select>
+								<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
+							</div>
 						</div>
-						<div className='bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20'>
-							<label className='text-blue-100 text-sm mb-2 block'>Mata Pelajaran</label>
-							<select
-								value={selectedMapel}
-								onChange={(e) => setSelectedMapel(e.target.value)}
-								className='w-full bg-white/90 border-0 rounded-xl px-4 py-3 text-gray-800 font-semibold focus:ring-2 focus:ring-blue-400'>
-								{mapelList.map((m) => (
-									<option
-										key={m.id}
-										value={m.mapel || m.nama_mapel}>
-										{m.mapel || m.nama_mapel}
-									</option>
-								))}
-							</select>
+						<div className='neo-card bg-white p-4'>
+							<label className='font-bold text-[#0D0D0D] text-sm mb-2 block uppercase tracking-tight'>Mata Pelajaran</label>
+							<div className='relative'>
+								<select
+									value={selectedMapel}
+									onChange={(e) => setSelectedMapel(e.target.value)}
+									className='neo-input appearance-none bg-white pr-10 cursor-pointer w-full'>
+									{mapelList.map((m) => (
+										<option
+											key={m.id}
+											value={m.mapel || m.nama_mapel}>
+											{m.mapel || m.nama_mapel}
+										</option>
+									))}
+								</select>
+								<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<div className='max-w-6xl mx-auto px-4 sm:px-8 -mt-10'>
+			<div className='max-w-6xl mx-auto px-4 sm:px-8 -mt-6 relative z-10'>
 				<div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
 					{/* SIDEBAR: Daftar Tugas */}
 					<div className='lg:col-span-1 space-y-4'>
-						<div className='bg-white rounded-2xl shadow-xl p-4 border border-gray-100 h-fit'>
-							<div className='flex items-center justify-between mb-4'>
-								<h2 className='font-bold text-gray-700'>Daftar Tugas</h2>
-								{/* <button
-									onClick={() => setSelectedTugasId('')}
-									className='text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-200 transition-colors font-semibold'>
-									+ Baru
-								</button> */}
+						<div className='neo-card bg-white p-4 h-fit'>
+							<div className='flex items-center justify-between mb-4 border-b-2 border-[#0D0D0D] pb-2'>
+								<h2 className='font-black text-[#0D0D0D] uppercase tracking-tight text-lg'>Daftar Tugas</h2>
 							</div>
 
-							<div className='space-y-2 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar'>
+							<div className='space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar'>
 								{/* Item "Tugas Baru" */}
 								<div
 									onClick={() => setSelectedTugasId('')}
-									className={`p-3 rounded-xl cursor-pointer transition-all border ${
-										!selectedTugasId ? 'bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'
+									className={`p-3 rounded-xl cursor-pointer transition-all border-2 border-[#0D0D0D] ${
+										!selectedTugasId ? 'bg-[#00A693] text-white shadow-[2px_2px_0px_0px_#0D0D0D] translate-y-0' : 'bg-white text-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-[1px] hover:-translate-x-[1px] hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
 									}`}>
-									<p className={`font-bold text-sm ${!selectedTugasId ? 'text-indigo-700' : 'text-gray-700'}`}>📝 Tugas Baru</p>
-									<p className='text-xs text-gray-500 mt-1'>Buat penilaian baru</p>
+									<p className='font-bold text-sm'>📝 Tugas Baru</p>
+									<p className={`text-xs mt-1 font-bold ${!selectedTugasId ? 'text-white' : 'text-gray-500'}`}>Buat penilaian baru</p>
 								</div>
 
 								{/* List Tugas Existing */}
 								{loadingTugas ? (
-									<p className='text-center text-xs text-gray-400 py-4'>Memuat...</p>
+									<p className='text-center text-xs text-[#0D0D0D] font-bold py-4 border-2 border-[#0D0D0D] rounded-xl bg-white'>Memuat...</p>
 								) : daftarTugas.length === 0 ? (
-									<p className='text-center text-xs text-gray-400 py-4'>Belum ada riwayat tugas</p>
+									<p className='text-center text-xs text-[#0D0D0D] font-bold py-4 border-2 border-[#0D0D0D] rounded-xl bg-white'>Belum ada riwayat tugas</p>
 								) : (
 									daftarTugas.map((t) => (
 										<div
 											key={t.tugas_id}
 											onClick={() => setSelectedTugasId(t.tugas_id)}
-											className={`p-3 rounded-xl cursor-pointer transition-all border group ${
-												selectedTugasId === t.tugas_id ? 'bg-white border-indigo-500 shadow-md ring-1 ring-indigo-500' : 'bg-white border-gray-100 hover:border-indigo-300 hover:shadow-sm'
+											className={`p-3 rounded-xl cursor-pointer transition-all border-2 border-[#0D0D0D] group ${
+												selectedTugasId === t.tugas_id ? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]' : 'bg-white text-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-[1px] hover:-translate-x-[1px] hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
 											}`}>
 											<div className='flex justify-between items-start mb-1'>
-												<p className={`font-bold text-sm line-clamp-1 ${selectedTugasId === t.tugas_id ? 'text-indigo-700' : 'text-gray-700'}`}>{t.judul}</p>
-												<span className='text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-mono'>
+												<p className='font-bold text-sm line-clamp-1'>{t.judul}</p>
+												<span className='text-[10px] bg-white border-2 border-[#0D0D0D] px-1.5 py-0.5 rounded font-mono font-bold shadow-[1px_1px_0px_0px_#0D0D0D]'>
 													{new Date(t.tanggal).toLocaleDateString('id-ID', {
 														day: '2-digit',
 														month: 'short',
@@ -773,8 +788,10 @@ export default function PenilaianPage() {
 												</span>
 											</div>
 											<div className='flex justify-between items-center mt-2'>
-												<span className='text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded-md'>{t.jumlahSiswa} Siswa</span>
-												{selectedTugasId === t.tugas_id && <span className='w-2 h-2 rounded-full bg-indigo-500 animate-pulse'></span>}
+												<span className='text-xs font-bold text-[#0D0D0D] bg-white border-2 border-[#0D0D0D] px-2 py-0.5 rounded-md shadow-[1px_1px_0px_0px_#0D0D0D]'>
+													{t.jumlahSiswaMengumpulkan}/{t.totalSiswa} Siswa
+												</span>
+												{selectedTugasId === t.tugas_id && <span className='w-3 h-3 rounded-full border-2 border-[#0D0D0D] bg-[#E8451A] animate-pulse shadow-[1px_1px_0px_0px_#0D0D0D]'></span>}
 											</div>
 										</div>
 									))
@@ -786,71 +803,66 @@ export default function PenilaianPage() {
 					{/* MAIN CONTENT: Form Input / Table */}
 					<div className='lg:col-span-3 space-y-6'>
 						{/* Info Tugas Card */}
-						<div className='bg-white rounded-2xl shadow-xl p-6 border border-gray-100'>
+						<div className='neo-card bg-white p-6'>
 							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4'>
 								<div className='lg:col-span-2'>
-									<label className='block text-sm font-medium text-gray-500 mb-1'>Judul Tugas / Materi</label>
+									<label className='block text-sm font-bold text-[#0D0D0D] mb-1 uppercase tracking-tight'>Judul Tugas / Materi</label>
 									<input
 										type='text'
 										value={judul}
 										onChange={(e) => setJudul(e.target.value)}
-										className={`w-full px-4 py-2 rounded-xl border ${
-											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
-										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}
+										className={`neo-input w-full ${selectedTugasId ? 'bg-[#FFF5F0]' : 'bg-white'}`}
 										placeholder='Contoh: UH Matematika Bab 1'
 									/>
 								</div>
 								<div>
-									<label className='block text-sm font-medium text-gray-500 mb-1'>Tipe</label>
-									<select
-										value={type}
-										onChange={(e) => setType(e.target.value)}
-										className={`w-full px-4 py-2 rounded-xl border ${
-											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
-										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}>
-										<option value='Formatif'>Formatif</option>
-										<option value='Sumatif'>Sumatif</option>
-										<option value='SAS'>SAS</option>
-									</select>
+									<label className='block text-sm font-bold text-[#0D0D0D] mb-1 uppercase tracking-tight'>Tipe</label>
+									<div className='relative'>
+										<select
+											value={type}
+											onChange={(e) => setType(e.target.value)}
+											className={`neo-input w-full appearance-none pr-10 cursor-pointer ${selectedTugasId ? 'bg-[#FFF5F0]' : 'bg-white'}`}>
+											<option value='Formatif'>Formatif</option>
+											<option value='Sumatif'>Sumatif</option>
+											<option value='SAS'>SAS</option>
+										</select>
+										<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
+									</div>
 								</div>
 								<div>
-									<label className='block text-sm font-medium text-gray-500 mb-1'>Tanggal</label>
+									<label className='block text-sm font-bold text-[#0D0D0D] mb-1 uppercase tracking-tight'>Tanggal</label>
 									<input
 										type='date'
 										value={tanggal}
 										onChange={(e) => setTanggal(e.target.value)}
-										className={`w-full px-4 py-2 rounded-xl border ${
-											selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
-										} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none`}
+										className={`neo-input w-full ${selectedTugasId ? 'bg-[#FFF5F0]' : 'bg-white'}`}
 									/>
 								</div>
 							</div>
 
 							<div className='mb-4'>
-								<label className='block text-sm font-medium text-gray-500 mb-1'>Deskripsi (Opsional)</label>
+								<label className='block text-sm font-bold text-[#0D0D0D] mb-1 uppercase tracking-tight'>Deskripsi (Opsional)</label>
 								<textarea
 									value={deskripsi}
 									onChange={(e) => setDeskripsi(e.target.value)}
 									rows={2}
-									className={`w-full px-4 py-2 rounded-xl border ${
-										selectedTugasId ? 'bg-indigo-50/30 border-indigo-200 hover:border-indigo-300' : 'bg-white border-gray-300'
-									} focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none`}
+									className={`neo-input w-full resize-none ${selectedTugasId ? 'bg-[#FFF5F0]' : 'bg-white'}`}
 									placeholder='Catatan tambahan tentang tugas ini'
 								/>
 							</div>
 
 							{selectedTugasId && (
 								<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2'>
-									<div className='bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2 flex-auto'>
+									<div className='bg-[#2F80ED] text-white font-bold px-4 py-3 rounded-xl border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] text-sm flex items-center gap-2 flex-auto'>
 										<svg
-											className='w-5 h-5 flex-shrink-0'
+											className='w-6 h-6 flex-shrink-0'
 											fill='none'
 											stroke='currentColor'
-											viewBox='0 0 24 24'>
+											viewBox='0 0 24 24'
+											strokeWidth={3}>
 											<path
 												strokeLinecap='round'
 												strokeLinejoin='round'
-												strokeWidth={2}
 												d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
 											/>
 										</svg>
@@ -861,7 +873,7 @@ export default function PenilaianPage() {
 									<button
 										onClick={handleUpdateInfoTugas}
 										disabled={saving}
-										className='flex-shrink-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm'>
+										className='flex-shrink-0 w-full sm:w-auto neo-btn-primary bg-[#0D0D0D] text-white px-6 py-3 uppercase tracking-wider flex items-center justify-center gap-2'>
 										{saving ? 'Menyimpan...' : 'Simpan Perubahan'}
 									</button>
 								</div>
@@ -870,16 +882,16 @@ export default function PenilaianPage() {
 								<button
 									onClick={handleHapusTugas}
 									disabled={saving}
-									className='w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-3'>
+									className='w-full neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] uppercase tracking-wider flex items-center justify-center gap-2 mt-4'>
 									<svg
 										className='w-5 h-5'
 										fill='none'
 										stroke='currentColor'
-										viewBox='0 0 24 24'>
+										viewBox='0 0 24 24'
+										strokeWidth={3}>
 										<path
 											strokeLinecap='round'
 											strokeLinejoin='round'
-											strokeWidth={2}
 											d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
 										/>
 									</svg>
@@ -889,19 +901,19 @@ export default function PenilaianPage() {
 						</div>
 
 						{/* Tabel Siswa */}
-						<div className='bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden'>
-							<div className='p-4 bg-white border-b border-gray-100'>
+						<div className='neo-card p-0 overflow-hidden bg-white'>
+							<div className='p-4 bg-[#F5C518] border-b-4 border-[#0D0D0D]'>
 								<div className='relative'>
-									<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+									<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
 										<svg
-											className='h-5 w-5 text-gray-400'
+											className='h-5 w-5 text-[#0D0D0D]'
 											fill='none'
 											viewBox='0 0 24 24'
-											stroke='currentColor'>
+											stroke='currentColor'
+											strokeWidth={3}>
 											<path
 												strokeLinecap='round'
 												strokeLinejoin='round'
-												strokeWidth={2}
 												d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
 											/>
 										</svg>
@@ -911,11 +923,11 @@ export default function PenilaianPage() {
 										placeholder='Cari Nama atau NIS Siswa...'
 										value={searchSiswa}
 										onChange={(e) => setSearchSiswa(e.target.value)}
-										className='block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out'
+										className='neo-input neo-input-with-icon bg-white w-full'
 									/>
 								</div>
 							</div>
-							<div className='grid grid-cols-12 gap-4 p-4 bg-gray-50 border-b border-gray-100 text-sm font-semibold text-gray-500 uppercase tracking-wider'>
+							<div className='grid grid-cols-12 gap-4 p-4 bg-[#0D0D0D] text-white border-b-4 border-[#0D0D0D] text-sm font-bold uppercase tracking-wider'>
 								<div className='col-span-1 text-center'>No</div>
 								<div className='col-span-6 sm:col-span-6'>Nama Siswa</div>
 								<div className='col-span-3 sm:col-span-3 text-center'>Nilai</div>
@@ -925,9 +937,9 @@ export default function PenilaianPage() {
 								</div>
 							</div>
 
-							<div className='divide-y divide-gray-100 max-h-[600px] overflow-y-auto'>
+							<div className='divide-y-2 divide-[#0D0D0D] max-h-[600px] overflow-y-auto bg-white'>
 								{filteredSiswa.length === 0 ? (
-									<div className='p-8 text-center text-gray-400'>Tidak ada siswa di kelas ini</div>
+									<div className='p-8 text-center text-[#0D0D0D] font-bold'>Tidak ada siswa di kelas ini</div>
 								) : (
 									filteredSiswa.map((siswa, idx) => {
 										const nilaiSiswa = nilai[siswa.id] || '';
@@ -940,23 +952,23 @@ export default function PenilaianPage() {
 												onClick={() => {
 													if (isEditMode) handleEditNilai(siswa.id, nilaiSiswa);
 												}}
-												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${isEditMode ? 'cursor-pointer hover:bg-indigo-50 group' : 'hover:bg-gray-50'}`}>
-												<div className='col-span-1 text-center text-gray-500 font-medium'>{idx + 1}</div>
+												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${isEditMode ? 'cursor-pointer hover:bg-[#F5C518] group' : 'hover:bg-[#FFF5F0]'}`}>
+												<div className='col-span-1 text-center text-[#0D0D0D] font-black'>{idx + 1}</div>
 												<div className='col-span-6 sm:col-span-6'>
 													<div className='flex items-center gap-2'>
-														<p className='font-bold text-gray-800 group-hover:text-indigo-700 transition-colors'>{siswa.nama_lengkap}</p>
-														{isNewStudentInTask && <span className='px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200'>BARU</span>}
+														<p className='font-bold text-[#0D0D0D] text-base group-hover:underline transition-colors'>{siswa.nama_lengkap}</p>
+														{isNewStudentInTask && <span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>}
 													</div>
-													<p className='text-xs text-gray-400'>{siswa.nis || '-'}</p>
+													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis || '-'}</p>
 												</div>
 												<div className='col-span-3 sm:col-span-3 flex justify-center'>
 													{isEditMode ? (
 														// --- VIEW MODE (Badge) ---
 														<div
-															className={`w-16 h-10 flex items-center justify-center rounded-lg font-bold text-white shadow-sm transform transition-transform group-hover:scale-110 bg-gradient-to-br ${getNilaiColor(
+															className={`w-16 h-10 flex items-center justify-center rounded-xl font-black border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] transform transition-transform group-hover:-translate-y-1 group-hover:shadow-[4px_4px_0px_0px_#0D0D0D] ${getNilaiColor(
 																nilaiSiswa,
 															)}`}>
-															{nilaiSiswa || '0'}
+															{Number(nilaiSiswa) > 0 ? nilaiSiswa : <span className="text-[10px] tracking-widest text-[#E8451A]">KOSONG</span>}
 														</div>
 													) : (
 														// --- INPUT MODE (Form) ---
@@ -966,13 +978,14 @@ export default function PenilaianPage() {
 															max='100'
 															value={nilaiSiswa}
 															onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
-															className='w-full text-center font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all'
+															onWheel={(e) => e.target.blur()}
+															className='neo-input text-center text-lg font-black w-full px-2 py-2'
 															placeholder='0'
 														/>
 													)}
 												</div>
 												<div className='col-span-2 text-center'>
-													<span className={`inline-block w-8 h-8 leading-8 rounded-full font-bold text-sm ${nilaiSiswa ? 'bg-gray-100 text-gray-700' : 'text-gray-300'}`}>{getPredikat(nilaiSiswa)}</span>
+													<span className={`inline-block w-8 h-8 leading-7 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] rounded-full font-black text-sm ${nilaiSiswa ? 'bg-[#2F80ED] text-white' : 'bg-white text-[#0D0D0D]'}`}>{getPredikat(nilaiSiswa)}</span>
 												</div>
 											</div>
 										);
@@ -983,15 +996,15 @@ export default function PenilaianPage() {
 
 						{/* Floating Action Button / Save Button */}
 						{!selectedTugasId && (
-							<div className='mt-6 flex justify-end sticky bottom-6'>
+							<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex justify-end shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
 								<button
 									onClick={handleSimpanMassal}
 									disabled={saving}
-									className='bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 backdrop-blur-md bg-opacity-90'>
+									className='w-full md:w-auto neo-btn-primary bg-[#0D0D0D] text-white py-3 px-10 text-lg uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed'>
 									{saving ? (
 										<>
 											<svg
-												className='animate-spin h-5 w-5 text-white'
+												className='animate-spin h-6 w-6 text-white'
 												xmlns='http://www.w3.org/2000/svg'
 												fill='none'
 												viewBox='0 0 24 24'>
@@ -1015,11 +1028,11 @@ export default function PenilaianPage() {
 												className='w-6 h-6'
 												fill='none'
 												stroke='currentColor'
-												viewBox='0 0 24 24'>
+												viewBox='0 0 24 24'
+												strokeWidth={3}>
 												<path
 													strokeLinecap='round'
 													strokeLinejoin='round'
-													strokeWidth={2}
 													d='M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4'
 												/>
 											</svg>

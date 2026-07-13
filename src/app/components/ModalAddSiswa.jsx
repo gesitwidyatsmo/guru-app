@@ -428,6 +428,7 @@ export function ModalAddSiswa({ isOpen, onClose, onRefresh, currentKelas }) {
 						</div>
 					</form>
 				)}
+				</div>
 			</div>
 		</div>
 	);

@@ -99,40 +99,41 @@ export default function DashboardCharts() {
 
 	if (isLoading) {
 		return (
-			<div className='neo-card flex items-center justify-center min-h-[300px] mb-8'>
+			<div className='bg-white border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] rounded-2xl flex items-center justify-center min-h-[300px] mb-8'>
 				<div className='animate-pulse flex flex-col items-center gap-4'>
-					<div className='w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin'></div>
-					<p className='text-gray-400 font-medium'>Memuat Visualisasi Data...</p>
+					<div className='w-12 h-12 border-4 border-black border-t-yellow-400 rounded-full animate-spin'></div>
+					<p className='text-black font-black uppercase tracking-wider'>Memuat Visualisasi Data...</p>
 				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8'>
+		<div className='grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-8'>
 			{/* Chart 1: Poin per Kelas */}
-			<div className='neo-card'>
-				<div className='mb-6'>
-					<h2 className='text-xl font-bold text-gray-800 flex items-center gap-2'>
-						<span className='text-2xl'>📊</span>
+			<div className='bg-[#FFF5F0] border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] rounded-2xl p-6'>
+				<div className='mb-6 border-b-[3px] border-black pb-4'>
+					<h2 className='text-2xl font-black text-black flex items-center gap-3 uppercase tracking-wider'>
+						<span className='bg-yellow-300 border-2 border-black p-2 rounded-lg shadow-[2px_2px_0px_0px_#0D0D0D]'>📊</span>
 						Distribusi Poin Kelas
 					</h2>
-					<p className='text-sm text-gray-500'>Akumulasi poin positif dan negatif per kelas</p>
+					<p className='text-sm text-black font-bold mt-2'>Akumulasi poin positif dan negatif per kelas</p>
 				</div>
 				<div className='h-[300px] w-full'>
 					{poinData.length > 0 ? (
 						<ResponsiveContainer width='100%' height='100%'>
 							<BarChart data={poinData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-								<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#e5e7eb' />
-								<XAxis dataKey='name' axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-								<YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
+								<CartesianGrid strokeDasharray='0' vertical={false} stroke='#000000' strokeWidth={2} />
+								<XAxis dataKey='name' axisLine={{ stroke: '#000', strokeWidth: 3 }} tickLine={{ stroke: '#000', strokeWidth: 3 }} tick={{ fill: '#000', fontSize: 14, fontWeight: 'bold' }} />
+								<YAxis axisLine={{ stroke: '#000', strokeWidth: 3 }} tickLine={{ stroke: '#000', strokeWidth: 3 }} tick={{ fill: '#000', fontSize: 14, fontWeight: 'bold' }} />
 								<Tooltip 
-									cursor={{ fill: '#f3f4f6' }}
-									contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+									cursor={{ fill: 'rgba(0,0,0,0.1)' }}
+									contentStyle={{ backgroundColor: '#fff', borderRadius: '0px', border: '3px solid #000', boxShadow: '4px 4px 0px 0px #000', fontWeight: 'bold', color: '#000' }}
+									itemStyle={{ color: '#000', fontWeight: '900' }}
 								/>
-								<Legend wrapperStyle={{ paddingTop: '20px' }} />
-								<Bar dataKey='Positif' fill='#10b981' radius={[4, 4, 0, 0]} maxBarSize={40} />
-								<Bar dataKey='Negatif' fill='#f43f5e' radius={[4, 4, 0, 0]} maxBarSize={40} />
+								<Legend wrapperStyle={{ paddingTop: '20px', fontWeight: 'bold', color: '#000' }} />
+								<Bar dataKey='Positif' fill='#4ade80' stroke='#000' strokeWidth={3} radius={[0, 0, 0, 0]} maxBarSize={40} />
+								<Bar dataKey='Negatif' fill='#f87171' stroke='#000' strokeWidth={3} radius={[0, 0, 0, 0]} maxBarSize={40} />
 							</BarChart>
 						</ResponsiveContainer>
 					) : (
@@ -144,30 +145,31 @@ export default function DashboardCharts() {
 			</div>
 
 			{/* Chart 2: Tren Jurnal */}
-			<div className='neo-card'>
-				<div className='mb-6'>
-					<h2 className='text-xl font-bold text-gray-800 flex items-center gap-2'>
-						<span className='text-2xl'>📈</span>
-						Aktivitas Mengajar (7 Hari)
+			<div className='bg-[#FFF5F0] border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] rounded-2xl p-6'>
+				<div className='mb-6 border-b-[3px] border-black pb-4'>
+					<h2 className='text-2xl font-black text-black flex items-center gap-3 uppercase tracking-wider'>
+						<span className='bg-cyan-300 border-2 border-black p-2 rounded-lg shadow-[2px_2px_0px_0px_#0D0D0D]'>📈</span>
+						Aktivitas Mengajar
 					</h2>
-					<p className='text-sm text-gray-500'>Grafik pengisian jurnal mengajar harian</p>
+					<p className='text-sm text-black font-bold mt-2'>Grafik pengisian jurnal mengajar harian (7 Hari)</p>
 				</div>
 				<div className='h-[300px] w-full'>
 					<ResponsiveContainer width='100%' height='100%'>
 						<LineChart data={jurnalData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-							<CartesianGrid strokeDasharray='3 3' vertical={false} stroke='#e5e7eb' />
-							<XAxis dataKey='name' axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-							<YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
+							<CartesianGrid strokeDasharray='0' vertical={false} stroke='#000000' strokeWidth={2} />
+							<XAxis dataKey='name' axisLine={{ stroke: '#000', strokeWidth: 3 }} tickLine={{ stroke: '#000', strokeWidth: 3 }} tick={{ fill: '#000', fontSize: 14, fontWeight: 'bold' }} />
+							<YAxis axisLine={{ stroke: '#000', strokeWidth: 3 }} tickLine={{ stroke: '#000', strokeWidth: 3 }} tick={{ fill: '#000', fontSize: 14, fontWeight: 'bold' }} allowDecimals={false} />
 							<Tooltip 
-								contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+								contentStyle={{ backgroundColor: '#fff', borderRadius: '0px', border: '3px solid #000', boxShadow: '4px 4px 0px 0px #000', fontWeight: 'bold', color: '#000' }}
+								itemStyle={{ color: '#000', fontWeight: '900' }}
 							/>
 							<Line 
-								type='monotone' 
+								type='linear' 
 								dataKey='Jurnal Diisi' 
-								stroke='#6366f1' 
+								stroke='#000' 
 								strokeWidth={4} 
-								dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} 
-								activeDot={{ r: 8, fill: '#6366f1', strokeWidth: 0 }} 
+								dot={{ r: 6, strokeWidth: 3, stroke: '#000', fill: '#fcd34d' }} 
+								activeDot={{ r: 10, fill: '#fcd34d', stroke: '#000', strokeWidth: 3 }} 
 							/>
 						</LineChart>
 					</ResponsiveContainer>

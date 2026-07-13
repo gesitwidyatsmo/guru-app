@@ -192,6 +192,20 @@ body {
   border-color: var(--neo-orange);
 }
 
+.neo-input-with-icon {
+  padding-left: 2.75rem !important;
+}
+
+/* Hide arrows (spinners) on number inputs globally */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .neo-badge {
   border: 2px solid var(--neo-black);
   border-radius: var(--radius-sm);

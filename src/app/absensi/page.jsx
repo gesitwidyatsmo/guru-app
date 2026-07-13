@@ -34,22 +34,18 @@ export default function AbsensiMapelPage() {
 
 	// Helper status colors
 	const getStatusClasses = (warna, active) => {
-		const base = 'px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200 shadow-sm';
+		const base = 'px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 border-[#0D0D0D] flex items-center justify-center';
 		if (active) {
+			const activeStyle = 'translate-x-[2px] translate-y-[2px] shadow-none';
 			switch (warna) {
-				case 'green':
-					return `${base} bg-gradient-to-br from-green-500 to-green-600 text-white ring-2 ring-green-400 ring-offset-2 scale-105`;
-				case 'yellow':
-					return `${base} bg-gradient-to-br from-yellow-400 to-yellow-500 text-white ring-2 ring-yellow-300 ring-offset-2 scale-105`;
-				case 'blue':
-					return `${base} bg-gradient-to-br from-blue-500 to-blue-600 text-white ring-2 ring-blue-400 ring-offset-2 scale-105`;
-				case 'red':
-					return `${base} bg-gradient-to-br from-red-500 to-red-600 text-white ring-2 ring-red-400 ring-offset-2 scale-105`;
-				default:
-					return `${base} bg-gradient-to-br from-indigo-500 to-indigo-600 text-white ring-2 ring-indigo-400 ring-offset-2 scale-105`;
+				case 'green': return `${base} bg-[#00A693] text-white ${activeStyle}`;
+				case 'yellow': return `${base} bg-[#F5C518] text-[#0D0D0D] ${activeStyle}`;
+				case 'blue': return `${base} bg-[#2F80ED] text-white ${activeStyle}`;
+				case 'red': return `${base} bg-[#E8451A] text-white ${activeStyle}`;
+				default: return `${base} bg-[#0D0D0D] text-white ${activeStyle}`;
 			}
 		}
-		return `${base} bg-white text-gray-600 border-2 border-gray-200 hover:border-gray-300 hover:shadow-md`;
+		return `${base} bg-white text-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-[1px] hover:-translate-x-[1px]`;
 	};
 
 	// Helper Badge untuk Tabel Rekap
@@ -57,18 +53,13 @@ export default function AbsensiMapelPage() {
 		const s = statusList.find((sl) => sl.label === status);
 		const warna = s ? s.warna : 'gray';
 
-		const style = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide';
+		const style = 'px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wide border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] inline-block';
 		switch (warna) {
-			case 'green':
-				return <span className={`${style} bg-emerald-100 text-emerald-700`}>Hadir</span>;
-			case 'yellow':
-				return <span className={`${style} bg-amber-100 text-amber-700`}>Sakit</span>;
-			case 'blue':
-				return <span className={`${style} bg-blue-100 text-blue-700`}>Izin</span>;
-			case 'red':
-				return <span className={`${style} bg-rose-100 text-rose-700`}>Alpha</span>;
-			default:
-				return <span className={`${style} bg-gray-100 text-gray-700`}>{status}</span>;
+			case 'green': return <span className={`${style} bg-[#00A693] text-white`}>Hadir</span>;
+			case 'yellow': return <span className={`${style} bg-[#F5C518] text-[#0D0D0D]`}>Sakit</span>;
+			case 'blue': return <span className={`${style} bg-[#2F80ED] text-white`}>Izin</span>;
+			case 'red': return <span className={`${style} bg-[#E8451A] text-white`}>Alpha</span>;
+			default: return <span className={`${style} bg-[#E8E8E8] text-[#0D0D0D]`}>{status}</span>;
 		}
 	};
 
@@ -323,29 +314,29 @@ export default function AbsensiMapelPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-32 font-sans'>
+		<div className='min-h-screen bg-[var(--background)] pb-32 font-sans'>
 			{/* --- Header & Filters --- */}
-			<div className='bg-white shadow-sm border-b border-gray-200'>
+			<div className='bg-white border-b-4 border-[#0D0D0D] shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)]'>
 				<div className='max-w-5xl mx-auto px-4 py-4 space-y-4'>
 					<ButtonBack />
 					{/* Title Row */}
 					<div className='flex justify-between items-center'>
 						<div>
-							<h1 className='text-xl font-bold text-gray-800'>Absensi Mapel</h1>
-							<div className='flex items-center gap-2 mt-1'>
+							<h1 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-tight'>Absensi Mapel</h1>
+							<div className='flex items-center gap-2 mt-2'>
 								{mode === 'rekap' ? (
-									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700'>Data Tersimpan (Rekap)</span>
+									<span className='px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border-2 border-[#0D0D0D] bg-[#2F80ED] text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>Data Tersimpan (Rekap)</span>
 								) : mode === 'edit' ? (
-									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700'>Mode Edit</span>
+									<span className='px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border-2 border-[#0D0D0D] bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>Mode Edit</span>
 								) : (
-									<span className='px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700'>Input Baru</span>
+									<span className='px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border-2 border-[#0D0D0D] bg-[#00A693] text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>Input Baru</span>
 								)}
 							</div>
 						</div>
 						<button
 							onClick={() => router.push('/laporan')}
-							className='bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 shadow-sm border border-indigo-100'>
-							<span>📅</span> <span className='hidden sm:inline'>Rekap Bulanan</span>
+							className='neo-btn-outline flex items-center gap-2 bg-[#F5C518] hover:bg-[#E8451A] hover:text-white'>
+							<span className='text-xl'>📅</span> <span className='hidden sm:inline'>Rekap Bulanan</span>
 						</button>
 					</div>
 
@@ -357,7 +348,7 @@ export default function AbsensiMapelPage() {
 								value={selectedKelas}
 								onChange={(e) => setSelectedKelas(e.target.value)}
 								disabled={mode === 'edit'} // Kunci saat edit
-								className='w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none disabled:opacity-60'>
+								className='neo-input appearance-none bg-white pr-10 cursor-pointer disabled:bg-gray-200 disabled:cursor-not-allowed'>
 								{kelasList.map((k) => (
 									<option
 										key={k.id}
@@ -366,7 +357,7 @@ export default function AbsensiMapelPage() {
 									</option>
 								))}
 							</select>
-							<div className='absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400'>▼</div>
+							<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
 						</div>
 
 						{/* Mapel */}
@@ -375,7 +366,7 @@ export default function AbsensiMapelPage() {
 								value={selectedMapel}
 								onChange={(e) => setSelectedMapel(e.target.value)}
 								disabled={mode === 'edit'}
-								className='w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none appearance-none disabled:opacity-60'>
+								className='neo-input appearance-none bg-white pr-10 cursor-pointer disabled:bg-gray-200 disabled:cursor-not-allowed'>
 								{mapelList.map((m) => (
 									<option
 										key={m.id}
@@ -384,7 +375,7 @@ export default function AbsensiMapelPage() {
 									</option>
 								))}
 							</select>
-							<div className='absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-400'>▼</div>
+							<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
 						</div>
 
 						{/* Tanggal */}
@@ -393,7 +384,7 @@ export default function AbsensiMapelPage() {
 							value={tanggal}
 							onChange={(e) => setTanggal(e.target.value)}
 							disabled={mode === 'edit'}
-							className='w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-60'
+							className='neo-input bg-white disabled:bg-gray-200 disabled:cursor-not-allowed'
 						/>
 
 						{/* Jam Ke */}
@@ -403,8 +394,8 @@ export default function AbsensiMapelPage() {
 							value={jamKe}
 							onChange={(e) => setJamKe(e.target.value)}
 							disabled={mode === 'edit'}
-							className={`w-full px-3 py-2 bg-gray-50 border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none text-center disabled:opacity-60 ${
-								!jamKe ? 'border-red-300 bg-red-50 placeholder-red-400' : 'border-gray-200'
+							className={`neo-input text-center disabled:bg-gray-200 disabled:cursor-not-allowed ${
+								!jamKe ? 'border-[#E8451A] bg-[#FFF5F0]' : 'bg-white'
 							}`}
 						/>
 					</div>
@@ -415,64 +406,67 @@ export default function AbsensiMapelPage() {
 			<div className='max-w-5xl mx-auto px-4 py-6'>
 				{/* 1. STATE KOSONG */}
 				{siswaKelasIni.length === 0 ? (
-					<div className='flex flex-col items-center justify-center py-20 opacity-50'>
-						<div className='text-6xl mb-4'>🎓</div>
-						<p className='text-gray-500 font-medium'>Tidak ada siswa di kelas ini</p>
+					<div className='flex flex-col items-center justify-center py-20'>
+						<div className='text-6xl mb-4 drop-shadow-[4px_4px_0px_#0D0D0D]'>🎓</div>
+						<p className='text-[#0D0D0D] font-bold text-xl border-2 border-[#0D0D0D] px-6 py-3 rounded-xl bg-white shadow-[4px_4px_0px_0px_#0D0D0D]'>Tidak ada siswa di kelas ini</p>
 					</div>
 				) : mode === 'rekap' ? (
 					/* 2. MODE REKAPITULASI (Tabel Read Only) */
-					<div className='bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden'>
-						<div className='px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50'>
+					<div className='neo-card p-0 overflow-hidden'>
+						<div className='px-6 py-5 border-b-4 border-[#0D0D0D] flex flex-col sm:flex-row justify-between sm:items-center items-start gap-4 bg-[#F5C518]'>
 							<div>
-								<h2 className='font-bold text-gray-800 text-lg'>Rekapitulasi Kehadiran</h2>
-								<p className='text-sm text-gray-500'>
+								<h2 className='font-black text-[#0D0D0D] text-xl uppercase tracking-tight'>Rekapitulasi Kehadiran</h2>
+								<p className='text-sm font-bold text-[#0D0D0D]'>
 									{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
 								</p>
 							</div>
-							<div className='flex flex-wrap gap-2'>
+							<div className='flex flex-wrap gap-3'>
 								<button
 									onClick={handleHapus}
-									className='px-3 py-2 bg-white border border-rose-200 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-all shadow-sm flex items-center gap-1'>
-									🗑️ <span className='hidden sm:inline'>Hapus</span>
+									className='neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+									<span className='hidden sm:inline'>Hapus</span>
 								</button>
 								<button
 									onClick={goToRiwayat}
-									className='px-3 py-2 bg-white border border-purple-200 rounded-xl text-sm font-bold text-purple-600 hover:bg-purple-50 hover:border-purple-300 transition-all shadow-sm flex items-center gap-1'>
-									🕒 <span className='hidden sm:inline'>Riwayat</span>
+									className='neo-btn-outline bg-[#2F80ED] text-white hover:bg-white hover:text-[#2F80ED] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/></svg>
+									<span className='hidden sm:inline'>Riwayat</span>
 								</button>
 								<button
 									onClick={() => setMode('edit')}
-									className='px-3 py-2 bg-white border border-indigo-200 rounded-xl text-sm font-bold text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm flex items-center gap-1'>
-									✏️ <span className='hidden sm:inline'>Edit</span>
+									className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'/></svg>
+									<span className='hidden sm:inline'>Edit</span>
 								</button>
 							</div>
 						</div>
 
 						<div className='overflow-x-auto'>
 							<table className='w-full'>
-								<thead className='bg-gray-50 text-gray-500 text-xs uppercase tracking-wider font-bold'>
+								<thead className='bg-[#0D0D0D] text-white text-xs uppercase tracking-wider font-bold border-b-4 border-[#0D0D0D]'>
 									<tr>
-										<th className='px-6 py-4 text-left w-16'>No</th>
-										<th className='px-6 py-4 text-left'>Nama Siswa</th>
-										<th className='px-6 py-4 text-center w-32'>Status</th>
+										<th className='px-6 py-4 text-left w-16 border-r-2 border-[#0D0D0D]'>No</th>
+										<th className='px-6 py-4 text-left border-r-2 border-[#0D0D0D]'>Nama Siswa</th>
+										<th className='px-6 py-4 text-center w-32 border-r-2 border-[#0D0D0D]'>Status</th>
 										<th className='px-6 py-4 text-left w-1/3'>Keterangan</th>
 									</tr>
 								</thead>
-								<tbody className='divide-y divide-gray-100'>
+								<tbody className='divide-y-2 divide-[#0D0D0D] bg-white'>
 									{siswaKelasIni.map((siswa, idx) => {
 										const status = absensi[siswa.id]?.status || '-';
 										const ket = absensi[siswa.id]?.keterangan || '-';
 										return (
 											<tr
 												key={siswa.id}
-												className='hover:bg-gray-50/50 transition-colors'>
-												<td className='px-6 py-4 text-gray-400 font-medium'>{idx + 1}</td>
-												<td className='px-6 py-4'>
-													<p className='font-bold text-gray-800'>{siswa.nama_lengkap}</p>
-													<p className='text-xs text-gray-400'>{siswa.nis}</p>
+												className='hover:bg-[#FFF5F0] transition-colors'>
+												<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
+												<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
+													<p className='font-bold text-[#0D0D0D] text-base'>{siswa.nama_lengkap}</p>
+													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis}</p>
 												</td>
-												<td className='px-6 py-4 text-center'>{getBadgeRekap(status)}</td>
-												<td className='px-6 py-4 text-sm text-gray-500 italic'>{ket !== '-' ? ket : <span className='text-gray-300'>Tidak ada keterangan</span>}</td>
+												<td className='px-6 py-4 text-center border-r-2 border-[#0D0D0D]'>{getBadgeRekap(status)}</td>
+												<td className='px-6 py-4 text-sm font-semibold text-[#0D0D0D]'>{ket !== '-' ? ket : <span className='text-gray-400 italic'>Tidak ada keterangan</span>}</td>
 											</tr>
 										);
 									})}
@@ -489,34 +483,36 @@ export default function AbsensiMapelPage() {
 							return (
 								<div
 									key={siswa.id}
-									className='bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200'>
-									<div className='flex justify-between items-start mb-4'>
-										<div>
-											<div className='flex items-center gap-2'>
-												<h3 className='font-bold text-gray-800 line-clamp-1 text-base'>{siswa.nama_lengkap}</h3>
+									className='neo-card flex flex-col gap-3 relative'>
+									<div className='flex justify-between items-start mb-1'>
+										<div className='pr-8'>
+											<div className='flex flex-wrap items-center gap-2 mb-1'>
+												<h3 className='font-bold text-[#0D0D0D] line-clamp-1 text-lg uppercase tracking-tight'>{siswa.nama_lengkap}</h3>
 												<div className='flex gap-1 shrink-0'>
 													{siswa.poinPositif > 0 && (
 														<span
-															className='text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-md'
+															className='text-[10px] font-bold text-white bg-[#00A693] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
 															title='Poin +'>
 															+{siswa.poinPositif}
 														</span>
 													)}
 													{siswa.poinNegatif > 0 && (
 														<span
-															className='text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded-md'
+															className='text-[10px] font-bold text-white bg-[#E8451A] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
 															title='Pelanggaran -'>
 															-{siswa.poinNegatif}
 														</span>
 													)}
 												</div>
 											</div>
-											<p className='text-xs text-gray-400 font-mono mt-0.5'>{siswa.nis || '-'}</p>
+											<p className='text-xs text-[#0D0D0D] font-mono font-bold'>{siswa.nis || '-'}</p>
 										</div>
-										<span className='text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-full'>#{idx + 1}</span>
+										<span className='absolute top-4 right-4 text-sm font-black text-[#0D0D0D] border-2 border-[#0D0D0D] w-8 h-8 flex items-center justify-center rounded-full bg-[#F5C518] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+											{idx + 1}
+										</span>
 									</div>
 
-									<div className='grid grid-cols-4 gap-2 mb-3'>
+									<div className='grid grid-cols-4 gap-2 my-2'>
 										{statusList.map((st) => {
 											const isActive = currentStatus === st.label;
 											return (
@@ -536,7 +532,7 @@ export default function AbsensiMapelPage() {
 											placeholder='Keterangan...'
 											value={absensi[siswa.id]?.keterangan || ''}
 											onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-											className='w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none bg-gray-50 focus:bg-white transition-colors'
+											className='neo-input text-sm'
 										/>
 									</div>
 								</div>
@@ -548,11 +544,11 @@ export default function AbsensiMapelPage() {
 
 			{/* --- Floating Save Button (Hanya Muncul di Mode Input/Edit) --- */}
 			{siswaKelasIni.length > 0 && mode !== 'rekap' && (
-				<div className='fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-gray-200 z-30 flex justify-end shadow-[0_-5px_15px_-5px_rgba(0,0,0,0.1)]'>
+				<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex justify-end shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
 					<button
 						onClick={handleSimpan}
 						disabled={saving}
-						className='w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 transform active:scale-95'>
+						className='w-full md:w-auto neo-btn-primary bg-[#0D0D0D] text-white py-3 px-10 text-lg uppercase tracking-wider flex items-center justify-center gap-2'>
 						{saving ? 'Menyimpan...' : 'Simpan'}
 					</button>
 				</div>

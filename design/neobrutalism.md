@@ -1,4 +1,4 @@
-﻿# Neobrutalism Design System
+# Neobrutalism Design System
 
 Panduan desain visual berbasis **Neobrutalism** — gaya yang menggabungkan estetika brutalisme digital (tepi tegas, warna berani, kontras tinggi) dengan kenyamanan antarmuka modern.
 
@@ -341,6 +341,32 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 	margin-bottom: 0.5rem;
 	display: block;
 }
+
+/* Input dengan Ikon */
+.neo-input-with-icon {
+	padding-left: 2.75rem !important;
+}
+```
+
+**Panduan Penggunaan Input dengan Ikon:**
+Jika Anda menempatkan ikon (misal pencarian) menggunakan `position: absolute` di dalam container `relative` sebelum input, Anda **wajib** menambahkan class `.neo-input-with-icon` ke input tersebut agar teks yang diketik tidak tertimpa/tumpang tindih dengan ikon. Contoh:
+```html
+<div class="relative">
+  <svg class="absolute left-3 top-3 w-5 h-5 text-black">...</svg>
+  <input class="neo-input neo-input-with-icon" placeholder="Cari..." />
+</div>
+```
+
+**Panduan Input Angka (Number):**
+Secara global, panah atas/bawah (spinners) pada `input[type="number"]` telah disembunyikan menggunakan CSS agar desain terlihat bersih dan datar.
+Selain itu, untuk mencegah nilai berubah secara tidak sengaja saat pengguna melakukan *scroll* dengan *mouse* di atas input yang sedang aktif, **wajib** menambahkan event `onWheel={(e) => e.target.blur()}` pada elemen input tersebut di React.
+Contoh:
+```jsx
+<input
+  type="number"
+  className="neo-input"
+  onWheel={(e) => e.target.blur()}
+/>
 ```
 
 ---

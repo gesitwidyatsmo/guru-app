@@ -253,7 +253,7 @@ export default function RiwayatAbsensiMapelPage() {
 	if (loading) return <Loader />;
 
 	return (
-		<main className='min-h-screen bg-gray-50 pb-20'>
+		<main className='min-h-screen bg-[#FFF5F0] pb-20'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
 				<SectionHeader
 					title={'Kelola Riwayat Absensi Mapel'}
@@ -276,13 +276,13 @@ export default function RiwayatAbsensiMapelPage() {
 				/>
 
 				{/* Filter Mapel */}
-				<div className='mt-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center gap-4'>
-					<label className='font-bold text-gray-700 w-full sm:w-auto shrink-0'>Pilih Mata Pelajaran :</label>
+				<div className='mt-6 bg-[#F5C518] p-6 border-[4px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-center gap-4'>
+					<label className='font-black text-black w-full sm:w-auto shrink-0 uppercase tracking-wider'>Pilih Mata Pelajaran :</label>
 					<select
 						required
 						value={selectedMapel}
 						onChange={(e) => setSelectedMapel(e.target.value)}
-						className='w-full sm:w-64 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all font-medium text-gray-700 outline-none'>
+						className='w-full sm:w-64 px-4 py-3 bg-white border-[3px] border-black rounded-none focus:ring-0 focus:outline-none transition-all font-black text-black cursor-pointer hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'>
 						<option
 							value=''
 							disabled>
@@ -302,33 +302,33 @@ export default function RiwayatAbsensiMapelPage() {
 					<div className='mt-6 flex flex-col lg:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500'>
 						{/* SIDEBAR: Daftar Sesi */}
 						<div className='w-full lg:w-[320px] shrink-0'>
-							<div className='bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[300px] lg:h-[calc(100vh-140px)] overflow-hidden lg:sticky top-[80px]'>
-								<div className='p-5 border-b border-gray-100 bg-gray-50 flex-shrink-0'>
-									<h2 className='text-lg font-bold text-gray-800 break-words'>{namaKelas}</h2>
-									<div className='text-sm text-gray-500 mt-1.5 flex items-center gap-1.5 flex-wrap'>
-										<div className='w-2 h-2 rounded-full bg-purple-500'></div>
-										<span>{selectedMapel}</span>
+							<div className='bg-white shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-black flex flex-col h-[300px] lg:h-[calc(100vh-140px)] overflow-hidden lg:sticky top-[80px]'>
+								<div className='p-5 border-b-[4px] border-black bg-[#C4F0EB] flex-shrink-0'>
+									<h2 className='text-2xl font-black text-black break-words uppercase'>{namaKelas}</h2>
+									<div className='text-sm text-black font-bold mt-1.5 flex items-center gap-1.5 flex-wrap'>
+										<div className='w-3 h-3 border-2 border-black bg-black'></div>
+										<span className='uppercase'>{selectedMapel}</span>
 									</div>
 								</div>
 
-								<div className='flex-1 overflow-y-auto p-3 space-y-2'>
+								<div className='flex-1 overflow-y-auto p-4 space-y-3 bg-[#FFF5F0]'>
 									{loadingSesi ? (
-										<div className='py-8 text-center text-sm text-gray-400'>Memuat daftar sesi...</div>
+										<div className='py-8 text-center text-sm font-bold text-black uppercase'>Memuat daftar sesi...</div>
 									) : daftarSesi.length === 0 ? (
-										<div className='py-8 text-center flex flex-col items-center justify-center text-gray-400'>
+										<div className='py-8 text-center flex flex-col items-center justify-center text-black'>
 											<svg
-												className='w-12 h-12 mb-3 text-gray-200'
+												className='w-12 h-12 mb-3 text-black'
 												fill='none'
 												viewBox='0 0 24 24'
 												stroke='currentColor'>
 												<path
 													strokeLinecap='round'
 													strokeLinejoin='round'
-													strokeWidth={1}
+													strokeWidth={2}
 													d='M12 6v6m0 0v6m0-6h6m-6 0H6'
 												/>
 											</svg>
-											<p className='text-sm'>Belum ada riwayat terekam.</p>
+											<p className='text-sm font-black uppercase'>Belum ada riwayat terekam.</p>
 										</div>
 									) : (
 										daftarSesi.map((item, idx) => {
@@ -340,30 +340,30 @@ export default function RiwayatAbsensiMapelPage() {
 														setSelectedTanggal(item.tanggal);
 														setSelectedJamKe(item.jam_ke);
 													}}
-													className={`w-full text-left p-3 rounded-xl border transition-all duration-200 ${
-														isSelected ? 'bg-purple-50 border-purple-200 shadow-sm' : 'bg-white border-gray-100 hover:border-purple-100 hover:shadow hover:bg-gray-50'
+													className={`w-full text-left p-4 border-[3px] border-black transition-transform duration-200 ${
+														isSelected ? 'bg-[#2F80ED] text-white shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1 -translate-x-1' : 'bg-white text-black hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
 													}`}>
 													<div className='flex items-start justify-between'>
 														<div className='flex items-center gap-3'>
-															<div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+															<div className={`w-10 h-10 border-[3px] border-black flex items-center justify-center ${isSelected ? 'bg-white text-[#2F80ED]' : 'bg-[#E2D4F0] text-black'}`}>
 																<svg
-																	className='w-5 h-5'
+																	className='w-6 h-6'
 																	fill='none'
 																	stroke='currentColor'
 																	viewBox='0 0 24 24'>
 																	<path
 																		strokeLinecap='round'
 																		strokeLinejoin='round'
-																		strokeWidth={2}
+																		strokeWidth={3}
 																		d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
 																	/>
 																</svg>
 															</div>
 															<div>
-																<div className={`font-bold ${isSelected ? 'text-purple-900' : 'text-gray-700'}`}>
+																<div className={`font-black text-lg ${isSelected ? 'text-white' : 'text-black'}`}>
 																	{new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
 																</div>
-																<div className='text-xs text-purple-600 mt-0.5 font-medium'>Jam Ke- {item.jam_ke}</div>
+																<div className={`text-xs mt-0.5 font-bold uppercase tracking-widest ${isSelected ? 'text-white/90' : 'text-gray-700'}`}>Jam Ke- {item.jam_ke}</div>
 															</div>
 														</div>
 													</div>
@@ -378,49 +378,49 @@ export default function RiwayatAbsensiMapelPage() {
 						{/* KONTEN UTAMA: Form Edit Detail Sesi */}
 						<div className='flex-1'>
 							{!selectedTanggal ? (
-								<div className='bg-white rounded-2xl shadow-sm border border-gray-100 h-[calc(100vh-140px)] flex flex-col items-center justify-center text-center p-8'>
-									<div className='w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6'>
+								<div className='bg-white border-[4px] border-black shadow-[6px_6px_0px_0px_#0D0D0D] h-[calc(100vh-140px)] flex flex-col items-center justify-center text-center p-8'>
+									<div className='w-24 h-24 bg-[#E2D4F0] border-[4px] border-black flex items-center justify-center mb-6 shadow-[4px_4px_0px_0px_#0D0D0D]'>
 										<svg
-											className='w-12 h-12 text-gray-300'
+											className='w-12 h-12 text-black'
 											fill='none'
 											stroke='currentColor'
 											viewBox='0 0 24 24'>
 											<path
 												strokeLinecap='round'
 												strokeLinejoin='round'
-												strokeWidth={1}
+												strokeWidth={2}
 												d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
 											/>
 										</svg>
 									</div>
-									<h3 className='text-xl font-bold text-gray-800 mb-2'>Pilih Sesi Rekaman</h3>
-									<p className='text-gray-500 max-w-sm'>Pilih absensi dari daftar di sebelah kiri untuk melihat, mengedit kehadiran, mengganti tanggal, atau menghapus sesi secara permanen.</p>
+									<h3 className='text-2xl font-black text-black mb-2 uppercase'>Pilih Sesi Rekaman</h3>
+									<p className='text-black font-bold max-w-sm'>Pilih absensi dari daftar di sebelah kiri untuk melihat, mengedit kehadiran, mengganti tanggal, atau menghapus sesi secara permanen.</p>
 								</div>
 							) : (
-								<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300'>
+								<div className='bg-white border-[4px] border-black shadow-[6px_6px_0px_0px_#0D0D0D] overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300'>
 									{/* Header Form Detail */}
-									<div className='border-b border-gray-100 p-6 sm:p-8 relative'>
+									<div className='border-b-[4px] border-black bg-[#FFE8DC] p-6 sm:p-8 relative'>
 										<div className='flex flex-col xl:flex-row xl:items-start justify-between gap-6'>
 											<div className='flex-1 max-w-2xl'>
-												<h3 className='text-xl font-bold text-gray-800 mb-4'>Pengaturan Data Sesi Kemarin</h3>
+												<h3 className='text-2xl font-black text-black mb-4 uppercase'>Pengaturan Data Sesi Kemarin</h3>
 												<div className='flex flex-col sm:flex-row gap-4'>
 													<div className='flex-1'>
-														<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Ubah Tanggal Sesi</label>
+														<label className='block text-sm font-black text-black uppercase tracking-wider mb-1.5'>Ubah Tanggal Sesi</label>
 														<input
 															type='date'
 															value={tanggalEdit}
 															onChange={(e) => setTanggalEdit(e.target.value)}
-															className='w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-shadow'
+															className='w-full px-4 py-2.5 bg-white border-[3px] border-black rounded-none focus:outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all font-bold text-black'
 														/>
 													</div>
 													<div className='flex-1'>
-														<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Ubah Jam Ke</label>
+														<label className='block text-sm font-black text-black uppercase tracking-wider mb-1.5'>Ubah Jam Ke</label>
 														<input
 															type='text'
 															placeholder='Contoh: 1-2'
 															value={jamKeEdit}
 															onChange={(e) => setJamKeEdit(e.target.value)}
-															className='w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-shadow'
+															className='w-full px-4 py-2.5 bg-white border-[3px] border-black rounded-none focus:outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all font-bold text-black'
 														/>
 													</div>
 												</div>
@@ -431,20 +431,20 @@ export default function RiwayatAbsensiMapelPage() {
 												<button
 													onClick={handleSimpan}
 													disabled={saving}
-													className='flex-1 xl:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:-translate-y-0.5'>
+													className='flex-1 xl:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#2F80ED] text-white border-[3px] border-black font-black uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'>
 													{saving ? (
-														<div className='w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin'></div>
+														<div className='w-5 h-5 border-[3px] border-white/30 border-t-white rounded-none animate-spin'></div>
 													) : (
 														<>
 															<svg
-																className='w-5 h-5'
+																className='w-6 h-6'
 																fill='none'
 																stroke='currentColor'
 																viewBox='0 0 24 24'>
 																<path
 																	strokeLinecap='round'
 																	strokeLinejoin='round'
-																	strokeWidth={2}
+																	strokeWidth={3}
 																	d='M5 13l4 4L19 7'
 																/>
 															</svg>
@@ -456,16 +456,16 @@ export default function RiwayatAbsensiMapelPage() {
 												<button
 													onClick={handleHapusSesi}
 													disabled={saving}
-													className='flex-1 xl:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-semibold transition-colors disabled:opacity-50'>
+													className='flex-1 xl:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#E8451A] text-white border-[3px] border-black font-black uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'>
 													<svg
-														className='w-5 h-5'
+														className='w-6 h-6'
 														fill='none'
 														stroke='currentColor'
 														viewBox='0 0 24 24'>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
-															strokeWidth={2}
+															strokeWidth={3}
 															d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
 														/>
 													</svg>
@@ -476,55 +476,55 @@ export default function RiwayatAbsensiMapelPage() {
 									</div>
 
 									{/* Daftar Siswa dan Absensinya */}
-									<div className='p-4 sm:p-6 lg:p-8 bg-gray-50/50'>
-										<div className='bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm'>
+									<div className='p-4 sm:p-6 lg:p-8 bg-white'>
+										<div className='bg-white border-[4px] border-black overflow-hidden'>
 											{siswaList.length === 0 ? (
-												<div className='p-8 text-center text-gray-500'>Tidak ada siswa di kelas ini.</div>
+												<div className='p-8 text-center text-black font-black uppercase'>Tidak ada siswa di kelas ini.</div>
 											) : (
 												<div className='overflow-x-auto'>
 													<table className='w-full min-w-[500px]'>
 														<thead>
-															<tr className='bg-gray-50 border-b border-gray-200'>
-																<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[40%]'>Data Siswa</th>
-																<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kehadiran & Keterangan</th>
+															<tr className='bg-[#C4F0EB] border-b-[4px] border-black'>
+																<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider w-[40%] border-r-[4px] border-black'>Data Siswa</th>
+																<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider'>Kehadiran & Keterangan</th>
 															</tr>
 														</thead>
-														<tbody className='divide-y divide-gray-100'>
+														<tbody className='divide-y-[4px] divide-black'>
 															{siswaList.map((siswa, idx) => {
 																const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
 
 																return (
 																	<tr
 																		key={siswa.id}
-																		className='hover:bg-gray-50 transition-colors group'>
+																		className='hover:bg-gray-100 transition-colors group'>
 																		{/* Info Siswa */}
-																		<td className='px-4 sm:px-6 py-4 align-top'>
+																		<td className='px-4 sm:px-6 py-4 align-top border-r-[4px] border-black'>
 																			<div className='flex items-center gap-4'>
-																				<div className='w-10 h-10 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 flex items-center justify-center font-bold text-sm flex-shrink-0'>
+																				<div className='w-10 h-10 border-[3px] border-black bg-[#E2D4F0] text-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>
 																					{idx + 1}
 																				</div>
 																				<div>
-																					<p className='font-bold text-gray-900 group-hover:text-purple-600 transition-colors'>{siswa.nama_lengkap}</p>
-																					<p className='text-xs text-gray-500 mt-0.5 uppercase tracking-wide'>NIS: {siswa.nis || '-'}</p>
+																					<p className='font-black text-black text-lg group-hover:text-[#2F80ED] transition-colors'>{siswa.nama_lengkap}</p>
+																					<p className='text-xs font-bold text-gray-600 mt-0.5 uppercase tracking-widest'>NIS: {siswa.nis || '-'}</p>
 																				</div>
 																			</div>
 																		</td>
 
 																		{/* Edit Absensi UI */}
 																		<td className='px-4 sm:px-6 py-4'>
-																			<div className='flex flex-wrap gap-2 mb-3'>
+																			<div className='flex flex-wrap gap-3 mb-3'>
 																				{[
-																					{ val: 'Hadir', label: 'Hadir', colors: 'text-green-700 bg-green-50 border-green-200 ring-green-500', icon: 'bg-green-500' },
-																					{ val: 'Izin', label: 'Izin', colors: 'text-blue-700 bg-blue-50 border-blue-200 ring-blue-500', icon: 'bg-blue-500' },
-																					{ val: 'Sakit', label: 'Sakit', colors: 'text-yellow-700 bg-yellow-50 border-yellow-200 ring-yellow-500', icon: 'bg-yellow-500' },
-																					{ val: 'Alpha', label: 'Alpha', colors: 'text-red-700 bg-red-50 border-red-200 ring-red-500', icon: 'bg-red-500' },
+																					{ val: 'Hadir', label: 'Hadir', activeBg: 'bg-[#00A693]', activeText: 'text-white' },
+																					{ val: 'Izin', label: 'Izin', activeBg: 'bg-[#2F80ED]', activeText: 'text-white' },
+																					{ val: 'Sakit', label: 'Sakit', activeBg: 'bg-[#F5C518]', activeText: 'text-black' },
+																					{ val: 'Alpa', label: 'Alpa', activeBg: 'bg-[#E8451A]', activeText: 'text-white' },
 																				].map((opt) => {
-																					const isSelected = currentVal.status === opt.val;
+																					const isSelected = currentVal.status === opt.val || (opt.val === 'Alpa' && currentVal.status === 'Alpha');
 																					return (
 																						<label
 																							key={opt.val}
-																							className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-																								isSelected ? `${opt.colors} shadow-sm border-transparent` : 'text-gray-500 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+																							className={`relative flex items-center justify-center px-4 py-2 border-[3px] border-black font-black uppercase cursor-pointer transition-transform duration-200 ${
+																								isSelected ? `${opt.activeBg} ${opt.activeText} shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1 -translate-x-1` : 'bg-white text-black hover:bg-gray-50 hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
 																							}`}>
 																							<input
 																								type='radio'
@@ -534,8 +534,7 @@ export default function RiwayatAbsensiMapelPage() {
 																								onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
 																								className='sr-only'
 																							/>
-																							<div className={`w-2 h-2 rounded-full ${isSelected ? opt.icon : 'bg-gray-300'}`}></div>
-																							<span className='text-sm font-semibold'>{opt.label}</span>
+																							<span>{opt.label}</span>
 																						</label>
 																					);
 																				})}
@@ -547,7 +546,7 @@ export default function RiwayatAbsensiMapelPage() {
 																				placeholder='Keterangan (Opsional / Alasan Sakit)'
 																				value={currentVal.keterangan || ''}
 																				onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-																				className='w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500'
+																				className='w-full mt-2 text-sm font-bold text-black px-4 py-3 bg-white border-[3px] border-black rounded-none focus:outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all'
 																			/>
 																		</td>
 																	</tr>

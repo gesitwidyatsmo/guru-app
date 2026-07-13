@@ -12,6 +12,10 @@ const nextConfig = {
 		styledComponents: true,
 	},
 	turbopack: {},
+	devIndicators: {
+		appIsrStatus: false,
+		buildActivity: false,
+	},
 };
 
 export default withPWA(nextConfig);

@@ -262,7 +262,7 @@ export default function LaporanAbsensiMapelPage() {
 			tanggalList.forEach((tanggal) => {
 				const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
 				const status = absensi?.status || '-';
-				const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : status === 'Alpha' ? 'A' : '-';
+				const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : (status === 'Alpha' || status === 'Alpa') ? 'A' : '-';
 				row.push(kode);
 			});
 
@@ -608,7 +608,7 @@ export default function LaporanAbsensiMapelPage() {
 															{getDatesInMonth(rekapData.tanggalList).map((tanggal) => {
 																const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
 																const status = absensi?.status || '-';
-																const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : status === 'Alpha' ? 'A' : '-';
+																const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : (status === 'Alpha' || status === 'Alpa') ? 'A' : '-';
 
 																const getStatusStyle = (status) => {
 																	switch (status) {

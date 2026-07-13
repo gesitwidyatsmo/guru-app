@@ -53,18 +53,35 @@ export async function GET(req) {
 			return NextResponse.json(mappedData);
 		}
 
+		// List mode
 		const { data: sessions, error } = await query;
 		if (error) throw error;
 
-		const pertemuan = (sessions || []).map((r) => ({
-			id: r.sesi_id,
-			guru_id: r.guru_id || '',
-			tanggal: normDate(r.tanggal),
-			jam_ke: r.jam_ke,
-			kelas: r.kelas,
-			mapel: r.mapel,
-			data_absensi: '[]',
-		}));
+		let allDetails = [];
+		if (sessions && sessions.length > 0) {
+			const sesiIds = sessions.map(s => s.sesi_id);
+			const { data: detailData, error: detailError } = await supabase
+				.from('absensi_mapel_siswa')
+				.select('sesi_id, siswa_id, status')
+				.in('sesi_id', sesiIds);
+			
+			if (!detailError && detailData) {
+				allDetails = detailData;
+			}
+		}
+
+		const pertemuan = (sessions || []).map((r) => {
+			const detailsForSession = allDetails.filter(d => d.sesi_id === r.sesi_id);
+			return {
+				id: r.sesi_id,
+				guru_id: r.guru_id || '',
+				tanggal: normDate(r.tanggal),
+				jam_ke: r.jam_ke,
+				kelas: r.kelas,
+				mapel: r.mapel,
+				data_absensi: detailsForSession,
+			};
+		});
 
 		pertemuan.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
 		return NextResponse.json(pertemuan);

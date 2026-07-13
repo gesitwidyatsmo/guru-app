@@ -2,7 +2,6 @@ import { Plus_Jakarta_Sans, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import StyledComponentsRegistry from '@/lib/registry';
 import IdleTimerWrapper from './components/IdleTimerWrapper';
-import BottomNavigation from './components/BottomNavigation';
 import KbmBlocker from './components/KbmBlocker';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -36,7 +35,6 @@ export default function RootLayout({ children }) {
 					<StyledComponentsRegistry>
 						{children}
 						<KbmBlocker />
-						<BottomNavigation />
 					</StyledComponentsRegistry>
 				</IdleTimerWrapper>
 			</body>
