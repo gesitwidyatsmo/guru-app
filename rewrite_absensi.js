@@ -1,324 +1,16 @@
-'use client';
+const fs = require('fs');
+const file = 'src/app/kelas/[id]/laporan-absensi-mapel/page.jsx';
+let content = fs.readFileSync(file, 'utf8');
 
-import { useState, useEffect } from 'react';
-import SectionHeader from '../../../components/SectionHeader';
-import * as XLSX from 'xlsx';
-import { useParams } from 'next/navigation';
-import { useRouter } from 'next/router';
-import Swal from 'sweetalert2';
-import { createClient } from '@/utils/supabase/client';
+const startIdx = content.indexOf('return (');
+const endIdx = content.lastIndexOf(');') + 2;
 
-export default function LaporanAbsensiMapelPage() {
-	const params = useParams();
-	const { id } = params;
+if (startIdx === -1 || endIdx < startIdx) {
+	console.error('Batas penggantian tidak ditemukan!');
+	process.exit(1);
+}
 
-	const [kelasList, setKelasList] = useState([]);
-	const [namaKelas, setNamaKelas] = useState('');
-	const [selectedBulan, setSelectedBulan] = useState('');
-	const [rekapData, setRekapData] = useState(null);
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState(null);
-
-	const [mapelList, setMapelList] = useState([]);
-	const [selectedMapel, setSelectedMapel] = useState('');
-
-	// Tampilan style: 'jumlah' | 'persentase'
-	const [tampilanStyle, setTampilanStyle] = useState('jumlah');
-
-	const bulanOptions = [
-		{ value: 'all', label: 'Semua Bulan' },
-		{ value: '01', label: 'Januari' },
-		{ value: '02', label: 'Februari' },
-		{ value: '03', label: 'Maret' },
-		{ value: '04', label: 'April' },
-		{ value: '05', label: 'Mei' },
-		{ value: '06', label: 'Juni' },
-		{ value: '07', label: 'Juli' },
-		{ value: '08', label: 'Agustus' },
-		{ value: '09', label: 'September' },
-		{ value: '10', label: 'Oktober' },
-		{ value: '11', label: 'November' },
-		{ value: '12', label: 'Desember' },
-	];
-
-	// Fetch daftar kelas
-	useEffect(() => {
-		const fetchKelas = async () => {
-			if (!id) return;
-			try {
-				const supabase = createClient();
-				const { data: dataKelas, error } = await supabase.from('kelas').select('*').eq('id', id).single();
-				if (error) throw error;
-				if (dataKelas) {
-					setNamaKelas(dataKelas.nama_kelas);
-				}
-			} catch (error) {
-				console.error('Error fetching kelas:', error);
-				setKelasList([]);
-			}
-		};
-
-		const fetchMapel = async () => {
-			try {
-				const supabase = createClient();
-				const { data: dataMapel } = await supabase.from('mapel').select('*');
-				if (dataMapel) {
-					setMapelList(dataMapel);
-				}
-			} catch (err) {
-				console.error('Gagal fetch mapel:', err);
-			}
-		};
-
-		fetchKelas();
-		fetchMapel();
-	}, [id]);
-
-	// Fetch rekap absensi
-	const fetchRekap = async () => {
-		if (!selectedBulan || !selectedMapel) {
-			Swal.fire('Oops', 'Pilih Mapel & Periode terlebih dahulu', 'warning');
-			return;
-		}
-
-		setLoading(true);
-		setError(null);
-		try {
-			const supabase = createClient();
-			const tahun = new Date().getFullYear();
-
-			// 1. Ambil data siswa
-			const { data: siswaData, error: siswaError } = await supabase
-				.from('siswa')
-				.select('id, nis, nama_lengkap, kelas')
-				.eq('kelas', namaKelas)
-				.eq('status', 'Aktif');
-
-			if (siswaError) throw siswaError;
-
-			const siswaDiKelas = siswaData || [];
-			
-			const namaBulanMap = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-			const periode = selectedBulan === 'all' ? `Semua Bulan ${tahun}` : `${namaBulanMap[parseInt(selectedBulan) - 1]} ${tahun}`;
-
-			if (siswaDiKelas.length === 0) {
-				setRekapData({
-					kelas: namaKelas,
-					periode,
-					tanggalList: [],
-					siswa: [],
-					totalSiswa: 0,
-				});
-				return;
-			}
-
-			// 2. Ambil data absensi mapel (sesi)
-			let querySesi = supabase.from('absensi_mapel').select('sesi_id, tanggal').eq('kelas', namaKelas).eq('mapel', selectedMapel);
-
-			if (selectedBulan !== 'all') {
-				const startDate = new Date(tahun, parseInt(selectedBulan) - 1, 1).toISOString();
-				const endDate = new Date(tahun, parseInt(selectedBulan), 0, 23, 59, 59).toISOString();
-				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
-			} else {
-				const startDate = new Date(tahun, 0, 1).toISOString();
-				const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
-				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
-			}
-
-			const { data: sesiData, error: sesiError } = await querySesi;
-			if (sesiError) throw sesiError;
-
-			const sessions = sesiData || [];
-			const tanggalSet = new Set();
-			sessions.forEach(s => {
-				if (s.tanggal) tanggalSet.add(String(s.tanggal).slice(0, 10));
-			});
-			const tanggalList = Array.from(tanggalSet).sort();
-
-			if (sessions.length === 0) {
-				const rekapSiswa = siswaDiKelas.map((siswa) => ({
-					...siswa,
-					absensi: {},
-					ringkasan: { H: 0, I: 0, S: 0, A: 0 },
-				}));
-
-				setRekapData({
-					kelas: namaKelas,
-					periode,
-					tanggalList: [],
-					siswa: rekapSiswa,
-					totalSiswa: rekapSiswa.length,
-				});
-				return;
-			}
-
-			const sesiIds = sessions.map(s => s.sesi_id);
-
-			// 3. Ambil detail absensi siswa
-			const { data: detailData, error: detailError } = await supabase
-				.from('absensi_mapel_siswa')
-				.select('sesi_id, siswa_id, status, keterangan')
-				.in('sesi_id', sesiIds);
-
-			if (detailError) throw detailError;
-			const absensiDetails = detailData || [];
-
-			const sesiTanggalMap = {};
-			sessions.forEach(s => {
-				sesiTanggalMap[s.sesi_id] = String(s.tanggal).slice(0, 10);
-			});
-
-			// 4. Proses rekap per siswa
-			const rekapSiswa = siswaDiKelas.map((siswa) => {
-				const absensiSiswa = {};
-				const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 };
-
-				const studentAbsensi = absensiDetails.filter(d => String(d.siswa_id) === String(siswa.id));
-
-				studentAbsensi.forEach(detail => {
-					const tanggal = sesiTanggalMap[detail.sesi_id];
-					if (!tanggal) return;
-
-					const status = detail.status || '';
-					const keterangan = detail.keterangan || '';
-					
-					absensiSiswa[tanggal] = { status, keterangan };
-
-					const s = status.toLowerCase();
-					if (s === 'hadir' || s === 'h') ringkasan.H++;
-					else if (s === 'izin' || s === 'i') ringkasan.I++;
-					else if (s === 'sakit' || s === 's') ringkasan.S++;
-					else if (s === 'alpa' || s === 'a' || s === 'alpha' || s === 'alfa') ringkasan.A++;
-					else if (s === 'terlambat' || s === 't') ringkasan.T++;
-					else if (s === 'cabut' || s === 'c') ringkasan.C++;
-				});
-
-				return {
-					...siswa,
-					absensi: absensiSiswa,
-					ringkasan,
-				};
-			});
-
-			setRekapData({
-				kelas: namaKelas,
-				periode,
-				tanggalList,
-				siswa: rekapSiswa,
-				totalSiswa: rekapSiswa.length,
-			});
-		} catch (error) {
-			console.error('Error fetching rekap:', error);
-			setError(error.message);
-			setRekapData(null);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	// Generate tanggal-tanggal dalam bulan
-	const getDatesInMonth = (dates) => {
-		if (!dates || !Array.isArray(dates) || dates.length === 0) return [];
-		return dates.sort((a, b) => new Date(a) - new Date(b));
-	};
-
-	const getStatusColor = (status) => {
-		const colors = {
-			Hadir: 'bg-green-100 text-green-800',
-			Izin: 'bg-blue-100 text-blue-800',
-			Sakit: 'bg-yellow-100 text-yellow-800',
-			Alpha: 'bg-red-100 text-red-800',
-		};
-		return colors[status] || 'bg-gray-100 text-gray-800';
-	};
-
-	// Fungsi Export ke Excel
-	const exportToExcel = () => {
-		if (!rekapData || !rekapData.siswa || rekapData.siswa.length === 0) {
-			alert('Tidak ada data untuk diekspor');
-			return;
-		}
-
-		const tanggalList = getDatesInMonth(rekapData.tanggalList);
-
-		// Buat header
-		const headers = ['No', 'NIS', 'Nama Siswa'];
-
-		// Tambahkan tanggal sebagai header
-		tanggalList.forEach((tanggal) => {
-			const date = new Date(tanggal);
-			const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
-			headers.push(`${date.getDate()} (${dayName})`);
-		});
-
-		// Tambahkan kolom ringkasan
-		headers.push('Hadir', 'Izin', 'Sakit', 'Alpha', 'Total');
-
-		// Buat data rows
-		const data = rekapData.siswa.map((siswa, index) => {
-			const row = [index + 1, siswa.nis || '-', siswa.nama_lengkap];
-
-			// Tambahkan status per tanggal
-			tanggalList.forEach((tanggal) => {
-				const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
-				const status = absensi?.status || '-';
-				const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : (status === 'Alpha' || status === 'Alpa') ? 'A' : '-';
-				row.push(kode);
-			});
-
-			// Tambahkan ringkasan
-			const total = (siswa.ringkasan?.H || 0) + (siswa.ringkasan?.I || 0) + (siswa.ringkasan?.S || 0) + (siswa.ringkasan?.A || 0);
-			row.push(siswa.ringkasan?.H || 0, siswa.ringkasan?.I || 0, siswa.ringkasan?.S || 0, siswa.ringkasan?.A || 0, total);
-
-			return row;
-		});
-
-		// Gabungkan header dan data
-		const worksheetData = [
-			[`REKAP ABSENSI - ${rekapData.kelas}`],
-			[`Periode: ${rekapData.periode}`],
-			[`Total Siswa: ${rekapData.siswa.length}`],
-			[], // Baris kosong
-			headers,
-			...data,
-		];
-
-		// Buat worksheet dan workbook
-		const ws = XLSX.utils.aoa_to_sheet(worksheetData);
-
-		// Styling untuk merge cells (judul)
-		ws['!merges'] = [
-			{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
-			{ s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
-			{ s: { r: 2, c: 0 }, e: { r: 2, c: headers.length - 1 } },
-		];
-
-		// Set column widths
-		const colWidths = [
-			{ wch: 5 }, // No
-			{ wch: 15 }, // NIS
-			{ wch: 30 }, // Nama
-			...tanggalList.map(() => ({ wch: 8 })), // Tanggal
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 },
-			{ wch: 8 }, // Ringkasan
-		];
-		ws['!cols'] = colWidths;
-
-		const wb = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(wb, ws, 'Rekap Absensi');
-
-		// Generate nama file
-		const bulanLabel = bulanOptions.find((b) => b.value === selectedBulan)?.label || 'Semua_Bulan';
-		const filename = `Rekap_Absensi_${rekapData.kelas}_${bulanLabel}_${new Date().getFullYear()}.xlsx`;
-
-		// Download file
-		XLSX.writeFile(wb, filename);
-	};
-
-	return (
+const newReturn = `return (
 		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>
 			
 			{/* Header Brutalist */}
@@ -433,12 +125,12 @@ export default function LaporanAbsensiMapelPage() {
 								<div className='flex bg-[#0D0D0D] border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 									<button
 										onClick={() => setTampilanStyle('jumlah')}
-										className={`px-4 py-2 text-xs font-black uppercase transition-colors ${tampilanStyle === 'jumlah' ? 'bg-[#F5C518] text-[#0D0D0D]' : 'bg-transparent text-white hover:bg-gray-800'}`}>
+										className={\`px-4 py-2 text-xs font-black uppercase transition-colors \${tampilanStyle === 'jumlah' ? 'bg-[#F5C518] text-[#0D0D0D]' : 'bg-transparent text-white hover:bg-gray-800'}\`}>
 										JUMLAH
 									</button>
 									<button
 										onClick={() => setTampilanStyle('persentase')}
-										className={`px-4 py-2 text-xs font-black uppercase transition-colors ${tampilanStyle === 'persentase' ? 'bg-[#F5C518] text-[#0D0D0D]' : 'bg-transparent text-white hover:bg-gray-800'}`}>
+										className={\`px-4 py-2 text-xs font-black uppercase transition-colors \${tampilanStyle === 'persentase' ? 'bg-[#F5C518] text-[#0D0D0D]' : 'bg-transparent text-white hover:bg-gray-800'}\`}>
 										PERSENTASE
 									</button>
 								</div>
@@ -490,7 +182,7 @@ export default function LaporanAbsensiMapelPage() {
 													const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
 													return (
-														<th key={tanggal} className={`border-b-[4px] border-r-[2px] border-[#0D0D0D] px-2 py-3 text-center min-w-[50px] ${isWeekend ? 'bg-[#E8451A] text-white' : ''}`}>
+														<th key={tanggal} className={\`border-b-[4px] border-r-[2px] border-[#0D0D0D] px-2 py-3 text-center min-w-[50px] \${isWeekend ? 'bg-[#E8451A] text-white' : ''}\`}>
 															<div className='text-sm font-black'>{date.getDate()}</div>
 															<div className='text-[10px] font-bold uppercase mt-1'>{dayName}</div>
 														</th>
@@ -544,7 +236,7 @@ export default function LaporanAbsensiMapelPage() {
 																<td key={tanggal} className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-2 py-3 text-center'>
 																	<div className='flex justify-center'>
 																		{kode !== '-' ? (
-																			<span className={`w-7 h-7 flex items-center justify-center text-xs font-black ${boxStyle}`} title={absensi?.keterangan ? `${status} - ${absensi.keterangan}` : status}>
+																			<span className={\`w-7 h-7 flex items-center justify-center text-xs font-black \${boxStyle}\`} title={absensi?.keterangan ? \`\${status} - \${absensi.keterangan}\` : status}>
 																				{kode}
 																			</span>
 																		) : (
@@ -592,5 +284,8 @@ export default function LaporanAbsensiMapelPage() {
 			</div>
 		</div>
 	);
+`
 
-}
+content = content.substring(0, startIdx) + newReturn + '\n}\n';
+fs.writeFileSync(file, content);
+console.log('Successfully updated laporan-absensi-mapel page!');

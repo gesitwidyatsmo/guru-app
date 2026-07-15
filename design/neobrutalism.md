@@ -348,12 +348,16 @@ font-family: 'Space Mono', 'Geist Mono', monospace;
 }
 ```
 
-**Panduan Penggunaan Input dengan Ikon:**
-Jika Anda menempatkan ikon (misal pencarian) menggunakan `position: absolute` di dalam container `relative` sebelum input, Anda **wajib** menambahkan class `.neo-input-with-icon` ke input tersebut agar teks yang diketik tidak tertimpa/tumpang tindih dengan ikon. Contoh:
+**PANDUAN KRITIKAL (WAJIB DIBACA): Input dengan Ikon**
+1. Jika Anda menempatkan ikon (misal pencarian atau ikon mata pelajaran) di dalam input menggunakan `position: absolute`, Anda **WAJIB MUTLAK** menambahkan class `.neo-input-with-icon` ke elemen `<input>` atau `<select>` tersebut.
+2. **JANGAN PERNAH** mengandalkan utility class dari Tailwind seperti `pl-10` atau `pl-12` untuk memberi jarak ikon. Class bawaan `.neo-input` memiliki spesifisitas CSS yang tinggi dan akan **mengubah paksa** padding kiri kembali ke awal, sehingga teks akan selalu **bertabrakan** dengan ikon.
+3. Satu-satunya cara yang benar adalah menggunakan: `className="neo-input neo-input-with-icon ..."`
+
+Contoh yang benar:
 ```html
 <div class="relative">
-  <svg class="absolute left-3 top-3 w-5 h-5 text-black">...</svg>
-  <input class="neo-input neo-input-with-icon" placeholder="Cari..." />
+  <svg class="absolute left-3 top-3 w-6 h-6 text-black">...</svg>
+  <input class="neo-input neo-input-with-icon w-full" placeholder="Cari..." />
 </div>
 ```
 
@@ -457,6 +461,15 @@ Contoh:
 
 ---
 
+### 8. Ikonografi (Iconography)
+
+**PANDUAN KRITIKAL: Ketebalan Ikon SVG**
+Ikon dalam desain Neobrutalism harus memiliki ketebalan (stroke-width) yang tegas namun tidak membengkak (bloated).
+- Hindari penggunaan \`strokeWidth="4"\` pada ikon berukuran standar (seperti \`24x24\` atau \`w-6 h-6\`), karena akan menutupi detail dan merusak estetika *pixel-perfect*.
+- Gunakan **\`strokeWidth="2.5"\`** atau **\`strokeWidth="3"\`** sebagai standar ideal agar ikon tampak tebal namun tetap terbaca rapi.
+- Pastikan SVG memiliki atribut \`fill="none"\` dan \`stroke="currentColor"\` agar mudah dikontrol pewarnaannya.
+
+---
 ## Shadow System
 
 Semua bayangan di sistem ini bersifat **hard / offset shadow** — tidak ada blur.

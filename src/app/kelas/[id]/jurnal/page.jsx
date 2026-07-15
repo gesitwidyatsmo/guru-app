@@ -1,28 +1,34 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
+import Loader from '../../../components/loading';
+import { createClient } from '@/utils/supabase/client';
 
 export default function JurnalKelasPage() {
-	const params = useParams();
 	const router = useRouter();
+	const params = useParams();
 	const classId = params.id;
 
-	// --- State ---
+	// --- STATE MANAGEMENT ---
 	const [kelasInfo, setKelasInfo] = useState(null);
 	const [journals, setJournals] = useState([]);
-	const [mapelList, setMapelList] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [searchQuery, setSearchQuery] = useState('');
 
-	// Filter State
-	const [selectedMapel, setSelectedMapel] = useState('Semua');
+	const [userRole, setUserRole] = useState('');
+	const [userId, setUserId] = useState('');
 
-	// Form State
+	// State Form Modal
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
 	const [saving, setSaving] = useState(false);
 
+	// Data Master
+	const [mapelList, setMapelList] = useState([]);
+
+	// Form Data
 	const initialForm = {
 		id: '',
 		tanggal: new Date().toISOString().slice(0, 10),
@@ -33,82 +39,104 @@ export default function JurnalKelasPage() {
 		kegiatan: '',
 		hambatan: '',
 		solusi: '',
+		dokumentasi: null,
 		tuntas: false,
 	};
 	const [formData, setFormData] = useState(initialForm);
 
-	// --- Fetch Data ---
+	// --- 1. FETCH DATA ---
 	useEffect(() => {
-		if (!classId) return;
-
-		const initData = async () => {
+		const fetchData = async () => {
+			if (!classId) return;
 			try {
-				// 1. Ambil Info Kelas
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const currentKelas = dataKelas.find((k) => String(k.id) === String(classId));
-
-				if (!currentKelas) {
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (!user) {
+					router.push('/login');
+					return;
+				}
+				
+				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+				let currentUserId = '';
+				let currentUserRole = '';
+				if (profile) {
+					currentUserId = profile.id_user;
+					currentUserRole = profile.role;
+					setUserId(currentUserId);
+					setUserRole(currentUserRole);
+				} else {
+					router.push('/login');
+					return;
+				}
+				
+				const { data: kelasData } = await supabase.from('kelas').select('*').eq('id', classId).single();
+				if (!kelasData) {
 					Swal.fire('Error', 'Kelas tidak ditemukan', 'error');
 					router.push('/kelas');
 					return;
 				}
-				setKelasInfo(currentKelas);
+				setKelasInfo(kelasData);
+				
+				const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
+				setMapelList(mapelData || []);
 
-				// 2. Ambil List Mapel (untuk dropdown)
-				const resMapel = await fetch('/api/mapel');
-				const dataMapel = resMapel.ok ? await resMapel.json() : [];
-				setMapelList(dataMapel);
+				await refreshJurnal(currentUserId, currentUserRole, kelasData.kelas || kelasData.nama_kelas);
 
-				// 3. Ambil Jurnal
-				await fetchJurnals(currentKelas.kelas || currentKelas.nama_kelas);
 			} catch (err) {
 				console.error(err);
 			} finally {
 				setLoading(false);
 			}
 		};
+		fetchData();
+	}, [classId]);
 
-		initData();
-	}, [classId, router, fetchJurnals]);
-
-	const fetchJurnals = useCallback(async (namaKelas) => {
+	const refreshJurnal = async (uid = userId, role = userRole, clsName = (kelasInfo?.kelas || kelasInfo?.nama_kelas)) => {
+		if (!clsName) return [];
 		try {
-			const res = await fetch(`/api/jurnal?kelas=${encodeURIComponent(namaKelas)}`);
-			if (res.ok) {
-				const data = await res.json();
-				setJournals(data);
+			const supabase = createClient();
+			let query = supabase.from('jurnal').select('*').eq('kelas', clsName).order('tanggal', { ascending: false });
+			if (role === 'Guru' && uid) {
+				query = query.eq('guru_id', uid);
+			}
+			const { data, error } = await query;
+			if (!error) {
+				setJournals(data || []);
+				return data || [];
 			}
 		} catch (error) {
-			console.error('Gagal load jurnal:', error);
+			console.error('Gagal memuat jurnal:', error);
 		}
-	}, []);
+		return [];
+	};
 
-	// --- Logic Auto-Suggest Pertemuan ---
-	useEffect(() => {
-		if (!isEditing && isModalOpen && formData.mapel && kelasInfo) {
-			const namaKelas = kelasInfo.kelas || kelasInfo.nama_kelas;
-			const existingCount = journals.filter((j) => j.kelas === namaKelas && j.mapel === formData.mapel).length;
+	// --- LOGIC AUTO-SUGGEST PERTEMUAN ---
+	const calculateMeeting = (cls, mpl) => {
+		// Hanya jalankan jika mode tambah baru (bukan edit)
+		if (isEditing || !cls || !mpl) return;
 
-			const suggestion = (existingCount + 1).toString();
-			if (formData.pertemuan_ke !== suggestion) {
-				setFormData((prev) => ({ ...prev, pertemuan_ke: suggestion }));
-			}
-		}
-	}, [formData.mapel, isModalOpen, isEditing, journals, kelasInfo, formData.pertemuan_ke]);
+		// Hitung jumlah jurnal yang sudah ada untuk kelas & mapel ini
+		const existingCount = journals.filter((j) => j.kelas === cls && j.mapel === mpl).length;
 
-	// --- Handlers ---
-	const handleOpenModal = (item = null) => {
-		if (item) {
+		// Saran = Jumlah data + 1
+		const suggestion = existingCount + 1;
+
+		setFormData((prev) => ({
+			...prev,
+			pertemuan_ke: suggestion.toString(),
+		}));
+	};
+
+	// --- HANDLERS ---
+	const handleOpenModal = (journal = null) => {
+		if (journal) {
+			// Mode Edit
 			setIsEditing(true);
-			setFormData(item);
+			setFormData(journal);
 		} else {
+			// Mode Tambah Baru
 			setIsEditing(false);
-			setFormData({
-				...initialForm,
-				// Pre-fill mapel jika filter sedang aktif
-				mapel: selectedMapel !== 'Semua' ? selectedMapel : '',
-			});
+			setFormData(initialForm);
 		}
 		setIsModalOpen(true);
 	};
@@ -116,459 +144,410 @@ export default function JurnalKelasPage() {
 	const handleDelete = async (id) => {
 		const result = await Swal.fire({
 			title: 'Hapus Jurnal?',
-			text: 'Data tidak bisa dikembalikan',
+			text: 'Data yang dihapus tidak bisa dikembalikan.',
 			icon: 'warning',
 			showCancelButton: true,
-			confirmButtonColor: '#0f172a',
-			confirmButtonText: 'Hapus',
+			confirmButtonColor: '#EF4444',
+			confirmButtonText: 'Ya, Hapus',
 			cancelButtonText: 'Batal',
-			customClass: { popup: 'rounded-2xl' },
 		});
 
 		if (result.isConfirmed) {
-			await fetch(`/api/jurnal?id=${id}`, { method: 'DELETE' });
-			fetchJurnals(kelasInfo.kelas || kelasInfo.nama_kelas);
-			Swal.fire({
-				title: 'Terhapus',
-				icon: 'success',
-				timer: 1000,
-				showConfirmButton: false,
-				customClass: { popup: 'rounded-2xl' },
-			});
+			try {
+				const supabase = createClient();
+				const { error } = await supabase.from('jurnal').delete().eq('id', id);
+				if (error) throw error;
+				
+				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
+				refreshJurnal();
+			} catch (err) {
+				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
+			}
 		}
 	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setSaving(true);
-
-		const namaKelas = kelasInfo.kelas || kelasInfo.nama_kelas;
-		const payload = { ...formData, kelas: namaKelas };
+		
+		const namaKelas = kelasInfo?.kelas || kelasInfo?.nama_kelas;
 
 		try {
-			const res = await fetch('/api/jurnal', {
-				method: isEditing ? 'PUT' : 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
-
-			if (res.ok) {
-				setIsModalOpen(false);
-				fetchJurnals(namaKelas);
-				Swal.fire({
-					icon: 'success',
-					title: 'Tersimpan',
-					timer: 1500,
-					showConfirmButton: false,
-					customClass: { popup: 'rounded-2xl' },
-				});
+			const supabase = createClient();
+			
+			if (isEditing) {
+				const { id, pertemuan_ke, ...others } = formData;
+				const updates = { ...others };
+				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
+				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
+				
+				const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				if (error) throw error;
 			} else {
-				throw new Error('Gagal API');
+				const newId = Math.random().toString(36).substring(2, 11);
+				const insertData = {
+					id: newId,
+					guru_id: userId || null,
+					tanggal: formData.tanggal,
+					jam_ke: formData.jam_ke || '',
+					pertemuan_ke: formData.pertemuan_ke || '',
+					kelas: namaKelas,
+					mapel: formData.mapel,
+					materi: formData.materi,
+					kegiatan: formData.kegiatan || '',
+					hambatan: formData.hambatan || '',
+					solusi: formData.solusi || '',
+					tuntas: !!formData.tuntas,
+				};
+				const { error } = await supabase.from('jurnal').insert(insertData);
+				if (error) throw error;
 			}
-		} catch (error) {
-			Swal.fire('Error', 'Gagal menyimpan data', 'error');
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil!',
+				text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
+				timer: 1500,
+				showConfirmButton: false,
+			});
+			setIsModalOpen(false);
+			refreshJurnal();
+		} catch (err) {
+			Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
 		} finally {
 			setSaving(false);
 		}
 	};
 
-	// --- Derived Data ---
-	const filteredJournals = selectedMapel === 'Semua' ? journals : journals.filter((j) => j.mapel === selectedMapel);
+	const filteredJournals = journals.filter((j) => {
+		const matchSearch =
+			searchQuery === '' ||
+			[j.materi, j.kegiatan, j.mapel, j.hambatan, j.solusi]
+				.filter(Boolean)
+				.some((field) => field.toString().toLowerCase().includes(searchQuery.toLowerCase()));
+		return matchSearch;
+	});
 
-	// Stats Sederhana
-	const totalPertemuan = filteredJournals.length;
-	const totalTuntas = filteredJournals.filter((j) => j.tuntas).length;
-
-	if (loading)
+	if (loading) {
 		return (
-			<div className='min-h-screen bg-gray-50 flex items-center justify-center'>
-				<div className='w-8 h-8 border-4 border-slate-900 border-t-transparent rounded-full animate-spin'></div>
+			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
+				<Loader />
 			</div>
 		);
+	}
 
 	return (
-		<div className='min-h-screen bg-[#FAFAFA] text-slate-800 font-sans'>
-			{/* --- Header Area --- */}
-			<header className='sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200'>
-				<div className='max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between'>
-					<div className='flex items-center gap-4'>
-						<button
-							onClick={() => router.back()}
-							className='p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500'>
-							<svg
-								className='w-5 h-5'
-								fill='none'
-								viewBox='0 0 24 24'
-								stroke='currentColor'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M10 19l-7-7m0 0l7-7m-7 7h18'
-								/>
-							</svg>
-						</button>
-						<div>
-							<h1 className='text-lg font-bold text-slate-900 leading-tight'>{kelasInfo?.kelas || kelasInfo?.nama_kelas}</h1>
-							<p className='text-xs text-slate-500'>Jurnal Pembelajaran</p>
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20'>
+			{/* Header Brutalist */}
+			<div className='bg-[#E8451A] border-b-[4px] border-[#0D0D0D] pb-16 pt-10 px-4 sm:px-8 relative overflow-hidden'>
+                {/* Decorative Elements */}
+                <div className='absolute top-4 right-10 w-24 h-24 bg-[#F5C518] border-[4px] border-[#0D0D0D] rounded-full shadow-[4px_4px_0px_0px_#0D0D0D] rotate-12 hidden md:block'></div>
+                <div className='absolute bottom-8 left-1/4 w-12 h-12 bg-[#00A693] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] -rotate-12 hidden md:block'></div>
+
+				<div className='max-w-5xl mx-auto relative z-10'>
+					<div className='flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8'>
+						<div className='flex items-center gap-4'>
+							<button
+								onClick={() => router.back()}
+								className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] text-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+								<svg className='w-8 h-8' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
+							</button>
+							<div>
+								<h1 className='text-4xl sm:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-2'>JURNAL {kelasInfo?.kelas || kelasInfo?.nama_kelas}</h1>
+								<p className='text-white font-black tracking-widest uppercase bg-[#0D0D0D] inline-block px-3 py-1 border-[2px] border-white text-xs sm:text-sm'>Catat aktivitas harian kelas ini</p>
+							</div>
 						</div>
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className='w-full md:w-auto bg-[#00A693] text-white px-8 py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-lg'>
+                            <svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
+                            BUAT JURNAL BARU
+                        </button>
 					</div>
-
-					<button
-						onClick={() => handleOpenModal()}
-						className='bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95'>
-						<svg
-							className='w-4 h-4'
-							fill='none'
-							viewBox='0 0 24 24'
-							stroke='currentColor'>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M12 4v16m8-8H4'
-							/>
-						</svg>
-						<span className='hidden sm:inline'>Entri Baru</span>
-					</button>
 				</div>
-			</header>
+			</div>
 
-			<main className='max-w-6xl mx-auto px-4 sm:px-6 py-8'>
-				<div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
-					{/* --- Sidebar (Stats & Filters) --- */}
-					<aside className='lg:col-span-3 space-y-6'>
-						{/* Stat Card */}
-						<div className='bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'>
-							<h3 className='text-xs font-bold text-slate-400 uppercase tracking-wider mb-4'>Ringkasan</h3>
-							<div className='space-y-4'>
-								<div>
-									<p className='text-3xl font-bold text-slate-900'>{totalPertemuan}</p>
-									<p className='text-sm text-slate-500'>Total Pertemuan</p>
-								</div>
-								<div className='w-full bg-slate-100 h-2 rounded-full overflow-hidden'>
-									<div
-										className='bg-emerald-500 h-full rounded-full transition-all duration-1000'
-										style={{ width: totalPertemuan > 0 ? `${(totalTuntas / totalPertemuan) * 100}%` : '0%' }}></div>
-								</div>
-								<div className='flex justify-between text-xs text-slate-500'>
-									<span>{totalTuntas} Tuntas</span>
-									<span>{totalPertemuan - totalTuntas} Remedial</span>
-								</div>
-							</div>
+			{/* Search & Filter Bar (Overlapping) */}
+            <div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>
+                <div className='flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]'>
+                    <div className='w-full'>
+                        <div className='relative group'>
+                            <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                                <svg className='w-7 h-7 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
+                            </div>
+                            <input
+                                type='text'
+                                placeholder='CARI JURNAL KELAS INI...'
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className='neo-input w-full !pl-16 pr-4 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg'
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+			{/* Timeline Content */}
+			<div className='max-w-5xl mx-auto px-4 sm:px-8 relative z-10'>
+				{filteredJournals.length === 0 ? (
+					<div className='bg-white shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] p-16 text-center flex flex-col items-center justify-center relative overflow-hidden'>
+						<div className='absolute -top-10 -right-10 w-40 h-40 bg-[#F5C518] rounded-full border-[4px] border-[#0D0D0D] opacity-50'></div>
+						<div className='absolute -bottom-10 -left-10 w-40 h-40 bg-[#00A693] border-[4px] border-[#0D0D0D] rotate-45 opacity-50'></div>
+						
+						<div className='w-28 h-28 bg-[#FFF5F0] border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] flex items-center justify-center mx-auto mb-8 relative z-10 transform -rotate-3 hover:rotate-0 transition-transform'>
+							<svg className='w-16 h-16 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'/></svg>
 						</div>
+						<h3 className='text-3xl sm:text-4xl font-black text-[#0D0D0D] mb-4 uppercase tracking-widest relative z-10'>BELUM ADA JURNAL</h3>
+						<p className='text-[#0D0D0D] font-bold text-lg relative z-10 bg-[#F5C518] px-4 py-2 border-[3px] border-[#0D0D0D]'>Silakan buat jurnal baru untuk mencatat kegiatan hari ini.</p>
+					</div>
+				) : (
+					<div className='space-y-12'>
+						{filteredJournals.map((journal) => (
+							<div
+								key={journal.id}
+								className='bg-white rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] transition-all relative group'>
+								
+								{/* Status Strip */}
+								<div className={`absolute left-0 top-0 bottom-0 w-4 border-r-[4px] border-[#0D0D0D] ${journal.tuntas ? 'bg-[#00A693]' : 'bg-[#E8451A]'}`}></div>
 
-						{/* Filter Mapel */}
-						<div className='bg-white p-2 rounded-2xl border border-slate-200 shadow-sm'>
-							<div className='flex flex-col gap-1'>
-								<button
-									onClick={() => setSelectedMapel('Semua')}
-									className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedMapel === 'Semua' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'}`}>
-									📂 Semua Mapel
-								</button>
-								{mapelList.map((m) => (
-									<button
-										key={m.id}
-										onClick={() => setSelectedMapel(m.mapel || m.nama_mapel)}
-										className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-											selectedMapel === (m.mapel || m.nama_mapel) ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'
-										}`}>
-										📚 {m.mapel || m.nama_mapel}
-									</button>
-								))}
-							</div>
-						</div>
-					</aside>
-
-					{/* --- Main Feed (Timeline) --- */}
-					<div className='lg:col-span-9'>
-						{filteredJournals.length === 0 ? (
-							<div className='flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-300'>
-								<div className='w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4'>
-									<svg
-										className='w-8 h-8 text-slate-300'
-										fill='none'
-										viewBox='0 0 24 24'
-										stroke='currentColor'>
-										<path
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											strokeWidth={1.5}
-											d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-										/>
-									</svg>
-								</div>
-								<h3 className='text-slate-900 font-semibold text-lg'>Belum ada jurnal</h3>
-								<p className='text-slate-500 text-sm mt-1'>Mulai dengan mencatat kegiatan pertama.</p>
-							</div>
-						) : (
-							<div className='space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent'>
-								{filteredJournals.map((journal) => (
-									<div
-										key={journal.id}
-										className='relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active'>
-										{/* Icon Titik Tengah */}
-										<div className='flex items-center justify-center w-10 h-10 rounded-full border-4 border-[#FAFAFA] bg-slate-200 group-hover:bg-slate-900 transition-colors shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10'>
-											<svg
-												className='w-4 h-4 text-slate-500 group-hover:text-white'
-												fill='none'
-												viewBox='0 0 24 24'
-												stroke='currentColor'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M12 6v6m0 0v6m0-6h6m-6 0H6'
-												/>
-											</svg>
-										</div>
-
-										{/* Content Card */}
-										<div className='w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-5 bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow'>
-											<div className='flex justify-between items-start mb-3'>
-												<div>
-													<span className='inline-block px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider mb-1'>{journal.mapel}</span>
-													<div className='text-xs text-slate-400 font-medium'>
-														{new Date(journal.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })} • Jam {journal.jam_ke}
-													</div>
-												</div>
-												<div className='flex gap-1'>
-													<button
-														onClick={() => handleOpenModal(journal)}
-														className='p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors'>
-														<svg
-															className='w-4 h-4'
-															fill='none'
-															viewBox='0 0 24 24'
-															stroke='currentColor'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																strokeWidth={2}
-																d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-															/>
-														</svg>
-													</button>
-													<button
-														onClick={() => handleDelete(journal.id)}
-														className='p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors'>
-														<svg
-															className='w-4 h-4'
-															fill='none'
-															viewBox='0 0 24 24'
-															stroke='currentColor'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																strokeWidth={2}
-																d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-															/>
-														</svg>
-													</button>
-												</div>
+								<div className='pl-6 sm:pl-8 py-6 pr-6'>
+									<div className='flex flex-col lg:flex-row justify-between items-start gap-6 mb-8'>
+										<div className='flex flex-col sm:flex-row items-start sm:items-center gap-6'>
+											{/* Date Badge (Offset/Popping out slightly) */}
+											<div className='bg-[#F5C518] border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] p-3 min-w-[90px] text-center transform -rotate-3 hover:rotate-0 transition-all'>
+												<span className='text-4xl font-black text-[#0D0D0D] block leading-none'>{new Date(journal.tanggal).getDate()}</span>
+												<span className='text-xs font-black text-[#0D0D0D] uppercase tracking-widest mt-1 block bg-white border-2 border-[#0D0D0D] py-1'>{new Date(journal.tanggal).toLocaleDateString('id-ID', { month: 'short' })}</span>
 											</div>
 
-											<h4 className='font-bold text-slate-800 mb-2 leading-snug'>
-												{journal.materi}
-												{journal.pertemuan_ke && <span className='ml-2 font-normal text-slate-500 text-sm'>(Pert. {journal.pertemuan_ke})</span>}
-											</h4>
-
-											<p className='text-sm text-slate-600 leading-relaxed mb-4 line-clamp-3'>{journal.kegiatan}</p>
-
-											{/* Footer Status */}
-											<div className='pt-3 border-t border-slate-100 flex items-center justify-between'>
-												<div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${journal.tuntas ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-													<div className={`w-1.5 h-1.5 rounded-full ${journal.tuntas ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-													{journal.tuntas ? 'Tuntas' : 'Perlu Remedial'}
+											{/* Info Utama */}
+											<div>
+												<div className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-3 flex-wrap'>
+													<span className='bg-white px-3 py-1 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>{journal.mapel}</span>
 												</div>
-												{(journal.hambatan || journal.solusi) && (
-													<div className='flex -space-x-2'>
-														{journal.hambatan && (
-															<div
-																className='w-6 h-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-[10px] ring-2 ring-white'
-																title='Ada Hambatan'>
-																⚠️
-															</div>
-														)}
-														{journal.solusi && (
-															<div
-																className='w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] ring-2 ring-white'
-																title='Ada Solusi'>
-																💡
-															</div>
-														)}
-													</div>
+												<div className='text-xs font-bold text-[#0D0D0D] flex flex-wrap items-center gap-3 mt-4'>
+													<span className='flex items-center gap-2 bg-white px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase font-black'>
+														<svg className='w-5 h-5 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg>
+														JAM KE-{journal.jam_ke}
+													</span>
+													{userRole === 'Admin' && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
+												</div>
+											</div>
+										</div>
+
+										{/* Action Buttons */}
+										<div className='flex gap-3 shrink-0 self-start sm:self-auto'>
+											<button
+												onClick={() => handleOpenModal(journal)}
+												className='p-3 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+												title='Edit'>
+												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
+											</button>
+											<button
+												onClick={() => handleDelete(journal.id)}
+												className='p-3 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+												title='Hapus'>
+												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+											</button>
+										</div>
+									</div>
+
+									<div className='flex flex-wrap gap-3 mb-8'>
+										{/* Badge Pertemuan */}
+										{journal.pertemuan_ke && <span className='px-4 py-2 bg-white text-[#0D0D0D] text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-1'>PERTEMUAN {journal.pertemuan_ke}</span>}
+
+										{journal.tuntas ? (
+											<span className='px-4 py-2 bg-[#00A693] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>TUNTAS</span>
+										) : (
+											<span className='px-4 py-2 bg-[#E8451A] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>PERLU REMEDIAL</span>
+										)}
+									</div>
+
+									<div className='border-t-[4px] border-dashed border-[#0D0D0D] pt-8'>
+										<div className='mb-8'>
+											<h4 className='text-xs font-black text-white uppercase tracking-widest mb-3 bg-[#0D0D0D] inline-block px-4 py-2 transform -skew-x-6'>📝 MATERI POKOK</h4>
+											<p className='text-[#0D0D0D] font-bold text-xl leading-relaxed bg-[#FFF5F0] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-5'>{journal.materi}</p>
+										</div>
+
+										<div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+											<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative'>
+												<div className='absolute -top-5 -right-5 text-4xl transform rotate-12 bg-[#F5C518] rounded-full border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] w-12 h-12 flex items-center justify-center'>🎯</div>
+												<h4 className='text-[10px] font-black text-white uppercase tracking-widest mb-4 bg-[#0D0D0D] px-3 py-1.5 inline-block'>KEGIATAN</h4>
+												<p className='text-base text-[#0D0D0D] font-bold'>{journal.kegiatan || '-'}</p>
+											</div>
+											<div className='bg-[#FFF5F0] p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative mt-4 md:mt-0'>
+												<div className='absolute -top-5 -right-5 text-4xl transform -rotate-12 bg-[#E8451A] rounded-full border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] w-12 h-12 flex items-center justify-center'>💡</div>
+												<div className='mb-3'>
+													<h4 className='text-[10px] font-black text-white uppercase tracking-widest bg-[#0D0D0D] px-3 py-1.5 inline-block'>EVALUASI / CATATAN</h4>
+												</div>
+												<p className='text-sm text-[#0D0D0D] font-bold mt-2'>{journal.hambatan ? `Hambatan: ${journal.hambatan}` : 'Tidak ada hambatan.'}</p>
+												{journal.solusi && (
+													<p className='text-sm text-[#0D0D0D] font-bold mt-3 pt-3 border-t-[3px] border-dashed border-[#0D0D0D]'>✅ Solusi: {journal.solusi}</p>
 												)}
 											</div>
 										</div>
 									</div>
-								))}
+								</div>
 							</div>
-						)}
+						))}
 					</div>
-				</div>
-			</main>
+				)}
+			</div>
 
-			{/* --- Minimalist Modal --- */}
+			{/* MODAL FORM */}
 			{isModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
-					<div
-						className='absolute inset-0 bg-slate-900/30 backdrop-blur-sm'
-						onClick={() => setIsModalOpen(false)}></div>
-					<div className='relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col'>
-						<div className='px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-white z-10'>
-							<h2 className='text-lg font-bold text-slate-900'>{isEditing ? 'Edit Entri' : 'Jurnal Baru'}</h2>
-							<button
-								onClick={() => setIsModalOpen(false)}
-								className='text-slate-400 hover:text-slate-600 transition-colors'>
-								<svg
-									className='w-6 h-6'
-									fill='none'
-									viewBox='0 0 24 24'
-									stroke='currentColor'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M6 18L18 6M6 6l12 12'
-									/>
-								</svg>
-							</button>
-						</div>
-
-						<form
-							onSubmit={handleSubmit}
-							className='flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar'>
-							{/* Section 1: Konteks */}
-							<div className='grid grid-cols-1 md:grid-cols-2 gap-5'>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase'>Mata Pelajaran</label>
-									<select
-										required
-										value={formData.mapel}
-										onChange={(e) => setFormData({ ...formData, mapel: e.target.value })}
-										className='w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-slate-900 font-medium text-slate-700'>
-										<option value=''>Pilih Mapel...</option>
-										{mapelList.map((m) => (
-											<option
-												key={m.id}
-												value={m.mapel || m.nama_mapel}>
-												{m.mapel || m.nama_mapel}
-											</option>
-										))}
-									</select>
-								</div>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase'>Tanggal</label>
-									<input
-										type='date'
-										required
-										value={formData.tanggal}
-										onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
-										className='w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-slate-900 font-medium text-slate-700'
-									/>
-								</div>
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0D0D0D]/60 backdrop-blur-sm'>
+					<div className='bg-white w-full max-w-2xl border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] rounded-none'>
+						<form onSubmit={handleSubmit}>
+							<div className='sticky top-0 bg-[#F5C518] px-8 py-5 border-b-[4px] border-[#0D0D0D] flex justify-between items-center z-10'>
+								<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest'>{isEditing ? 'EDIT JURNAL' : 'JURNAL BARU'}</h2>
+								<button
+									type='button'
+									onClick={() => setIsModalOpen(false)}
+									className='w-10 h-10 flex items-center justify-center bg-white border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white transition-colors rounded-none'>
+									<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12'/></svg>
+								</button>
 							</div>
 
-							<div className='grid grid-cols-2 gap-5'>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase'>Jam Ke-</label>
-									<input
-										type='text'
-										placeholder='1-2'
-										value={formData.jam_ke}
-										onChange={(e) => setFormData({ ...formData, jam_ke: e.target.value })}
-										className='w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-slate-900 text-slate-700'
-									/>
+							<div className='p-8 space-y-6 bg-[#FFF5F0]'>
+								{/* Baris 1: Mapel (Satu-satunya Dropdown) */}
+								<div>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Mata Pelajaran</label>
+									<div className='relative'>
+										<select
+											required
+											value={formData.mapel}
+											onChange={(e) => {
+												const val = e.target.value;
+												setFormData({ ...formData, mapel: val });
+												calculateMeeting(kelasInfo?.kelas || kelasInfo?.nama_kelas, val);
+											}}
+											className='neo-input appearance-none w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none uppercase cursor-pointer'>
+											<option value=''>PILIH MAPEL</option>
+											{mapelList.map((m) => (
+												<option key={m.id} value={m.mapel || m.nama_mapel}>{m.mapel || m.nama_mapel}</option>
+											))}
+										</select>
+										<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-bold'>▼</div>
+									</div>
 								</div>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase flex justify-between'>
-										Pertemuan
-										<span className='text-emerald-600 text-[10px] bg-emerald-50 px-1 rounded'>Auto</span>
-									</label>
-									<input
-										type='text'
-										placeholder='Auto'
-										value={formData.pertemuan_ke}
-										onChange={(e) => setFormData({ ...formData, pertemuan_ke: e.target.value })}
-										className='w-full p-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-slate-900 text-slate-700 font-semibold'
-									/>
-								</div>
-							</div>
 
-							{/* Section 2: Isi */}
-							<div className='space-y-4 pt-2'>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase'>Materi Pokok</label>
-									<input
-										type='text'
+								{/* Baris 2: Tanggal, Jam, Pertemuan */}
+								<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+									<div>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Tanggal</label>
+										<input
+											type='date'
+											required
+											value={formData.tanggal}
+											onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none cursor-pointer'
+										/>
+									</div>
+									<div>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Jam Ke-</label>
+										<input
+											type='text'
+											required
+											placeholder='Contoh: 1-2'
+											value={formData.jam_ke}
+											onChange={(e) => setFormData({ ...formData, jam_ke: e.target.value })}
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none'
+										/>
+									</div>
+									<div>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>
+											Pertemuan <span className='text-[10px] text-[#E8451A]'>(Auto)</span>
+										</label>
+										<input
+											type='text'
+											placeholder='Auto'
+											value={formData.pertemuan_ke}
+											onChange={(e) => setFormData({ ...formData, pertemuan_ke: e.target.value })}
+											className='neo-input w-full px-4 py-3 bg-[#E8E8E8] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-white outline-none rounded-none'
+										/>
+									</div>
+								</div>
+
+								{/* Materi */}
+								<div>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Materi Pembelajaran</label>
+									<textarea
+										rows='2'
 										required
-										placeholder='Topik pembahasan hari ini...'
+										placeholder='Apa materi yang diajarkan?'
 										value={formData.materi}
 										onChange={(e) => setFormData({ ...formData, materi: e.target.value })}
-										className='w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-transparent text-slate-700 font-medium placeholder:font-normal'
-									/>
+										className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
 								</div>
-								<div className='space-y-1.5'>
-									<label className='text-xs font-semibold text-slate-500 uppercase'>Kegiatan Pembelajaran</label>
-									<textarea
-										rows={4}
-										placeholder='Deskripsikan aktivitas siswa secara singkat...'
-										value={formData.kegiatan}
-										onChange={(e) => setFormData({ ...formData, kegiatan: e.target.value })}
-										className='w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900 focus:border-transparent text-slate-700 leading-relaxed'></textarea>
+
+								{/* Detail Kegiatan */}
+								<div className='space-y-4'>
+									<div>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kegiatan Pembelajaran</label>
+										<textarea
+											rows='3'
+											placeholder='Deskripsi singkat aktivitas siswa...'
+											value={formData.kegiatan}
+											onChange={(e) => setFormData({ ...formData, kegiatan: e.target.value })}
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
+									</div>
+
+									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+										<div>
+											<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Hambatan / Masalah</label>
+											<textarea
+												rows='2'
+												placeholder='Kendala yang dihadapi...'
+												value={formData.hambatan}
+												onChange={(e) => setFormData({ ...formData, hambatan: e.target.value })}
+												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
+										</div>
+										<div>
+											<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Solusi / Tindak Lanjut</label>
+											<textarea
+												rows='2'
+												placeholder='Solusi yang dilakukan...'
+												value={formData.solusi}
+												onChange={(e) => setFormData({ ...formData, solusi: e.target.value })}
+												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
+										</div>
+									</div>
+								</div>
+
+								{/* Status Checkbox */}
+								<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
+									<div>
+										<p className='font-black text-[#0D0D0D] uppercase tracking-widest'>Status Pembelajaran</p>
+										<p className='text-xs text-[#0D0D0D] font-bold mt-1'>Apakah tujuan pembelajaran tercapai?</p>
+									</div>
+									<label className='relative inline-flex items-center cursor-pointer'>
+										<input
+											type='checkbox'
+											checked={formData.tuntas}
+											onChange={(e) => setFormData({ ...formData, tuntas: e.target.checked })}
+											className='sr-only peer'
+										/>
+										<div className="w-16 h-8 bg-white border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-[26px] peer-checked:after:border-[#0D0D0D] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-[#0D0D0D] after:border-[#0D0D0D] after:border after:rounded-none after:h-6 after:w-6 after:transition-all peer-checked:bg-[#00A693] peer-checked:after:bg-white"></div>
+										<span className='ml-4 text-sm font-black text-[#0D0D0D] uppercase tracking-widest w-16'>{formData.tuntas ? 'TUNTAS' : 'BELUM'}</span>
+									</label>
 								</div>
 							</div>
 
-							{/* Section 3: Evaluasi */}
-							<div className='bg-slate-50 p-5 rounded-2xl space-y-4'>
-								<h3 className='text-xs font-bold text-slate-400 uppercase tracking-widest'>Catatan Evaluasi</h3>
-
-								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-									<input
-										type='text'
-										placeholder='Hambatan (jika ada)'
-										value={formData.hambatan}
-										onChange={(e) => setFormData({ ...formData, hambatan: e.target.value })}
-										className='w-full p-3 bg-white border-none shadow-sm rounded-xl focus:ring-2 focus:ring-rose-200 text-sm'
-									/>
-									<input
-										type='text'
-										placeholder='Solusi / Tindak lanjut'
-										value={formData.solusi}
-										onChange={(e) => setFormData({ ...formData, solusi: e.target.value })}
-										className='w-full p-3 bg-white border-none shadow-sm rounded-xl focus:ring-2 focus:ring-blue-200 text-sm'
-									/>
-								</div>
-
-								<div className='flex items-center justify-between pt-2'>
-									<span className='text-sm font-medium text-slate-600'>Apakah tujuan tercapai?</span>
-									<button
-										type='button'
-										onClick={() => setFormData((prev) => ({ ...prev, tuntas: !prev.tuntas }))}
-										className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 ${
-											formData.tuntas ? 'bg-emerald-500' : 'bg-slate-200'
-										}`}>
-										<span className={`${formData.tuntas ? 'translate-x-9' : 'translate-x-1'} inline-block h-6 w-6 transform rounded-full bg-white transition duration-200 shadow-sm`} />
-										<span className={`absolute text-[10px] font-bold text-white ${formData.tuntas ? 'left-2' : 'right-2'}`}>{formData.tuntas ? 'YA' : 'NO'}</span>
-									</button>
-								</div>
+							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-4 sm:py-5 border-t-[4px] border-[#0D0D0D] flex flex-col sm:flex-row justify-end gap-3 sm:gap-4'>
+								<button
+									type='button'
+									onClick={() => setIsModalOpen(false)}
+									className='neo-btn-outline w-full sm:w-auto bg-white text-[#0D0D0D] px-6 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest'>
+									BATAL
+								</button>
+								<button
+									type='submit'
+									disabled={saving}
+									className='neo-btn-primary w-full sm:w-auto bg-[#0D0D0D] text-white px-8 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed'>
+									{saving ? 'MENYIMPAN...' : 'SIMPAN JURNAL'}
+								</button>
 							</div>
 						</form>
-
-						<div className='p-6 border-t border-slate-100 bg-white flex justify-end gap-3 z-10'>
-							<button
-								onClick={() => setIsModalOpen(false)}
-								className='px-6 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 transition-colors'>
-								Batal
-							</button>
-							<button
-								onClick={handleSubmit}
-								disabled={saving}
-								className='bg-slate-900 hover:bg-slate-800 text-white px-8 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-slate-900/20 disabled:opacity-70 disabled:cursor-not-allowed transition-all'>
-								{saving ? 'Menyimpan...' : 'Simpan Jurnal'}
-							</button>
-						</div>
 					</div>
 				</div>
 			)}

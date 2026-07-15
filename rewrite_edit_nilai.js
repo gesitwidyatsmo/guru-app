@@ -1,243 +1,14 @@
-'use client';
+const fs = require('fs');
+const file = 'src/app/kelas/[id]/nilai/[tugasId]/edit/page.jsx';
+let content = fs.readFileSync(file, 'utf8');
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import SectionHeader from '@/app/components/SectionHeader';
-import Swal from 'sweetalert2';
-import { createClient } from '@/utils/supabase/client';
+const startIdx = content.indexOf('\tif (loading) {');
+if (startIdx === -1) {
+	console.error('Batas penggantian tidak ditemukan!');
+	process.exit(1);
+}
 
-export default function EditNilaiPage() {
-	const params = useParams();
-	const router = useRouter();
-	const { id, tugasId } = params;
-
-	const [judul, setJudul] = useState('');
-	const [type, setType] = useState('Formatif');
-	const [deskripsi, setDeskripsi] = useState('');
-	const [kelas, setKelas] = useState('');
-	const [mapel, setMapel] = useState('');
-	const [tanggal, setTanggal] = useState('');
-	const [siswaList, setSiswaList] = useState([]);
-	const [nilaiSiswa, setNilaiSiswa] = useState({});
-	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
-	const [searchSiswa, setSearchSiswa] = useState('');
-
-	// Fetch data tugas yang akan diedit
-	useEffect(() => {
-		if (!tugasId) return;
-
-		const fetchDetailTugas = async () => {
-			try {
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				if (!user) throw new Error('Unauthenticated');
-
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const role = userData?.role;
-				const userId = userData?.id_user;
-
-				let query = supabase.from('nilai_siswa').select(`
-					id,
-					tugas_id,
-					siswa_id,
-					nama_siswa,
-					nilai,
-					nilai_tugas!inner (
-						guru_id,
-						kategori,
-						type,
-						deskripsi,
-						kelas,
-						mapel,
-						tanggal
-					)
-				`).eq('tugas_id', tugasId);
-
-				if (role === 'Guru' && userId) {
-					query = query.eq('nilai_tugas.guru_id', userId);
-				}
-
-				const { data: rawData, error } = await query;
-				if (error) throw error;
-
-				if (rawData && rawData.length > 0) {
-					const firstData = rawData[0].nilai_tugas;
-					
-					setJudul(firstData.kategori);
-					setType(firstData.type || 'Formatif');
-					setDeskripsi(firstData.deskripsi || '');
-					setKelas(firstData.kelas);
-					setMapel(firstData.mapel);
-					setTanggal(firstData.tanggal);
-
-					const siswaData = rawData.map((item) => ({
-						id: item.siswa_id,
-						nama_lengkap: item.nama_siswa,
-						nilai: item.nilai,
-						rowId: item.id,
-					}));
-					setSiswaList(siswaData);
-
-					const initialNilai = {};
-					siswaData.forEach((siswa) => {
-						initialNilai[siswa.id] = siswa.nilai;
-					});
-					setNilaiSiswa(initialNilai);
-				} else {
-					// Fallback if no students inserted but task exists
-					const { data: tugasHead, error: errHead } = await supabase.from('nilai_tugas').select('*').eq('tugas_id', tugasId).single();
-					if (tugasHead) {
-						if (role === 'Guru' && tugasHead.guru_id !== userId) throw new Error('Akses Ditolak');
-						setJudul(tugasHead.kategori);
-						setType(tugasHead.type || 'Formatif');
-						setDeskripsi(tugasHead.deskripsi || '');
-						setKelas(tugasHead.kelas);
-						setMapel(tugasHead.mapel);
-						setTanggal(tugasHead.tanggal);
-						setSiswaList([]);
-						setNilaiSiswa({});
-					}
-				}
-			} catch (error) {
-				console.error('Error fetching tugas:', error);
-				Swal.fire({
-					icon: 'error',
-					title: 'Gagal Memuat Data',
-					text: error.message,
-					confirmButtonColor: '#4F46E5',
-				});
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchDetailTugas();
-	}, [tugasId]);
-
-	// Handle perubahan nilai siswa
-	const handleNilaiChange = (siswaId, nilai) => {
-		setNilaiSiswa((prev) => ({
-			...prev,
-			[siswaId]: nilai,
-		}));
-	};
-
-	// Handle submit update
-	const handleSubmit = async (e) => {
-		e.preventDefault();
-
-		// Konfirmasi
-		const result = await Swal.fire({
-			title: 'Update Nilai?',
-			text: 'Nilai yang diubah akan tersimpan',
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#6B7280',
-			confirmButtonText: 'Ya, Update',
-			cancelButtonText: 'Batal',
-		});
-
-		if (!result.isConfirmed) return;
-
-		setSaving(true);
-
-		try {
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-			const role = userData?.role;
-			const userId = userData?.id_user;
-
-			// Verify
-			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id').eq('tugas_id', tugasId).single();
-			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
-
-			if (role === 'Guru' && userId) {
-				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
-					throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
-				}
-				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', kelas).eq('mapel', mapel).single();
-				if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
-			}
-
-			// Update Header
-			const updates = { kategori: judul, tanggal: tanggal, type, deskripsi };
-			const { error: updateError } = await supabase.from('nilai_tugas').update(updates).eq('tugas_id', tugasId);
-			if (updateError) throw updateError;
-
-			// Update students
-			const { data: existingGrades } = await supabase.from('nilai_siswa').select('siswa_id').eq('tugas_id', tugasId);
-			const existingIds = new Set((existingGrades || []).map(g => g.siswa_id));
-			
-			const siswaIdsToUpdate = siswaList.map(s => s.id).filter(id => {
-				const n = nilaiSiswa[id];
-				return n !== undefined && n !== null && String(n).trim() !== '';
-			});
-
-			const newSiswaIds = siswaIdsToUpdate.filter(id => !existingIds.has(id));
-			let siswaMap = new Map();
-			if (newSiswaIds.length > 0) {
-				const { data: siswaData } = await supabase.from('siswa').select('id, nama_lengkap').in('id', newSiswaIds);
-				siswaMap = new Map((siswaData || []).map(s => [s.id, s.nama_lengkap]));
-			}
-
-			let updatedCount = 0;
-			const promises = [];
-
-			for (const siswa of siswaList) {
-				const idSiswa = siswa.id;
-				const n = nilaiSiswa[idSiswa];
-				const hasValidScore = n !== undefined && n !== null && String(n).trim() !== '';
-
-				if (hasValidScore) {
-					if (existingIds.has(idSiswa)) {
-						promises.push(supabase.from('nilai_siswa').update({ nilai: n }).eq('tugas_id', tugasId).eq('siswa_id', idSiswa));
-					} else if (siswaMap.has(idSiswa)) {
-						promises.push(supabase.from('nilai_siswa').insert({
-							tugas_id: tugasId,
-							siswa_id: idSiswa,
-							nama_siswa: siswaMap.get(idSiswa),
-							nilai: n
-						}));
-					}
-					updatedCount++;
-				} else {
-					if (existingIds.has(idSiswa)) {
-						promises.push(supabase.from('nilai_siswa').delete().eq('tugas_id', tugasId).eq('siswa_id', idSiswa));
-					}
-				}
-			}
-
-			await Promise.all(promises);
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil!',
-				text: `${updatedCount} nilai berhasil diperbarui`,
-				confirmButtonColor: '#4F46E5',
-				timer: 2000,
-				timerProgressBar: true,
-			});
-
-			router.push(`/kelas/${id}/nilai/${tugasId}`);
-		} catch (error) {
-			console.error('Error updating nilai:', error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Memperbarui',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
-			});
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const filteredSiswa = siswaList.filter((s) => (s.nama_lengkap?.toLowerCase() || '').includes(searchSiswa.toLowerCase()) || (s.nis?.toLowerCase() || '').includes(searchSiswa.toLowerCase()));
-
-	if (loading) {
+const newReturn = `	if (loading) {
 		return (
 			<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] flex flex-col font-sans'>
 				<div className='bg-[#00A693] border-b-[4px] border-[#0D0D0D] p-6 flex items-center gap-4'>
@@ -320,40 +91,6 @@ export default function EditNilaiPage() {
 								className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-lg shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none uppercase cursor-pointer transition-all'
 								required
 							/>
-						</div>
-					</div>
-					{/* Tambahan Baris untuk Tipe Tugas & Deskripsi */}
-					<div className='grid grid-cols-1 md:grid-cols-2 gap-6 mt-6'>
-						<div>
-							<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>TIPE TUGAS</label>
-							<div className='relative'>
-								<select
-									value={type}
-									onChange={(e) => setType(e.target.value)}
-									className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-lg uppercase shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none cursor-pointer transition-all appearance-none'
-								>
-									<option value='Formatif'>Formatif</option>
-									<option value='Sumatif'>Sumatif</option>
-									<option value='SAS'>SAS</option>
-									<option value='PTS'>PTS</option>
-									<option value='PAS'>PAS</option>
-								</select>
-								<div className='absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none'>
-									<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='3' stroke='currentColor' className='w-5 h-5'>
-										<path strokeLinecap='round' strokeLinejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5' />
-									</svg>
-								</div>
-							</div>
-						</div>
-						<div>
-							<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>DESKRIPSI (OPSIONAL)</label>
-							<textarea
-								value={deskripsi}
-								onChange={(e) => setDeskripsi(e.target.value)}
-								placeholder='Contoh: BAB 1 Eksponen'
-								className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-medium text-base shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none transition-all min-h-[56px] resize-y'
-								rows='1'
-							></textarea>
 						</div>
 					</div>
 				</div>
@@ -446,3 +183,8 @@ export default function EditNilaiPage() {
 		</div>
 	);
 }
+`
+
+content = content.substring(0, startIdx) + newReturn;
+fs.writeFileSync(file, content);
+console.log('Successfully updated edit nilai page!');

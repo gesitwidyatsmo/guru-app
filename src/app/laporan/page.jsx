@@ -717,6 +717,7 @@ export default function LaporanPage() {
 								<table className='w-full min-w-[800px]'>
 									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
 										<tr>
+											<th className='px-4 py-4 text-center text-sm font-black text-black uppercase border-r-[3px] border-black w-16'>No</th>
 											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Nama Siswa</th>
 											{pivotNilai(dataRekap.data).kolomTugas.map((t) => (
 												<th
@@ -725,21 +726,28 @@ export default function LaporanPage() {
 													{t.judul}
 												</th>
 											))}
-											<th className='px-4 py-4 text-center text-sm font-black text-black bg-[#C4F0EB]'>Rata2</th>
+											<th className='px-4 py-4 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#C4F0EB]'>Rata2</th>
+											<th className='px-4 py-4 text-center text-sm font-black text-black bg-[#FFE8DC]'>Status</th>
 										</tr>
 									</thead>
 									<tbody className='divide-y-[3px] divide-black'>
-										{pivotNilai(dataRekap.data).barisSiswa.map((row) => (
+										{pivotNilai(dataRekap.data).barisSiswa.map((row, idx) => (
 											<tr key={row.siswa_id} className='hover:bg-gray-100 transition-colors'>
+												<td className='px-4 py-3 font-black text-black border-r-[3px] border-black text-center'>{idx + 1}</td>
 												<td className='px-6 py-3 font-black text-black border-r-[3px] border-black'>{row.nama_lengkap}</td>
 												{pivotNilai(dataRekap.data).kolomTugas.map((t) => (
 													<td
 														key={t.key}
 														className='px-4 py-3 text-center font-bold text-black border-r-[3px] border-black'>
-														{row.nilaiByTugas[t.key] || '-'}
+														{row.nilaiByTugas[t.key] ?? '-'}
 													</td>
 												))}
-												<td className='px-4 py-3 text-center font-black text-[#00A693] bg-[#C4F0EB]/30'>{row.rataRata}</td>
+												<td className='px-4 py-3 text-center font-black text-[#00A693] border-r-[3px] border-black bg-[#C4F0EB]/30'>{row.rataRata}</td>
+												<td className='px-4 py-3 text-center bg-[#FFE8DC]/30'>
+													<span className={`inline-block px-3 py-1 text-[10px] font-black uppercase border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] ${row.rataRata >= 75 ? 'bg-[#00A693] text-white' : 'bg-[#E8451A] text-white'}`}>
+														{row.rataRata >= 75 ? 'Tuntas' : 'Belum'}
+													</span>
+												</td>
 											</tr>
 										))}
 									</tbody>
@@ -753,17 +761,29 @@ export default function LaporanPage() {
 								<table className='w-full min-w-[600px]'>
 									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
 										<tr>
+											<th className='px-4 py-4 text-center text-sm font-black text-black uppercase border-r-[3px] border-black w-16'>No</th>
 											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Tanggal</th>
 											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Materi</th>
-											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase'>Kegiatan</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Kegiatan</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Hambatan</th>
+											<th className='px-6 py-4 text-left text-sm font-black text-black uppercase border-r-[3px] border-black'>Solusi</th>
+											<th className='px-6 py-4 text-center text-sm font-black text-black uppercase'>Status</th>
 										</tr>
 									</thead>
 									<tbody className='divide-y-[3px] divide-black'>
 										{dataRekap.data.map((row, i) => (
 											<tr key={i} className='hover:bg-gray-100 transition-colors'>
+												<td className='px-4 py-3 text-center text-sm font-black text-black border-r-[3px] border-black'>{i + 1}</td>
 												<td className='px-6 py-3 text-sm font-black text-black border-r-[3px] border-black w-32'>{new Date(row.tanggal).toLocaleDateString('id-ID')}</td>
 												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black'>{row.materi}</td>
-												<td className='px-6 py-3 text-sm font-bold text-black'>{row.kegiatan}</td>
+												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black'>{row.kegiatan}</td>
+												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black max-w-[200px] truncate' title={row.hambatan}>{row.hambatan || '-'}</td>
+												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black max-w-[200px] truncate' title={row.solusi}>{row.solusi || '-'}</td>
+												<td className='px-6 py-3 text-center'>
+													<span className={`inline-block px-3 py-1 text-[10px] font-black uppercase border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] ${row.tuntas ? 'bg-[#00A693] text-white' : 'bg-[#E8451A] text-white'}`}>
+														{row.tuntas ? 'Tuntas' : 'Belum'}
+													</span>
+												</td>
 											</tr>
 										))}
 									</tbody>

@@ -213,7 +213,7 @@ export default function LaporanPage() {
 				}
 			});
 
-			const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+			const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
 
 			const nilaiHarian = avg(studentScores.harian);
 			const nilaiSumatif = avg(studentScores.sumatif);
@@ -225,9 +225,9 @@ export default function LaporanPage() {
 			// Format: (NH * W_H + NS * W_S + NU * W_U) / 100
 			let finalOrig = 0;
 			if (calcMethod === 'sederhana') {
-				finalOrig = (nilaiHarian + nilaiSumatif + nilaiUAS) / 3;
+				finalOrig = ((nilaiHarian || 0) + (nilaiSumatif || 0) + (nilaiUAS || 0)) / 3;
 			} else {
-				finalOrig = (nilaiHarian * bobot.harian + nilaiSumatif * bobot.sumatif + nilaiUAS * bobot.uas) / 100;
+				finalOrig = ((nilaiHarian || 0) * bobot.harian + (nilaiSumatif || 0) * bobot.sumatif + (nilaiUAS || 0) * bobot.uas) / 100;
 			}
 
 			// Conversion
@@ -675,9 +675,9 @@ export default function LaporanPage() {
 														</div>
 													</div>
 												</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.harian > 0 ? siswa.harian.toFixed(1) : '-'}</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.sumatif > 0 ? siswa.sumatif.toFixed(1) : '-'}</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.uas > 0 ? siswa.uas.toFixed(1) : '-'}</td>
+												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.harian !== null ? siswa.harian.toFixed(1) : '-'}</td>
+												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.sumatif !== null ? siswa.sumatif.toFixed(1) : '-'}</td>
+												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.uas !== null ? siswa.uas.toFixed(1) : '-'}</td>
 												<td className='px-4 py-4 text-center text-sm font-semibold text-emerald-600 bg-emerald-50/10'>+{siswa.poinPositif}</td>
 												<td className='px-4 py-4 text-center text-sm font-semibold text-rose-600 bg-rose-50/10'>-{siswa.poinNegatif}</td>
 												<td className='px-6 py-4 text-center text-sm font-bold text-gray-900 bg-gray-50/50'>{siswa.finalOrig.toFixed(2)}</td>

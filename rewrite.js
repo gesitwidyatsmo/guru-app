@@ -1,133 +1,10 @@
-'use client';
+const fs = require('fs');
+const file = 'src/app/kelas/[id]/riwayat-nilai/page.jsx';
+let content = fs.readFileSync(file, 'utf8');
+const startIdx = content.indexOf('return (');
+const endIdx = content.lastIndexOf(');\n}') + 2;
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import SectionHeader from '@/app/components/SectionHeader';
-import Link from 'next/link';
-import Loader from '@/app/components/loading';
-import { createClient } from '@/utils/supabase/client';
-
-export default function RiwayatNilaiPage() {
-	const params = useParams();
-	const router = useRouter();
-	const { id } = params;
-
-	const [namaKelas, setNamaKelas] = useState('');
-	const [mapelList, setMapelList] = useState([]);
-	const [selectedMapel, setSelectedMapel] = useState('');
-	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-	const [tugasList, setTugasList] = useState([]);
-	const [loading, setLoading] = useState(false);
-	const [loadingPage, setLoadingPage] = useState(true);
-
-	const bulanNama = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
-	// Fetch kelas dan mapel
-	useEffect(() => {
-		const fetchData = async () => {
-			try {
-				const supabase = createClient();
-				const { data: dataKelas } = await supabase.from('kelas').select('*').eq('id', id).single();
-				if (dataKelas) {
-					setNamaKelas(dataKelas.nama_kelas);
-				}
-
-				const dataMapel = await fetch('/api/mapel?all=false').then(res => res.json());
-				if (dataMapel) {
-					setMapelList(dataMapel);
-				}
-			} catch (error) {
-				console.error('Error fetching data:', error);
-			} finally {
-				setLoadingPage(false);
-			}
-		};
-
-		fetchData();
-	}, [id]);
-
-	// Fetch tugas berdasarkan filter
-	useEffect(() => {
-		if (!namaKelas) return;
-
-		const fetchTugas = async () => {
-			setLoading(true);
-			try {
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const role = userData?.role;
-				const userId = userData?.id_user;
-
-				let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, type, deskripsi, mapel, tanggal, kelas').eq('kelas', namaKelas);
-
-				if (selectedMapel) {
-					query = query.eq('mapel', selectedMapel);
-				}
-
-				if (role === 'Guru' && userId) {
-					query = query.eq('guru_id', userId);
-				}
-
-				const { data } = await query;
-				
-				const filtered = (data || []).filter((tugas) => {
-					const tanggalTugas = new Date(tugas.tanggal);
-					return tanggalTugas.getMonth() === currentMonth && tanggalTugas.getFullYear() === currentYear;
-				});
-
-				const uniqueTugas = filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
-				setTugasList(uniqueTugas);
-			} catch (error) {
-				console.error('Error fetching tugas:', error);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchTugas();
-	}, [namaKelas, selectedMapel, currentMonth, currentYear]);
-
-	// Handler prev/next month
-	const handlePrevMonth = () => {
-		if (currentMonth === 0) {
-			setCurrentMonth(11);
-			setCurrentYear(currentYear - 1);
-		} else {
-			setCurrentMonth(currentMonth - 1);
-		}
-	};
-
-	const handleNextMonth = () => {
-		if (currentMonth === 11) {
-			setCurrentMonth(0);
-			setCurrentYear(currentYear + 1);
-		} else {
-			setCurrentMonth(currentMonth + 1);
-		}
-	};
-
-	// Group tugas by tanggal
-	const groupTugasByDate = () => {
-		const grouped = {};
-		tugasList.forEach((tugas) => {
-			const tanggal = tugas.tanggal;
-			if (!grouped[tanggal]) {
-				grouped[tanggal] = [];
-			}
-			grouped[tanggal].push(tugas);
-		});
-		return grouped;
-	};
-
-	const groupedTugas = groupTugasByDate();
-
-	if (loadingPage) {
-		return <Loader />;
-	}
-
-	return (
+const newReturn = `return (
 		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>
 			
 			{/* Header Brutalist */}
@@ -187,7 +64,7 @@ export default function RiwayatNilaiPage() {
 						<select
 							value={selectedMapel}
 							onChange={(e) => setSelectedMapel(e.target.value)}
-							className='w-full h-full pl-12 pr-10 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] outline-none rounded-none text-lg appearance-none cursor-pointer uppercase transition-all hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D]'>
+							className='neo-input w-full pl-12 pr-10 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg appearance-none cursor-pointer uppercase'>
 							<option value=''>SEMUA MATA PELAJARAN</option>
 							{mapelList.map((mapel) => (
 								<option key={mapel.id} value={mapel.mapel}>{mapel.mapel}</option>
@@ -249,7 +126,7 @@ export default function RiwayatNilaiPage() {
 											{groupedTugas[tanggal].map((tugas) => (
 												<Link
 													key={tugas.tugas_id}
-													href={`/kelas/${id}/nilai/${tugas.tugas_id}`}
+													href={\`/kelas/\${id}/nilai/\${tugas.tugas_id}\`}
 													className='block bg-white rounded-none border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] transition-all relative group'>
 													
 													{/* Strip Kiri */}
@@ -264,14 +141,8 @@ export default function RiwayatNilaiPage() {
 
 															{/* Konten */}
 															<div>
-																<div className='flex flex-wrap items-center gap-2 mb-1'>
-																	<div className='inline-block bg-[#F5C518] px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>{tugas.mapel}</div>
-																	<div className='inline-block bg-[#00A693] text-white px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>{tugas.type || 'Formatif'}</div>
-																</div>
+																<div className='inline-block bg-[#F5C518] px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest mb-1 shadow-[2px_2px_0px_0px_#0D0D0D]'>{tugas.mapel}</div>
 																<h4 className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-wider'>{tugas.kategori}</h4>
-																{tugas.deskripsi && (
-																	<p className='mt-1 text-sm text-[#0D0D0D] font-medium opacity-80 line-clamp-1'>{tugas.deskripsi}</p>
-																)}
 															</div>
 														</div>
 
@@ -290,4 +161,7 @@ export default function RiwayatNilaiPage() {
 			)}
 		</div>
 	);
-}
+`
+
+content = content.substring(0, startIdx) + newReturn + content.substring(endIdx);
+fs.writeFileSync(file, content);

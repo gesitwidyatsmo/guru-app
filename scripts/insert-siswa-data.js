@@ -17,9 +17,9 @@ function capitalize(str) {
 
 const data = [
   // XI 1
-  { kelas: 'XI 1', kelamin: 'Laki-laki', nama: ["Abdul Hamid Syaiful Barnawi", "ADIL RASHAD ZAKI", "ARDIUL HAFIDZ", "ARIS TAMA PUTRA", "CHESSLI ALKHAZAHRI", "DAFFA DZAKWAN IRSYAD", "DHIGO PRATAMA", "Fahry Al Gizrie", "FIRLY RIZKY ADHA", "ILHAM JUWANDA", "IRSYADUR RIFQI", "JOS RAHARJO", "M. IRFAN ALGHIFARY", "M.RISKI ALFARIZ", "MAGENTA AIDIL RAHMAN", "MUHAMMAD ALFI ZADAH", "MUHAMMAD FACHRY YUSUF", "MUHAMMAD ILHAM", "Muhammad Rafiansyah", "NAUVAL HYSAAM AMRULLAH", "OZI OVANDRA", "RESNO FAUZAN AL HAFIZ", "RISQI ANDIKA PRATAMA", "Rudi Setiawan", "Wildan Rizky"] },
+  { kelas: 'XI 1', kelamin: 'Laki-laki', nama: ["Abdul Hamid Syaiful Barnawi", "Adil Rashad Zaki", "Ardiul Hafidz", "Aris Tama Putra", "Chessli Alkhazahri", "Daffa Dzakwan Irsyad", "Danil", "Dhigo Pratama", "Fahry Al Gizrie", "Firly Rizky Adha", "Ilham Juwanda", "Irsyadur Rifqi", "Jos Raharjo", "Ma'ruf Nurdiansyah", "M. Irfan Alghifary", "M.Riski Alfariz", "Magenta Aidil Rahman", "Muhammad Alfi Zadah", "Muhammad Fachry Yusuf", "Muhammad Ilham", "Muhammad Rafiansyah", "Nauval Hysaam Amrullah", "Ozi Ovandra", "Raditya Firmansyah", "Resno Fauzan Al Hafiz", "Risqi Andika Pratama", "Rudi Setiawan", "Wildan Rizky"] },
   // XI 2
-  { kelas: 'XI 2', kelamin: 'Laki-laki', nama: ["AHMADILAH RIFANTO", "AHMAT ILHAM ROMADHON", "Aldy Pramuditya", "ALFIKRI", "ARYA PANDU BRILLIANT", "Bagas", "BUDI SEPTRIA", "DANIL", "DAVID ALAMSYAH", "DIKA SETIAWAN", "DIMAS FIRMANSYAH", "Elvino Aqil Adzaky", "FADHLAN NAUFAL HIDAYATULLAH", "FERDI ARDIANSYAH", "FIRHAN AL ZIKRI", "GALIH LATIFATUL FADLI", "HABIB QOWWIYA", "Hayyu Al Rozaqi", "ILHAM BAGUS RAMADANI", "Labib Deskha pratama", "M. ARIF ALFARIZI", "Ma'ruf Nurdiansyah", "MUHAMAD KHOIRUL TRI SUGIARTO", "MUHAMMAD EKO BIMA SAPUTRA", "Muhammad Fatkhur Rizky", "MUHAMMAD INGGIL MAULANA IBRAHIM", "MUHAMMAD REVAND ALFAJRI", "MUMTAZ AL BAQI", "RADITYA FATURAHMAN", "RADITYA FIRMANSYAH", "ROYHAN YUSUF AT THIBBI", "SAFWAN ZAIZULY", "TEGAR ANANKA PRATAMA", "WISNU LUTFIANSYAH", "YOGA MAY PRASETYO"] },
+  { kelas: 'XI 2', kelamin: 'Laki-laki', nama: ["Ahmadilah Rifanto", "Ahmat Ilham Romadhon", "Aldy Pramuditya", "Alfikri", "Arya Pandu Brilliant", "Bagas", "Budi Septria", "David Alamsyah", "Dika Setiawan", "Elvino Aqil Adzaky", "Fadhlan Naufal Hidayatullah", "Firhan Al Zikri", "Galih Latifatul Fadli", "Habib Qowwiya", "Hayyu Al Rozaqi", "Ilham Bagus Ramadani", "Labib Deskha Pratama", "M. Arif Alfarizi", "Muhamad Khoirul Tri Sugiarto", "Muhammad Eko Bima Saputra", "Muhammad Fatkhur Rizky", "Muhammad Inggil Maulana Ibrahim", "Muhammad Revand Alfajri", "Mumtaz Al Baqi", "Raditya Faturahman", "Royhan Yusuf At Thibbi", "Safwan Zaizuly", "Tegar Ananka Pratama", "Wisnu Lutfiansyah", "Yoga May Prasetyo"] },
   // XI 3
   { kelas: 'XI 3', kelamin: 'Perempuan', nama: ["AINA BISMIKA FATMA", "ALFYA CHELSHELIA", "ANASTASYA AULIA", "ANISSA KOIROTUS ZAHRA", "Anisyatul Nabila", "ASSYIFA RAHMATUL HUSNA", "Aufa Azalia", "AVELYA DIAN NINGTIAS", "Ayu Kanza Salamah", "DARA ANGGIA WAFIROH", "DEA ANANTA SIREGAR", "DEA RAHMA SAID", "Diah Asyifa Deviana", "DIKA ARUM UTAMI", "Dina Amelia Putri", "DIRA ANGGIA WAFIROH", "DWI ALSAPITRI", "ELSA LAILY SAPUTRI", "Elvina Ramadani", "FAUZIAH ZULFA RISKI", "FINA AYU LESTARI", "FITA SARI", "FITRI RAHMA SARI", "HAFIDZAH AULIA AZHARI", "HAFIZAH HUSNATULLAILA", "IMELDA OLIVIA", "IRA BORU RAHMAN", "ISTIQOMAH KAFFAH", "Liliana Sulistiyaningsih", "MALA VITA SARI", "Miftahatun Mafanza Mutiara", "Moza Putri Anjani", "Muhajarotul Khusnia", "MUSTIVATUL MAULIDAH", "MUTIARA", "NABILA AZIZAH", "NAYZILA DWI LESTARI"] },
   // XI 4
@@ -64,6 +64,26 @@ async function insertData() {
       console.error('Error inserting batch:', error);
     } else {
       console.log(`Inserted batch ${i} to ${i + batch.length}`);
+    }
+  }
+
+  console.log('Cleaning up obsolete records...');
+  for (const group of data) {
+    const validIds = group.nama.map((_, i) => `${group.kelas.replace(' ', '')}-${i + 1}`);
+    const { data: existingSiswa, error: fetchError } = await supabase
+      .from('siswa')
+      .select('id')
+      .eq('kelas', group.kelas);
+    
+    if (existingSiswa) {
+      const idsToDelete = existingSiswa
+        .map(s => s.id)
+        .filter(id => !validIds.includes(id));
+      
+      if (idsToDelete.length > 0) {
+        console.log(`Deleting ${idsToDelete.length} obsolete records for ${group.kelas}...`);
+        await supabase.from('siswa').delete().in('id', idsToDelete);
+      }
     }
   }
 

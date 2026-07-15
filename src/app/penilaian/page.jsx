@@ -929,8 +929,8 @@ export default function PenilaianPage() {
 							</div>
 							<div className='grid grid-cols-12 gap-4 p-4 bg-[#0D0D0D] text-white border-b-4 border-[#0D0D0D] text-sm font-bold uppercase tracking-wider'>
 								<div className='col-span-1 text-center'>No</div>
-								<div className='col-span-6 sm:col-span-6'>Nama Siswa</div>
-								<div className='col-span-3 sm:col-span-3 text-center'>Nilai</div>
+								<div className='col-span-5 sm:col-span-6'>Nama Siswa</div>
+								<div className='col-span-4 sm:col-span-3 text-center'>Nilai</div>
 								<div className='col-span-2 text-center'>
 									<span className='block md:hidden'>Ket.</span>
 									<span className='hidden md:block'>Predikat</span>
@@ -954,14 +954,14 @@ export default function PenilaianPage() {
 												}}
 												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${isEditMode ? 'cursor-pointer hover:bg-[#F5C518] group' : 'hover:bg-[#FFF5F0]'}`}>
 												<div className='col-span-1 text-center text-[#0D0D0D] font-black'>{idx + 1}</div>
-												<div className='col-span-6 sm:col-span-6'>
+												<div className='col-span-5 sm:col-span-6'>
 													<div className='flex items-center gap-2'>
 														<p className='font-bold text-[#0D0D0D] text-base group-hover:underline transition-colors'>{siswa.nama_lengkap}</p>
 														{isNewStudentInTask && <span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>}
 													</div>
 													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis || '-'}</p>
 												</div>
-												<div className='col-span-3 sm:col-span-3 flex justify-center'>
+												<div className='col-span-4 sm:col-span-3 flex justify-center'>
 													{isEditMode ? (
 														// --- VIEW MODE (Badge) ---
 														<div

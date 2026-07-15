@@ -13,6 +13,7 @@ export default function JurnalPage() {
 	const [journals, setJournals] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [filterKelas, setFilterKelas] = useState('Semua');
+	const [searchQuery, setSearchQuery] = useState('');
 
 	const [userRole, setUserRole] = useState('');
 	const [userId, setUserId] = useState('');
@@ -228,7 +229,15 @@ export default function JurnalPage() {
 		}
 	};
 
-	const filteredJournals = filterKelas === 'Semua' ? journals : journals.filter((j) => j.kelas === filterKelas);
+	const filteredJournals = journals.filter((j) => {
+		const matchKelas = filterKelas === 'Semua' || j.kelas === filterKelas;
+		const matchSearch =
+			searchQuery === '' ||
+			[j.materi, j.kegiatan, j.mapel, j.kelas, j.hambatan, j.solusi]
+				.filter(Boolean)
+				.some((field) => field.toString().toLowerCase().includes(searchQuery.toLowerCase()));
+		return matchKelas && matchSearch;
+	});
 
 	if (loading) {
 		return (
@@ -239,242 +248,166 @@ export default function JurnalPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-20'>
-			{/* Header Gradient */}
-			<div className='bg-gradient-to-br from-orange-500 to-red-600 pb-24 pt-8 px-4 sm:px-8 rounded-b-3xl shadow-xl relative overflow-hidden'>
-				<div className='absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-white/10 rounded-full blur-3xl'></div>
-				<div className='absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-white/10 rounded-full blur-2xl'></div>
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20'>
+			{/* Header Brutalist */}
+			<div className='bg-[#E8451A] border-b-[4px] border-[#0D0D0D] pb-16 pt-10 px-4 sm:px-8 relative overflow-hidden'>
+                {/* Decorative Elements */}
+                <div className='absolute top-4 right-10 w-24 h-24 bg-[#F5C518] border-[4px] border-[#0D0D0D] rounded-full shadow-[4px_4px_0px_0px_#0D0D0D] rotate-12 hidden md:block'></div>
+                <div className='absolute bottom-8 left-1/4 w-12 h-12 bg-[#00A693] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] -rotate-12 hidden md:block'></div>
 
 				<div className='max-w-5xl mx-auto relative z-10'>
-					<div className='flex items-center gap-4 mb-6'>
-						<button
-							onClick={() => router.back()}
-							className='p-2 bg-white/20 backdrop-blur-md rounded-xl text-white hover:bg-white/30 transition-all shadow-lg border border-white/20'>
-							<svg
-								className='w-6 h-6'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M15 19l-7-7 7-7'
-								/>
-							</svg>
-						</button>
-						<div>
-							<h1 className='text-3xl font-bold text-white'>Jurnal Guru</h1>
-							<p className='text-orange-100 text-sm'>Catat aktivitas pembelajaran harian Anda</p>
-						</div>
-					</div>
-
-					{/* Search & Filter Bar (Opsi Dropdown Modern) */}
-					<div className='flex flex-col sm:flex-row gap-4 justify-between items-center bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/20'>
-						<div className='relative group w-full sm:w-64'>
-							<div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
-								<svg
-									className='w-5 h-5 text-orange-200'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth='2'
-										d='M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'></path>
-								</svg>
-							</div>
-							<input
-								type='text'
-								placeholder='Cari jurnal...'
-								className='block w-full pl-10 pr-4 py-3 rounded-xl bg-orange-800/30 text-white placeholder-orange-200 border border-orange-500/30 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all'
-							/>
-						</div>
-						<div className='flex gap-2 w-full sm:w-auto'>
-							<select
-								value={filterKelas}
-								onChange={(e) => setFilterKelas(e.target.value)}
-								className='block w-full pl-10 pr-10 py-3 rounded-xl bg-orange-800/30 text-white placeholder-orange-200 border border-orange-500/30 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent appearance-none cursor-pointer font-medium transition-all hover:bg-orange-800/40'>
-								<option
-									value='Semua'
-									className='text-gray-900 bg-white'>
-									📂 Semua Kelas
-								</option>
-								{kelasList.map((k) => (
-									<option
-										key={k.id}
-										value={k.kelas || k.nama_kelas}
-										className='text-gray-900 bg-white'>
-										🏫 {k.kelas || k.nama_kelas}
-									</option>
-								))}
-							</select>
-							<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-orange-200'>
-								<svg
-									className='w-5 h-5'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth='2'
-										d='M19 9l-7 7-7-7'></path>
-								</svg>
+					<div className='flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8'>
+						<div className='flex items-center gap-4'>
+							<button
+								onClick={() => router.back()}
+								className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] text-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+								<svg className='w-8 h-8' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
+							</button>
+							<div>
+								<h1 className='text-4xl sm:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-2'>Jurnal Guru</h1>
+								<p className='text-white font-black tracking-widest uppercase bg-[#0D0D0D] inline-block px-3 py-1 border-[2px] border-white text-xs sm:text-sm'>Catat aktivitas harian</p>
 							</div>
 						</div>
-
-						<button
-							onClick={() => handleOpenModal()}
-							className='w-full sm:w-auto bg-white text-orange-600 px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-gray-50 hover:shadow-xl transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 whitespace-nowrap'>
-							<svg
-								className='w-5 h-5'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M12 4v16m8-8H4'
-								/>
-							</svg>
-							Buat Jurnal Baru
-						</button>
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className='w-full md:w-auto bg-[#00A693] text-white px-8 py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-lg'>
+                            <svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
+                            BUAT JURNAL BARU
+                        </button>
 					</div>
 				</div>
 			</div>
 
+			{/* Search & Filter Bar (Overlapping) */}
+            <div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>
+                <div className='flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]'>
+                    <div className='flex flex-col md:flex-row gap-4 w-full'>
+                        <div className='relative group flex-1'>
+                            <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                                <svg className='w-7 h-7 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
+                            </div>
+                            <input
+                                type='text'
+                                placeholder='CARI JURNAL...'
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className='neo-input w-full !pl-16 pr-4 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg'
+                            />
+                        </div>
+                        <div className='relative w-full md:w-80'>
+                            <select
+                                value={filterKelas}
+                                onChange={(e) => setFilterKelas(e.target.value)}
+                                className='neo-input w-full pl-4 pr-12 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none appearance-none cursor-pointer rounded-none uppercase text-lg'>
+                                <option value='Semua'>📂 SEMUA KELAS</option>
+                                {kelasList.map((k) => (
+                                    <option key={k.id} value={k.kelas || k.nama_kelas}>🏫 {k.kelas || k.nama_kelas}</option>
+                                ))}
+                            </select>
+                            <div className='absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#0D0D0D] font-black text-2xl'>▼</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 			{/* Timeline Content */}
-			<div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-12 relative z-10'>
+			<div className='max-w-5xl mx-auto px-4 sm:px-8 relative z-10'>
 				{filteredJournals.length === 0 ? (
-					<div className='bg-white rounded-3xl shadow-xl p-12 text-center border border-gray-100'>
-						<div className='w-24 h-24 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6'>
-							<svg
-								className='w-12 h-12 text-orange-500'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
-								/>
-							</svg>
+					<div className='bg-white shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] p-16 text-center flex flex-col items-center justify-center relative overflow-hidden'>
+						<div className='absolute -top-10 -right-10 w-40 h-40 bg-[#F5C518] rounded-full border-[4px] border-[#0D0D0D] opacity-50'></div>
+						<div className='absolute -bottom-10 -left-10 w-40 h-40 bg-[#00A693] border-[4px] border-[#0D0D0D] rotate-45 opacity-50'></div>
+						
+						<div className='w-28 h-28 bg-[#FFF5F0] border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] flex items-center justify-center mx-auto mb-8 relative z-10 transform -rotate-3 hover:rotate-0 transition-transform'>
+							<svg className='w-16 h-16 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'/></svg>
 						</div>
-						<h3 className='text-xl font-bold text-gray-800 mb-2'>Belum ada jurnal</h3>
-						<p className='text-gray-500'>Silakan buat jurnal baru untuk mencatat kegiatan hari ini.</p>
+						<h3 className='text-3xl sm:text-4xl font-black text-[#0D0D0D] mb-4 uppercase tracking-widest relative z-10'>BELUM ADA JURNAL</h3>
+						<p className='text-[#0D0D0D] font-bold text-lg relative z-10 bg-[#F5C518] px-4 py-2 border-[3px] border-[#0D0D0D]'>Silakan buat jurnal baru untuk mencatat kegiatan hari ini.</p>
 					</div>
 				) : (
-					<div className='space-y-6'>
+					<div className='space-y-12'>
 						{filteredJournals.map((journal) => (
 							<div
 								key={journal.id}
-								className='bg-white rounded-3xl shadow-lg border border-gray-100 p-6 sm:p-8 hover:shadow-xl transition-shadow relative overflow-hidden group'>
+								className='bg-white rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] transition-all relative group'>
+								
 								{/* Status Strip */}
-								<div className={`absolute left-0 top-0 bottom-0 w-2 ${journal.tuntas ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+								<div className={`absolute left-0 top-0 bottom-0 w-4 border-r-[4px] border-[#0D0D0D] ${journal.tuntas ? 'bg-[#00A693]' : 'bg-[#E8451A]'}`}></div>
 
-								<div className='flex justify-between items-start mb-4'>
-									<div className='flex items-center gap-4'>
-										{/* Date Badge */}
-										<div className='bg-orange-50 p-3 rounded-2xl min-w-[70px] text-center'>
-											<span className='text-2xl font-bold text-orange-600 block leading-none'>{new Date(journal.tanggal).getDate()}</span>
-											<span className='text-[10px] font-bold text-orange-400 uppercase tracking-wide'>{new Date(journal.tanggal).toLocaleDateString('id-ID', { month: 'short' })}</span>
-										</div>
+								<div className='pl-6 sm:pl-8 py-6 pr-6'>
+									<div className='flex flex-col lg:flex-row justify-between items-start gap-6 mb-8'>
+										<div className='flex flex-col sm:flex-row items-start sm:items-center gap-6'>
+											{/* Date Badge (Offset/Popping out slightly) */}
+											<div className='bg-[#F5C518] border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] p-3 min-w-[90px] text-center transform -rotate-3 hover:rotate-0 transition-all'>
+												<span className='text-4xl font-black text-[#0D0D0D] block leading-none'>{new Date(journal.tanggal).getDate()}</span>
+												<span className='text-xs font-black text-[#0D0D0D] uppercase tracking-widest mt-1 block bg-white border-2 border-[#0D0D0D] py-1'>{new Date(journal.tanggal).toLocaleDateString('id-ID', { month: 'short' })}</span>
+											</div>
 
-										{/* Info Utama */}
-										<div>
-											<div className='flex items-center gap-2 mb-1'>
-												<div className='text-sm font-bold text-gray-800 flex flex-col'>
-													<h2>{journal.kelas}</h2>
-													<h2>{journal.mapel}</h2>
+											{/* Info Utama */}
+											<div>
+												<div className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-3 flex-wrap'>
+													<span className='bg-white px-3 py-1 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>{journal.kelas}</span>
+													<span className='bg-white px-3 py-1 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>{journal.mapel}</span>
+												</div>
+												<div className='text-xs font-bold text-[#0D0D0D] flex flex-wrap items-center gap-3 mt-4'>
+													<span className='flex items-center gap-2 bg-white px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase font-black'>
+														<svg className='w-5 h-5 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg>
+														JAM KE-{journal.jam_ke}
+													</span>
+													{userRole === 'Admin' && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
 												</div>
 											</div>
-											<div className='text-sm text-gray-500 flex flex-wrap items-center gap-2'>
-												<span className='flex items-center gap-1'>
-													<svg
-														className='w-4 h-4'
-														fill='none'
-														stroke='currentColor'
-														viewBox='0 0 24 24'>
-														<path
-															strokeLinecap='round'
-															strokeLinejoin='round'
-															strokeWidth='2'
-															d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path>
-													</svg>
-													Jam ke-{journal.jam_ke}
-												</span>
-												{userRole === 'Admin' && <span className='ml-2 text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded'>ID Guru: {journal.guru_id || 'Tidak Diketahui'}</span>}
+										</div>
+
+										{/* Action Buttons */}
+										<div className='flex gap-3 shrink-0 self-start sm:self-auto'>
+											<button
+												onClick={() => handleOpenModal(journal)}
+												className='p-3 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+												title='Edit'>
+												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
+											</button>
+											<button
+												onClick={() => handleDelete(journal.id)}
+												className='p-3 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+												title='Hapus'>
+												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+											</button>
+										</div>
+									</div>
+
+									<div className='flex flex-wrap gap-3 mb-8'>
+										{/* Badge Pertemuan */}
+										{journal.pertemuan_ke && <span className='px-4 py-2 bg-white text-[#0D0D0D] text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-1'>PERTEMUAN {journal.pertemuan_ke}</span>}
+
+										{journal.tuntas ? (
+											<span className='px-4 py-2 bg-[#00A693] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>TUNTAS</span>
+										) : (
+											<span className='px-4 py-2 bg-[#E8451A] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>PERLU REMEDIAL</span>
+										)}
+									</div>
+
+									<div className='border-t-[4px] border-dashed border-[#0D0D0D] pt-8'>
+										<div className='mb-8'>
+											<h4 className='text-xs font-black text-white uppercase tracking-widest mb-3 bg-[#0D0D0D] inline-block px-4 py-2 transform -skew-x-6'>📝 MATERI POKOK</h4>
+											<p className='text-[#0D0D0D] font-bold text-xl leading-relaxed bg-[#FFF5F0] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-5'>{journal.materi}</p>
+										</div>
+
+										<div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+											<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative'>
+												<div className='absolute -top-5 -right-5 text-4xl transform rotate-12 bg-[#F5C518] rounded-full border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] w-12 h-12 flex items-center justify-center'>🎯</div>
+												<h4 className='text-[10px] font-black text-white uppercase tracking-widest mb-4 bg-[#0D0D0D] px-3 py-1.5 inline-block'>KEGIATAN</h4>
+												<p className='text-base text-[#0D0D0D] font-bold'>{journal.kegiatan || '-'}</p>
 											</div>
-										</div>
-									</div>
-
-									{/* Action Buttons */}
-									<div className='flex'>
-										<button
-											onClick={() => handleOpenModal(journal)}
-											className='p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors'
-											title='Edit'>
-											<svg
-												className='w-5 h-5'
-												fill='none'
-												stroke='currentColor'
-												viewBox='0 0 24 24'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-												/>
-											</svg>
-										</button>
-										<button
-											onClick={() => handleDelete(journal.id)}
-											className='p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors'
-											title='Hapus'>
-											<svg
-												className='w-5 h-5'
-												fill='none'
-												stroke='currentColor'
-												viewBox='0 0 24 24'>
-												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
-													d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-												/>
-											</svg>
-										</button>
-									</div>
-								</div>
-								<div className='space-x-2'>
-									{/* Badge Pertemuan */}
-									{journal.pertemuan_ke && <span className='px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-bold tracking-wider border border-gray-200'>Pertemuan {journal.pertemuan_ke}</span>}
-
-									{journal.tuntas ? (
-										<span className='px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold border border-green-200'>Tuntas</span>
-									) : (
-										<span className='px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold border border-yellow-200'>Perlu Remedial</span>
-									)}
-								</div>
-								<div className='space-y-4 border-t border-gray-100 pt-4 mt-4'>
-									<div>
-										<h4 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-1'>Materi Pokok</h4>
-										<p className='text-gray-700 font-medium'>{journal.materi}</p>
-									</div>
-
-									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-										<div className='bg-gray-50 p-3 rounded-xl'>
-											<h4 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1'>🎯 Kegiatan</h4>
-											<p className='text-sm text-gray-600'>{journal.kegiatan || '-'}</p>
-										</div>
-										<div className='bg-gray-50 p-3 rounded-xl'>
-											<h4 className='text-xs font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1'>💡 Evaluasi / Catatan</h4>
-											<p className='text-sm text-gray-600'>{journal.hambatan ? `Hambatan: ${journal.hambatan}` : 'Tidak ada hambatan.'}</p>
-											{journal.solusi && <p className='text-sm text-gray-600 mt-1 pt-1 border-t border-gray-200'>✅ {journal.solusi}</p>}
+											<div className='bg-[#FFF5F0] p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative mt-4 md:mt-0'>
+												<div className='absolute -top-5 -right-5 text-4xl transform -rotate-12 bg-[#E8451A] rounded-full border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] w-12 h-12 flex items-center justify-center'>💡</div>
+												<div className='mb-3'>
+													<h4 className='text-[10px] font-black text-white uppercase tracking-widest bg-[#0D0D0D] px-3 py-1.5 inline-block'>EVALUASI / CATATAN</h4>
+												</div>
+												<p className='text-sm text-[#0D0D0D] font-bold mt-2'>{journal.hambatan ? `Hambatan: ${journal.hambatan}` : 'Tidak ada hambatan.'}</p>
+												{journal.solusi && (
+													<p className='text-sm text-[#0D0D0D] font-bold mt-3 pt-3 border-t-[3px] border-dashed border-[#0D0D0D]'>✅ Solusi: {journal.solusi}</p>
+												)}
+											</div>
 										</div>
 									</div>
 								</div>
@@ -486,166 +419,152 @@ export default function JurnalPage() {
 
 			{/* MODAL FORM */}
 			{isModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm'>
-					<div className='bg-white w-full max-w-2xl rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]'>
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0D0D0D]/60 backdrop-blur-sm'>
+					<div className='bg-white w-full max-w-2xl border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] rounded-none'>
 						<form onSubmit={handleSubmit}>
-							<div className='sticky top-0 bg-white px-8 py-5 border-b border-gray-100 flex justify-between items-center z-10'>
-								<h2 className='text-xl font-bold text-gray-800'>{isEditing ? 'Edit Jurnal' : 'Jurnal Baru'}</h2>
+							<div className='sticky top-0 bg-[#F5C518] px-8 py-5 border-b-[4px] border-[#0D0D0D] flex justify-between items-center z-10'>
+								<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest'>{isEditing ? 'EDIT JURNAL' : 'JURNAL BARU'}</h2>
 								<button
 									type='button'
 									onClick={() => setIsModalOpen(false)}
-									className='p-2 hover:bg-gray-100 rounded-full transition-colors'>
-									<svg
-										className='w-6 h-6 text-gray-500'
-										fill='none'
-										stroke='currentColor'
-										viewBox='0 0 24 24'>
-										<path
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											strokeWidth={2}
-											d='M6 18L18 6M6 6l12 12'
-										/>
-									</svg>
+									className='w-10 h-10 flex items-center justify-center bg-white border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white transition-colors rounded-none'>
+									<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12'/></svg>
 								</button>
 							</div>
 
-							<div className='p-8 space-y-6'>
+							<div className='p-8 space-y-6 bg-[#FFF5F0]'>
 								{/* Baris 1: Kelas & Mapel (Pemicu Hitung Pertemuan) */}
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>Kelas</label>
-										<select
-											required
-											value={formData.kelas}
-											onChange={(e) => {
-												const val = e.target.value;
-												setFormData({ ...formData, kelas: val });
-												calculateMeeting(val, formData.mapel);
-											}}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'>
-											<option value=''>Pilih Kelas</option>
-											{kelasList.map((k) => (
-												<option
-													key={k.id}
-													value={k.kelas || k.nama_kelas}>
-													{k.kelas || k.nama_kelas}
-												</option>
-											))}
-										</select>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kelas</label>
+										<div className='relative'>
+											<select
+												required
+												value={formData.kelas}
+												onChange={(e) => {
+													const val = e.target.value;
+													setFormData({ ...formData, kelas: val });
+													calculateMeeting(val, formData.mapel);
+												}}
+												className='neo-input appearance-none w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none uppercase cursor-pointer'>
+												<option value=''>PILIH KELAS</option>
+												{kelasList.map((k) => (
+													<option key={k.id} value={k.kelas || k.nama_kelas}>{k.kelas || k.nama_kelas}</option>
+												))}
+											</select>
+											<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-bold'>▼</div>
+										</div>
 									</div>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>Mata Pelajaran</label>
-										<select
-											required
-											value={formData.mapel}
-											onChange={(e) => {
-												const val = e.target.value;
-												setFormData({ ...formData, mapel: val });
-												calculateMeeting(formData.kelas, val);
-											}}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'>
-											<option value=''>Pilih Mata Pelajaran</option>
-											{mapelList.map((m) => (
-												<option
-													key={m.id}
-													value={m.mapel || m.nama_mapel}>
-													{m.mapel || m.nama_mapel}
-												</option>
-											))}
-										</select>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Mata Pelajaran</label>
+										<div className='relative'>
+											<select
+												required
+												value={formData.mapel}
+												onChange={(e) => {
+													const val = e.target.value;
+													setFormData({ ...formData, mapel: val });
+													calculateMeeting(formData.kelas, val);
+												}}
+												className='neo-input appearance-none w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none uppercase cursor-pointer'>
+												<option value=''>PILIH MAPEL</option>
+												{mapelList.map((m) => (
+													<option key={m.id} value={m.mapel || m.nama_mapel}>{m.mapel || m.nama_mapel}</option>
+												))}
+											</select>
+											<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-bold'>▼</div>
+										</div>
 									</div>
 								</div>
 
 								{/* Baris 2: Tanggal, Jam, Pertemuan */}
 								<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>Tanggal</label>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Tanggal</label>
 										<input
 											type='date'
 											required
 											value={formData.tanggal}
 											onChange={(e) => setFormData({ ...formData, tanggal: e.target.value })}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none cursor-pointer'
 										/>
 									</div>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>Jam Ke-</label>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Jam Ke-</label>
 										<input
 											type='text'
 											required
 											placeholder='Contoh: 1-2'
 											value={formData.jam_ke}
 											onChange={(e) => setFormData({ ...formData, jam_ke: e.target.value })}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none'
 										/>
 									</div>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>
-											Pertemuan Ke-
-											<span className='text-xs font-normal text-orange-500 ml-1'>(Auto)</span>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>
+											Pertemuan <span className='text-[10px] text-[#E8451A]'>(Auto)</span>
 										</label>
 										<input
 											type='text'
-											placeholder='Hitungan otomatis'
+											placeholder='Auto'
 											value={formData.pertemuan_ke}
 											onChange={(e) => setFormData({ ...formData, pertemuan_ke: e.target.value })}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-medium text-orange-600'
+											className='neo-input w-full px-4 py-3 bg-[#E8E8E8] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-white outline-none rounded-none'
 										/>
 									</div>
 								</div>
 
 								{/* Materi */}
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1'>Materi Pembelajaran</label>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Materi Pembelajaran</label>
 									<textarea
 										rows='2'
 										required
 										placeholder='Apa materi yang diajarkan?'
 										value={formData.materi}
 										onChange={(e) => setFormData({ ...formData, materi: e.target.value })}
-										className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'></textarea>
+										className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
 								</div>
 
 								{/* Detail Kegiatan */}
 								<div className='space-y-4'>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1'>Kegiatan Pembelajaran</label>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kegiatan Pembelajaran</label>
 										<textarea
 											rows='3'
 											placeholder='Deskripsi singkat aktivitas siswa...'
 											value={formData.kegiatan}
 											onChange={(e) => setFormData({ ...formData, kegiatan: e.target.value })}
-											className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'></textarea>
+											className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
 									</div>
 
 									<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 										<div>
-											<label className='block text-sm font-semibold text-gray-700 mb-1'>Hambatan / Masalah</label>
+											<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Hambatan / Masalah</label>
 											<textarea
 												rows='2'
 												placeholder='Kendala yang dihadapi...'
 												value={formData.hambatan}
 												onChange={(e) => setFormData({ ...formData, hambatan: e.target.value })}
-												className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'></textarea>
+												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
 										</div>
 										<div>
-											<label className='block text-sm font-semibold text-gray-700 mb-1'>Solusi / Tindak Lanjut</label>
+											<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Solusi / Tindak Lanjut</label>
 											<textarea
 												rows='2'
 												placeholder='Solusi yang dilakukan...'
 												value={formData.solusi}
 												onChange={(e) => setFormData({ ...formData, solusi: e.target.value })}
-												className='w-full px-4 py-2 rounded-xl border border-gray-300 focus:ring-2 focus:ring-orange-500 focus:border-orange-500'></textarea>
+												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
 										</div>
 									</div>
 								</div>
 
 								{/* Status Checkbox */}
-								<div className='bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center justify-between'>
+								<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4'>
 									<div>
-										<p className='font-bold text-gray-800'>Status Pembelajaran</p>
-										<p className='text-xs text-gray-500'>Apakah tujuan pembelajaran tercapai?</p>
+										<p className='font-black text-[#0D0D0D] uppercase tracking-widest'>Status Pembelajaran</p>
+										<p className='text-xs text-[#0D0D0D] font-bold mt-1'>Apakah tujuan pembelajaran tercapai?</p>
 									</div>
 									<label className='relative inline-flex items-center cursor-pointer'>
 										<input
@@ -654,24 +573,24 @@ export default function JurnalPage() {
 											onChange={(e) => setFormData({ ...formData, tuntas: e.target.checked })}
 											className='sr-only peer'
 										/>
-										<div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-										<span className='ml-3 text-sm font-medium text-gray-700'>{formData.tuntas ? 'Tuntas' : 'Belum'}</span>
+										<div className="w-16 h-8 bg-white border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-[26px] peer-checked:after:border-[#0D0D0D] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-[#0D0D0D] after:border-[#0D0D0D] after:border after:rounded-none after:h-6 after:w-6 after:transition-all peer-checked:bg-[#00A693] peer-checked:after:bg-white"></div>
+										<span className='ml-4 text-sm font-black text-[#0D0D0D] uppercase tracking-widest w-16'>{formData.tuntas ? 'TUNTAS' : 'BELUM'}</span>
 									</label>
 								</div>
 							</div>
 
-							<div className='sticky bottom-0 bg-white px-8 py-5 border-t border-gray-100 flex justify-end gap-3'>
+							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-4 sm:py-5 border-t-[4px] border-[#0D0D0D] flex flex-col sm:flex-row justify-end gap-3 sm:gap-4'>
 								<button
 									type='button'
 									onClick={() => setIsModalOpen(false)}
-									className='px-6 py-2.5 rounded-xl font-semibold text-gray-600 hover:bg-gray-100 transition-colors'>
-									Batal
+									className='neo-btn-outline w-full sm:w-auto bg-white text-[#0D0D0D] px-6 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest'>
+									BATAL
 								</button>
 								<button
 									type='submit'
 									disabled={saving}
-									className='bg-orange-600 hover:bg-orange-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg hover:shadow-orange-500/30 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed'>
-									{saving ? 'Menyimpan...' : 'Simpan Jurnal'}
+									className='neo-btn-primary w-full sm:w-auto bg-[#0D0D0D] text-white px-8 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed'>
+									{saving ? 'MENYIMPAN...' : 'SIMPAN JURNAL'}
 								</button>
 							</div>
 						</form>

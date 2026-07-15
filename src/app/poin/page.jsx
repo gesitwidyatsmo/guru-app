@@ -5,13 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 
-export default function PoinKelasPage() {
-	const params = useParams();
+export default function PoinGlobalPage() {
 	const router = useRouter();
-	const classId = params.id;
 
 	// --- State ---
-	const [kelasInfo, setKelasInfo] = useState(null);
+	const [kelasList, setKelasList] = useState([]);
 	const [poinList, setPoinList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [siswaMap, setSiswaMap] = useState({});
@@ -22,6 +20,7 @@ export default function PoinKelasPage() {
 
 	// Filter State
 	const [selectedTipe, setSelectedTipe] = useState('semua');
+	const [filterKelas, setFilterKelas] = useState('Semua');
 	const [searchQuery, setSearchQuery] = useState('');
 
 	// Modal State
@@ -30,6 +29,7 @@ export default function PoinKelasPage() {
 	const [saving, setSaving] = useState(false);
 	const [searchSiswaModal, setSearchSiswaModal] = useState('');
 	const [isSiswaDropdownOpen, setIsSiswaDropdownOpen] = useState(false);
+	const [modalFilterKelas, setModalFilterKelas] = useState('Semua');
 
 	const initialForm = {
 		id: '',
@@ -45,31 +45,22 @@ export default function PoinKelasPage() {
 
 	// --- Fetch Data ---
 	useEffect(() => {
-		if (!classId) return;
-
 		const initData = async () => {
 			try {
-				// 1. Ambil Info Kelas
+				// 1. Ambil List Kelas
 				const resKelas = await fetch('/api/kelas');
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const currentKelas = dataKelas.find((k) => String(k.id) === String(classId));
+				setKelasList(dataKelas.sort((a, b) => (a.nama_kelas || a.kelas).localeCompare(b.nama_kelas || b.kelas)));
 
-				if (!currentKelas) {
-					Swal.fire('Error', 'Kelas tidak ditemukan', 'error');
-					router.push('/kelas');
-					return;
-				}
-				setKelasInfo(currentKelas);
-
-				// 2. Ambil List Siswa
+				// 2. Ambil List Siswa (Semua)
 				const resSiswa = await fetch('/api/siswa');
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-				const siswaKelas = dataSiswa.filter((s) => s.kelas === (currentKelas.kelas || currentKelas.nama_kelas) && s.status === 'Aktif');
-				setSiswaList(siswaKelas);
+				const siswaAktif = dataSiswa.filter((s) => s.status === 'Aktif');
+				setSiswaList(siswaAktif);
 
 				// Buat map siswa untuk lookup cepat
 				const map = {};
-				dataSiswa.forEach((s) => {
+				siswaAktif.forEach((s) => {
 					map[s.id] = s;
 				});
 				setSiswaMap(map);
@@ -84,7 +75,7 @@ export default function PoinKelasPage() {
 				}
 
 				// 4. Ambil Poin
-				await fetchPoin(currentKelas.kelas || currentKelas.nama_kelas);
+				await fetchPoin();
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -93,11 +84,11 @@ export default function PoinKelasPage() {
 		};
 
 		initData();
-	}, [classId, router]);
+	}, [router]);
 
-	const fetchPoin = useCallback(async (namaKelas) => {
+	const fetchPoin = useCallback(async () => {
 		try {
-			const res = await fetch(`/api/poin?kelas=${encodeURIComponent(namaKelas)}`);
+			const res = await fetch(`/api/poin`);
 			if (res.ok) {
 				const data = await res.json();
 				setPoinList(data);
@@ -114,10 +105,12 @@ export default function PoinKelasPage() {
 			setFormData(item);
 			const tmpsiswa = siswaList.find((s) => s.id === item.siswa_id) || siswaMap[item.siswa_id];
 			setSearchSiswaModal(tmpsiswa ? `${tmpsiswa.nama_lengkap} (${tmpsiswa.nis})` : '');
+			setModalFilterKelas(tmpsiswa?.kelas || 'Semua');
 		} else {
 			setIsEditing(false);
 			setFormData(initialForm);
 			setSearchSiswaModal('');
+			setModalFilterKelas(filterKelas);
 		}
 		setIsSiswaDropdownOpen(false);
 		setIsModalOpen(true);
@@ -146,7 +139,7 @@ export default function PoinKelasPage() {
 
 		if (result.isConfirmed) {
 			await fetch(`/api/poin?id=${id}`, { method: 'DELETE' });
-			fetchPoin(kelasInfo.kelas || kelasInfo.nama_kelas);
+			fetchPoin();
 			Swal.fire({
 				title: 'TERHAPUS!',
 				icon: 'success',
@@ -172,7 +165,7 @@ export default function PoinKelasPage() {
 
 			if (res.ok) {
 				setIsModalOpen(false);
-				fetchPoin(kelasInfo.kelas || kelasInfo.nama_kelas);
+				fetchPoin();
 				Swal.fire({
 					icon: 'success',
 					title: 'TERSIMPAN!',
@@ -191,7 +184,13 @@ export default function PoinKelasPage() {
 	};
 
 	// --- Derived Data ---
-	const filteredPoin = poinList
+	const poinByClass = poinList.filter((p) => {
+		if (filterKelas === 'Semua') return true;
+		const siswa = siswaMap[p.siswa_id];
+		return siswa?.kelas === filterKelas;
+	});
+
+	const filteredPoin = poinByClass
 		.filter((p) => selectedTipe === 'semua' || p.tipe === selectedTipe)
 		.filter((p) => {
 			if (!searchQuery) return true;
@@ -201,8 +200,8 @@ export default function PoinKelasPage() {
 		});
 
 	// Stats
-	const totalPositif = poinList.filter((p) => p.tipe === 'positif').reduce((sum, p) => sum + p.poin, 0);
-	const totalNegatif = poinList.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
+	const totalPositif = poinByClass.filter((p) => p.tipe === 'positif').reduce((sum, p) => sum + p.poin, 0);
+	const totalNegatif = poinByClass.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
 	const netPoin = totalPositif - totalNegatif;
 
 	// Group by date
@@ -249,7 +248,7 @@ export default function PoinKelasPage() {
 							</button>
 							<div>
 								<h1 className='text-4xl sm:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-2'>
-									{kelasInfo?.kelas || kelasInfo?.nama_kelas}
+									REKAP POIN
 								</h1>
 								<p className='text-[#0D0D0D] font-black tracking-widest uppercase bg-[#F5C518] inline-block px-3 py-1 border-[2px] border-[#0D0D0D] text-xs sm:text-sm'>
 									Poin Prestasi & Pelanggaran
@@ -298,7 +297,7 @@ export default function PoinKelasPage() {
 
 			{/* Search & Filter Bar */}
 			<div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>
-				<div className='bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col md:flex-row gap-4'>
+				<div className='bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col gap-4'>
 					{/* Toggle Tipe */}
 					<div className='flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 custom-scrollbar'>
 						{['semua', 'positif', 'negatif'].map((tipe) => (
@@ -310,18 +309,38 @@ export default function PoinKelasPage() {
 							</button>
 						))}
 					</div>
-					{/* Search Input */}
-					<div className='relative group flex-1'>
-						<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-							<svg className='w-7 h-7 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
+					<div className='flex flex-col md:flex-row gap-4 w-full'>
+						{/* Class Dropdown */}
+						<div className='relative w-full md:w-1/3 shrink-0'>
+							<select
+								value={filterKelas}
+								onChange={(e) => setFilterKelas(e.target.value)}
+								className='neo-input w-full pl-6 pr-10 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg appearance-none cursor-pointer'>
+								<option value='Semua'>SEMUA KELAS</option>
+								{kelasList.map((k) => (
+									<option key={k.id} value={k.nama_kelas || k.kelas}>
+										{k.nama_kelas || k.kelas}
+									</option>
+								))}
+							</select>
+							<div className='absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none'>
+								<svg className='w-6 h-6 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 9l-7 7-7-7'/></svg>
+							</div>
 						</div>
-						<input
-							type='text'
-							placeholder='CARI NAMA SISWA...'
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							className='neo-input w-full !pl-16 pr-4 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg uppercase placeholder:text-gray-400'
-						/>
+
+						{/* Search Input */}
+						<div className='relative flex-1'>
+							<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+								<svg className='w-7 h-7 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
+							</div>
+							<input
+								type='text'
+								placeholder='CARI NAMA SISWA...'
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								className='neo-input w-full !pl-16 pr-4 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg uppercase placeholder:text-gray-400'
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -461,8 +480,31 @@ export default function PoinKelasPage() {
 									<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative z-20'>
 										<div className='absolute -top-4 -left-4 bg-[#F5C518] px-3 py-1 border-[3px] border-[#0D0D0D] font-black uppercase text-sm shadow-[2px_2px_0px_0px_#0D0D0D] rotate-2'>TARGET SISWA</div>
 										
+										{/* Pilihan Kelas Modal */}
+										<div className='mt-4 mb-4 relative'>
+											<select
+												value={modalFilterKelas}
+												onChange={(e) => {
+													setModalFilterKelas(e.target.value);
+													setSearchSiswaModal('');
+													if (formData.siswa_id) setFormData({ ...formData, siswa_id: '' });
+													setIsSiswaDropdownOpen(false);
+												}}
+												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none appearance-none cursor-pointer'>
+												<option value='Semua'>SEMUA KELAS</option>
+												{kelasList.map((k) => (
+													<option key={k.id} value={k.nama_kelas || k.kelas}>
+														{k.nama_kelas || k.kelas}
+													</option>
+												))}
+											</select>
+											<div className='absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none'>
+												<svg className='w-5 h-5 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 9l-7 7-7-7'/></svg>
+											</div>
+										</div>
+
 										{/* Pencarian Siswa */}
-										<div className='relative mt-4'>
+										<div className='relative'>
 											<input
 												type='text'
 												required={!formData.siswa_id}
@@ -492,6 +534,7 @@ export default function PoinKelasPage() {
 											{isSiswaDropdownOpen && (
 												<ul className='absolute z-50 w-full bg-white border-[4px] border-[#0D0D0D] mt-2 max-h-48 overflow-y-auto shadow-[6px_6px_0px_0px_#0D0D0D] divide-y-[3px] divide-[#0D0D0D] custom-scrollbar'>
 													{siswaList
+														.filter((s) => modalFilterKelas === 'Semua' || s.kelas === modalFilterKelas)
 														.filter((s) => s.nama_lengkap.toLowerCase().includes(searchSiswaModal.toLowerCase()) || (s.nis && s.nis.toLowerCase().includes(searchSiswaModal.toLowerCase())))
 														.map((s) => (
 															<li
@@ -506,7 +549,7 @@ export default function PoinKelasPage() {
 																{s.nama_lengkap} <span className='text-[#0D0D0D] bg-white px-2 py-0.5 border border-[#0D0D0D] ml-2 text-xs'>{s.nis}</span>
 															</li>
 														))}
-													{siswaList.filter((s) => s.nama_lengkap.toLowerCase().includes(searchSiswaModal.toLowerCase()) || (s.nis && s.nis.toLowerCase().includes(searchSiswaModal.toLowerCase()))).length === 0 && (
+													{siswaList.filter((s) => modalFilterKelas === 'Semua' || s.kelas === modalFilterKelas).filter((s) => s.nama_lengkap.toLowerCase().includes(searchSiswaModal.toLowerCase()) || (s.nis && s.nis.toLowerCase().includes(searchSiswaModal.toLowerCase()))).length === 0 && (
 														<li className='px-4 py-4 text-sm font-bold text-[#0D0D0D] text-center bg-[#FFE8DC]'>TIDAK DITEMUKAN</li>
 													)}
 												</ul>

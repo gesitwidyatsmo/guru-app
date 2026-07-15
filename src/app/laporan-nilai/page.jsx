@@ -217,7 +217,7 @@ export default function RekapNilaiPage() {
 
 			// Tambahkan nilai per tugas
 			rekapData.tugasList.forEach((tugas) => {
-				const nilai = siswa.nilai[tugas.tugas_id] || '-';
+				const nilai = siswa.nilai[tugas.tugas_id] ?? '-';
 				row.push(nilai);
 			});
 
