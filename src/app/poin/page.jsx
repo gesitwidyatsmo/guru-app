@@ -223,11 +223,7 @@ export default function PoinGlobalPage() {
 		return acc;
 	}, {});
 
-	if (loading) return (
-		<div className='min-h-screen flex items-center justify-center bg-[#FFF5F0]'>
-			<Loader />
-		</div>
-	);
+	if (loading) return <Loader />;
 
 	return (
 		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>

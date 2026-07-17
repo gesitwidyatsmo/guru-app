@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 
 export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, isEditMode = false }) {
 	// State form data
-	const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+	const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 	const hariIni = namaHari[new Date().getDay()];
 
 	const [formData, setFormData] = useState({
@@ -12,6 +12,7 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 		hari: hariIni,
 		jam_mulai: '',
 		jam_selesai: '',
+		jam_ke: '',
 	});
 
 	// State untuk menyimpan list opsi dari API
@@ -22,13 +23,11 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 	// 1. Fetch Data Master (Mapel & Kelas) saat Modal dibuka pertama kali
 	useEffect(() => {
 		if (isOpen) {
-			// Ambil data Mapel
 			fetch('/api/mapel')
 				.then((res) => res.json())
 				.then((data) => setListMapel(data))
 				.catch((err) => console.error('Gagal ambil mapel:', err));
 
-			// Ambil data Kelas
 			fetch('/api/kelas')
 				.then((res) => res.json())
 				.then((data) => setListKelas(data))
@@ -53,6 +52,7 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 					hari: hariIni,
 					jam_mulai: '',
 					jam_selesai: '',
+					jam_ke: '',
 				});
 			}
 		}
@@ -73,120 +73,129 @@ export default function ModalJadwal({ isOpen, onClose, onSubmit, initialData, is
 	};
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-300'>
-			<div className='bg-white w-full max-w-lg rounded-2xl border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] overflow-hidden transform transition-all scale-100'>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-opacity duration-300'>
+			<div className='bg-[#FFF5F0] w-full max-w-lg rounded-none border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden transform transition-all'>
+				
 				{/* HEADER */}
-				<div className='bg-yellow-300 border-b-[3px] border-black px-6 py-4 flex justify-between items-center'>
-					<h3 className='text-xl font-black text-black uppercase tracking-wider'>{isEditMode ? 'Edit Jadwal' : 'Tambah Jadwal'}</h3>
+				<div className='bg-[#F5C518] border-b-[4px] border-[#0D0D0D] px-6 py-5 flex justify-between items-center'>
+					<h3 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>{isEditMode ? 'EDIT JADWAL' : 'TAMBAH JADWAL'}</h3>
 					<button
 						type="button"
 						onClick={onClose}
-						className='text-black bg-white border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[0px_0px_0px_0px_#0D0D0D] hover:translate-x-[2px] hover:translate-y-[2px] p-1 px-3 rounded-md transition-all font-bold'>
+						className='w-10 h-10 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black flex items-center justify-center shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'>
 						✕
 					</button>
 				</div>
 
 				<form
 					onSubmit={handleSubmit}
-					className='p-6 space-y-4'>
+					className='p-6 space-y-6'>
+					
 					{/* DROPDOWN MAPEL */}
 					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>Mata Pelajaran</label>
+						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>MATA PELAJARAN</label>
 						<select
 							name='mapel'
 							value={formData.mapel}
 							onChange={handleChange}
-							className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white'
+							className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer appearance-none'
 							required>
-							<option value=''>-- Pilih Mapel --</option>
+							<option value='' disabled>-- PILIH MAPEL --</option>
 							{listMapel.map((m) => (
-								// Gunakan m.mapel (nama) atau m.id sesuai kebutuhan penyimpanan
-								<option
-									key={m.id}
-									value={m.mapel}>
-									{m.mapel}
-								</option>
+								<option key={m.id} value={m.mapel}>{m.mapel}</option>
 							))}
 						</select>
 					</div>
 
-					{/* DROPDOWN KELAS */}
-					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>Kelas</label>
-						<select
-							name='kelas'
-							value={formData.kelas}
-							onChange={handleChange}
-							className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white'
-							required>
-							<option value=''>-- Pilih Kelas --</option>
-							{listKelas.map((k) => (
-								// Asumsi API kelas mengembalikan properti: id, kelas (nama kelas)
-								<option
-									key={k.id}
-									value={k.kelas || k.nama_kelas}>
-									{k.kelas || k.nama_kelas}
-								</option>
-							))}
-						</select>
-					</div>
-
-					{/* Input Hari */}
-					<div>
-						<label className='block text-sm font-medium text-gray-700 mb-1'>Hari</label>
-						<select
-							name='hari'
-							value={formData.hari}
-							onChange={handleChange}
-							className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white'>
-							{['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'].map((h) => (
-								<option
-									key={h}
-									value={h}>
-									{h}
-								</option>
-							))}
-						</select>
-					</div>
-
-					{/* Input Jam (Sama seperti sebelumnya) */}
 					<div className='grid grid-cols-2 gap-4'>
+						{/* DROPDOWN KELAS */}
 						<div>
-							<label className='block text-sm font-medium text-gray-700 mb-1'>Jam Mulai</label>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>KELAS</label>
+							<select
+								name='kelas'
+								value={formData.kelas}
+								onChange={handleChange}
+								className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer appearance-none'
+								required>
+								<option value='' disabled>-- KELAS --</option>
+								{listKelas.map((k) => (
+									<option key={k.id} value={k.kelas || k.nama_kelas}>{k.kelas || k.nama_kelas}</option>
+								))}
+							</select>
+						</div>
+
+						{/* INPUT HARI */}
+						<div>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>HARI</label>
+							<select
+								name='hari'
+								value={formData.hari}
+								onChange={handleChange}
+								className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer appearance-none'
+								required>
+								<option value='' disabled>-- HARI --</option>
+								{namaHari.map((h) => (
+									<option key={h} value={h}>{h}</option>
+								))}
+							</select>
+						</div>
+					</div>
+
+					<div className='grid grid-cols-3 gap-4'>
+						{/* JAM KE */}
+						<div>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>JAM KE</label>
+							<input
+								type='number'
+								name='jam_ke'
+								value={formData.jam_ke}
+								onChange={handleChange}
+								placeholder='1'
+								min='1'
+								max='15'
+								className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
+								required
+							/>
+						</div>
+						{/* JAM MULAI */}
+						<div>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>MULAI</label>
 							<input
 								type='time'
 								name='jam_mulai'
 								value={formData.jam_mulai}
 								onChange={handleChange}
-								className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none'
+								className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
 								required
 							/>
 						</div>
+						{/* JAM SELESAI */}
 						<div>
-							<label className='block text-sm font-medium text-gray-700 mb-1'>Jam Selesai</label>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>SELESAI</label>
 							<input
 								type='time'
 								name='jam_selesai'
 								value={formData.jam_selesai}
 								onChange={handleChange}
-								className='w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none'
+								className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
 								required
 							/>
 						</div>
 					</div>
 
-					<div className='flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100'>
+					{/* ACTION BUTTONS */}
+					<div className='flex justify-end gap-4 mt-8 pt-6 border-t-[4px] border-[#0D0D0D]'>
 						<button
 							type='button'
 							onClick={onClose}
-							className='px-6 py-2 border-2 border-black bg-gray-200 text-black font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all'>
-							Batal
+							className='h-[60px] px-6 bg-white text-[#0D0D0D] border-[4px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'>
+							BATAL
 						</button>
 						<button
 							type='submit'
 							disabled={loading}
-							className='px-6 py-2 border-2 border-black bg-blue-500 text-white font-bold uppercase tracking-wider rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px] transition-all disabled:opacity-50 flex items-center'>
-							{loading ? 'Menyimpan...' : isEditMode ? 'Update' : 'Simpan'}
+							className='h-[60px] px-6 bg-[#2F80ED] text-white border-[4px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2'>
+							{loading ? 'MENYIMPAN...' : isEditMode ? 'UPDATE' : 'SIMPAN'}
 						</button>
 					</div>
 				</form>

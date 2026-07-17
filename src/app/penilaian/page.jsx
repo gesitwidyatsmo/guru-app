@@ -671,11 +671,7 @@ export default function PenilaianPage() {
 	// --- 5. Render UI ---
 
 	if (loading) {
-		return (
-			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
-				<Loader />
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (

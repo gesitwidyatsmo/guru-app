@@ -345,11 +345,7 @@ export default function CreateGroupPage() {
 	}
 
 	if (loadingPage) {
-		return (
-			<div className='min-h-screen flex items-center justify-center bg-gray-50'>
-				<Loader />
-			</div>
-		);
+		return <Loader />;
 	}
 
 	return (
