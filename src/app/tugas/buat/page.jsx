@@ -38,7 +38,7 @@ export default function BuatTugas() {
 		materi: '',
 		tipe_soal: 'Tunggal', // 'Tunggal' atau 'Kasus'
 		kategori: 'Pengetahuan',
-		type: 'Tugas Online',
+		type: 'Formatif',
 	});
 
 	const [soalTunggal, setSoalTunggal] = useState('');
@@ -74,17 +74,34 @@ export default function BuatTugas() {
 		e.preventDefault();
 
 		if (!form.judul || !form.mapel) {
-			Swal.fire('Error', 'Judul dan Mata Pelajaran wajib diisi', 'error');
+			Swal.fire({
+				title: 'ERROR',
+				text: 'Judul dan Mata Pelajaran wajib diisi',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
 			return;
 		}
 
 		let soalPayload = null;
 		if (form.tipe_soal === 'Tunggal') {
-			if (!soalTunggal) return Swal.fire('Error', 'Teks soal belum diisi', 'error');
+			if (!soalTunggal) {
+				Swal.fire({ title: 'ERROR', text: 'Teks soal belum diisi', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
+				return;
+			}
 			soalPayload = soalTunggal;
 		} else if (form.tipe_soal === 'Kasus') {
 			const kasusIsi = soalKasus.filter(k => k.teks.trim() !== '');
-			if (kasusIsi.length === 0) return Swal.fire('Error', 'Minimal 1 kasus harus diisi', 'error');
+			if (kasusIsi.length === 0) {
+				Swal.fire({ title: 'ERROR', text: 'Minimal 1 kasus harus diisi', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
+				return;
+			}
 			soalPayload = kasusIsi.map(k => k.teks); // Array of strings
 		} else if (form.tipe_soal === 'PG') {
 			const cleanedPG = validatePG(soalPG);
@@ -127,16 +144,23 @@ export default function BuatTugas() {
 
 			if (response.ok) {
 				await Swal.fire({
-					title: 'Berhasil!',
-					html: `Tugas telah dibuat.<br><br>PIN Akses:<br><b style="font-size: 24px; color: #4f46e5;">${data.pin}</b><br><br>Siswa dapat menggunakan PIN ini di halaman <b>/soal</b>.`,
+					title: 'BERHASIL!',
+					html: `Tugas telah dibuat.<br><br>PIN Akses:<br><div style="font-size: 32px; font-weight: 900; background: #F5C518; color: #0D0D0D; padding: 10px; border: 4px solid #0D0D0D; box-shadow: 6px 6px 0px 0px #0D0D0D; margin-top: 10px; margin-bottom: 15px; display: inline-block;">${data.pin}</div><br>Siswa dapat menggunakan PIN ini di halaman <b>/soal</b>.`,
 					icon: 'success',
+					background: '#FFF5F0',
+					color: '#0D0D0D',
+					customClass: {
+						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+						title: 'font-black uppercase tracking-widest',
+						confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+					},
 				});
 				router.push('/tugas');
 			} else {
-				Swal.fire('Gagal', data.error || 'Terjadi kesalahan', 'error');
+				Swal.fire({ title: 'GAGAL', text: data.error || 'Terjadi kesalahan', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			}
 		} catch (error) {
-			Swal.fire('Error', 'Gagal terhubung ke server', 'error');
+			Swal.fire({ title: 'ERROR', text: 'Gagal terhubung ke server', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 		} finally {
 			setLoading(false);
 		}
@@ -211,7 +235,7 @@ export default function BuatTugas() {
 
 		const invalid = cleanedPG.find(s => !s.pertanyaan.trim() || s.opsi.length < 2 || s.jawabanBenar.length === 0);
 		if (invalid) {
-			Swal.fire('Error', 'Pastikan setiap pertanyaan PG terisi, memiliki minimal 2 opsi (jawaban), dan tentukan kunci jawabannya!', 'error');
+			Swal.fire({ title: 'ERROR', text: 'Pastikan setiap pertanyaan PG terisi, memiliki minimal 2 opsi (jawaban), dan tentukan kunci jawabannya!', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			return null;
 		}
 		return cleanedPG;
@@ -220,7 +244,7 @@ export default function BuatTugas() {
 	const validateEssai = (essaiList) => {
 		const invalid = essaiList.find(s => !s.pertanyaan.trim());
 		if (invalid) {
-			Swal.fire('Error', 'Pastikan setiap pertanyaan Essai telah terisi!', 'error');
+			Swal.fire({ title: 'ERROR', text: 'Pastikan setiap pertanyaan Essai telah terisi!', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			return null;
 		}
 		return essaiList;
@@ -291,16 +315,16 @@ export default function BuatTugas() {
 
 			if (isEssaiImport && newSoalEssai.length > 0) {
 				setSoalEssai(newSoalEssai);
-				Swal.fire('Berhasil', `${newSoalEssai.length} soal Essai berhasil diimport!`, 'success');
+				Swal.fire({ title: 'BERHASIL', text: `\${newSoalEssai.length} soal Essai berhasil diimport!`, icon: 'success', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase tracking-widest', confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			} else if (!isEssaiImport && newSoalPG.length > 0) {
 				setSoalPG(newSoalPG);
-				Swal.fire('Berhasil', `${newSoalPG.length} soal PG berhasil diimport!`, 'success');
+				Swal.fire({ title: 'BERHASIL', text: `\${newSoalPG.length} soal PG berhasil diimport!`, icon: 'success', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase tracking-widest', confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			} else {
-				Swal.fire('Gagal', 'Tidak ada soal valid yang ditemukan dalam file.', 'error');
+				Swal.fire({ title: 'GAGAL', text: 'Tidak ada soal valid yang ditemukan dalam file.', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 			}
 		} catch (error) {
 			console.error(error);
-			Swal.fire('Error', 'Gagal membaca file Excel. Pastikan format sesuai template.', 'error');
+			Swal.fire({ title: 'ERROR', text: 'Gagal membaca file Excel. Pastikan format sesuai template.', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
 		}
 		
 		e.target.value = '';
@@ -331,119 +355,122 @@ export default function BuatTugas() {
 	};
 
 	return (
-		<main className='min-h-screen bg-gray-50 py-8'>
-			<div className='max-w-4xl mx-auto px-4 sm:px-6 lg:px-8'>
-				<div className='mb-8 flex items-center gap-4'>
-					<Link href='/tugas' className='p-2 rounded-xl bg-white shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors'>
-						<ChevronLeft className='w-6 h-6 text-gray-600' />
+		<main className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] py-12 font-sans'>
+			<div className='max-w-5xl mx-auto px-4 sm:px-6 lg:px-8'>
+				
+				{/* Header Section */}
+				<div className='mb-12 flex items-center gap-6'>
+					<Link href='/tugas' className='p-4 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+						<ChevronLeft className='w-8 h-8 text-[#0D0D0D]' strokeWidth={3} />
 					</Link>
 					<div>
-						<h1 className='text-3xl font-bold text-gray-800'>Buat Tugas Baru</h1>
-						<p className='text-gray-500'>Buat tugas tunggal atau berbasis studi kasus untuk siswa</p>
+						<h1 className='text-3xl sm:text-5xl font-black text-[#0D0D0D] uppercase tracking-widest drop-shadow-[2px_2px_0px_#F5C518] mb-1'>Buat Tugas Baru</h1>
+						<p className='text-[#0D0D0D] font-bold text-sm sm:text-base uppercase tracking-wider'>Buat tugas tunggal atau berbasis studi kasus untuk siswa</p>
 					</div>
 				</div>
 
-				<div className='bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden'>
-					<form onSubmit={handleSubmit} className='p-6 sm:p-8 space-y-8'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D]'>
+					<form onSubmit={handleSubmit} className='p-6 sm:p-10 space-y-12'>
 						
 						{/* Informasi Dasar */}
-						<div className='space-y-4'>
-							<h3 className='text-lg font-bold text-gray-800 border-b pb-2'>Informasi Tugas</h3>
+						<div className='space-y-6'>
+							<div className='bg-[#A3E635] p-3 border-[4px] border-[#0D0D0D] -rotate-1 mb-8 inline-block'>
+								<h3 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>1. Informasi Tugas</h3>
+							</div>
 							
 							<div>
-								<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Judul Tugas <span className="text-red-500">*</span></label>
+								<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Judul Tugas <span className="text-[#E8451A] text-xl">*</span></label>
 								<input
 									type='text'
 									required
 									value={form.judul}
 									onChange={(e) => setForm({ ...form, judul: e.target.value })}
 									placeholder='Contoh: Tugas Praktikum Excel 1'
-									className='w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all'
+									className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] placeholder-gray-400 focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none'
 								/>
 							</div>
 
-							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-6'>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Mata Pelajaran <span className="text-red-500">*</span></label>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Mata Pelajaran <span className="text-[#E8451A] text-xl">*</span></label>
 									<select
 										required
 										value={form.mapel}
 										onChange={(e) => setForm({ ...form, mapel: e.target.value })}
-										className='w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer bg-white disabled:opacity-50'
+										className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer rounded-none disabled:bg-gray-200'
 										disabled={fetchingMapel}
 									>
-										<option value="" disabled>{fetchingMapel ? 'Memuat Mapel...' : 'Pilih Mata Pelajaran'}</option>
+										<option value="" disabled>{fetchingMapel ? 'Memuat Mapel...' : 'PILIH MATA PELAJARAN'}</option>
 										{mapelList.map((m) => (
 											<option key={m.id} value={m.mapel}>{m.mapel}</option>
 										))}
 									</select>
 								</div>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Materi (Opsional)</label>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Materi <span className="text-gray-500 lowercase tracking-normal">(Opsional)</span></label>
 									<input
 										type='text'
 										value={form.materi}
 										onChange={(e) => setForm({ ...form, materi: e.target.value })}
 										placeholder='Contoh: Microsoft Excel'
-										className='w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all'
+										className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] placeholder-gray-400 focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none'
 									/>
 								</div>
 							</div>
 
-							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4'>
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6'>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Kategori Nilai</label>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kategori Nilai</label>
 									<select
 										value={form.kategori}
 										onChange={(e) => setForm({ ...form, kategori: e.target.value })}
-										className='w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer bg-white'
+										className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer rounded-none'
 									>
-										<option value="Pengetahuan">Pengetahuan</option>
-										<option value="Keterampilan">Keterampilan</option>
-										<option value="Sikap">Sikap</option>
-										<option value="Spiritual">Spiritual</option>
-										<option value="Lainnya">Lainnya</option>
+										<option value="Pengetahuan">PENGETAHUAN</option>
+										<option value="Keterampilan">KETERAMPILAN</option>
+										<option value="Sikap">SIKAP</option>
+										<option value="Spiritual">SPIRITUAL</option>
+										<option value="Lainnya">LAINNYA</option>
 									</select>
 								</div>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Tipe Nilai</label>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Tipe Nilai</label>
 									<select
 										value={form.type}
 										onChange={(e) => setForm({ ...form, type: e.target.value })}
-										className='w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all cursor-pointer bg-white'
+										className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer rounded-none'
 									>
-										<option value="Tugas Online">Tugas Online</option>
-										<option value="Formatif">Formatif</option>
-										<option value="Sumatif">Sumatif</option>
-										<option value="UTS">UTS</option>
-										<option value="UAS">UAS</option>
-										<option value="Lainnya">Lainnya</option>
+										<option value="Formatif">FORMATIF</option>
+										<option value="Sumatif">SUMATIF</option>
+										<option value="SAS">SAS</option>
 									</select>
 								</div>
 							</div>
 						</div>
 
 						{/* Detail Soal */}
-						<div className='space-y-4'>
-							<div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-2 gap-3">
-								<h3 className='text-lg font-bold text-gray-800'>Detail Soal</h3>
-								<div className="w-full sm:w-auto">
+						<div className='space-y-6 pt-10 border-t-[4px] border-[#0D0D0D]'>
+							<div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+								<div className='bg-[#FF90E8] p-3 border-[4px] border-[#0D0D0D] rotate-1 inline-block'>
+									<h3 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>2. Detail Soal</h3>
+								</div>
+								<div className="w-full md:w-auto">
 									<select
 										value={form.tipe_soal}
 										onChange={(e) => setForm({ ...form, tipe_soal: e.target.value })}
-										className="bg-white border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2 outline-none font-semibold cursor-pointer shadow-sm"
+										className="w-full md:w-auto px-6 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-widest focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all cursor-pointer rounded-none"
 									>
-										<option value="Tunggal">Soal Tunggal</option>
-										<option value="Kasus">Studi Kasus (Variasi)</option>
-										<option value="PG">Pilihan Ganda</option>
-										<option value="Essai">Essai</option>
-										<option value="Gabungan">Gabungan (PG + Essai)</option>
+										<option value="Tunggal">SOAL TUNGGAL</option>
+										<option value="Kasus">STUDI KASUS (VARIASI)</option>
+										<option value="PG">PILIHAN GANDA</option>
+										<option value="Essai">ESSAI</option>
+										<option value="Gabungan">GABUNGAN (PG + ESSAI)</option>
 									</select>
 								</div>
 							</div>
 
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-								<div className='flex items-start gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200'>
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+								<div className='flex items-start gap-4 bg-[#A3E635] p-5 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 									<label className='relative inline-flex items-center cursor-pointer mt-1'>
 										<input 
 											type='checkbox' 
@@ -451,15 +478,15 @@ export default function BuatTugas() {
 											checked={allowUpload} 
 											onChange={(e) => setAllowUpload(e.target.checked)} 
 										/>
-										<div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+										<div className="w-14 h-8 bg-white border-[3px] border-[#0D0D0D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-[#0D0D0D] after:border-[#0D0D0D] after:border-[3px] after:h-6 after:w-6 after:transition-all peer-checked:bg-[#0D0D0D] peer-checked:after:bg-[#A3E635]"></div>
 									</label>
 									<div>
-										<span className='block text-sm font-bold text-gray-800'>Izinkan Upload Lampiran</span>
-										<span className='block text-xs text-gray-500'>Siswa dapat mengunggah file (seperti foto/dokumen) saat mengerjakan.</span>
+										<span className='block text-base font-black text-[#0D0D0D] uppercase tracking-widest'>Izinkan Upload Lampiran</span>
+										<span className='block text-sm font-bold text-[#0D0D0D] mt-1'>Siswa dapat mengunggah file (seperti foto/dokumen) saat mengerjakan.</span>
 									</div>
 								</div>
 
-								<div className='flex items-start gap-3 bg-red-50 p-4 rounded-xl border border-red-200'>
+								<div className='flex items-start gap-4 bg-[#E8451A] p-5 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 									<label className='relative inline-flex items-center cursor-pointer mt-1'>
 										<input 
 											type='checkbox' 
@@ -467,19 +494,22 @@ export default function BuatTugas() {
 											checked={isCBTMode} 
 											onChange={(e) => setIsCBTMode(e.target.checked)} 
 										/>
-										<div className="w-11 h-6 bg-red-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+										<div className="w-14 h-8 bg-white border-[3px] border-[#0D0D0D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-[#0D0D0D] after:border-[#0D0D0D] after:border-[3px] after:h-6 after:w-6 after:transition-all peer-checked:bg-[#0D0D0D] peer-checked:after:bg-[#F5C518]"></div>
 									</label>
 									<div>
-										<span className='block text-sm font-bold text-red-800'>Mode Ujian Ketat (CBT/CAT)</span>
-										<span className='block text-xs text-red-600'>Wajib Layar Penuh. Siswa akan ditandai melanggar jika berpindah tab atau aplikasi.</span>
+										<span className='block text-base font-black text-white uppercase tracking-widest'>Mode Ujian Ketat (CBT)</span>
+										<span className='block text-sm font-bold text-white mt-1'>Wajib Layar Penuh. Siswa ditandai melanggar jika pindah tab.</span>
 									</div>
 								</div>
 							</div>
 
 							{form.tipe_soal === 'Tunggal' ? (
-								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Teks Soal / Instruksi</label>
-									<div className="bg-white rounded-xl border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 transition-all">
+								<div className="bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] p-1">
+									<div className="bg-[#0D0D0D] text-white px-4 py-2 font-black uppercase tracking-widest border-b-[4px] border-[#0D0D0D] mb-2 flex items-center justify-between">
+										<span>Teks Soal / Instruksi</span>
+										<span className="text-xs text-gray-400 bg-gray-800 px-2 py-1">Semua siswa melihat soal ini</span>
+									</div>
+									<div className="bg-white">
 										<ReactQuill 
 											theme="snow"
 											value={soalTunggal}
@@ -487,24 +517,41 @@ export default function BuatTugas() {
 											modules={quillModules}
 											formats={quillFormats}
 											placeholder='Ketikkan soal atau instruksi pengerjaan di sini...'
-											className="min-h-[200px]"
+											className="min-h-[250px] font-bold text-lg"
 										/>
 									</div>
-									<p className="text-sm text-gray-500 mt-2">Semua siswa yang memasukkan PIN akan melihat soal yang sama ini.</p>
 								</div>
 							) : form.tipe_soal === 'Kasus' ? (
-								<div className="space-y-4">
-									<div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
-										<strong>Mode Studi Kasus:</strong> Aplikasi akan membagikan kasus secara otomatis kepada siswa berdasarkan rumus: <code className="bg-white px-1.5 py-0.5 rounded text-blue-600">(Nomor Absen mod Jumlah Kasus)</code>.
+								<div className="space-y-6">
+									<div className="bg-[#2F80ED] border-[4px] border-[#0D0D0D] p-4 text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex gap-4 items-start">
+										<div className="bg-white p-2 border-[3px] border-[#0D0D0D] -rotate-3">
+											<svg className='w-8 h-8 text-[#0D0D0D]' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
+												<path strokeLinecap='square' strokeLinejoin='miter' d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+											</svg>
+										</div>
+										<div>
+											<strong className="font-black uppercase tracking-widest text-white block mb-1">MODE STUDI KASUS:</strong> 
+											<span className="font-bold text-white text-sm">Aplikasi membagikan kasus secara otomatis kepada siswa berdasarkan rumus: <code className="bg-white text-[#0D0D0D] px-2 py-1 border-[2px] border-[#0D0D0D] font-black">(Nomor Absen mod Jumlah Kasus)</code>.</span>
+										</div>
 									</div>
 									
-									<div className="space-y-4">
+									<div className="space-y-6">
 										{soalKasus.map((kasus, index) => (
-											<div key={kasus.id} className="flex gap-3 items-start bg-gray-50 p-4 rounded-xl border border-gray-200">
-												<div className="w-10 h-10 shrink-0 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold">
-													{index + 1}
+											<div key={kasus.id} className="bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] p-1 relative">
+												<div className="bg-[#0D0D0D] flex justify-between items-center mb-1">
+													<div className="bg-[#F5C518] text-[#0D0D0D] px-6 py-3 font-black uppercase tracking-widest text-xl border-r-[4px] border-[#0D0D0D]">
+														VAR. #{index + 1}
+													</div>
+													<button
+														type="button"
+														onClick={() => hapusKasus(kasus.id)}
+														className="bg-[#E8451A] text-white px-6 py-3 font-black uppercase hover:bg-white hover:text-[#E8451A] transition-colors border-l-[4px] border-[#0D0D0D] disabled:opacity-50"
+														disabled={soalKasus.length === 1}
+													>
+														<Trash2 className="w-6 h-6" strokeWidth={3} />
+													</button>
 												</div>
-												<div className="flex-1 bg-white rounded-xl border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+												<div className="bg-white p-2">
 													<ReactQuill 
 														theme="snow"
 														value={kasus.teks}
@@ -512,16 +559,9 @@ export default function BuatTugas() {
 														modules={quillModules}
 														formats={quillFormats}
 														placeholder={`Teks soal untuk kasus #${index + 1}`}
+														className="min-h-[200px] font-bold text-lg"
 													/>
 												</div>
-												<button
-													type="button"
-													onClick={() => hapusKasus(kasus.id)}
-													className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-													disabled={soalKasus.length === 1}
-												>
-													<Trash2 className="w-5 h-5" />
-												</button>
 											</div>
 										))}
 									</div>
@@ -529,28 +569,37 @@ export default function BuatTugas() {
 									<button
 										type="button"
 										onClick={tambahKasus}
-										className="inline-flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-semibold hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+										className="inline-flex items-center justify-center gap-3 w-full py-5 bg-[#A3E635] border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all"
 									>
-										<Plus className="w-5 h-5" />
-										Tambah Variasi Kasus
+										<Plus className="w-8 h-8" strokeWidth={3} />
+										TAMBAH VARIASI KASUS
 									</button>
 								</div>
 							) : null}
 
 							{(form.tipe_soal === 'PG' || form.tipe_soal === 'Gabungan') && (
-								<div className="space-y-6 pt-4">
-									{form.tipe_soal === 'Gabungan' && <h4 className="text-xl font-bold text-gray-800 border-b pb-2">Bagian 1: Pilihan Ganda</h4>}
-									<div className="flex flex-col sm:flex-row gap-4 mb-4">
-										<div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-sm text-emerald-800 flex-1">
-											<strong>Pilihan Ganda (CBT):</strong> Sistem akan secara otomatis mengoreksi jawaban siswa.
+								<div className="space-y-8 pt-6">
+									{form.tipe_soal === 'Gabungan' && <h4 className="text-3xl font-black text-[#0D0D0D] uppercase tracking-widest border-b-[6px] border-[#0D0D0D] pb-3">BAGIAN 1: PILIHAN GANDA</h4>}
+									
+									<div className="flex flex-col lg:flex-row gap-6 mb-6">
+										<div className="bg-[#00A693] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-4 flex-1 flex gap-4 items-start">
+											<div className="bg-white p-2 border-[3px] border-[#0D0D0D] rotate-3">
+												<svg className='w-8 h-8 text-[#0D0D0D]' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
+													<path strokeLinecap='square' strokeLinejoin='miter' d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' />
+												</svg>
+											</div>
+											<div>
+												<strong className="font-black uppercase tracking-widest text-[#0D0D0D] block mb-1">PILIHAN GANDA (CBT):</strong>
+												<span className="font-bold text-[#0D0D0D] text-sm">Sistem mengoreksi jawaban siswa otomatis.</span>
+											</div>
 										</div>
-										<div className="flex flex-col gap-2 min-w-max">
+										<div className="flex flex-col gap-3 min-w-max">
 											<button
 												type="button"
 												onClick={() => fileInputRef.current.click()}
-												className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+												className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0D0D0D] text-white border-[4px] border-[#0D0D0D] hover:bg-[#F5C518] hover:text-[#0D0D0D] font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all"
 											>
-												<Upload className="w-4 h-4" /> Import Excel PG
+												<Upload className="w-5 h-5" strokeWidth={3} /> IMPORT EXCEL PG
 											</button>
 											<input
 												type="file"
@@ -562,32 +611,32 @@ export default function BuatTugas() {
 											<button
 												type="button"
 												onClick={() => downloadTemplate('PG')}
-												className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-sm font-semibold rounded-lg transition-colors"
+												className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#0D0D0D] border-[4px] border-[#0D0D0D] hover:bg-[#00A693] hover:text-white font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all"
 											>
-												<Download className="w-4 h-4" /> Download Template PG
+												<Download className="w-5 h-5" strokeWidth={3} /> DOWNLOAD TEMPLATE PG
 											</button>
 										</div>
 									</div>
 
 									{soalPG.map((soal, index) => (
-										<div key={soal.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm relative">
-											<div className="absolute -top-3 -left-3 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold shadow-md">
-												{index + 1}
-											</div>
-											<div className="flex justify-between items-start mb-4 pl-3">
-												<h4 className="font-bold text-gray-700">Pertanyaan PG</h4>
+										<div key={soal.id} className="bg-[#FFF5F0] border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] p-2 relative">
+											<div className="bg-[#0D0D0D] flex justify-between items-center mb-2">
+												<div className="bg-[#00A693] text-white px-6 py-3 font-black uppercase tracking-widest text-xl border-r-[4px] border-[#0D0D0D]">
+													SOAL #{index + 1}
+												</div>
 												<button
 													type="button"
 													onClick={() => hapusSoalPG(soal.id)}
 													disabled={soalPG.length === 1}
-													className="text-gray-400 hover:text-red-500 transition-colors"
+													className="bg-[#E8451A] text-white px-6 py-3 font-black uppercase hover:bg-white hover:text-[#E8451A] transition-colors border-l-[4px] border-[#0D0D0D] disabled:opacity-50"
 													title="Hapus Soal"
 												>
-													<Trash2 className="w-5 h-5" />
+													<Trash2 className="w-6 h-6" strokeWidth={3} />
 												</button>
 											</div>
 
-											<div className="bg-white rounded-xl border border-gray-300 mb-4 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+											<div className="bg-white border-[4px] border-[#0D0D0D] mb-6 p-1">
+												<div className="bg-[#0D0D0D] text-white px-4 py-2 font-black uppercase tracking-widest text-sm border-b-[4px] border-[#0D0D0D]">Pertanyaan</div>
 												<ReactQuill 
 													theme="snow"
 													value={soal.pertanyaan}
@@ -595,32 +644,36 @@ export default function BuatTugas() {
 													modules={quillModules}
 													formats={quillFormats}
 													placeholder="Ketikkan pertanyaan di sini..."
+													className="min-h-[150px] font-bold"
 												/>
 											</div>
 
-											<div className="space-y-3">
+											<div className="space-y-4 px-2 pb-4">
+												<div className="font-black text-[#0D0D0D] uppercase tracking-widest mb-2 border-b-[4px] border-[#0D0D0D] inline-block pb-1">Opsi Jawaban</div>
 												{soal.opsi.map((opt, optIdx) => {
 													const isChecked = Array.isArray(soal.jawabanBenar) 
 														? soal.jawabanBenar.includes(optIdx)
 														: soal.jawabanBenar === optIdx;
 													
 													return (
-														<div key={optIdx} className="flex items-center gap-3">
+														<div key={optIdx} className="flex items-center gap-4">
 															<input
 																type="checkbox"
 																checked={isChecked}
 																onChange={() => updateSoalPG(soal.id, 'jawabanBenar', optIdx)}
-																className="w-5 h-5 text-emerald-500 focus:ring-emerald-500 rounded cursor-pointer"
+																className="w-8 h-8 appearance-none border-[3px] border-[#0D0D0D] bg-white checked:bg-[#00A693] checked:border-[3px] checked:after:content-['✔'] checked:after:text-white checked:after:font-black checked:after:flex checked:after:items-center checked:after:justify-center checked:after:h-full cursor-pointer hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all"
 																title="Jadikan sebagai kunci jawaban"
 															/>
-															<div className="flex-1 flex items-center gap-2">
-																<span className="font-bold text-gray-500 w-5">{String.fromCharCode(65 + optIdx)}.</span>
+															<div className="flex-1 flex items-center gap-0">
+																<div className="bg-[#0D0D0D] text-white font-black text-xl px-4 py-3 h-[60px] flex items-center justify-center border-[4px] border-[#0D0D0D] border-r-0">
+																	{String.fromCharCode(65 + optIdx)}
+																</div>
 																<input
 																	type="text"
 																	value={opt}
 																	onChange={(e) => updateSoalPG(soal.id, 'opsi', e.target.value, optIdx)}
-																	placeholder={`Opsi ${String.fromCharCode(65 + optIdx)}`}
-																	className={`w-full px-4 py-2 rounded-lg border outline-none transition-all ${isChecked ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-gray-300 focus:border-indigo-500'}`}
+																	placeholder={`Teks Opsi ${String.fromCharCode(65 + optIdx)}`}
+																	className={`w-full px-5 py-3 h-[60px] border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] outline-none transition-all ${isChecked ? 'bg-[#00A693] text-white placeholder-white/70' : 'bg-white focus:-translate-y-1 focus:shadow-[4px_4px_0px_0px_#0D0D0D]'}`}
 																/>
 															</div>
 														</div>
@@ -630,9 +683,9 @@ export default function BuatTugas() {
 												<button
 													type="button"
 													onClick={() => tambahOpsiPG(soal.id)}
-													className="inline-flex items-center gap-1.5 text-indigo-600 font-semibold text-sm hover:text-indigo-800 transition-colors mt-2"
+													className="inline-flex items-center gap-2 text-[#0D0D0D] font-black uppercase tracking-widest text-sm bg-[#F5C518] px-4 py-2 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all mt-4"
 												>
-													<Plus className="w-4 h-4" /> Tambah Opsi
+													<Plus className="w-5 h-5" strokeWidth={3} /> TAMBAH OPSI JAWABAN
 												</button>
 											</div>
 										</div>
@@ -641,59 +694,66 @@ export default function BuatTugas() {
 									<button
 										type="button"
 										onClick={tambahSoalPG}
-										className="inline-flex items-center justify-center gap-2 w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-semibold hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+										className="inline-flex items-center justify-center gap-3 w-full py-5 bg-[#00A693] text-white border-[4px] border-[#0D0D0D] font-black uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all"
 									>
-										<Plus className="w-6 h-6" />
-										Tambah Soal Pilihan Ganda
+										<Plus className="w-8 h-8" strokeWidth={3} />
+										TAMBAH SOAL PILIHAN GANDA
 									</button>
 								</div>
 							)}
 
 							{(form.tipe_soal === 'Essai' || form.tipe_soal === 'Gabungan') && (
-								<div className="space-y-6 pt-4">
-									{form.tipe_soal === 'Gabungan' && <h4 className="text-xl font-bold text-gray-800 border-b pb-2 mt-8">Bagian 2: Essai</h4>}
-									<div className="flex flex-col sm:flex-row gap-4 mb-4">
-										<div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-800 flex-1">
-											<strong>Mode Essai:</strong> Siswa akan diberikan kotak teks terpisah untuk tiap butir soal. Penilaian akan dilakukan manual oleh guru.
+								<div className="space-y-8 pt-6">
+									{form.tipe_soal === 'Gabungan' && <h4 className="text-3xl font-black text-[#0D0D0D] uppercase tracking-widest border-b-[6px] border-[#0D0D0D] pb-3 mt-12">BAGIAN 2: ESSAI</h4>}
+									
+									<div className="flex flex-col lg:flex-row gap-6 mb-6">
+										<div className="bg-[#2F80ED] border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-4 flex-1 flex gap-4 items-start">
+											<div className="bg-white p-2 border-[3px] border-[#0D0D0D] -rotate-3">
+												<svg className='w-8 h-8 text-[#0D0D0D]' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={3}>
+													<path strokeLinecap='square' strokeLinejoin='miter' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' />
+												</svg>
+											</div>
+											<div>
+												<strong className="font-black uppercase tracking-widest text-white block mb-1">MODE ESSAI:</strong>
+												<span className="font-bold text-white text-sm">Siswa diberi kotak teks terpisah tiap soal. Penilaian manual oleh guru.</span>
+											</div>
 										</div>
-										<div className="flex flex-col gap-2 min-w-max">
+										<div className="flex flex-col gap-3 min-w-max">
 											<button
 												type="button"
 												onClick={() => fileInputRef.current.click()}
-												className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors"
+												className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0D0D0D] text-white border-[4px] border-[#0D0D0D] hover:bg-[#2F80ED] hover:text-white font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all"
 											>
-												<Upload className="w-4 h-4" /> Import Excel Essai
+												<Upload className="w-5 h-5" strokeWidth={3} /> IMPORT EXCEL ESSAI
 											</button>
-											{/* Note: using the same fileInputRef requires handling based on form.tipe_soal */}
 											<button
 												type="button"
 												onClick={() => downloadTemplate('Essai')}
-												className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 text-sm font-semibold rounded-lg transition-colors"
+												className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-[#0D0D0D] border-[4px] border-[#0D0D0D] hover:bg-[#F5C518] font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all"
 											>
-												<Download className="w-4 h-4" /> Download Template Essai
+												<Download className="w-5 h-5" strokeWidth={3} /> DOWNLOAD TEMPLATE ESSAI
 											</button>
 										</div>
 									</div>
 
 									{soalEssai.map((soal, index) => (
-										<div key={soal.id} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm relative">
-											<div className="absolute -top-3 -left-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold shadow-md">
-												{index + 1}
-											</div>
-											<div className="flex justify-between items-start mb-4 pl-3">
-												<h4 className="font-bold text-gray-700">Pertanyaan Essai</h4>
+										<div key={soal.id} className="bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] p-1 relative">
+											<div className="bg-[#0D0D0D] flex justify-between items-center mb-1">
+												<div className="bg-[#2F80ED] text-white px-6 py-3 font-black uppercase tracking-widest text-xl border-r-[4px] border-[#0D0D0D]">
+													ESSAI #{index + 1}
+												</div>
 												<button
 													type="button"
 													onClick={() => hapusSoalEssai(soal.id)}
 													disabled={soalEssai.length === 1}
-													className="text-gray-400 hover:text-red-500 transition-colors"
+													className="bg-[#E8451A] text-white px-6 py-3 font-black uppercase hover:bg-white hover:text-[#E8451A] transition-colors border-l-[4px] border-[#0D0D0D] disabled:opacity-50"
 													title="Hapus Soal"
 												>
-													<Trash2 className="w-5 h-5" />
+													<Trash2 className="w-6 h-6" strokeWidth={3} />
 												</button>
 											</div>
 
-											<div className="bg-white rounded-xl border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+											<div className="bg-white p-2">
 												<ReactQuill 
 													theme="snow"
 													value={soal.pertanyaan}
@@ -701,6 +761,7 @@ export default function BuatTugas() {
 													modules={quillModules}
 													formats={quillFormats}
 													placeholder="Ketikkan pertanyaan essai di sini..."
+													className="min-h-[150px] font-bold"
 												/>
 											</div>
 										</div>
@@ -709,25 +770,25 @@ export default function BuatTugas() {
 									<button
 										type="button"
 										onClick={tambahSoalEssai}
-										className="inline-flex items-center justify-center gap-2 w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-semibold hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+										className="inline-flex items-center justify-center gap-3 w-full py-5 bg-[#2F80ED] text-white border-[4px] border-[#0D0D0D] font-black uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all"
 									>
-										<Plus className="w-6 h-6" />
-										Tambah Soal Essai
+										<Plus className="w-8 h-8" strokeWidth={3} />
+										TAMBAH SOAL ESSAI
 									</button>
 								</div>
 							)}
 						</div>
 
-						<div className="pt-4 border-t border-gray-200 flex justify-end">
+						<div className="pt-10 border-t-[6px] border-[#0D0D0D] flex justify-end">
 							<button
 								type='submit'
 								disabled={loading}
-								className='inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+								className='inline-flex items-center justify-center gap-3 px-12 py-5 bg-[#FF90E8] text-[#0D0D0D] border-[4px] border-[#0D0D0D] font-black uppercase tracking-widest text-xl shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-2 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto'
 							>
 								{loading ? (
-									<div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+									<div className="w-8 h-8 border-[4px] border-[#0D0D0D] border-t-transparent rounded-full animate-spin"></div>
 								) : (
-									<><Save className="w-5 h-5" /> Simpan Tugas & Generate PIN</>
+									<><Save className="w-8 h-8" strokeWidth={3} /> SIMPAN TUGAS & GENERATE PIN</>
 								)}
 							</button>
 						</div>
@@ -737,4 +798,5 @@ export default function BuatTugas() {
 			</div>
 		</main>
 	);
+
 }

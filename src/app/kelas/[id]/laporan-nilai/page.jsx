@@ -334,48 +334,41 @@ export default function LaporanPage() {
 	};
 
 	return (
-		<div className='min-h-screen bg-gray-50 pb-10'>
-			<SectionHeader
-				title='Laporan Penilaian'
-				leftIcon={
-					<div className='bg-indigo-100 text-indigo-600 p-2 rounded-full'>
-						<svg
-							className='w-5 h-5'
-							fill='none'
-							stroke='currentColor'
-							viewBox='0 0 24 24'>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M15 19l-7-7 7-7'
-							/>
-						</svg>
-					</div>
-				}
-				onLeftClick={() => window.history.back()}
-			/>
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>
+			<div className='bg-[#00A693] border-b-[4px] border-[#0D0D0D] p-4 sm:p-6 flex items-center gap-4 sticky top-0 z-50'>
+				<button onClick={() => window.history.back()} className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none'>
+					<svg className='w-6 h-6 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
+				</button>
+				<h1 className='text-xl sm:text-2xl font-black text-white uppercase tracking-widest drop-shadow-[2px_2px_0px_#0D0D0D]'>LAPORAN PENILAIAN</h1>
+			</div>
 
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6'>
+			<div className='max-w-7xl mx-auto px-4 sm:px-8 pt-10 space-y-10 relative z-10'>
 				{/* 1. Filter / Selector */}
-				<div className='bg-white p-6 rounded-2xl shadow-sm border border-gray-100'>
-					<h3 className='font-bold text-gray-800 mb-4'>Filter Laporan</h3>
+				<div className='bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]'>
+					<div className='text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-4 bg-white inline-block px-3 py-1 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -rotate-2'>FILTER LAPORAN</div>
 					<div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
 						<div>
-							<label className='block text-sm font-medium text-gray-600 mb-2'>Mata Pelajaran</label>
-							<select
-								value={selectedMapel}
-								onChange={(e) => setSelectedMapel(e.target.value)}
-								className='w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none'>
-								<option value=''>-- Pilih Mapel --</option>
-								{mapelList.map((m) => (
-									<option
-										key={m.id}
-										value={m.mapel}>
-										{m.mapel}
-									</option>
-								))}
-							</select>
+							<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>MATA PELAJARAN</label>
+							<div className='relative'>
+								<select
+									value={selectedMapel}
+									onChange={(e) => setSelectedMapel(e.target.value)}
+									className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-lg shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none appearance-none cursor-pointer uppercase transition-all'>
+									<option value=''>-- PILIH MAPEL --</option>
+									{mapelList.map((m) => (
+										<option
+											key={m.id}
+											value={m.mapel}>
+											{m.mapel}
+										</option>
+									))}
+								</select>
+								<div className='absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none'>
+									<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='3' stroke='currentColor' className='w-5 h-5'>
+										<path strokeLinecap='round' strokeLinejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5' />
+									</svg>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -384,20 +377,20 @@ export default function LaporanPage() {
 					<div className='flex justify-end'>
 						<button
 							onClick={handleDownloadExcel}
-							className='flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-sm'>
+							className='flex items-center gap-3 px-6 py-3 bg-[#A3E635] text-[#0D0D0D] border-[4px] border-[#0D0D0D] font-black uppercase tracking-wider shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
 							<svg
-								className='w-5 h-5'
+								className='w-6 h-6'
 								fill='none'
 								viewBox='0 0 24 24'
 								stroke='currentColor'>
 								<path
 									strokeLinecap='round'
 									strokeLinejoin='round'
-									strokeWidth={2}
+									strokeWidth={3}
 									d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'
 								/>
 							</svg>
-							Download Excel
+							DOWNLOAD EXCEL
 						</button>
 					</div>
 				)}
@@ -405,60 +398,52 @@ export default function LaporanPage() {
 				{selectedMapel && (
 					<div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
 						{/* 2. Settings (Weights) */}
-						<div className='bg-white p-6 rounded-2xl shadow-sm border border-gray-100 lg:col-span-1 h-fit'>
-							<h3 className='font-bold text-gray-800 mb-4 flex items-center gap-2'>
+						<div className='bg-[#F5C518] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] lg:col-span-1 h-fit'>
+							<div className='flex items-center justify-between mb-6 border-b-[4px] border-[#0D0D0D] pb-4'>
+								<h3 className='font-black text-[#0D0D0D] text-xl uppercase tracking-widest'>
+									PENGATURAN NILAI
+								</h3>
 								<svg
-									className='w-5 h-5 text-gray-400'
+									className='w-8 h-8 text-[#0D0D0D]'
 									fill='none'
 									viewBox='0 0 24 24'
 									stroke='currentColor'>
 									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
+										strokeLinecap='square'
+										strokeLinejoin='miter'
+										strokeWidth={3}
 										d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z'
 									/>
 									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
+										strokeLinecap='square'
+										strokeLinejoin='miter'
+										strokeWidth={3}
 										d='M15 12a3 3 0 11-6 0 3 3 0 016 0z'
 									/>
 								</svg>
-								Pengaturan Nilai
-							</h3>
+							</div>
 
-							<div className='flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 bg-gray-50 p-3 rounded-xl border border-gray-100'>
-								<label className='flex items-center gap-2 cursor-pointer w-full sm:w-auto'>
-									<input
-										type='radio'
-										name='calcMethod'
-										value='persentase'
-										checked={calcMethod === 'persentase'}
-										onChange={() => setCalcMethod('persentase')}
-										className='accent-indigo-600 w-4 h-4'
-									/>
-									<span className='text-sm font-semibold text-gray-700'>Bobot Persentase</span>
-								</label>
-								<label className='flex items-center gap-2 cursor-pointer w-full sm:w-auto'>
-									<input
-										type='radio'
-										name='calcMethod'
-										value='sederhana'
-										checked={calcMethod === 'sederhana'}
-										onChange={() => setCalcMethod('sederhana')}
-										className='accent-indigo-600 w-4 h-4'
-									/>
-									<span className='text-sm font-semibold text-gray-700'>Rata-rata Sederhana</span>
-								</label>
+							<div className='flex flex-col sm:flex-row items-stretch gap-0 mb-6 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+								<button
+									onClick={() => setCalcMethod('persentase')}
+									className={`flex-1 py-3 px-2 font-black uppercase text-xs tracking-wider transition-colors ${calcMethod === 'persentase' ? 'bg-[#0D0D0D] text-white' : 'hover:bg-gray-100 text-[#0D0D0D]'}`}>
+									Bobot %
+								</button>
+								<div className='w-[3px] bg-[#0D0D0D] hidden sm:block'></div>
+								<div className='h-[3px] bg-[#0D0D0D] sm:hidden'></div>
+								<button
+									onClick={() => setCalcMethod('sederhana')}
+									className={`flex-1 py-3 px-2 font-black uppercase text-xs tracking-wider transition-colors ${calcMethod === 'sederhana' ? 'bg-[#0D0D0D] text-white' : 'hover:bg-gray-100 text-[#0D0D0D]'}`}>
+									Rata-Rata
+								</button>
 							</div>
 
 							{calcMethod === 'persentase' ? (
-								<div className='space-y-4'>
-									<div>
-										<div className='flex justify-between text-sm mb-1'>
-											<label className='text-gray-600'>Nilai Harian (%)</label>
-											<span className='font-bold text-indigo-600'>{bobot.harian}%</span>
+								<div className='space-y-6'>
+									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+										<div className='flex justify-between items-center mb-2'>
+											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>HARIAN</label>
+											<div className='bg-[#00A693] text-white font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] -rotate-2'>{bobot.harian}%</div>
 										</div>
 										<input
 											type='range'
@@ -466,13 +451,13 @@ export default function LaporanPage() {
 											max='100'
 											value={bobot.harian}
 											onChange={(e) => setBobot({ ...bobot, harian: parseInt(e.target.value) })}
-											className='w-full accent-indigo-600'
+											className='w-full accent-[#0D0D0D] cursor-pointer'
 										/>
 									</div>
-									<div>
-										<div className='flex justify-between text-sm mb-1'>
-											<label className='text-gray-600'>Nilai Sumatif (%)</label>
-											<span className='font-bold text-indigo-600'>{bobot.sumatif}%</span>
+									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+										<div className='flex justify-between items-center mb-2'>
+											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>SUMATIF</label>
+											<div className='bg-[#FF90E8] text-[#0D0D0D] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] rotate-1'>{bobot.sumatif}%</div>
 										</div>
 										<input
 											type='range'
@@ -480,13 +465,13 @@ export default function LaporanPage() {
 											max='100'
 											value={bobot.sumatif}
 											onChange={(e) => setBobot({ ...bobot, sumatif: parseInt(e.target.value) })}
-											className='w-full accent-indigo-600'
+											className='w-full accent-[#0D0D0D] cursor-pointer'
 										/>
 									</div>
-									<div>
-										<div className='flex justify-between text-sm mb-1'>
-											<label className='text-gray-600'>Nilai UAS (%)</label>
-											<span className='font-bold text-indigo-600'>{bobot.uas}%</span>
+									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+										<div className='flex justify-between items-center mb-2'>
+											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>UAS</label>
+											<div className='bg-[#A3E635] text-[#0D0D0D] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] -rotate-1'>{bobot.uas}%</div>
 										</div>
 										<input
 											type='range'
@@ -494,141 +479,157 @@ export default function LaporanPage() {
 											max='100'
 											value={bobot.uas}
 											onChange={(e) => setBobot({ ...bobot, uas: parseInt(e.target.value) })}
-											className='w-full accent-indigo-600'
+											className='w-full accent-[#0D0D0D] cursor-pointer'
 										/>
 									</div>
 
-									<div className='p-3 bg-blue-50 rounded-lg text-xs text-blue-700 mt-2 flex items-start gap-2'>
-										<span className='text-lg'>ℹ️</span>
-										<span>
-											Total Bobot: <strong>{bobot.harian + bobot.sumatif + bobot.uas}%</strong>. Pastikan totalnya 100% untuk hasil akurat.
-										</span>
+									<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] mt-4 flex gap-3 items-start'>
+										<svg className='w-6 h-6 text-[#E8451A] flex-shrink-0 mt-0.5' fill='none' viewBox='0 0 24 24' strokeWidth='3' stroke='currentColor'><path strokeLinecap='square' strokeLinejoin='miter' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' /></svg>
+										<div>
+											<div className='font-black uppercase text-[#0D0D0D] mb-1'>TOTAL BOBOT: {bobot.harian + bobot.sumatif + bobot.uas}%</div>
+											<p className='text-xs font-medium text-[#0D0D0D]'>Pastikan total keseluruhannya 100% untuk mendapatkan hasil kalkulasi yang seimbang.</p>
+										</div>
 									</div>
 								</div>
 							) : (
-								<div className='p-6 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-600 text-center flex flex-col items-center gap-3'>
-									<div className='p-3 bg-white rounded-full shadow-sm'>
+								<div className='p-6 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-center flex flex-col items-center gap-4'>
+									<div className='w-14 h-14 bg-[#2F80ED] border-[3px] border-[#0D0D0D] flex items-center justify-center -rotate-6 shadow-[2px_2px_0px_0px_#0D0D0D]'>
 										<svg
-											className='w-6 h-6 text-indigo-500'
+											className='w-8 h-8 text-white'
 											fill='none'
 											stroke='currentColor'
 											viewBox='0 0 24 24'>
 											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												strokeWidth={2}
+												strokeLinecap='square'
+												strokeLinejoin='miter'
+												strokeWidth={3}
 												d='M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'
 											/>
 										</svg>
 									</div>
-									Menggunakan <b>Rata-rata Sederhana</b>.<br />
-									Semua komponen (Harian, Sumatif, UAS) memiliki bobot yg sama dan dirata-rata (/ 3).
+									<div>
+										<h4 className='font-black uppercase text-[#0D0D0D] mb-2 text-lg'>RATA-RATA SEDERHANA</h4>
+										<p className='text-sm font-medium text-[#0D0D0D]'>Semua komponen (Harian, Sumatif, UAS) dianggap setara dan akan dirata-rata lurus (dibagi 3).</p>
+									</div>
 								</div>
 							)}
 
-							<hr className='my-6 border-gray-100' />
+							<div className='w-full h-[4px] bg-[#0D0D0D] my-8'></div>
 
 							{/* Conversion Tool */}
 							<div>
-								<div className='flex items-center justify-between mb-4'>
-									<h3 className='font-bold text-gray-800'>Konversi Nilai</h3>
+								<div className='flex items-center justify-between mb-6'>
+									<h3 className='font-black text-[#0D0D0D] text-xl uppercase tracking-widest'>KONVERSI NILAI</h3>
 									<div
 										onClick={toggleConversion}
-										className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${convertConfig.useConversion ? 'bg-green-500' : 'bg-gray-300'}`}>
-										<div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${convertConfig.useConversion ? 'translate-x-5' : ''}`}></div>
+										className={`w-14 h-8 border-[3px] border-[#0D0D0D] rounded-full p-1 cursor-pointer transition-colors shadow-[2px_2px_0px_0px_#0D0D0D] relative ${convertConfig.useConversion ? 'bg-[#00A693]' : 'bg-white'}`}>
+										<div className={`bg-[#0D0D0D] w-5 h-5 rounded-full transform transition-transform ${convertConfig.useConversion ? 'translate-x-6' : ''}`}></div>
 									</div>
 								</div>
 
 								{convertConfig.useConversion && (
-									<div className='space-y-4 animate-in fade-in slide-in-from-top-2'>
-										<div className='grid grid-cols-2 gap-3'>
-											<div>
-												<label className='text-xs text-gray-500 block mb-1'>Nilai Asli Min</label>
-												<input
-													type='number'
-													value={convertConfig.ncMin}
-													onChange={(e) => setConvertConfig({ ...convertConfig, ncMin: parseInt(e.target.value) })}
-													className='w-full px-3 py-2 text-sm border border-gray-200 rounded-lg'
-												/>
+									<div className='space-y-6 animate-in fade-in slide-in-from-top-2'>
+										<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+											<div className='flex items-center gap-2 mb-3'>
+												<span className='bg-[#E8451A] text-white px-2 py-0.5 font-black border-[2px] border-[#0D0D0D] text-xs -rotate-2'>ASLI</span>
+												<span className='font-black uppercase tracking-wider text-sm'>NILAI SISWA</span>
 											</div>
-											<div>
-												<label className='text-xs text-gray-500 block mb-1'>Nilai Asli Max</label>
-												<input
-													type='number'
-													value={convertConfig.ncMax}
-													onChange={(e) => setConvertConfig({ ...convertConfig, ncMax: parseInt(e.target.value) })}
-													className='w-full px-3 py-2 text-sm border border-gray-200 rounded-lg'
-												/>
+											<div className='grid grid-cols-2 gap-4'>
+												<div>
+													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MIN (NCmin)</label>
+													<input
+														type='number'
+														value={convertConfig.ncMin}
+														onWheel={(e) => e.target.blur()}
+														onChange={(e) => setConvertConfig({ ...convertConfig, ncMin: parseInt(e.target.value) })}
+														className='neo-input w-full px-3 py-2 text-lg font-black'
+													/>
+												</div>
+												<div>
+													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MAX (NCmax)</label>
+													<input
+														type='number'
+														value={convertConfig.ncMax}
+														onWheel={(e) => e.target.blur()}
+														onChange={(e) => setConvertConfig({ ...convertConfig, ncMax: parseInt(e.target.value) })}
+														className='neo-input w-full px-3 py-2 text-lg font-black'
+													/>
+												</div>
 											</div>
 										</div>
+
 										{/* Tampilan Aktual Nilai Kelas & Tombol Gunakan */}
-										<div className='bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex flex-col sm:flex-row gap-3 items-center justify-between'>
-											<div className='text-sm'>
-												<p className='text-indigo-900 font-semibold mb-1'>Nilai Kelas Aktual</p>
-												<div className='flex items-center gap-4 text-xs text-indigo-700'>
-													<span>
-														Min: <b className='text-indigo-900'>{actualStats.min}</b>
+										<div className='bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-4 flex flex-col gap-3 items-center text-center'>
+											<div>
+												<p className='font-black uppercase tracking-widest text-[#0D0D0D] mb-1'>NILAI KELAS AKTUAL</p>
+												<div className='flex items-center justify-center gap-4 font-black text-lg'>
+													<span className='bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D]'>
+														MIN: {actualStats.min}
 													</span>
-													<span>
-														Max: <b className='text-indigo-900'>{actualStats.max}</b>
+													<span className='bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D]'>
+														MAX: {actualStats.max}
 													</span>
 												</div>
 											</div>
 											<button
 												onClick={() => setConvertConfig((prev) => ({ ...prev, ncMin: Math.floor(actualStats.min), ncMax: Math.ceil(actualStats.max) }))}
-												className='px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors whitespace-nowrap'>
-												Dapatkan Nilai Aktual
+												className='w-full py-2 bg-[#2F80ED] hover:bg-[#0D0D0D] hover:-translate-y-1 text-white border-[3px] border-[#0D0D0D] font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'>
+												GUNAKAN AKTUAL
 											</button>
 										</div>
-										<div className='flex justify-center text-gray-400'>
+
+										<div className='flex justify-center text-[#0D0D0D] py-2'>
 											<svg
-												className='w-5 h-5'
+												className='w-8 h-8'
 												fill='none'
 												viewBox='0 0 24 24'
 												stroke='currentColor'>
 												<path
-													strokeLinecap='round'
-													strokeLinejoin='round'
-													strokeWidth={2}
+													strokeLinecap='square'
+													strokeLinejoin='miter'
+													strokeWidth={4}
 													d='M19 14l-7 7m0 0l-7-7m7 7V3'
 												/>
 											</svg>
 										</div>
-										<div className='grid grid-cols-2 gap-3'>
-											<div>
-												<label className='text-xs text-gray-500 block mb-1'>Target Min</label>
-												<input
-													type='number'
-													value={convertConfig.nhMin}
-													onChange={(e) => setConvertConfig({ ...convertConfig, nhMin: parseInt(e.target.value) })}
-													className='w-full px-3 py-2 text-sm border border-gray-200 rounded-lg'
-												/>
+
+										<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+											<div className='flex items-center gap-2 mb-3'>
+												<span className='bg-[#00A693] text-white px-2 py-0.5 font-black border-[2px] border-[#0D0D0D] text-xs rotate-2'>TARGET</span>
+												<span className='font-black uppercase tracking-wider text-sm'>NILAI HARAPAN</span>
 											</div>
-											<div>
-												<label className='text-xs text-gray-500 block mb-1'>Target Max</label>
-												<input
-													type='number'
-													value={convertConfig.nhMax}
-													onChange={(e) => setConvertConfig({ ...convertConfig, nhMax: parseInt(e.target.value) })}
-													className='w-full px-3 py-2 text-sm border border-gray-200 rounded-lg'
-												/>
+											<div className='grid grid-cols-2 gap-4'>
+												<div>
+													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MIN (NHmin)</label>
+													<input
+														type='number'
+														value={convertConfig.nhMin}
+														onWheel={(e) => e.target.blur()}
+														onChange={(e) => setConvertConfig({ ...convertConfig, nhMin: parseInt(e.target.value) })}
+														className='neo-input w-full px-3 py-2 text-lg font-black'
+													/>
+												</div>
+												<div>
+													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MAX (NHmax)</label>
+													<input
+														type='number'
+														value={convertConfig.nhMax}
+														onWheel={(e) => e.target.blur()}
+														onChange={(e) => setConvertConfig({ ...convertConfig, nhMax: parseInt(e.target.value) })}
+														className='neo-input w-full px-3 py-2 text-lg font-black'
+													/>
+												</div>
 											</div>
 										</div>
-										<div className='p-3 bg-yellow-50 rounded-xl mt-2 mb-4'>
-											<p className='text-[10px] font-bold text-yellow-800 mb-1'>Rumus: NK = NHmin + ((NCx - NCmin) / (NCmax - NCmin)) * (NHmax - NHmin)</p>
-											<ul className='text-[9px] text-yellow-700 space-y-0.5'>
-												<li>
-													• <b>NK</b> = Nilai Konversi (Hasil)
-												</li>
-												<li>
-													• <b>NCx</b> = Nilai Asli Siswa saat ini
-												</li>
-												<li>
-													• <b>NCmin / NCmax</b> = Range Nilai Asli Min / Max
-												</li>
-												<li>
-													• <b>NHmin / NHmax</b> = Range Target Nilai Min / Max (Harapan)
-												</li>
+
+										<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+											<div className='inline-block bg-[#0D0D0D] text-white px-2 py-0.5 font-black uppercase text-[10px] tracking-widest mb-2'>RUMUS KONVERSI</div>
+											<p className='text-xs font-bold text-[#0D0D0D] mb-2 font-mono'>NK = NHmin + ((NCx - NCmin) / (NCmax - NCmin)) * (NHmax - NHmin)</p>
+											<ul className='text-[10px] text-[#0D0D0D] font-medium space-y-1 leading-tight'>
+												<li><strong>NK</strong> = Nilai Konversi (Hasil Akhir)</li>
+												<li><strong>NCx</strong> = Nilai Asli Siswa saat ini</li>
+												<li><strong>NCmin / NCmax</strong> = Rentang Nilai Asli</li>
+												<li><strong>NHmin / NHmax</strong> = Rentang Target Nilai</li>
 											</ul>
 										</div>
 									</div>
@@ -637,51 +638,67 @@ export default function LaporanPage() {
 						</div>
 
 						{/* 3. Table */}
-						<div className='bg-white rounded-2xl shadow-sm border border-gray-100 lg:col-span-2 overflow-hidden'>
+						<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] lg:col-span-2 flex flex-col h-fit overflow-hidden'>
+							<div className='bg-[#0D0D0D] px-6 py-4 flex items-center justify-between'>
+								<h3 className='text-white font-black uppercase tracking-widest text-lg'>REKAP NILAI SISWA</h3>
+								{convertConfig.useConversion && <span className='bg-[#00A693] text-white text-[10px] font-black px-2 py-1 border-[2px] border-white -rotate-2'>KONVERSI AKTIF</span>}
+							</div>
 							<div className='overflow-x-auto'>
-								<table className='w-full min-w-[600px]'>
-									<thead className='bg-gray-50 border-b border-gray-200'>
+								<table className='w-full min-w-[700px]'>
+									<thead className='bg-[#F5C518] border-b-[4px] border-[#0D0D0D]'>
 										<tr>
-											<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Siswa</th>
-											<th className='px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider'>
+											<th className='px-6 py-4 text-left text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[4px] border-[#0D0D0D]'>Siswa</th>
+											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>
 												Harian <br />
-												{calcMethod === 'persentase' && <span className='text-[10px] bg-gray-200 px-1 rounded'>{bobot.harian}%</span>}
+												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.harian}%</span>}
 											</th>
-											<th className='px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider'>
+											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>
 												Sumatif <br />
-												{calcMethod === 'persentase' && <span className='text-[10px] bg-gray-200 px-1 rounded'>{bobot.sumatif}%</span>}
+												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.sumatif}%</span>}
 											</th>
-											<th className='px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider'>
+											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[4px] border-[#0D0D0D]'>
 												UAS <br />
-												{calcMethod === 'persentase' && <span className='text-[10px] bg-gray-200 px-1 rounded'>{bobot.uas}%</span>}
+												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.uas}%</span>}
 											</th>
-											<th className='px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider'>Pt (+)</th>
-											<th className='px-4 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider'>Pt (-)</th>
-											<th className='px-6 py-4 text-center text-xs font-bold text-gray-800 uppercase tracking-wider bg-gray-100'>Akhir</th>
-											{convertConfig.useConversion && <th className='px-6 py-4 text-center text-xs font-bold text-green-700 uppercase tracking-wider bg-green-50'>Konversi</th>}
+											<th className='px-2 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>Pt (+)</th>
+											<th className='px-2 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[4px] border-[#0D0D0D]'>Pt (-)</th>
+											<th className='px-6 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider bg-[#FF90E8] border-r-[4px] border-[#0D0D0D]'>Akhir</th>
+											{convertConfig.useConversion && <th className='px-6 py-4 text-center text-xs font-black text-white uppercase tracking-wider bg-[#2F80ED]'>Konversi</th>}
 										</tr>
 									</thead>
-									<tbody className='divide-y divide-gray-100'>
+									<tbody className='divide-y-[3px] divide-[#0D0D0D]'>
 										{studentGrades.map((siswa, idx) => (
 											<tr
 												key={siswa.id}
-												className='hover:bg-slate-50 transition-colors'>
-												<td className='px-6 py-4 whitespace-nowrap'>
-													<div className='flex items-center gap-3'>
-														<div className='w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500'>{idx + 1}</div>
+												className='hover:bg-[#F3F4F6] transition-colors'>
+												<td className='px-6 py-4 whitespace-nowrap border-r-[4px] border-[#0D0D0D]'>
+													<div className='flex items-center gap-4'>
+														<div className='w-8 h-8 bg-white border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-center text-xs font-black text-[#0D0D0D]'>{idx + 1}</div>
 														<div>
-															<div className='text-sm font-semibold text-gray-900'>{siswa.nama_lengkap}</div>
-															<div className='text-xs text-gray-500'>{siswa.nis}</div>
+															<div className='text-sm font-black text-[#0D0D0D] uppercase'>{siswa.nama_lengkap}</div>
+															<div className='text-xs font-bold text-gray-500 uppercase tracking-widest'>{siswa.nis}</div>
 														</div>
 													</div>
 												</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.harian !== null ? siswa.harian.toFixed(1) : '-'}</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.sumatif !== null ? siswa.sumatif.toFixed(1) : '-'}</td>
-												<td className='px-4 py-4 text-center text-sm text-gray-600'>{siswa.uas !== null ? siswa.uas.toFixed(1) : '-'}</td>
-												<td className='px-4 py-4 text-center text-sm font-semibold text-emerald-600 bg-emerald-50/10'>+{siswa.poinPositif}</td>
-												<td className='px-4 py-4 text-center text-sm font-semibold text-rose-600 bg-rose-50/10'>-{siswa.poinNegatif}</td>
-												<td className='px-6 py-4 text-center text-sm font-bold text-gray-900 bg-gray-50/50'>{siswa.finalOrig.toFixed(2)}</td>
-												{convertConfig.useConversion && <td className='px-6 py-4 text-center text-sm font-bold text-green-600 bg-green-50/30'>{siswa.finalConvert.toFixed(2)}</td>}
+												<td className='px-4 py-4 text-center text-sm font-bold text-[#0D0D0D] border-r-[2px] border-[#0D0D0D] bg-white'>{siswa.harian !== null ? siswa.harian.toFixed(1) : '-'}</td>
+												<td className='px-4 py-4 text-center text-sm font-bold text-[#0D0D0D] border-r-[2px] border-[#0D0D0D] bg-white'>{siswa.sumatif !== null ? siswa.sumatif.toFixed(1) : '-'}</td>
+												<td className='px-4 py-4 text-center text-sm font-bold text-[#0D0D0D] border-r-[4px] border-[#0D0D0D] bg-white'>{siswa.uas !== null ? siswa.uas.toFixed(1) : '-'}</td>
+												<td className='px-2 py-4 text-center border-r-[2px] border-[#0D0D0D] bg-white'>
+													{siswa.poinPositif > 0 ? (
+														<span className='inline-block bg-[#00A693] text-white px-2 py-0.5 border-[2px] border-[#0D0D0D] font-black text-xs'>+{siswa.poinPositif}</span>
+													) : (
+														<span className='text-gray-400 font-bold'>-</span>
+													)}
+												</td>
+												<td className='px-2 py-4 text-center border-r-[4px] border-[#0D0D0D] bg-white'>
+													{siswa.poinNegatif > 0 ? (
+														<span className='inline-block bg-[#E8451A] text-white px-2 py-0.5 border-[2px] border-[#0D0D0D] font-black text-xs'>-{siswa.poinNegatif}</span>
+													) : (
+														<span className='text-gray-400 font-bold'>-</span>
+													)}
+												</td>
+												<td className='px-6 py-4 text-center text-base font-black text-[#0D0D0D] bg-[#FFF5F0] border-r-[4px] border-[#0D0D0D] shadow-[inset_4px_4px_0px_0px_rgba(0,0,0,0.05)]'>{siswa.finalOrig.toFixed(2)}</td>
+												{convertConfig.useConversion && <td className='px-6 py-4 text-center text-base font-black text-white bg-[#00A693] shadow-[inset_4px_4px_0px_0px_rgba(0,0,0,0.15)]'>{siswa.finalConvert.toFixed(2)}</td>}
 											</tr>
 										))}
 									</tbody>
