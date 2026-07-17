@@ -1,12 +1,23 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Users, Shuffle, TrendingUp, Save, Loader2, GripVertical, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Shuffle, TrendingUp, Loader2, GripVertical } from 'lucide-react';
 import Loader from '@/app/components/loading';
 import DragDropBoard from '@/app/components/DragDropBoard';
-import ButtonBack from '@/app/components/button/ButtonBack';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
+
+// Neobrutalism SweetAlert Mixin
+const brutalSwal = Swal.mixin({
+	customClass: {
+		popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+		title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
+		htmlContainer: 'font-bold text-[#0D0D0D]',
+		confirmButton: 'bg-[#2F80ED] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+		cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
+	},
+	buttonsStyling: false
+});
 
 export default function CreateGroupPage() {
 	const router = useRouter();
@@ -27,7 +38,7 @@ export default function CreateGroupPage() {
 	const [mapelList, setMapelList] = useState([]);
 	const [tugasList, setTugasList] = useState([]);
 	const [loading, setLoading] = useState(false);
-	const [loadingPage, setLoadingPage] = useState(false);
+	const [loadingPage, setLoadingPage] = useState(true);
 
 	// State UI
 	const [showBoard, setShowBoard] = useState(false);
@@ -43,8 +54,20 @@ export default function CreateGroupPage() {
 					supabase.from('mapel').select('*')
 				]);
 
-				setKelasList(dataKelas || []);
-				setMapelList(mapelData || []);
+				const sortedKelas = (dataKelas || []).sort((a, b) => {
+					const nameA = a.nama_kelas || a.kelas || '';
+					const nameB = b.nama_kelas || b.kelas || '';
+					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+				});
+
+				const sortedMapel = (mapelData || []).sort((a, b) => {
+					const nameA = a.nama_mapel || a.mapel || '';
+					const nameB = b.nama_mapel || b.mapel || '';
+					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+				});
+
+				setKelasList(sortedKelas);
+				setMapelList(sortedMapel);
 			} catch (err) {
 				console.error('Error fetching kelas:', err);
 			} finally {
@@ -129,10 +152,18 @@ export default function CreateGroupPage() {
 				setTugasList(tugasList);
 
 				if (siswaDataUpdated.length === 0) {
-					Swal.fire('Informasi', `Tidak ada siswa aktif di kelas ${form.kelas}`, 'info');
+					brutalSwal.fire({
+						title: 'INFORMASI',
+						text: `TIDAK ADA SISWA AKTIF DI KELAS ${form.kelas}`,
+						icon: 'info'
+					});
 				}
 			} catch (err) {
-				Swal.fire('Gagal', err.message, 'error');
+				brutalSwal.fire({
+					title: 'GAGAL',
+					text: err.message,
+					icon: 'error'
+				});
 				setSiswaList([]);
 				setTugasList([]);
 			} finally {
@@ -154,11 +185,15 @@ export default function CreateGroupPage() {
 
 	const generateRandomGroups = () => {
 		if (siswaList.length === 0) {
-			Swal.fire('Maaf', 'Tidak ada siswa untuk dibagi ke dalam grup', 'warning');
+			brutalSwal.fire({
+				title: 'MAAF',
+				text: 'TIDAK ADA SISWA UNTUK DIBAGI',
+				icon: 'warning'
+			});
 			return;
 		}
 
-		const shuffled = fisherYatesShuffle(siswaList); // unbiased shuffle [web:38]
+		const shuffled = fisherYatesShuffle(siswaList);
 
 		const k = form.jumlahGrup;
 		const groups = Array.from({ length: k }, (_, i) => ({
@@ -167,11 +202,10 @@ export default function CreateGroupPage() {
 			members: [],
 		}));
 
-		// Offset acak agar grup yang dapat anggota ekstra juga acak
 		const startOffset = Math.floor(Math.random() * k);
 
 		shuffled.forEach((s, idx) => {
-			const groupIdx = (startOffset + idx) % k; // floor-mod style distribution [web:26]
+			const groupIdx = (startOffset + idx) % k;
 			groups[groupIdx].members.push({
 				id: s.id,
 				nama: s.nama_lengkap,
@@ -185,11 +219,14 @@ export default function CreateGroupPage() {
 
 	const generateHeterogenGroups = async () => {
 		if (siswaList.length === 0) {
-			Swal.fire('Maaf', 'Tidak ada siswa untuk dibagi ke dalam grup', 'warning');
+			brutalSwal.fire({
+				title: 'MAAF',
+				text: 'TIDAK ADA SISWA UNTUK DIBAGI',
+				icon: 'warning'
+			});
 			return;
 		}
 
-		// Bila all, validasinya countNilai. Bila spesifik, validasinya adalah map nilai spesifik ada isinya
 		let totalRekamNilai = 0;
 		if (form.tugasSumber === 'all') {
 			totalRekamNilai = siswaList.reduce((acc, s) => acc + (s.countNilai || 0), 0);
@@ -199,7 +236,11 @@ export default function CreateGroupPage() {
 
 		if (form.tugasSumber !== 'poin_aktif' && totalRekamNilai === 0) {
 			const labelTugas = form.tugasSumber === 'all' ? 'belum ada nilai rute manapun' : 'belum ada satupun yang dinilai pada tugas ini';
-			Swal.fire('Tidak Dapat Diproses', `Tidak dapat membuat grup metode heterogen. Siswa ${labelTugas} di database.`, 'error');
+			brutalSwal.fire({
+				title: 'TIDAK DAPAT DIPROSES',
+				text: `Tidak dapat membuat grup metode heterogen. Siswa ${labelTugas} di database.`,
+				icon: 'error'
+			});
 			return;
 		}
 
@@ -211,22 +252,23 @@ export default function CreateGroupPage() {
 		}
 
 		if (adaYgNol) {
-			const result = await Swal.fire({
-				title: 'Peringatan Data Kosong',
-				text:
-					form.tugasSumber === 'all'
+			const result = await brutalSwal.fire({
+				title: 'PERINGATAN DATA KOSONG',
+				text: form.tugasSumber === 'all'
 						? 'Beberapa siswa tidak memiliki kerekaman nilai secara lengkap pada seluruh tugas di kelas ini. Kekosongan akan dianggap 0 dan memotong rata-rata akhirnya. Lanjutkan?'
 						: 'Beberapa siswa belum memiliki rekam nilai untuk tugas kriteria ini. Mereka akan dianggap bernilai 0. Lanjutkan?',
 				icon: 'warning',
 				showCancelButton: true,
-				confirmButtonColor: '#3085d6',
-				cancelButtonColor: '#d33',
-				confirmButtonText: 'Ya, lanjutkan',
+				confirmButtonText: 'YA, LANJUTKAN',
+				cancelButtonText: 'BATAL',
+				customClass: {
+					...brutalSwal.options.customClass,
+					confirmButton: 'bg-[#E8451A] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+				}
 			});
 			if (!result.isConfirmed) return;
 		}
 
-		// Kalkulator khusus "Semua Nilai" agar membagi berdasar total TugasList, bukan countNilainya si anak
 		const getScoreAvg = (siswa) => {
 			if (form.tugasSumber === 'poin_aktif') return siswa.netPoin || 0;
 			if (form.tugasSumber !== 'all') {
@@ -234,12 +276,10 @@ export default function CreateGroupPage() {
 			}
 			if (tugasList.length === 0) return 0;
 
-			// Akumulasi total nilai mutlak
 			const totalMutlak = Object.values(siswa.nilai || {}).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
 			return totalMutlak / tugasList.length;
 		};
 
-		// Urutkan nilai tertinggi ke terendah (Descending)
 		const sorted = [...siswaList].sort((a, b) => {
 			const scoreA = getScoreAvg(a);
 			const scoreB = getScoreAvg(b);
@@ -252,16 +292,12 @@ export default function CreateGroupPage() {
 			members: [],
 		}));
 
-		// Distribusi Snake-Draft (Melanggar arah di setiap repetisi untuk keseimbangan)
-		// e.g., 1-2-3-4 -> 4-3-2-1 -> 1-2-3-4
 		let arahMaju = true;
 
-		// Bagi ke dalam 'ronde' putaran
 		for (let i = 0; i < sorted.length; i += form.jumlahGrup) {
 			const batch = sorted.slice(i, i + form.jumlahGrup);
 
 			if (arahMaju) {
-				// Isi normal (K1, K2, K3, K4)
 				batch.forEach((siswa, idx) => {
 					groups[idx].members.push({
 						id: siswa.id,
@@ -271,11 +307,8 @@ export default function CreateGroupPage() {
 					});
 				});
 			} else {
-				// Isi terbalik (K4, K3, K2, K1)
 				batch.forEach((siswa, idx) => {
-					// Balik indeks berdasarkan sisa ukuran batch (Bisa saja batch sisa kurang dari jumlahGrup)
 					const reverseIdx = form.jumlahGrup - 1 - idx;
-					// Pastikan indeks tidak undefined jika batch melompati struktur
 					if (groups[reverseIdx]) {
 						groups[reverseIdx].members.push({
 							id: siswa.id,
@@ -284,7 +317,6 @@ export default function CreateGroupPage() {
 							avg: getScoreAvg(siswa),
 						});
 					} else {
-						// Fallback aman
 						groups[idx].members.push({
 							id: siswa.id,
 							nama: siswa.nama_lengkap,
@@ -294,8 +326,6 @@ export default function CreateGroupPage() {
 					}
 				});
 			}
-
-			// Ganti arah putaran untuk ronde berikutnya
 			arahMaju = !arahMaju;
 		}
 
@@ -305,14 +335,22 @@ export default function CreateGroupPage() {
 
 	const handleGenerate = async () => {
 		if (!form.judul || !form.kelas) {
-			Swal.fire('Ops!', 'Mohon lengkapi perihal judul aktivitas beserta kelas yang dituju.', 'warning');
+			brutalSwal.fire({
+				title: 'OPS!',
+				text: 'MOHON LENGKAPI JUDUL DAN KELAS',
+				icon: 'warning'
+			});
 			return;
 		}
 		setLoading(true);
 
 		try {
 			if (!siswaList.length) {
-				Swal.fire('Maaf', `Tidak ada siswa di database yang terdaftar untuk kelas "${form.kelas}".`, 'error');
+				brutalSwal.fire({
+					title: 'MAAF',
+					text: `TIDAK ADA SISWA DI DATABASE UNTUK KELAS ${form.kelas}`,
+					icon: 'error'
+				});
 				setLoading(false);
 				return;
 			}
@@ -331,9 +369,8 @@ export default function CreateGroupPage() {
 
 	if (showBoard) {
 		return (
-			<div className='max-w-6xl mx-auto'>
-				<ButtonBack />
-				<div className='bg-white rounded-2xl shadow-sm border border-slate-200/70 p-1 h-full  overflow-hidden'>
+			<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 pt-8 font-sans'>
+				<div className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
 					<DragDropBoard
 						initialGroups={generatedGroups}
 						metaData={form}
@@ -349,256 +386,209 @@ export default function CreateGroupPage() {
 	}
 
 	return (
-		<div className='min-h-screen bg-slate-50'>
-			<div className='mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:px-8'>
-				<ButtonBack />
-				<div className='overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm'>
-					{/* Header */}
-					<div className='border-b border-slate-200 bg-white px-5 py-4 sm:px-6'>
-						<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 pt-8 font-sans'>
+			<div className='mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 space-y-8'>
+				
+				{/* Header Navigasi */}
+				<div className='flex items-center justify-between'>
+					<button
+						onClick={() => window.history.back()}
+						className='p-4 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+						<ChevronLeft className='w-8 h-8 text-[#0D0D0D]' strokeWidth={3} />
+					</button>
+					<div className='bg-[#A3E635] p-3 border-[4px] border-[#0D0D0D] rotate-2 inline-block shadow-[4px_4px_0px_0px_#0D0D0D]'>
+						<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>BUAT GRUP BARU</h1>
+					</div>
+				</div>
+
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] rounded-none overflow-hidden relative'>
+					
+					{/* Header Papan Form */}
+					<div className='border-b-[4px] border-[#0D0D0D] bg-[#2F80ED] p-6 relative overflow-hidden'>
+						{/* Deco */}
+						<div className='absolute -right-10 -bottom-10 w-32 h-32 bg-[#FF90E8] border-[4px] border-[#0D0D0D] rotate-45 z-0'></div>
+
+						<div className='relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
 							<div>
-								<h1 className='text-xl font-semibold text-slate-900 sm:text-2xl'>Buat Grup Belajar Baru</h1>
-								<p className='mt-1 text-sm text-slate-500'>Isi detail kegiatan, lalu generate grup dan atur anggota di papan drag & drop.</p>
+								<h1 className='text-xl font-black text-white uppercase tracking-widest'>DATA KEGIATAN & METODE</h1>
+								<p className='mt-1 text-sm font-bold text-white bg-[#0D0D0D] px-2 py-1 inline-block uppercase tracking-widest'>ISI DETAIL, GENERATE, DAN ATUR DI PAPAN DRAG & DROP.</p>
 							</div>
 
-							{/* Info kecil di kanan (opsional UI) */}
 							{form.kelas ? (
-								<div className='inline-flex items-center gap-2 self-start rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700 sm:self-auto'>
-									<span className='h-2 w-2 rounded-full bg-emerald-500' />
-									{loading ? 'Memuat siswa...' : `${siswaList.length} siswa aktif`}
+								<div className='inline-flex items-center self-start border-[3px] border-[#0D0D0D] bg-[#A3E635] px-4 py-2 font-black uppercase tracking-widest text-[#0D0D0D] sm:self-auto shadow-[4px_4px_0px_0px_#0D0D0D]'>
+									{loading ? 'MEMUAT...' : `${siswaList.length} SISWA AKTIF`}
 								</div>
 							) : (
-								<div className='inline-flex items-center gap-2 self-start rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 sm:self-auto'>Pilih kelas untuk memuat siswa</div>
+								<div className='inline-flex items-center self-start border-[3px] border-[#0D0D0D] bg-white px-4 py-2 font-black uppercase tracking-widest text-[#0D0D0D] sm:self-auto shadow-[4px_4px_0px_0px_#0D0D0D]'>PILIH KELAS DULU</div>
 							)}
 						</div>
 					</div>
 
-					{/* Body */}
-					<div className='px-5 py-5 sm:px-6'>
-						{/* Style base (UI only) */}
-						{/*
-            Catatan: ini bukan perubahan logika; hanya helper string untuk className.
-          */}
-						{(() => {
-							const inputClass =
-								'mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 shadow-sm placeholder:text-slate-400 ' +
-								'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:border-blue-600';
+					{/* Body Form */}
+					<div className='p-6 md:p-8 relative z-10'>
+						<div className='space-y-8'>
+							
+							<div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+								{/* Judul */}
+								<div className='md:col-span-2'>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
+										JUDUL KEGIATAN <span className='text-[#E8451A]'>*</span>
+									</label>
+									<input
+										type='text'
+										value={form.judul}
+										onChange={(e) => setForm({ ...form, judul: e.target.value })}
+										placeholder='CONTOH: DISKUSI BAB 3'
+										className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all placeholder:text-gray-400'
+									/>
+									<p className='mt-2 text-[10px] font-bold text-[#0D0D0D] bg-[#F5C518] px-2 py-1 inline-block uppercase tracking-widest border-[2px] border-[#0D0D0D]'>Judul akan tampil di papan grup.</p>
+								</div>
 
-							const selectClass =
-								'mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-slate-900 shadow-sm ' +
-								'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/50 focus-visible:border-blue-600';
+								{/* Kelas */}
+								<div>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
+										KELAS <span className='text-[#E8451A]'>*</span>
+									</label>
+									<select
+										value={form.kelas}
+										onChange={(e) => setForm({ ...form, kelas: e.target.value })}
+										className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
+										<option value='' disabled>-- PILIH KELAS --</option>
+										{kelasList.map((k) => (
+											<option key={k.id} value={k.nama_kelas || k.kelas}>{k.nama_kelas || k.kelas}</option>
+										))}
+									</select>
+								</div>
 
-							const hintClass = 'mt-2 text-xs text-slate-500';
+								{/* Mapel */}
+								<div>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
+										MATA PELAJARAN (OPSIONAL)
+									</label>
+									<select
+										value={form.mapel}
+										onChange={(e) => setForm({ ...form, mapel: e.target.value })}
+										className='w-full h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
+										<option value=''>-- SEMUA MAPEL --</option>
+										{mapelList.map((m) => (
+											<option key={m.id} value={m.nama_mapel || m.mapel}>{m.nama_mapel || m.mapel}</option>
+										))}
+									</select>
+								</div>
 
-							return (
-								<div className='space-y-6'>
-									{/* Grid form */}
-									<div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
-										{/* Judul */}
-										<div className='md:col-span-2'>
-											<label
-												htmlFor='judul'
-												className='text-sm font-medium text-slate-800'>
-												Judul Kegiatan
-											</label>
-											<input
-												id='judul'
-												type='text'
-												value={form.judul}
-												onChange={(e) => setForm({ ...form, judul: e.target.value })}
-												placeholder='Contoh: Diskusi Bab 3'
-												className={inputClass}
-											/>
-											<p className={hintClass}>Judul akan tampil di papan grup sebagai nama aktivitas.</p>
+								{/* Metode */}
+								<div className='md:col-span-2 pt-4 border-t-[4px] border-[#0D0D0D]'>
+									<p className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest mb-4'>METODE PEMBAGIAN</p>
+
+									<div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
+										{/* Random */}
+										<div
+											onClick={() => setForm({ ...form, metode: 'random' })}
+											className={`cursor-pointer border-[4px] border-[#0D0D0D] p-6 transition-all shadow-[8px_8px_0px_0px_#0D0D0D] ${form.metode === 'random' ? 'bg-[#F5C518] -translate-y-1 shadow-[10px_10px_0px_0px_#0D0D0D]' : 'bg-white hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_#0D0D0D]'}`}>
+											<div className='flex items-center gap-3 mb-2'>
+												<div className={`p-2 border-[3px] border-[#0D0D0D] ${form.metode === 'random' ? 'bg-white' : 'bg-gray-100'}`}>
+													<Shuffle className='h-6 w-6 text-[#0D0D0D]' strokeWidth={3} />
+												</div>
+												<h3 className='text-lg font-black text-[#0D0D0D] uppercase tracking-widest'>ACAK (RANDOM)</h3>
+											</div>
+											<p className='text-sm font-bold text-[#0D0D0D] uppercase tracking-widest'>Pembagian otomatis secara acak dan merata.</p>
 										</div>
 
-										{/* Kelas */}
-										<div>
-											<label
-												htmlFor='kelas'
-												className='text-sm font-medium text-slate-800'>
-												Kelas
-											</label>
-											<select
-												id='kelas'
-												value={form.kelas}
-												onChange={(e) => setForm({ ...form, kelas: e.target.value })}
-												className={selectClass}>
-												<option value=''>-- Pilih Kelas --</option>
-												{kelasList.map((k) => (
-													<option
-														key={k.id}
-														value={k.kelas}>
-														{k.kelas}
-													</option>
-												))}
-											</select>
-
-											{loading && <p className={hintClass}>Memuat data siswa...</p>}
-											{!loading && form.kelas && <p className={hintClass}>{siswaList.length} siswa aktif ditemukan</p>}
-										</div>
-
-										{/* Mapel */}
-										<div>
-											<label
-												htmlFor='mapel'
-												className='text-sm font-medium text-slate-800'>
-												Mata Pelajaran <span className='font-normal text-slate-500'>(opsional)</span>
-											</label>
-											<select
-												id='mapel'
-												value={form.mapel}
-												onChange={(e) => setForm({ ...form, mapel: e.target.value })}
-												className={selectClass}>
-												<option value=''>-- Pilih Mapel --</option>
-												{mapelList.map((m) => (
-													<option
-														key={m.id}
-														value={m.mapel}>
-														{m.mapel}
-													</option>
-												))}
-											</select>
-											<p className={hintClass}>Kosongkan jika grup tidak terikat mapel tertentu.</p>
-										</div>
-
-										{/* Metode */}
-										<div className='md:col-span-2'>
-											<p className='text-sm font-medium text-slate-800'>Metode Pembagian</p>
-
-											<div className='mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2'>
-												{/* Random */}
-												<label className='group relative flex cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300'>
-													<input
-														type='radio'
-														name='metode'
-														value='random'
-														checked={form.metode === 'random'}
-														onChange={(e) => setForm({ ...form, metode: e.target.value })}
-														className='mt-1 h-4 w-4 accent-blue-600'
-													/>
-													<div className='min-w-0 flex-1'>
-														<div className='flex items-center gap-2'>
-															<Shuffle className='h-5 w-5 text-blue-600' />
-															<p className='text-sm font-semibold text-slate-900'>Acak</p>
-														</div>
-														<p className='mt-1 text-sm text-slate-500'>Pembagian otomatis secara random dan merata.</p>
+										{/* Heterogen */}
+										<div
+											onClick={() => setForm({ ...form, metode: 'heterogen' })}
+											className={`cursor-pointer border-[4px] border-[#0D0D0D] p-6 transition-all shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col justify-between ${form.metode === 'heterogen' ? 'bg-[#FF90E8] -translate-y-1 shadow-[10px_10px_0px_0px_#0D0D0D]' : 'bg-white hover:-translate-y-1 hover:shadow-[10px_10px_0px_0px_#0D0D0D]'}`}>
+											<div>
+												<div className='flex items-center gap-3 mb-2'>
+													<div className={`p-2 border-[3px] border-[#0D0D0D] ${form.metode === 'heterogen' ? 'bg-white' : 'bg-gray-100'}`}>
+														<TrendingUp className='h-6 w-6 text-[#0D0D0D]' strokeWidth={3} />
 													</div>
-												</label>
+													<h3 className='text-lg font-black text-[#0D0D0D] uppercase tracking-widest'>HETEROGEN</h3>
+												</div>
+												<p className='text-sm font-bold text-[#0D0D0D] uppercase tracking-widest'>Distribusi menyeimbangkan skor kelompok.</p>
+											</div>
 
-												{/* Heterogen */}
-												<div
-													className={`rounded-2xl border bg-white shadow-sm transition ${form.metode === 'heterogen' ? 'border-emerald-500 ring-1 ring-emerald-500 rounded-b-none border-b-0' : 'border-slate-200 hover:border-slate-300'}`}>
-													<label className='group relative flex cursor-pointer gap-3 p-4'>
-														<input
-															type='radio'
-															name='metode'
-															value='heterogen'
-															checked={form.metode === 'heterogen'}
-															onChange={(e) => setForm({ ...form, metode: e.target.value })}
-															className='mt-1 h-4 w-4 accent-emerald-600'
-														/>
-														<div className='min-w-0 flex-1'>
-															<div className='flex items-center gap-2'>
-																<TrendingUp className='h-5 w-5 text-emerald-600' />
-																<p className='text-sm font-semibold text-slate-900'>Heterogen (berdasarkan nilai)</p>
-															</div>
-															<p className='mt-1 text-sm text-slate-500'>Distribusi merata menyeimbangkan skor kelompok.</p>
-														</div>
+											{form.metode === 'heterogen' && (
+												<div className='mt-6 pt-6 border-t-[4px] border-[#0D0D0D] animate-in fade-in zoom-in-95 duration-200'>
+													<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>
+														SUMBER NILAI:
 													</label>
-
-													{form.metode === 'heterogen' && (
-														<div className='px-4 pb-4 animate-in slide-in-from-top-2 fade-in duration-200'>
-															<hr className='border-slate-100 mb-3' />
-															<label
-																htmlFor='tugasSumber'
-																className='block text-xs font-medium text-slate-500 mb-1'>
-																Pilih Dasar Perhitungan Nilai:
-															</label>
-															<select
-																id='tugasSumber'
-																value={form.tugasSumber}
-																onChange={(e) => setForm({ ...form, tugasSumber: e.target.value })}
-																className='w-full text-sm rounded-lg border border-slate-200 bg-emerald-50/50 px-3 py-2 text-slate-700 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500'>
-																<option value='all'>⭐ Semua Nilai (Rata-rata)</option>
-																<option value='poin_aktif'>🎭 Keaktifan Karakter (Net Poin)</option>
-																{tugasList.length > 0 && (
-																	<optgroup label='Berdasarkan Tugas Kelompok/Individu:'>
-																		{tugasList.map((t) => (
-																			<option
-																				key={t.tugas_id}
-																				value={t.tugas_id}>
-																				{t.kategori} - {t.tanggal} (Mapel: {t.mapel})
-																			</option>
-																		))}
-																	</optgroup>
-																)}
-															</select>
-															{tugasList.length === 0 && form.kelas && !loading && <p className='text-[10px] text-amber-600 mt-1 italic'>Belum ada satupun riwayat nilai di kelas terkait.</p>}
-														</div>
+													<select
+														value={form.tugasSumber}
+														onChange={(e) => setForm({ ...form, tugasSumber: e.target.value })}
+														className='w-full h-[50px] px-4 border-[3px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] appearance-none cursor-pointer text-sm focus:outline-none focus:-translate-y-1 transition-all'>
+														<option value='all'>⭐ SEMUA NILAI (RATA-RATA)</option>
+														<option value='poin_aktif'>🎭 KEAKTIFAN (NET POIN)</option>
+														{tugasList.length > 0 && (
+															<optgroup label='BERDASARKAN TUGAS SPESIFIK:'>
+																{tugasList.map((t) => (
+																	<option key={t.tugas_id} value={t.tugas_id}>
+																		{t.kategori} - {t.tanggal}
+																	</option>
+																))}
+															</optgroup>
+														)}
+													</select>
+													{tugasList.length === 0 && form.kelas && !loading && (
+														<p className='text-[10px] bg-white border-[2px] border-[#0D0D0D] px-2 py-1 text-[#0D0D0D] font-black uppercase tracking-widest mt-2 inline-block'>BELUM ADA RIWAYAT NILAI</p>
 													)}
 												</div>
-											</div>
-										</div>
-
-										{/* Jumlah grup */}
-										<div className='md:col-span-2'>
-											<label
-												htmlFor='jumlahGrup'
-												className='text-sm font-medium text-slate-800'>
-												Jumlah Grup
-											</label>
-											<div className='mt-1 flex flex-col gap-3 sm:flex-row sm:items-center'>
-												<select
-													id='jumlahGrup'
-													value={form.jumlahGrup}
-													onChange={(e) => setForm({ ...form, jumlahGrup: parseInt(e.target.value) })}
-													className={`${selectClass} sm:max-w-xs`}>
-													{Array.from({ length: 14 }, (_, i) => i + 2).map((num) => (
-														<option
-															key={num}
-															value={num}>
-															{num} Kelompok
-														</option>
-													))}
-												</select>
-
-												<div className='flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600'>
-													Sistem akan membagi siswa ke dalam <span className='font-semibold'>{form.jumlahGrup}</span> kelompok secara merata.
-												</div>
-											</div>
-										</div>
-									</div>
-
-									{/* Action bar */}
-									<div className='flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end'>
-										<button
-											onClick={() => router.back()}
-											className='inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto'>
-											<ChevronLeft className='mr-2 h-5 w-5' />
-											Batal
-										</button>
-
-										<button
-											onClick={handleGenerate}
-											disabled={loading || !form.kelas || !form.judul}
-											className='inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-auto'>
-											{loading ? (
-												<>
-													<Loader2 className='mr-2 h-5 w-5 animate-spin' />
-													Memproses...
-												</>
-											) : (
-												<>
-													Generate Grup
-													<ChevronRight className='ml-2 h-5 w-5' />
-												</>
 											)}
-										</button>
+										</div>
 									</div>
 								</div>
-							);
-						})()}
+
+								{/* Jumlah grup */}
+								<div className='md:col-span-2 pt-4'>
+									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
+										JUMLAH GRUP
+									</label>
+									<div className='flex flex-col gap-4 sm:flex-row sm:items-center'>
+										<select
+											value={form.jumlahGrup}
+											onChange={(e) => setForm({ ...form, jumlahGrup: parseInt(e.target.value) })}
+											className='w-full sm:w-64 h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
+											{Array.from({ length: 14 }, (_, i) => i + 2).map((num) => (
+												<option key={num} value={num}>
+													{num} KELOMPOK
+												</option>
+											))}
+										</select>
+
+										<div className='flex-1 border-[4px] border-[#0D0D0D] bg-[#A3E635] px-6 py-4 text-sm font-black uppercase tracking-widest text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+											DIBAGI RATA MENJADI <span className='bg-white px-2 py-1 border-[2px] border-[#0D0D0D] mx-1 text-lg'>{form.jumlahGrup}</span> KELOMPOK
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Action bar */}
+							<div className='flex flex-col-reverse gap-4 border-t-[4px] border-[#0D0D0D] pt-8 sm:flex-row sm:justify-end mt-4'>
+								<button
+									onClick={() => router.back()}
+									className='h-[60px] px-8 bg-white text-[#0D0D0D] border-[4px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all flex items-center justify-center gap-2'>
+									BATAL
+								</button>
+
+								<button
+									onClick={handleGenerate}
+									disabled={loading || !form.kelas || !form.judul}
+									className='h-[60px] px-8 bg-[#2F80ED] text-white border-[4px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-center gap-2'>
+									{loading ? (
+										<>
+											<Loader2 className='h-6 w-6 animate-spin' />
+											MEMPROSES...
+										</>
+									) : (
+										<>
+											GENERATE GRUP
+											<ChevronRight className='h-6 w-6' strokeWidth={3} />
+										</>
+									)}
+								</button>
+							</div>
+
+						</div>
 					</div>
 				</div>
 			</div>

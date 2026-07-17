@@ -7,6 +7,18 @@ import { DndContext, PointerSensor, TouchSensor, useDroppable, useDraggable, use
 import Swal from 'sweetalert2';
 import { swalProcess, swalSuccess, swalError } from '@/lib/swal';
 
+// Neobrutalism SweetAlert Mixin
+const brutalSwal = Swal.mixin({
+	customClass: {
+		popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+		title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
+		htmlContainer: 'font-bold text-[#0D0D0D]',
+		confirmButton: 'bg-[#2F80ED] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+		cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
+	},
+	buttonsStyling: false
+});
+
 const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 	const router = useRouter();
 	const [groups, setGroups] = useState(initialGroups);
@@ -26,13 +38,13 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 	};
 
 	const handleShuffle = async () => {
-		const result = await Swal.fire({
-			title: 'Acak ulang anggota?',
-			text: 'Susunan anggota akan diacak ulang.',
+		const result = await brutalSwal.fire({
+			title: 'ACAK ULANG ANGGOTA?',
+			text: 'SUSUNAN ANGGOTA AKAN DIACAK ULANG.',
 			icon: 'warning',
 			showCancelButton: true,
-			confirmButtonText: 'Ya, acak',
-			cancelButtonText: 'Batal',
+			confirmButtonText: 'YA, ACAK',
+			cancelButtonText: 'BATAL',
 		});
 
 		if (!result.isConfirmed) return;
@@ -73,8 +85,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 
 	const totalSiswa = useMemo(() => groups.reduce((acc, g) => acc + (g.members?.length || 0), 0), [groups]);
 
-	const title = metaData?.judul_kegiatan || metaData?.judul || 'Edit Susunan Grup';
-	const kelas = metaData?.kelas_id || metaData?.kelas || 'Kelas';
+	const title = metaData?.judul_kegiatan || metaData?.judul || 'EDIT SUSUNAN GRUP';
+	const kelas = metaData?.kelas_id || metaData?.kelas || 'KELAS';
 	const mapel = metaData?.mapel_id || metaData?.mapel || null;
 
 	const findMemberById = (memberId) => {
@@ -83,10 +95,6 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 			if (m) return m;
 		}
 		return null;
-	};
-
-	const findGroupByMemberId = (memberId) => {
-		return groups.find((g) => g.members?.some((x) => String(x.id) === String(memberId)));
 	};
 
 	const handleDragStart = (event) => {
@@ -127,7 +135,12 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 
 	const handleSave = async () => {
 		setIsSaving(true);
-		swalProcess('Menyimpan...', 'Jangan tutup halaman');
+		brutalSwal.fire({
+			title: 'MENYIMPAN...',
+			text: 'JANGAN TUTUP HALAMAN',
+			allowOutsideClick: false,
+			didOpen: () => Swal.showLoading()
+		});
 		try {
 			const dataToSave = groups.map((g) => ({
 				nama_grup: g.nama,
@@ -156,7 +169,14 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 
 			if (!response.ok) throw new Error('Gagal menyimpan');
 			Swal.close();
-			await swalSuccess('Tersimpan', 'Data berhasil disimpan');
+			
+			await brutalSwal.fire({
+				icon: 'success',
+				title: 'TERSIMPAN!',
+				text: 'DATA BERHASIL DISIMPAN',
+				timer: 1500,
+				showConfirmButton: false
+			});
 
 			if (isEditMode) {
 				onBack();
@@ -166,7 +186,11 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 			}
 		} catch (error) {
 			Swal.close();
-			await swalError('Gagal', error.message);
+			await brutalSwal.fire({
+				icon: 'error',
+				title: 'GAGAL',
+				text: error.message
+			});
 		} finally {
 			setIsSaving(false);
 		}
@@ -177,40 +201,39 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 	return (
 		<div className='w-full'>
 			{/* Toolbar */}
-			<div className='bg-white border border-slate-200/70 rounded-2xl shadow-sm p-4 md:p-5 mb-6'>
-				<div className='flex flex-col md:flex-row md:items-center md:justify-between gap-3'>
-					<div className='min-w-0'>
-						<h2 className='font-bold text-lg md:text-xl text-slate-900 truncate'>{title}</h2>
-						<p className='text-sm text-slate-500 mt-0.5'>
-							<span className='font-medium text-slate-700'>{kelas}</span>
-							{mapel ? <span> • {mapel}</span> : null}
-							<span> • {totalSiswa} siswa</span>
+			<div className='bg-[#FF90E8] border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] p-5 mb-8'>
+				<div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4'>
+					<div className='min-w-0 bg-white p-3 border-[3px] border-[#0D0D0D]'>
+						<h2 className='font-black text-xl md:text-2xl text-[#0D0D0D] uppercase tracking-widest truncate'>{title}</h2>
+						<p className='text-xs font-bold text-[#0D0D0D] uppercase tracking-widest mt-1'>
+							<span className='bg-[#A3E635] px-2 py-1 border-[2px] border-[#0D0D0D] mr-2'>{kelas}</span>
+							{mapel ? <span className='bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D] mr-2'>{mapel}</span> : null}
+							<span className='bg-white px-2 py-1 border-[2px] border-[#0D0D0D]'>{totalSiswa} SISWA</span>
 						</p>
 					</div>
 
-					<div className='flex flex-col sm:flex-row gap-2'>
-						<button
-							onClick={onBack}
-							className='px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2'>
-							Kembali
-						</button>
+					<div className='flex flex-col sm:flex-row gap-3'>
+						{onBack && (
+							<button
+								onClick={onBack}
+								className='px-6 py-3 h-[50px] rounded-none border-[3px] border-[#0D0D0D] bg-white text-[#0D0D0D] font-black uppercase tracking-widest hover:-translate-y-1 shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center'>
+								KEMBALI
+							</button>
+						)}
 
 						<button
 							type='button'
 							onClick={handleShuffle}
-							className='px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition'>
-							Acak ulang
+							className='px-6 py-3 h-[50px] rounded-none border-[3px] border-[#0D0D0D] bg-[#F5C518] text-[#0D0D0D] font-black uppercase tracking-widest hover:-translate-y-1 shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center'>
+							ACAK ULANG
 						</button>
 
 						<button
 							onClick={handleSave}
 							disabled={isSaving}
-							className='inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition
-                         shadow-sm hover:shadow-emerald-200/60 disabled:opacity-60
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'>
-							{isSaving ? <Loader2 className='animate-spin w-4 h-4' /> : <Save className='w-4 h-4' />}
-							{sessionId ? 'Simpan Perubahan' : 'Simpan'}
+							className='inline-flex items-center justify-center gap-2 px-6 py-3 h-[50px] rounded-none bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] font-black uppercase tracking-widest hover:-translate-y-1 shadow-[4px_4px_0px_0px_#0D0D0D] transition-all disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							{isSaving ? <Loader2 className='animate-spin w-5 h-5' /> : <Save className='w-5 h-5' strokeWidth={3} />}
+							{sessionId ? 'SIMPAN PERUBAHAN' : 'SIMPAN'}
 						</button>
 					</div>
 				</div>
@@ -224,13 +247,13 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}>
 				{/* Board */}
-				<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6'>
+				<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start'>
 					{groups.map((group) => (
 						<DroppableGroupColumn
 							key={group.id}
 							group={group}
 							isHeterogen={metaData?.metode === 'heterogen'}>
-							<div className='space-y-2 p-3'>
+							<div className='p-4 min-h-[150px] space-y-3 bg-[#FFF5F0]'>
 								{group.members.map((member) => (
 									<DraggableMemberCard
 										key={member.id}
@@ -240,7 +263,9 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 								))}
 
 								{group.members.length === 0 && (
-									<div className='text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-xl bg-slate-50'>Lepas di sini untuk memindahkan siswa</div>
+									<div className='text-center py-10 border-[3px] border-dashed border-[#0D0D0D] bg-white'>
+										<span className='font-black text-sm uppercase tracking-widest text-[#0D0D0D] bg-[#FF90E8] px-3 py-1 border-[2px] border-[#0D0D0D] rotate-2 inline-block'>LEPAS DI SINI</span>
+									</div>
 								)}
 							</div>
 						</DroppableGroupColumn>
@@ -250,9 +275,11 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 				{/* Drag overlay (ghost card yang mengikuti jari/mouse) */}
 				<DragOverlay>
 					{overlayMember ? (
-						<div className='bg-white rounded-xl border border-slate-200 shadow-2xl p-3 w-[260px] scale-[1.03]'>
-							<div className='font-semibold text-slate-900 text-sm truncate'>{overlayMember.nama}</div>
-							{typeof overlayMember.nilai !== 'undefined' && <div className='text-xs text-slate-500 mt-1'>Nilai: {overlayMember.nilai}</div>}
+						<div className='bg-[#A3E635] rounded-none border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] p-4 w-[280px] rotate-3 opacity-90 scale-105'>
+							<div className='font-black text-[#0D0D0D] uppercase tracking-widest text-lg truncate mb-2'>{overlayMember.nama}</div>
+							{typeof overlayMember.avg !== 'undefined' && (
+								<div className='inline-block text-xs font-bold text-[#0D0D0D] bg-white px-2 py-1 border-[2px] border-[#0D0D0D] uppercase tracking-widest'>NILAI: {parseFloat(overlayMember.avg).toFixed(1)}</div>
+							)}
 						</div>
 					) : null}
 				</DragOverlay>
@@ -267,17 +294,20 @@ function DroppableGroupColumn({ group, isHeterogen, children }) {
 	return (
 		<div
 			ref={setNodeRef}
-			className={['bg-white rounded-2xl border shadow-sm flex flex-col transition', isOver ? 'border-indigo-300 ring-2 ring-indigo-200' : 'border-slate-200/70'].join(' ')}>
-			<div className='p-4 border-b rounded-t-2xl border-slate-100 bg-gradient-to-r from-slate-50 to-white flex items-center justify-between gap-3'>
-				<div className='min-w-0'>
-					<h3 className='font-bold text-lg text-slate-900 truncate'>{group.nama}</h3>
-					<p className='text-xs text-slate-500 mt-1'>Drag & drop antar grup</p>
+			className={`bg-white rounded-none border-[4px] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col transition-all overflow-hidden ${isOver ? 'border-[#2F80ED] scale-[1.02] shadow-[12px_12px_0px_0px_#2F80ED]' : 'border-[#0D0D0D]'}`}>
+			<div className='p-4 border-b-[4px] border-[#0D0D0D] bg-white flex items-center justify-between gap-3 relative overflow-hidden'>
+				{/* Deco bg */}
+				<div className='absolute -right-4 -top-4 w-16 h-16 bg-[#F5C518] border-[3px] border-[#0D0D0D] rotate-12 z-0'></div>
+				
+				<div className='min-w-0 relative z-10'>
+					<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest truncate'>{group.nama}</h3>
+					<p className='text-[10px] font-bold text-[#0D0D0D] bg-[#A3E635] px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>DRAG & DROP ANTAR GRUP</p>
 				</div>
-				<div className='flex flex-col items-end gap-1'>
-					<span className='bg-slate-100 text-slate-700 text-sm font-bold px-3 py-1 rounded-full text-center min-w-[3rem]'>{group.members.length}</span>
+				<div className='flex flex-col items-end gap-2 relative z-10'>
+					<span className='bg-[#0D0D0D] text-white text-sm font-black px-3 py-1 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#E8451A] text-center min-w-[3rem]'>{group.members.length}</span>
 					{isHeterogen && (
-						<span className='bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-full'>
-							{(group.members.reduce((acc, m) => acc + (parseFloat(m.avg) || 0), 0) / (group.members.length || 1)).toFixed(1)}
+						<span className='bg-white text-[#0D0D0D] border-[2px] border-[#0D0D0D] text-[10px] font-black px-2 py-0.5 uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>
+							AVG: {(group.members.reduce((acc, m) => acc + (parseFloat(m.avg) || 0), 0) / (group.members.length || 1)).toFixed(1)}
 						</span>
 					)}
 				</div>
@@ -297,7 +327,6 @@ function DraggableMemberCard({ member, fromGroupId }) {
 	});
 
 	const style = {
-		// touchAction: 'none',
 		transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
 		transition,
 	};
@@ -306,19 +335,15 @@ function DraggableMemberCard({ member, fromGroupId }) {
 		<div
 			ref={setNodeRef}
 			style={style}
-			className={['bg-white rounded-xl border border-slate-200 p-3 select-none', 'hover:border-indigo-200 hover:shadow-sm transition', isDragging ? 'opacity-0' : ''].join(' ')}>
-			<div className='flex items-start justify-between gap-3'>
+			className={`bg-white rounded-none border-[3px] border-[#0D0D0D] p-3 select-none hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] transition-all cursor-grab active:cursor-grabbing group ${isDragging ? 'opacity-0' : ''}`}>
+			<div className='flex items-center justify-between gap-3'>
 				<div className='min-w-0'>
-					<div className='font-semibold text-slate-900 text-sm truncate'>{member.nama}</div>
+					<div className='font-black text-[#0D0D0D] uppercase tracking-widest text-sm truncate'>{member.nama}</div>
 				</div>
 
-				<div className='flex items-center gap-2'>
+				<div className='flex items-center gap-2 shrink-0'>
 					{typeof member.avg !== 'undefined' && (
-						<span
-							className={[
-								'text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap',
-								member.avg >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : member.avg >= 60 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-rose-50 text-rose-700 border-rose-100',
-							].join(' ')}>
+						<span className='text-[10px] font-bold px-2 py-1 border-[2px] border-[#0D0D0D] whitespace-nowrap bg-[#FFF5F0] text-[#0D0D0D] uppercase'>
 							{parseFloat(member.avg).toFixed(1)}
 						</span>
 					)}
@@ -328,9 +353,9 @@ function DraggableMemberCard({ member, fromGroupId }) {
 						{...listeners}
 						{...attributes}
 						style={{ touchAction: 'none' }}
-						className='p-1 rounded-lg bg-slate-50 cursor-grab active:cursor-grabbing text-slate-700'
-						aria-label='Tahan 1 detik lalu tarik untuk memindahkan'>
-						<GripVertical className='h-4 w-4 text-slate-400' />
+						className='p-2 bg-[#0D0D0D] text-white border-[2px] border-[#0D0D0D] group-hover:bg-[#FF90E8] group-hover:text-[#0D0D0D] transition-colors'
+						aria-label='Tahan dan tarik'>
+						<GripVertical className='h-4 w-4' strokeWidth={3} />
 					</button>
 				</div>
 			</div>
