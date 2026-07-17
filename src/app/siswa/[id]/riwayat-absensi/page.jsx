@@ -4,88 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
-import SectionHeader from '@/app/components/SectionHeader';
-import ButtonBack from '@/app/components/button/ButtonBack';
 import { createClient } from '@/utils/supabase/client';
-
-// --- Ikon SVG (Sama seperti sebelumnya) ---
-const IconCalendar = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<rect
-			x='3'
-			y='4'
-			width='18'
-			height='18'
-			rx='2'
-			ry='2'
-		/>
-		<line
-			x1='16'
-			y1='2'
-			x2='16'
-			y2='6'
-		/>
-		<line
-			x1='8'
-			y1='2'
-			x2='8'
-			y2='6'
-		/>
-		<line
-			x1='3'
-			y1='10'
-			x2='21'
-			y2='10'
-		/>
-	</svg>
-);
-const IconChevronLeft = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<path d='m15 18-6-6 6-6' />
-	</svg>
-);
-const IconChevronRight = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<path d='m9 18 6-6-6-6' />
-	</svg>
-);
-const IconFilter = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3' />
-	</svg>
-);
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter } from 'lucide-react';
 
 const WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
@@ -104,23 +24,25 @@ function mondayIndex(jsDayIndex) {
 
 function statusMeta(statusRaw) {
 	const s = String(statusRaw || '').toLowerCase();
-	if (s === 'hadir') return { label: 'Hadir', ring: 'ring-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', dot: 'bg-emerald-500' };
-	if (s === 'sakit') return { label: 'Sakit', ring: 'ring-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', dot: 'bg-amber-500' };
-	if (s === 'izin') return { label: 'Izin', ring: 'ring-sky-500', text: 'text-sky-700', bg: 'bg-sky-50', dot: 'bg-sky-500' };
-	if (s === 'alfa' || s === 'alpha') return { label: 'Alfa', ring: 'ring-rose-500', text: 'text-rose-700', bg: 'bg-rose-50', dot: 'bg-rose-500' };
-	return { label: statusRaw || '-', ring: 'ring-gray-300', text: 'text-gray-600', bg: 'bg-gray-50', dot: 'bg-gray-400' };
+	// Neobrutalism Colors
+	if (s === 'hadir') return { label: 'Hadir', border: 'border-[#0D0D0D]', text: 'text-[#0D0D0D]', bg: 'bg-[#A3E635]', dot: 'bg-[#0D0D0D]' };
+	if (s === 'sakit') return { label: 'Sakit', border: 'border-[#0D0D0D]', text: 'text-[#0D0D0D]', bg: 'bg-[#F5C518]', dot: 'bg-[#0D0D0D]' };
+	if (s === 'izin') return { label: 'Izin', border: 'border-[#0D0D0D]', text: 'text-white', bg: 'bg-[#2F80ED]', dot: 'bg-white' };
+	if (s === 'alfa' || s === 'alpha') return { label: 'Alfa', border: 'border-[#0D0D0D]', text: 'text-white', bg: 'bg-[#E8451A]', dot: 'bg-white' };
+	return { label: statusRaw || '-', border: 'border-[#0D0D0D]', text: 'text-[#0D0D0D]', bg: 'bg-white', dot: 'bg-[#0D0D0D]' };
 }
 
 function StatCard({ title, value, sub, type = 'default' }) {
 	const meta = statusMeta(type);
 	return (
-		<div className={`group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-1`}>
-			<div className={`absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-full opacity-10 transition-transform group-hover:scale-110 ${meta.dot.replace('bg-', 'bg-')}`} />
+		<div className={`group relative overflow-hidden rounded-none border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] hover:shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-1 transition-all p-5 ${meta.bg}`}>
+			{/* Decorative Dots Pattern Background */}
+			<div className={`absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-none opacity-20 transition-transform group-hover:scale-110 bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMSIvPjwvc3ZnPg==")]`} />
 			<div className='relative z-10'>
-				<div className='text-xs font-medium uppercase tracking-wider text-gray-500'>{title}</div>
+				<div className={`text-sm font-black uppercase tracking-widest ${meta.text}`}>{title}</div>
 				<div className='mt-2 flex items-baseline gap-2'>
-					<div className='text-3xl font-bold text-gray-900'>{value}</div>
-					{sub && <div className='text-xs font-medium text-gray-400'>{sub}</div>}
+					<div className={`text-4xl font-black ${meta.text}`}>{value}</div>
+					{sub && <div className={`text-sm font-bold ${meta.text} border-[2px] ${meta.border} px-1 bg-white/20`}>{sub}</div>}
 				</div>
 			</div>
 		</div>
@@ -133,17 +55,11 @@ export default function RiwayatAbsensiSiswaPage() {
 
 	const [loading, setLoading] = useState(true);
 	const [siswa, setSiswa] = useState(null);
-
-	// State ini akan menampung GABUNGAN data (Kelas + Mapel)
 	const [riwayat, setRiwayat] = useState([]);
-
 	const [monthOffset, setMonthOffset] = useState(0);
-
-	// View Mode & Selected Mapel
-	const [viewMode, setViewMode] = useState('kelas'); // 'kelas' | 'mapel'
+	const [viewMode, setViewMode] = useState('kelas');
 	const [selectedMapel, setSelectedMapel] = useState('');
 
-	// --- PERUBAHAN UTAMA ADA DI SINI ---
 	useEffect(() => {
 		if (!id) return;
 		const run = async () => {
@@ -151,11 +67,9 @@ export default function RiwayatAbsensiSiswaPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				// 1. Fetch Data Siswa
 				const { data: siswaData } = await supabase.from('siswa').select('*').eq('id', id).single();
 				setSiswa(siswaData || null);
 
-				// 2. Fetch Absensi Mapel
 				const { data: mapelDataRaw } = await supabase.from('absensi_mapel_siswa').select(`
 					status,
 					absensi_mapel!inner(sesi_id, tanggal, jam_ke, kelas, mapel)
@@ -170,7 +84,6 @@ export default function RiwayatAbsensiSiswaPage() {
 					status: r.status,
 				}));
 
-				// 3. Fetch Absensi Kelas
 				const { data: kelasDataRaw } = await supabase.from('absensi_harian_siswa').select(`
 					id, status, keterangan, absensi_harian!inner(tanggal)
 				`).eq('siswa_id', id);
@@ -230,7 +143,6 @@ export default function RiwayatAbsensiSiswaPage() {
 		}
 	}, [activeMonthDate]);
 
-	// Logic Kalender & Filter Data
 	const calendar = useMemo(() => {
 		const year = activeMonthDate.getFullYear();
 		const month = activeMonthDate.getMonth();
@@ -252,14 +164,11 @@ export default function RiwayatAbsensiSiswaPage() {
 		return { year, month, cells, byDate };
 	}, [activeMonthDate, riwayat]);
 
-	// Hitung ulang statistik berdasarkan View Mode
 	const stats = useMemo(() => {
 		const filteredRiwayat = riwayat.filter((r) => {
 			if (viewMode === 'kelas') {
-				// Mode Kelas: Ambil data yg mapelnya kosong atau '-'
 				return !r.mapel || r.mapel === '-';
 			} else {
-				// Mode Mapel: Hanya mapel yang dipilih
 				return r.mapel === selectedMapel;
 			}
 		});
@@ -282,78 +191,74 @@ export default function RiwayatAbsensiSiswaPage() {
 		};
 	}, [riwayat, viewMode, selectedMapel]);
 
-	if (loading)
-		return (
-			<div className='flex min-h-screen items-center justify-center bg-slate-50'>
-				<Loader />
-			</div>
-		);
-	if (!siswa) return <div className='p-10 text-center'>Siswa tidak ditemukan</div>;
+	if (loading) return <Loader />;
+	if (!siswa) return <div className='p-20 text-center font-black text-2xl text-[#0D0D0D] bg-[#FFF5F0] uppercase tracking-widest'>Siswa tidak ditemukan</div>;
 
 	return (
-		<div className='min-h-screen bg-slate-50/50 pb-20 pt-6'>
-			<div className='mx-auto max-w-5xl space-y-6 px-4 sm:px-6 lg:px-8'>
-				<ButtonBack />
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 pt-8 font-sans'>
+			<div className='mx-auto max-w-5xl space-y-8 px-4 sm:px-6 lg:px-8'>
+				
+				{/* Header Navigasi */}
+				<div className='flex items-center justify-between'>
+					<button
+						onClick={() => window.history.back()}
+						className='p-4 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+						<ChevronLeft className='w-8 h-8 text-[#0D0D0D]' strokeWidth={3} />
+					</button>
+					<div className='bg-[#2F80ED] p-3 border-[4px] border-[#0D0D0D] -rotate-1 inline-block'>
+						<h1 className='text-2xl sm:text-3xl font-black text-white uppercase tracking-widest'>Riwayat Absensi</h1>
+					</div>
+				</div>
 
 				{/* Profil Card */}
-				<div className='rounded-2xl border border-gray-100 bg-white p-6 shadow-sm flex items-center gap-5 -mt-2'>
-					<div className='h-16 w-16 flex-shrink-0 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-md'>{initials}</div>
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none flex items-center gap-5 p-6'>
+					<div className='h-20 w-20 flex-shrink-0 border-[4px] border-[#0D0D0D] bg-[#FF90E8] shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-center text-[#0D0D0D] font-black text-3xl'>{initials}</div>
 					<div>
-						<h2 className='text-xl font-bold text-gray-900'>{siswa.nama_lengkap}</h2>
-						<p className='text-sm text-gray-500'>
-							Kelas {siswa.kelas} • NIS {siswa.nis}
+						<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest'>{siswa.nama_lengkap}</h2>
+						<p className='text-sm font-bold text-[#0D0D0D] uppercase mt-1 px-2 py-1 bg-[#F5C518] border-[2px] border-[#0D0D0D] inline-block'>
+							KELAS {siswa.kelas} • NIS {siswa.nis}
 						</p>
 					</div>
 				</div>
 
 				{/* --- FILTER SECTION --- */}
 				<div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
-					<div className='flex w-full rounded-xl bg-gray-100 p-1.5 sm:w-auto'>
+					<div className='flex w-full sm:w-auto p-1 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 						<button
 							onClick={() => setViewMode('kelas')}
-							className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 sm:flex-none ${
-								viewMode === 'kelas' ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:bg-gray-200/50 hover:text-gray-700'
+							className={`flex-1 px-6 py-3 text-sm font-black uppercase tracking-widest transition-all sm:flex-none border-[2px] border-transparent ${
+								viewMode === 'kelas' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'text-[#0D0D0D] hover:bg-gray-100'
 							}`}>
 							Absensi Harian
 						</button>
 						<button
 							onClick={() => setViewMode('mapel')}
-							className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 sm:flex-none ${
-								viewMode === 'mapel' ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-gray-200' : 'text-gray-500 hover:bg-gray-200/50 hover:text-gray-700'
+							className={`flex-1 px-6 py-3 text-sm font-black uppercase tracking-widest transition-all sm:flex-none border-[2px] border-transparent ${
+								viewMode === 'mapel' ? 'bg-[#0D0D0D] text-white border-[#0D0D0D]' : 'text-[#0D0D0D] hover:bg-gray-100'
 							}`}>
 							Absensi Mapel
 						</button>
 					</div>
 
 					{viewMode === 'mapel' && (
-						<div className='relative w-full animate-in fade-in slide-in-from-top-1 duration-200 sm:w-auto'>
-							<div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500'>
-								<IconFilter className='h-4 w-4' />
+						<div className='relative w-full sm:w-auto flex items-center'>
+							<div className='absolute left-4 pointer-events-none'>
+								<Filter className='w-6 h-6 text-[#0D0D0D]' strokeWidth={3} />
 							</div>
 							<select
 								value={selectedMapel}
 								onChange={(e) => setSelectedMapel(e.target.value)}
-								className='block w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-10 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-indigo-300 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:w-64'>
-								{uniqueMapels.length === 0 && <option>Belum ada data mapel</option>}
+								className='block w-full sm:w-80 h-[60px] pl-14 pr-10 bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] text-[#0D0D0D] font-black uppercase tracking-widest focus:outline-none focus:-translate-y-1 focus:shadow-[8px_8px_0px_0px_#0D0D0D] transition-all cursor-pointer appearance-none rounded-none'>
+								{uniqueMapels.length === 0 && <option>BELUM ADA MAPEL</option>}
 								{uniqueMapels.map((m) => (
-									<option
-										key={m}
-										value={m}>
+									<option key={m} value={m}>
 										{m}
 									</option>
 								))}
 							</select>
-							<div className='pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400'>
-								<svg
-									xmlns='http://www.w3.org/2000/svg'
-									className='h-4 w-4'
-									viewBox='0 0 20 20'
-									fill='currentColor'>
-									<path
-										fillRule='evenodd'
-										d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'
-										clipRule='evenodd'
-									/>
+							<div className='absolute right-4 pointer-events-none'>
+								<svg xmlns='http://www.w3.org/2000/svg' className='h-6 w-6 text-[#0D0D0D]' viewBox='0 0 20 20' fill='currentColor'>
+									<path fillRule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clipRule='evenodd' />
 								</svg>
 							</div>
 						</div>
@@ -361,72 +266,48 @@ export default function RiwayatAbsensiSiswaPage() {
 				</div>
 
 				{/* Statistik */}
-				<div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
-					<StatCard
-						title='Hadir'
-						value={stats.counts.hadir}
-						sub={`${stats.pct.hadir}%`}
-						type='hadir'
-					/>
-					<StatCard
-						title='Sakit'
-						value={stats.counts.sakit}
-						sub={`${stats.pct.sakit}%`}
-						type='sakit'
-					/>
-					<StatCard
-						title='Izin'
-						value={stats.counts.izin}
-						sub={`${stats.pct.izin}%`}
-						type='izin'
-					/>
-					<StatCard
-						title='Alfa'
-						value={stats.counts.alfa}
-						sub={`${stats.pct.alfa}%`}
-						type='alfa'
-					/>
+				<div className='grid grid-cols-2 gap-4 md:grid-cols-4'>
+					<StatCard title='Hadir' value={stats.counts.hadir} sub={`${stats.pct.hadir}%`} type='hadir' />
+					<StatCard title='Sakit' value={stats.counts.sakit} sub={`${stats.pct.sakit}%`} type='sakit' />
+					<StatCard title='Izin' value={stats.counts.izin} sub={`${stats.pct.izin}%`} type='izin' />
+					<StatCard title='Alfa' value={stats.counts.alfa} sub={`${stats.pct.alfa}%`} type='alfa' />
 				</div>
 
 				{/* Kalender */}
-				<div className='rounded-3xl border border-gray-100 bg-white p-6 shadow-sm'>
-					<div className='mb-6 flex items-center justify-between'>
-						<div className='flex items-center gap-3'>
-							<div className='flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600'>
-								<IconCalendar className='h-5 w-5' />
-							</div>
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] rounded-none p-6 sm:p-8'>
+					<div className='mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+						<div className='flex items-center gap-4 bg-[#FF90E8] p-3 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] inline-flex'>
+							<CalendarIcon className='h-8 w-8 text-[#0D0D0D]' strokeWidth={3} />
 							<div>
-								<h3 className='text-lg font-bold text-gray-900'>{viewMode === 'kelas' ? 'Kalender Harian' : 'Jadwal Mapel'}</h3>
-								<p className='text-sm text-gray-500 capitalize'>{activeMonthLabel}</p>
+								<h3 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>{viewMode === 'kelas' ? 'KALENDER HARIAN' : 'JADWAL MAPEL'}</h3>
+								<p className='text-sm font-bold text-[#0D0D0D] uppercase'>{activeMonthLabel}</p>
 							</div>
 						</div>
 
-						<div className='flex items-center rounded-xl border border-gray-200 bg-gray-50 p-1'>
+						<div className='flex items-center bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 							<button
 								onClick={() => setMonthOffset((v) => v - 1)}
-								className='rounded-lg p-2 text-gray-500 hover:bg-white hover:shadow-sm'>
-								<IconChevronLeft className='h-4 w-4' />
+								className='p-4 border-r-[4px] border-[#0D0D0D] hover:bg-[#F5C518] hover:text-[#0D0D0D] transition-colors'>
+								<ChevronLeft className='h-6 w-6' strokeWidth={3} />
 							</button>
 							<button
 								onClick={() => setMonthOffset((v) => v + 1)}
-								className='rounded-lg p-2 text-gray-500 hover:bg-white hover:shadow-sm'>
-								<IconChevronRight className='h-4 w-4' />
+								className='p-4 hover:bg-[#F5C518] hover:text-[#0D0D0D] transition-colors'>
+								<ChevronRight className='h-6 w-6' strokeWidth={3} />
 							</button>
 						</div>
 					</div>
 
-					<div className='border-t border-gray-100 pt-4'>
-						<div className='grid grid-cols-7 mb-2'>
+					<div className='border-t-[4px] border-[#0D0D0D] pt-6'>
+						<div className='grid grid-cols-7 mb-4 border-b-[4px] border-[#0D0D0D] pb-2'>
 							{WEEKDAYS.map((d) => (
-								<div
-									key={d}
-									className='text-center text-xs font-semibold uppercase tracking-wide text-gray-400 py-2'>
+								<div key={d} className='text-center text-sm font-black uppercase tracking-widest text-[#0D0D0D]'>
 									{d}
 								</div>
 							))}
 						</div>
 
-						<div className='grid grid-cols-7 gap-y-4 gap-x-2'>
+						<div className='grid grid-cols-7 gap-y-4 gap-x-2 sm:gap-x-4'>
 							{calendar.cells.map((day, idx) => {
 								if (!day) return <div key={`empty-${idx}`} />;
 
@@ -441,21 +322,19 @@ export default function RiwayatAbsensiSiswaPage() {
 									targetItem = items.find((i) => i.mapel === selectedMapel);
 								}
 
-								let circleClass = 'text-gray-700 hover:bg-gray-50';
+								let squareClass = 'text-[#0D0D0D] bg-white border-[3px] border-transparent hover:border-[#0D0D0D] hover:shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1';
 								if (targetItem) {
 									const meta = statusMeta(targetItem.status);
-									circleClass = `${meta.ring} ring-2 ${meta.bg} ${meta.text} font-bold shadow-sm cursor-pointer`;
+									squareClass = `${meta.bg} ${meta.text} border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] hover:-translate-y-2 cursor-pointer`;
 								} else if (items.length > 0 && viewMode === 'mapel') {
-									circleClass = 'text-gray-300';
+									squareClass = 'text-gray-300 border-[3px] border-transparent bg-gray-50';
 								}
 
 								return (
-									<div
-										key={key}
-										className='flex flex-col items-center justify-start min-h-[50px]'>
+									<div key={key} className='flex flex-col items-center justify-start min-h-[60px]'>
 										<div
-											className={`flex h-10 w-10 items-center justify-center rounded-full text-sm transition-all ${circleClass}`}
-											title={targetItem ? `${targetItem.status}` : ''}>
+											className={`flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center font-black text-lg transition-all rounded-none ${squareClass}`}
+											title={targetItem ? `${targetItem.status.toUpperCase()}` : ''}>
 											{day}
 										</div>
 									</div>
@@ -464,18 +343,18 @@ export default function RiwayatAbsensiSiswaPage() {
 						</div>
 					</div>
 
-					<div className='mt-8 flex flex-wrap justify-center gap-4 border-t border-gray-100 pt-4 text-xs text-gray-500'>
-						<span className='flex items-center gap-1.5'>
-							<span className='h-2 w-2 rounded-full bg-emerald-500'></span> Hadir
+					<div className='mt-10 flex flex-wrap justify-center gap-6 border-t-[4px] border-[#0D0D0D] pt-6'>
+						<span className='flex items-center gap-2 font-black uppercase tracking-widest text-sm text-[#0D0D0D]'>
+							<span className='h-6 w-6 border-[3px] border-[#0D0D0D] bg-[#A3E635] shadow-[2px_2px_0px_0px_#0D0D0D]'></span> HADIR
 						</span>
-						<span className='flex items-center gap-1.5'>
-							<span className='h-2 w-2 rounded-full bg-amber-500'></span> Sakit
+						<span className='flex items-center gap-2 font-black uppercase tracking-widest text-sm text-[#0D0D0D]'>
+							<span className='h-6 w-6 border-[3px] border-[#0D0D0D] bg-[#F5C518] shadow-[2px_2px_0px_0px_#0D0D0D]'></span> SAKIT
 						</span>
-						<span className='flex items-center gap-1.5'>
-							<span className='h-2 w-2 rounded-full bg-sky-500'></span> Izin
+						<span className='flex items-center gap-2 font-black uppercase tracking-widest text-sm text-[#0D0D0D]'>
+							<span className='h-6 w-6 border-[3px] border-[#0D0D0D] bg-[#2F80ED] shadow-[2px_2px_0px_0px_#0D0D0D]'></span> IZIN
 						</span>
-						<span className='flex items-center gap-1.5'>
-							<span className='h-2 w-2 rounded-full bg-rose-500'></span> Alfa
+						<span className='flex items-center gap-2 font-black uppercase tracking-widest text-sm text-[#0D0D0D]'>
+							<span className='h-6 w-6 border-[3px] border-[#0D0D0D] bg-[#E8451A] shadow-[2px_2px_0px_0px_#0D0D0D]'></span> ALFA
 						</span>
 					</div>
 				</div>

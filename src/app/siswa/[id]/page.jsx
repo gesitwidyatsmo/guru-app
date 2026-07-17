@@ -5,126 +5,37 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
-import { swalProcess, swalSuccess, swalError, swalConfirmDelete } from '@/lib/swal';
+import { ChevronLeft, X } from 'lucide-react';
 
 // --- Ikon SVG ---
-const IconUser = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2' />
-		<circle
-			cx='12'
-			cy='7'
-			r='4'
-		/>
-	</svg>
-);
 const IconCalendar = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<rect
-			x='3'
-			y='4'
-			width='18'
-			height='18'
-			rx='2'
-			ry='2'
-		/>
-		<line
-			x1='16'
-			y1='2'
-			x2='16'
-			y2='6'
-		/>
-		<line
-			x1='8'
-			y1='2'
-			x2='8'
-			y2='6'
-		/>
-		<line
-			x1='3'
-			y1='10'
-			x2='21'
-			y2='10'
-		/>
+	<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' className={className}>
+		<rect x='3' y='4' width='18' height='18' rx='0' ry='0' />
+		<line x1='16' y1='2' x2='16' y2='6' />
+		<line x1='8' y1='2' x2='8' y2='6' />
+		<line x1='3' y1='10' x2='21' y2='10' />
 	</svg>
 );
 const IconEdit = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' />
-		<path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' />
+	<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' className={className}>
+		<path d='M11 4H4v14h14v-7' />
+		<path d='M18.5 2.5l3 3L12 15l-4 1 1-4 9.5-9.5z' />
 	</svg>
 );
 const IconTrash = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
+	<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' className={className}>
 		<polyline points='3 6 5 6 21 6' />
-		<path d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' />
+		<path d='M19 6v14H7V6m3 0V4h4v2' />
 	</svg>
 );
 const IconAward = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<circle
-			cx='12'
-			cy='8'
-			r='7'
-		/>
+	<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='3' strokeLinecap='round' strokeLinejoin='round' className={className}>
+		<circle cx='12' cy='8' r='7' />
 		<polyline points='8.21 13.89 7 23 12 20 17 23 15.79 13.88' />
 	</svg>
 );
-const IconArrowLeft = ({ className }) => (
-	<svg
-		xmlns='http://www.w3.org/2000/svg'
-		viewBox='0 0 24 24'
-		fill='none'
-		stroke='currentColor'
-		strokeWidth='2'
-		strokeLinecap='round'
-		strokeLinejoin='round'
-		className={className}>
-		<path d='M19 12H5M12 19l-7-7 7-7' />
-	</svg>
-);
 
-// --- MODAL EDIT MODERN ---
+// --- MODAL EDIT NEOBRUTALISM ---
 function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 	const [formData, setFormData] = useState({ id: '', nis: '', nama_lengkap: '', kelas: '', jenis_kelamin: 'Laki-laki', status: 'Aktif' });
 	const [loading, setLoading] = useState(false);
@@ -151,118 +62,115 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+		if (!formData.nama_lengkap || !formData.kelas) {
+			Swal.fire({
+				title: 'ERROR',
+				text: 'Nama Lengkap dan Kelas wajib diisi!',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
 		setLoading(true);
 		await onSubmit(formData);
 		setLoading(false);
-		onClose();
 	};
 
 	return (
-		<div className='fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 sm:p-6'>
-			<div
-				className='fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity'
-				onClick={onClose}
-			/>
-			<div className='relative w-full max-w-lg transform rounded-t-2xl sm:rounded-2xl bg-white p-6 shadow-xl transition-all animate-in slide-in-from-bottom-10 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'>
-				<div className='mb-6 flex items-center justify-between'>
-					<h3 className='text-xl font-bold text-gray-900'>Edit Data Siswa</h3>
+		<div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0D0D0D]/80 backdrop-blur-sm p-4'>
+			<div className='bg-white w-full max-w-lg border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden rounded-none transform transition-all'>
+				<div className='bg-[#F5C518] px-6 py-5 border-b-[4px] border-[#0D0D0D] flex justify-between items-center'>
+					<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-2'>
+						<IconEdit className='w-6 h-6' /> EDIT DATA
+					</h2>
 					<button
 						onClick={onClose}
-						className='rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 transition-colors'>
-						<span className='sr-only'>Close</span>
-						<svg
-							className='h-6 w-6'
-							fill='none'
-							viewBox='0 0 24 24'
-							strokeWidth='1.5'
-							stroke='currentColor'>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M6 18L18 6M6 6l12 12'
-							/>
-						</svg>
+						className='w-10 h-10 flex items-center justify-center bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all'>
+						<X className='w-6 h-6' strokeWidth={3} />
 					</button>
 				</div>
 
-				<form
-					onSubmit={handleSubmit}
-					className='space-y-5'>
+				<form onSubmit={handleSubmit} className='p-6 space-y-6 bg-[#FFF5F0]'>
+					<div>
+						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Nama Lengkap <span className="text-[#E8451A] text-xl">*</span></label>
+						<input
+							type='text'
+							required
+							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none uppercase'
+							value={formData.nama_lengkap}
+							onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
+							placeholder='NAMA LENGKAP SISWA'
+						/>
+					</div>
+					<div>
+						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>NIS (Nomor Induk Siswa)</label>
+						<input
+							type='text'
+							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none uppercase'
+							value={formData.nis}
+							onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
+							placeholder='NOMOR INDUK SISWA'
+						/>
+					</div>
+					<div>
+						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kelas <span className="text-[#E8451A] text-xl">*</span></label>
+						<select
+							required
+							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
+							value={formData.kelas}
+							onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
+							<option value='' disabled>-- PILIH KELAS --</option>
+							{kelasList.map((k) => (
+								<option key={k.id} value={k.kelas}>
+									{k.kelas}
+								</option>
+							))}
+						</select>
+					</div>
+
 					<div className='grid grid-cols-2 gap-4'>
-						<div className='col-span-2'>
-							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>Nama Lengkap</label>
-							<input
-								type='text'
-								required
-								className='block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 transition-colors'
-								value={formData.nama_lengkap}
-								onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
-								placeholder='Nama lengkap siswa'
-							/>
-						</div>
 						<div>
-							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>NIS</label>
-							<input
-								type='text'
-								required
-								className='block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 transition-colors'
-								value={formData.nis}
-								onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
-								placeholder='Nomor Induk'
-							/>
-						</div>
-						<div>
-							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>Kelas</label>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Jenis Kelamin</label>
 							<select
-								required
-								className='block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 transition-colors'
-								value={formData.kelas}
-								onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
-								<option value=''>Pilih Kelas</option>
-								{kelasList.map((k) => (
-									<option
-										key={k.id}
-										value={k.kelas}>
-										{k.kelas}
-									</option>
-								))}
-							</select>
-						</div>
-						<div>
-							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>Jenis Kelamin</label>
-							<select
-								className='block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 transition-colors'
+								className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
 								value={formData.jenis_kelamin}
 								onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}>
-								<option value='Laki-laki'>Laki-laki</option>
-								<option value='Perempuan'>Perempuan</option>
+								<option value='Laki-laki'>LAKI-LAKI</option>
+								<option value='Perempuan'>PEREMPUAN</option>
 							</select>
 						</div>
 						<div>
-							<label className='mb-1.5 block text-sm font-semibold text-gray-700'>Status</label>
+							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Status</label>
 							<select
-								className='block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-indigo-500 focus:bg-white focus:ring-indigo-500 transition-colors'
+								className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
 								value={formData.status}
 								onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
-								<option value='Aktif'>Aktif</option>
-								<option value='Boyong'>Boyong</option>
-								<option value='Lulus'>Lulus</option>
+								<option value='Aktif'>AKTIF</option>
+								<option value='Boyong'>BOYONG</option>
+								<option value='Lulus'>LULUS</option>
 							</select>
 						</div>
 					</div>
 
-					<div className='flex gap-3 pt-4'>
+					<div className='pt-6 border-t-[4px] border-[#0D0D0D] flex justify-end gap-4'>
 						<button
 							type='button'
 							onClick={onClose}
-							className='flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all'>
-							Batal
+							className='px-6 py-4 bg-white border-[4px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-widest hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none'>
+							BATAL
 						</button>
 						<button
 							type='submit'
 							disabled={loading}
-							className='flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-70 transition-all'>
-							{loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+							className='px-8 py-4 bg-[#FF90E8] border-[4px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-widest hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none disabled:opacity-50'>
+							{loading ? 'MENYIMPAN...' : 'SIMPAN PERUBAHAN'}
 						</button>
 					</div>
 				</form>
@@ -334,9 +242,37 @@ export default function SiswaPage() {
 	};
 
 	const handleUpdateSiswa = async (updatedData) => {
-		if (!updatedData.id) return alert('Error: ID Siswa hilang.');
-		swalProcess('Updating...', 'Jangan tutup halaman');
-		setIsEditOpen(false);
+		if (!updatedData.id) {
+			Swal.fire({
+				title: 'ERROR',
+				text: 'ID Siswa hilang.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
+		Swal.fire({
+			title: 'MENYIMPAN...',
+			text: 'Jangan tutup halaman',
+			allowOutsideClick: false,
+			background: '#FFF5F0',
+			color: '#0D0D0D',
+			didOpen: () => {
+				Swal.showLoading();
+			},
+			customClass: {
+				popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+				title: 'font-black uppercase tracking-widest',
+			},
+		});
+
 		try {
 			const res = await fetch('/api/siswa', {
 				method: 'PUT',
@@ -345,33 +281,127 @@ export default function SiswaPage() {
 			});
 			if (res.ok) {
 				setSiswaData((prev) => ({ ...prev, ...updatedData }));
-				Swal.close();
-				await swalSuccess('Tersimpan', 'Data berhasil disimpan');
+				setIsEditOpen(false);
+				Swal.fire({
+					title: 'BERHASIL!',
+					text: 'Data berhasil disimpan',
+					icon: 'success',
+					background: '#FFF5F0',
+					color: '#0D0D0D',
+					customClass: {
+						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+						title: 'font-black uppercase tracking-widest',
+						confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+					},
+				});
 			} else {
-				await swalError('Gagal Update Data');
+				Swal.fire({
+					title: 'GAGAL',
+					text: 'Gagal Update Data',
+					icon: 'error',
+					background: '#FFF5F0',
+					color: '#0D0D0D',
+					customClass: {
+						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+						title: 'font-black uppercase tracking-widest',
+						confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+					},
+				});
 			}
 		} catch (error) {
-			await swalError('Gagal', error);
+			Swal.fire({
+				title: 'ERROR',
+				text: error.message || 'Terjadi kesalahan jaringan.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
 		}
 	};
 
 	const handleDeleteSiswa = async () => {
-		// if (!confirm('Hapus siswa ini? Data tidak bisa dikembalikan.')) return;
-		const result = await swalConfirmDelete('Hapus Siswa ini?', 'Data siswa akan dihapus permanen.');
+		const result = await Swal.fire({
+			title: 'HAPUS SISWA?',
+			text: 'Data siswa akan dihapus permanen.',
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: 'YA, HAPUS!',
+			cancelButtonText: 'BATAL',
+			background: '#FFF5F0',
+			color: '#0D0D0D',
+			customClass: {
+				popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+				title: 'font-black uppercase tracking-widest',
+				confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				cancelButton: 'bg-white text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+			},
+		});
+
 		if (!result.isConfirmed) return;
-		swalProcess('Menghapus...', 'Jangan tutup halaman');
+
+		Swal.fire({
+			title: 'MENGHAPUS...',
+			text: 'Jangan tutup halaman',
+			allowOutsideClick: false,
+			background: '#FFF5F0',
+			color: '#0D0D0D',
+			didOpen: () => {
+				Swal.showLoading();
+			},
+			customClass: {
+				popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+				title: 'font-black uppercase tracking-widest',
+			},
+		});
+
 		try {
 			const res = await fetch(`/api/siswa?id=${id}`, { method: 'DELETE' });
 			if (res.ok) {
-				Swal.close();
-				await swalSuccess('Terhapus', 'Data berhasil dihapus');
+				await Swal.fire({
+					title: 'TERHAPUS!',
+					text: 'Data berhasil dihapus',
+					icon: 'success',
+					background: '#FFF5F0',
+					color: '#0D0D0D',
+					customClass: {
+						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+						title: 'font-black uppercase tracking-widest',
+						confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+					},
+				});
 				router.back();
-				// router.push('/siswa');
 			} else {
-				alert('Gagal menghapus siswa');
+				Swal.fire({
+					title: 'GAGAL',
+					text: 'Gagal menghapus siswa',
+					icon: 'error',
+					background: '#FFF5F0',
+					color: '#0D0D0D',
+					customClass: {
+						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+						title: 'font-black uppercase tracking-widest',
+						confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+					},
+				});
 			}
 		} catch (e) {
-			alert('Error koneksi saat menghapus');
+			Swal.fire({
+				title: 'ERROR',
+				text: 'Error koneksi saat menghapus',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
 		}
 	};
 
@@ -381,82 +411,67 @@ export default function SiswaPage() {
 		return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || 'S';
 	}, [siswaData]);
 
-	if (loading)
-		return (
-			<div className='flex min-h-screen items-center justify-center bg-slate-50'>
-				<Loader />
-			</div>
-		);
-	if (!siswaData) return <div className='p-10 text-center text-gray-500'>Data siswa tidak ditemukan.</div>;
+	if (loading) return <Loader />;
+	if (!siswaData) return <div className='p-20 text-center font-black text-2xl text-[#0D0D0D] bg-[#FFF5F0] uppercase tracking-widest'>Data siswa tidak ditemukan.</div>;
 
 	return (
-		<div className='min-h-screen bg-slate-50/50 pb-20 pt-6'>
-			<div className='mx-auto max-w-2xl space-y-6 px-4 sm:px-6 lg:px-8'>
+		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 pt-8 font-sans'>
+			<div className='mx-auto max-w-4xl space-y-8 px-4 sm:px-6 lg:px-8'>
+				
 				{/* Header Navigasi */}
 				<div className='flex items-center justify-between'>
-					{/* <h1 className='text-2xl font-bold tracking-tight text-gray-900'>Detail Siswa</h1> */}
 					<button
 						onClick={() => window.history.back()}
-						className='group flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900'>
-						<IconArrowLeft className='h-4 w-4 transition-transform group-hover:-translate-x-1' />
-						Kembali
+						className='p-4 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
+						<ChevronLeft className='w-8 h-8 text-[#0D0D0D]' strokeWidth={3} />
 					</button>
+					<div className='bg-[#A3E635] p-3 border-[4px] border-[#0D0D0D] rotate-1 inline-block'>
+						<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>Profil Siswa</h1>
+					</div>
 				</div>
 
 				{/* Profil Utama */}
-				<div className='overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm'>
-					{/* Banner Gradient */}
-					<div className='h-32 w-full bg-linear-150 bg-blue-500 to-blue-50'></div>
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none'>
+					{/* Banner Solid */}
+					<div className='h-40 w-full bg-[#2F80ED] border-b-[4px] border-[#0D0D0D] relative overflow-hidden'>
+						{/* Geometric Decoration */}
+						<div className="absolute -right-10 -top-10 w-40 h-40 bg-[#FF90E8] rounded-full border-[4px] border-[#0D0D0D] opacity-80 mix-blend-multiply"></div>
+						<div className="absolute right-20 bottom-[-20px] w-20 h-20 bg-[#F5C518] rotate-45 border-[4px] border-[#0D0D0D] opacity-80"></div>
+					</div>
 
-					<div className='px-6 pb-8'>
+					<div className='px-6 pb-10'>
 						<div className='relative flex flex-col items-center'>
 							{/* Avatar */}
-							<div className='-mt-16 mb-4'>
-								<div className='flex h-32 w-32 items-center justify-center rounded-full border-[6px] border-white bg-white text-4xl font-bold text-indigo-600 shadow-lg'>{initials}</div>
+							<div className='-mt-20 mb-6'>
+								<div className='flex h-40 w-40 items-center justify-center rounded-none border-[4px] border-[#0D0D0D] bg-white text-6xl font-black text-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D]'>
+									{initials}
+								</div>
 							</div>
 
 							{/* Nama & Info */}
-							<div className='text-center'>
-								<h2 className='text-2xl font-bold text-gray-900'>{siswaData.nama_lengkap}</h2>
-								<p className='mt-1 font-medium text-gray-500'>Kelas {siswaData.kelas}</p>
+							<div className='text-center w-full'>
+								<h2 className='text-3xl sm:text-4xl font-black text-[#0D0D0D] uppercase tracking-widest break-words'>{siswaData.nama_lengkap}</h2>
+								
+								<div className='mt-3 mb-6 inline-block bg-[#0D0D0D] text-white px-4 py-1 text-lg font-black uppercase tracking-widest border-[2px] border-[#0D0D0D]'>
+									KELAS {siswaData.kelas}
+								</div>
 
-								<div className='mt-4 flex flex-wrap justify-center gap-2'>
-									<span className='inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600'>NIS: {siswaData.nis}</span>
+								<div className='flex flex-wrap justify-center gap-4 mt-2'>
+									<span className='px-4 py-2 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest text-[#0D0D0D]'>
+										NIS: {siswaData.nis || '-'}
+									</span>
 									<span
-										className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${siswaData.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-										<span className={`h-1.5 w-1.5 rounded-full ${siswaData.status === 'Aktif' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+										className={`px-4 py-2 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest \${siswaData.status === 'Aktif' ? 'bg-[#A3E635] text-[#0D0D0D]' : siswaData.status === 'Lulus' ? 'bg-[#2F80ED] text-white' : 'bg-[#E8451A] text-white'}`}>
 										{siswaData.status}
 									</span>
-									<span className='inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700'>{siswaData.jenis_kelamin || 'Laki-laki'}</span>
-									<span className='inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200'>
-										<svg
-											className='w-4 h-4'
-											fill='none'
-											stroke='currentColor'
-											viewBox='0 0 24 24'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												strokeWidth={2}
-												d='M5 13l4 4L19 7'
-											/>
-										</svg>
-										Pts: +{poinSiswa.positif}
+									<span className='px-4 py-2 bg-[#F5C518] border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest text-[#0D0D0D]'>
+										{siswaData.jenis_kelamin || 'LAKI-LAKI'}
 									</span>
-									<span className='inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 border border-rose-200'>
-										<svg
-											className='w-4 h-4'
-											fill='none'
-											stroke='currentColor'
-											viewBox='0 0 24 24'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												strokeWidth={2}
-												d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-											/>
-										</svg>
-										Pts: -{poinSiswa.negatif}
+									<span className='px-4 py-2 bg-[#00A693] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest'>
+										POS (+): {poinSiswa.positif}
+									</span>
+									<span className='px-4 py-2 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest'>
+										NEG (-): {poinSiswa.negatif}
 									</span>
 								</div>
 							</div>
@@ -465,52 +480,52 @@ export default function SiswaPage() {
 				</div>
 
 				{/* Menu Grid */}
-				<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+				<div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
 					<Link
 						href={`/siswa/${id}/riwayat-absensi`}
-						className='group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-indigo-100 hover:shadow-md hover:-translate-y-0.5'>
-						<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors'>
-							<IconCalendar className='h-6 w-6' />
+						className='group flex items-center gap-5 bg-[#2F80ED] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-6 transition-transform'>
+							<IconCalendar className='h-8 w-8' />
 						</div>
 						<div>
-							<h3 className='font-bold text-gray-900'>Riwayat Absensi</h3>
-							<p className='text-xs text-gray-500'>Cek kehadiran siswa</p>
+							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>RIWAYAT ABSENSI</h3>
+							<p className='text-sm font-bold text-white/80 uppercase'>Cek kehadiran siswa</p>
 						</div>
 					</Link>
 
 					<Link
 						href={`/siswa/${id}/riwayat-nilai`}
-						className='group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-purple-100 hover:shadow-md hover:-translate-y-0.5'>
-						<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors'>
-							<IconAward className='h-6 w-6' />
+						className='group flex items-center gap-5 bg-[#F5C518] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 transition-transform'>
+							<IconAward className='h-8 w-8' />
 						</div>
 						<div>
-							<h3 className='font-bold text-gray-900'>Riwayat Nilai</h3>
-							<p className='text-xs text-gray-500'>Akademik & rapor</p>
+							<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>RIWAYAT NILAI</h3>
+							<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Akademik & rapor</p>
 						</div>
 					</Link>
 
 					<button
 						onClick={handleOpenEdit}
-						className='group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-amber-100 hover:shadow-md hover:-translate-y-0.5 text-left'>
-						<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition-colors'>
-							<IconEdit className='h-6 w-6' />
+						className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
+							<IconEdit className='h-8 w-8' />
 						</div>
 						<div>
-							<h3 className='font-bold text-gray-900'>Edit Data</h3>
-							<p className='text-xs text-gray-500'>Perbarui profil siswa</p>
+							<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>EDIT DATA</h3>
+							<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Perbarui profil siswa</p>
 						</div>
 					</button>
 
 					<button
 						onClick={handleDeleteSiswa}
-						className='group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-rose-100 hover:shadow-md hover:-translate-y-0.5 text-left'>
-						<div className='flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 group-hover:bg-rose-500 group-hover:text-white transition-colors'>
-							<IconTrash className='h-6 w-6' />
+						className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
+							<IconTrash className='h-8 w-8' />
 						</div>
 						<div>
-							<h3 className='font-bold text-gray-900'>Hapus Siswa</h3>
-							<p className='text-xs text-gray-500'>Hapus permanen</p>
+							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
+							<p className='text-sm font-bold text-white/80 uppercase'>Hapus permanen</p>
 						</div>
 					</button>
 				</div>
