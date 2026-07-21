@@ -64,36 +64,65 @@ export default function LoginPage() {
 
 	return (
 		<div className='min-h-screen bg-[#FFF5F0] flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 relative overflow-hidden'>
-			
 			{/* Decorative elements for brutalist vibe */}
-			<div className="absolute top-10 left-10 w-24 h-24 bg-yellow-300 border-[3px] border-black rounded-full shadow-[4px_4px_0px_0px_#0D0D0D] hidden md:block animate-[spin_10s_linear_infinite]"></div>
-			<div className="absolute bottom-10 right-10 w-32 h-32 bg-teal-400 border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] hidden md:block transform rotate-12"></div>
+			<div className='absolute top-10 left-10 w-24 h-24 bg-yellow-300 border-[3px] border-black rounded-full shadow-[4px_4px_0px_0px_#0D0D0D] hidden md:block animate-[spin_10s_linear_infinite]'></div>
+			<div className='absolute bottom-10 right-10 w-32 h-32 bg-teal-400 border-[3px] border-black shadow-[8px_8px_0px_0px_#0D0D0D] hidden md:block transform rotate-12'></div>
 
 			{/* Header Branding */}
 			<div className='relative sm:mx-auto sm:w-full sm:max-w-md text-center z-10 pt-4'>
-				
 				{/* Background Floating Elements */}
-				<div className="absolute inset-0 pointer-events-none -z-10">
+				<div className='absolute inset-0 pointer-events-none -z-10'>
 					{/* Small floating yellow star on left */}
-					<svg className="absolute -left-6 top-10 w-10 h-10 text-yellow-300 animate-[spin_10s_linear_infinite]" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z" stroke="black" strokeWidth="2" strokeLinejoin="round"/>
+					<svg
+						className='absolute -left-6 top-10 w-10 h-10 text-yellow-300 animate-[spin_10s_linear_infinite]'
+						viewBox='0 0 24 24'
+						fill='currentColor'>
+						<path
+							d='M12 2L14.5 9H22L16 13.5L18.5 21L12 16.5L5.5 21L8 13.5L2 9H9.5L12 2Z'
+							stroke='black'
+							strokeWidth='2'
+							strokeLinejoin='round'
+						/>
 					</svg>
 
 					{/* Tiny dotted line on right */}
-					<svg className="absolute -right-6 top-16 w-12 h-12 text-black opacity-40" viewBox="0 0 50 50" fill="none">
-						<circle cx="10" cy="10" r="3" fill="black" />
-						<circle cx="30" cy="10" r="3" fill="black" />
-						<circle cx="10" cy="30" r="3" fill="black" />
-						<circle cx="30" cy="30" r="3" fill="black" />
+					<svg
+						className='absolute -right-6 top-16 w-12 h-12 text-black opacity-40'
+						viewBox='0 0 50 50'
+						fill='none'>
+						<circle
+							cx='10'
+							cy='10'
+							r='3'
+							fill='black'
+						/>
+						<circle
+							cx='30'
+							cy='10'
+							r='3'
+							fill='black'
+						/>
+						<circle
+							cx='10'
+							cy='30'
+							r='3'
+							fill='black'
+						/>
+						<circle
+							cx='30'
+							cy='30'
+							r='3'
+							fill='black'
+						/>
 					</svg>
 
 					{/* Small teal square near bottom left */}
-					<div className="absolute left-4 bottom-4 w-6 h-6 bg-teal-400 border-2 border-black transform -rotate-12 shadow-[2px_2px_0px_0px_#0D0D0D]"></div>
+					<div className='absolute left-4 bottom-4 w-6 h-6 bg-teal-400 border-2 border-black transform -rotate-12 shadow-[2px_2px_0px_0px_#0D0D0D]'></div>
 				</div>
 
 				<div className='flex justify-center mb-8 relative'>
 					{/* Simple offset square behind logo */}
-					<div className="absolute top-1/2 left-1/2 w-20 h-20 bg-orange-200 border-[3px] border-black rounded-xl -translate-x-4 -translate-y-4 -z-20 shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-3"></div>
+					<div className='absolute top-1/2 left-1/2 w-20 h-20 bg-orange-200 border-[3px] border-black rounded-xl -translate-x-4 -translate-y-4 -z-20 shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-3'></div>
 
 					<div className='w-20 h-20 rounded-xl bg-orange-500 border-[3px] border-black flex items-center justify-center shadow-[6px_6px_0px_0px_#0D0D0D] transform hover:-rotate-6 transition-transform cursor-pointer relative z-10'>
 						<svg
@@ -110,12 +139,10 @@ export default function LoginPage() {
 						</svg>
 					</div>
 				</div>
-				
-				<h2 className='text-4xl sm:text-5xl font-black text-black tracking-tight uppercase'>
-					Guru-App
-				</h2>
-				
-				<div className="mt-6 mb-2">
+
+				<h2 className='text-4xl sm:text-5xl font-black text-black tracking-tight uppercase'>Guru-App</h2>
+
+				<div className='mt-6 mb-2'>
 					<p className='text-xs sm:text-sm text-black font-bold border-[3px] border-black bg-white inline-block px-4 py-1.5 rounded-full shadow-[4px_4px_0px_0px_#0D0D0D]'>
 						Sistem Manajemen Akademika Digital
 					</p>
@@ -163,7 +190,7 @@ export default function LoginPage() {
 							</div>
 						</div>
 
-						<div className="mt-6">
+						<div className='mt-6'>
 							<label
 								htmlFor='password'
 								className='block text-base font-bold text-black uppercase tracking-wider mb-2'>
@@ -239,15 +266,24 @@ export default function LoginPage() {
 
 						<div className='flex items-center justify-between mt-6 mb-8'>
 							<div className='flex items-center cursor-pointer group'>
-								<div className="relative flex items-center">
+								<div className='relative flex items-center'>
 									<input
 										id='remember-me'
 										name='remember-me'
 										type='checkbox'
 										className='peer appearance-none h-6 w-6 border-2 border-black rounded bg-white checked:bg-black transition-colors cursor-pointer'
 									/>
-									<svg className="absolute w-4 h-4 text-white left-1 pointer-events-none hidden peer-checked:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4">
-										<path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+									<svg
+										className='absolute w-4 h-4 text-white left-1 pointer-events-none hidden peer-checked:block'
+										fill='none'
+										viewBox='0 0 24 24'
+										stroke='currentColor'
+										strokeWidth='4'>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											d='M5 13l4 4L19 7'
+										/>
 									</svg>
 								</div>
 								<label
@@ -266,7 +302,7 @@ export default function LoginPage() {
 							</div>
 						</div>
 
-						<div className="mt-8">
+						<div className='mt-8'>
 							<button
 								type='submit'
 								disabled={loading}
@@ -305,10 +341,10 @@ export default function LoginPage() {
 				</div>
 
 				{/* Footer Copy */}
-				<div className="mt-8 relative inline-block mx-auto">
-					<div className="absolute inset-0 bg-yellow-300 border-2 border-black rounded-lg transform translate-x-1.5 translate-y-1.5"></div>
-					<div className="relative bg-white border-2 border-black rounded-lg px-6 py-3 font-bold text-black text-xs sm:text-sm uppercase text-center">
-						&copy; {new Date().getFullYear()} Hak Akses Terbatas. <br className="sm:hidden"/> Lingkungan Tenaga Pendidik.
+				<div className='mt-8 relative inline-block mx-auto'>
+					<div className='absolute inset-0 bg-yellow-300 border-2 border-black rounded-lg transform translate-x-1.5 translate-y-1.5'></div>
+					<div className='relative bg-white border-2 border-black rounded-lg px-6 py-3 font-bold text-black text-xs sm:text-sm uppercase text-center'>
+						Copyright &copy; {new Date().getFullYear()} Gesit Widi Atmoko. <br className='sm:hidden' /> All Rights Reserved.
 					</div>
 				</div>
 			</div>
