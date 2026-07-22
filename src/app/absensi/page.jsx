@@ -138,16 +138,11 @@ export default function AbsensiMapelPage() {
 						if (data[0]?.id_row) setExistingId(data[0].id_row);
 					} else {
 						// Data baru: INIT SAJA jika absensi kosong total (bukan reset)
-						setAbsensi((prev) => {
-							if (Object.keys(prev).length === 0) {
-								const init = {};
-								siswaKelasIni.forEach((s) => {
-									init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
-								});
-								return init;
-							}
-							return prev;
+						const init = {};
+						siswaKelasIni.forEach((s) => {
+							init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
 						});
+						setAbsensi(init);
 						setMode('input');
 						setExistingId(null);
 					}
@@ -210,6 +205,7 @@ export default function AbsensiMapelPage() {
 		const dataToSave = siswaKelasIni.map((s) => ({
 			siswa_id: s.id,
 			status: absensi[s.id]?.status || 'Hadir',
+			keterangan: absensi[s.id]?.keterangan || '',
 		}));
 
 		const payload = {

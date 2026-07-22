@@ -62,7 +62,7 @@ export async function GET(req) {
 			const sesiIds = sessions.map(s => s.sesi_id);
 			const { data: detailData, error: detailError } = await supabase
 				.from('absensi_mapel_siswa')
-				.select('sesi_id, siswa_id, status')
+				.select('sesi_id, siswa_id, status, keterangan')
 				.in('sesi_id', sesiIds);
 			
 			if (!detailError && detailData) {
