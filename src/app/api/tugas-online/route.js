@@ -24,6 +24,8 @@ export async function GET(request) {
 			
 			if (error || !task) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
 			
+			const parsedSoal = typeof task.soal === 'string' ? JSON.parse(task.soal) : task.soal;
+
 			return NextResponse.json({
 				id: task.id,
 				pin: task.pin,
@@ -32,8 +34,8 @@ export async function GET(request) {
 				materi: task.materi,
 				tipe_soal: task.tipe_soal,
 				soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
-				kategori: task.kategori,
-				type: task.type,
+				kategori: parsedSoal?.kategori || 'Formatif',
+				type: parsedSoal?.type || 'Tugas Online',
 				createdAt: task.created_at,
 				createdBy: task.created_by,
 			});
@@ -43,19 +45,22 @@ export async function GET(request) {
 		const { data: tasks, error } = await supabase.from('tugas_online').select('*').order('created_at', { ascending: false });
 		if (error) throw error;
 
-		const formattedTasks = (tasks || []).map(task => ({
-			id: task.id,
-			pin: task.pin,
-			judul: task.judul,
-			mapel: task.mapel,
-			materi: task.materi,
-			tipe_soal: task.tipe_soal,
-			soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
-			kategori: task.kategori,
-			type: task.type,
-			createdAt: task.created_at,
-			createdBy: task.created_by,
-		}));
+		const formattedTasks = (tasks || []).map(task => {
+			const parsedSoal = typeof task.soal === 'string' ? JSON.parse(task.soal) : task.soal;
+			return {
+				id: task.id,
+				pin: task.pin,
+				judul: task.judul,
+				mapel: task.mapel,
+				materi: task.materi,
+				tipe_soal: task.tipe_soal,
+				soal: typeof task.soal === 'string' ? task.soal : JSON.stringify(task.soal),
+				kategori: parsedSoal?.kategori || 'Formatif',
+				type: parsedSoal?.type || 'Tugas Online',
+				createdAt: task.created_at,
+				createdBy: task.created_by,
+			};
+		});
 
 		return NextResponse.json(formattedTasks);
 	} catch (error) {
@@ -81,6 +86,8 @@ export async function POST(request) {
 
 		const supabase = await createClient();
 
+		const finalSoal = typeof soal === 'object' && soal !== null ? { ...soal, kategori: kategori || 'Formatif', type: type || 'Tugas Online' } : soal;
+
 		const { error } = await supabase.from('tugas_online').insert({
 			id: newId,
 			pin: pin,
@@ -88,9 +95,7 @@ export async function POST(request) {
 			mapel: mapel || '',
 			materi: materi || '',
 			tipe_soal: tipe_soal,
-			kategori: kategori || 'Formatif',
-			type: type || 'Tugas Online',
-			soal: soal,
+			soal: finalSoal,
 			created_by: auth.name || auth.id,
 		});
 
@@ -146,14 +151,14 @@ export async function PUT(request) {
 		const { data: rowToUpdate, error: fetchError } = await supabase.from('tugas_online').select('id').eq('id', id).single();
 		if (fetchError || !rowToUpdate) return NextResponse.json({ error: 'Tugas tidak ditemukan' }, { status: 404 });
 
+		const finalSoal = typeof soal === 'object' && soal !== null ? { ...soal, kategori: kategori || 'Formatif', type: type || 'Tugas Online' } : soal;
+
 		const updates = {
 			judul: judul,
 			mapel: mapel || '',
 			materi: materi || '',
 			tipe_soal: tipe_soal,
-			kategori: kategori,
-			type: type,
-			soal: soal,
+			soal: finalSoal,
 		};
 
 		const { error: updateError } = await supabase.from('tugas_online').update(updates).eq('id', id);

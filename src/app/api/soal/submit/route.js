@@ -45,10 +45,15 @@ export async function POST(request) {
 			.eq('pin', pin.toUpperCase())
 			.single();
 
+		let parsedTaskSoal = null;
+		try {
+			parsedTaskSoal = typeof taskRow?.soal === 'string' ? JSON.parse(taskRow?.soal) : taskRow?.soal;
+		} catch(e) {}
+
 		const taskMapel = taskRow?.mapel || '-';
 		const taskJudul = taskRow?.judul || `Tugas ${pin}`;
-		const taskKategori = taskRow?.kategori || 'Formatif';
-		const taskType = taskRow?.type || 'Tugas Online';
+		const taskKategori = parsedTaskSoal?.kategori || 'Formatif';
+		const taskType = parsedTaskSoal?.type || 'Tugas Online';
 
 		if (tipeSoal === 'PG') {
 			if (!taskError && taskRow) {
