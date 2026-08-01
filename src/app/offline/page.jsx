@@ -1,9 +1,5 @@
+'use client';
 import Link from 'next/link';
-
-export const metadata = {
-	title: 'Offline | Guru App',
-	description: 'Anda sedang offline',
-};
 
 export default function OfflinePage() {
 	return (
