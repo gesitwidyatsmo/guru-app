@@ -1,13 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 
 export default function LoginPage() {
 	const router = useRouter();
 
-	const [formData, setFormData] = useState({ username: '', password: '' });
+	const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
+
+	useEffect(() => {
+		const searchParams = new URLSearchParams(window.location.search);
+		if (searchParams.get('expired') === '1') {
+			// Bersihkan sisa sesi dari server secara paksa
+			fetch('/api/logout', { method: 'POST' }).catch(() => {});
+			Swal.fire({
+				icon: 'info',
+				title: 'Sesi Berakhir',
+				text: 'Waktu sesi Anda telah habis. Silakan login kembali.',
+				confirmButtonColor: '#E8451A',
+			});
+			// Hapus parameter dari URL agar tidak muncul terus saat refresh
+			router.replace('/login');
+		}
+	}, [router]);
 	const [loading, setLoading] = useState(false);
 	const [showPswd, setShowPswd] = useState(false);
 
@@ -269,8 +285,10 @@ export default function LoginPage() {
 								<div className='relative flex items-center'>
 									<input
 										id='remember-me'
-										name='remember-me'
+										name='rememberMe'
 										type='checkbox'
+										checked={formData.rememberMe}
+										onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
 										className='peer appearance-none h-6 w-6 border-2 border-black rounded bg-white checked:bg-black transition-colors cursor-pointer'
 									/>
 									<svg

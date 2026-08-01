@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export async function POST(req) {
 	try {
-		const { username, password } = await req.json();
+		const { username, password, rememberMe } = await req.json();
 
 		if (!username || !password) {
 			return NextResponse.json({ error: 'Username dan Password wajib diisi.' }, { status: 400 });
@@ -55,7 +55,17 @@ export async function POST(req) {
 			{ status: 200 },
 		);
 
+		// Hapus legacy 'token' cookie agar tidak bentrok
 		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
+
+		// Set cookie custom untuk mengatur limit maksimal sesi (2 Jam vs 7 Hari)
+		const maxAge = rememberMe ? 7 * 24 * 60 * 60 : 2 * 60 * 60; // 7 Hari vs 2 Jam
+		response.cookies.set('auth_session_valid', 'true', {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			path: '/',
+			maxAge: maxAge,
+		});
 
 		return response;
 	} catch (error) {

@@ -122,6 +122,13 @@ export default function JurnalPage() {
 		return [];
 	};
 
+	// --- AUTO-SAVE DRAFT JURNAL BARU ---
+	useEffect(() => {
+		if (isModalOpen && !isEditing) {
+			localStorage.setItem('draft_jurnal_baru', JSON.stringify(formData));
+		}
+	}, [formData, isModalOpen, isEditing]);
+
 	// --- LOGIC AUTO-SUGGEST PERTEMUAN ---
 	const calculateMeeting = (cls, mpl) => {
 		// Hanya jalankan jika mode tambah baru (bukan edit)
@@ -148,7 +155,13 @@ export default function JurnalPage() {
 		} else {
 			// Mode Tambah Baru
 			setIsEditing(false);
-			setFormData(initialForm);
+			// Cek apakah ada draft lokal
+			const savedDraft = localStorage.getItem('draft_jurnal_baru');
+			if (savedDraft) {
+				setFormData(JSON.parse(savedDraft));
+			} else {
+				setFormData(initialForm);
+			}
 		}
 		setIsModalOpen(true);
 	};
@@ -180,6 +193,18 @@ export default function JurnalPage() {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+
+		// Pengecekan offline
+		if (typeof window !== 'undefined' && !window.navigator.onLine) {
+			Swal.fire({
+				icon: 'info',
+				title: 'Anda Sedang Offline',
+				text: 'Internet terputus. Data Anda sudah otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan Jurnal" kembali saat koneksi internet sudah aktif.',
+				confirmButtonColor: '#E8451A',
+			});
+			return;
+		}
+
 		setSaving(true);
 
 		try {
@@ -211,6 +236,11 @@ export default function JurnalPage() {
 				};
 				const { error } = await supabase.from('jurnal').insert(insertData);
 				if (error) throw error;
+			}
+
+			// Bersihkan draft jika mode tambah baru berhasil
+			if (!isEditing) {
+				localStorage.removeItem('draft_jurnal_baru');
 			}
 
 			await Swal.fire({

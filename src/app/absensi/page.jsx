@@ -137,14 +137,28 @@ export default function AbsensiMapelPage() {
 						setMode('rekap');
 						if (data[0]?.id_row) setExistingId(data[0].id_row);
 					} else {
-						// Data baru: INIT SAJA jika absensi kosong total (bukan reset)
-						const init = {};
-						siswaKelasIni.forEach((s) => {
-							init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
-						});
-						setAbsensi(init);
-						setMode('input');
-						setExistingId(null);
+						// Cek Draft Lokal terlebih dahulu (Offline PWA feature)
+						const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+						const savedDraft = localStorage.getItem(draftKey);
+
+						if (savedDraft) {
+							setAbsensi(JSON.parse(savedDraft));
+							setMode('input');
+							setExistingId(null);
+						} else {
+							// Data baru: INIT SAJA jika absensi kosong total (bukan reset)
+							setAbsensi(prev => {
+								const newAbsensi = { ...prev };
+								siswaKelasIni.forEach((s) => {
+									if (!newAbsensi[s.id]) {
+										newAbsensi[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+									}
+								});
+								return newAbsensi;
+							});
+							setMode('input');
+							setExistingId(null);
+						}
 					}
 				}
 			} catch (err) {
@@ -156,28 +170,75 @@ export default function AbsensiMapelPage() {
 	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni, statusList]); // Tambah statusList ke deps
 
 	const handleStatusChange = (siswaId, labelStatus) => {
-		setAbsensi((prev) => ({
-			...prev,
-			[siswaId]: { ...(prev[siswaId] || { keterangan: '' }), status: labelStatus },
-		}));
+		setAbsensi((prev) => {
+			const updated = {
+				...prev,
+				[siswaId]: { ...(prev[siswaId] || { keterangan: '' }), status: labelStatus },
+			};
+			// Simpan draft lokal
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
+			return updated;
+		});
 	};
 
 	const handleKeteranganChange = (siswaId, value) => {
-		setAbsensi((prev) => ({
-			...prev,
-			[siswaId]: { ...(prev[siswaId] || { status: statusList[0]?.label || '' }), keterangan: value },
-		}));
+		setAbsensi((prev) => {
+			const updated = {
+				...prev,
+				[siswaId]: { ...(prev[siswaId] || { status: statusList[0]?.label || '' }), keterangan: value },
+			};
+			// Simpan draft lokal
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
+			return updated;
+		});
 	};
 
 	const handleSimpan = async () => {
-		if (!jamKe || jamKe.trim() === '') {
+		// Pengecekan offline
+		if (typeof window !== 'undefined' && !window.navigator.onLine) {
 			Swal.fire({
-				icon: 'warning',
-				title: 'Jam Belum Diisi',
-				text: 'Harap isi Jam Ke (misal: 1-2) sebelum menyimpan.',
-				confirmButtonColor: '#f59e0b',
+				icon: 'info',
+				title: 'Anda Sedang Offline',
+				text: 'Pekerjaan Anda otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan" kembali saat internet terhubung.',
+				confirmButtonColor: '#E8451A',
 			});
 			return;
+		}
+
+		let currentJamKe = jamKe;
+		let isDirectSave = false;
+
+		if (!currentJamKe || currentJamKe.trim() === '') {
+			const { value: inputJamKe } = await Swal.fire({
+				title: 'Jam Belum Diisi',
+				text: 'Masukkan Jam Ke (misal: 1-2) untuk menyimpan.',
+				input: 'text',
+				inputPlaceholder: 'Contoh: 1-2',
+				showCancelButton: true,
+				confirmButtonColor: '#4F46E5',
+				cancelButtonColor: '#6B7280',
+				confirmButtonText: 'Simpan Absensi',
+				cancelButtonText: 'Batal',
+				inputValidator: (value) => {
+					if (!value || value.trim() === '') {
+						return 'Jam Ke wajib diisi!';
+					}
+				}
+			});
+
+			if (inputJamKe) {
+				currentJamKe = inputJamKe;
+				setJamKe(currentJamKe);
+				isDirectSave = true;
+			} else {
+				return;
+			}
 		}
 
 		const hasAbsensiData = siswaKelasIni.some((s) => absensi[s.id]);
@@ -188,18 +249,21 @@ export default function AbsensiMapelPage() {
 
 		if (siswaKelasIni.length === 0) return;
 
-		const result = await Swal.fire({
-			title: 'Simpan Absensi Mapel?',
-			text: `Simpan data ${selectedMapel} jam ke-${jamKe}?`,
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#6B7280',
-			confirmButtonText: 'Ya, Simpan',
-			cancelButtonText: 'Batal',
-		});
+		if (!isDirectSave) {
+			const result = await Swal.fire({
+				title: 'Simpan Absensi Mapel?',
+				text: `Simpan data ${selectedMapel} jam ke-${currentJamKe}?`,
+				icon: 'question',
+				showCancelButton: true,
+				confirmButtonColor: '#4F46E5',
+				cancelButtonColor: '#6B7280',
+				confirmButtonText: 'Ya, Simpan',
+				cancelButtonText: 'Batal',
+			});
 
-		if (!result.isConfirmed) return;
+			if (!result.isConfirmed) return;
+		}
+
 		setSaving(true);
 
 		const dataToSave = siswaKelasIni.map((s) => ({
@@ -213,7 +277,7 @@ export default function AbsensiMapelPage() {
 			tanggal,
 			kelas: selectedKelas,
 			mapel: selectedMapel,
-			jam_ke: jamKe,
+			jam_ke: currentJamKe,
 			data: dataToSave,
 		};
 
@@ -226,6 +290,11 @@ export default function AbsensiMapelPage() {
 
 			if (res.ok) {
 				const responseData = await res.json();
+				
+				// Bersihkan draft lokal karena sudah tersimpan di server
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${currentJamKe}`;
+				localStorage.removeItem(draftKey);
+
 				await Swal.fire({
 					icon: 'success',
 					title: 'Berhasil!',

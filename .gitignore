@@ -43,25 +43,5 @@ next-env.d.ts
 *.json
 gurupp-ee31577a3cf4.json
 page copy.jsx
-fitur_tracking.md
-log_kemajuan.md
-bug.md
-test_fitur.md
-repair.js
-check_syntax.js
-splice.js
-splice2.js
-count_tags.js
-count_braces.js
-redesign_laporan_1.js
-redesign_laporan_2.js
-redesign_laporan_3.js
-redesign_laporan_final.js
-new_ui.jsx
-updatelogikalaporannilai.md
-updatelogikaltugas.md
-arahperkembangan.md
-rewrite_buat.js
-replace_all.js
-replace_file.js
-fix_loaders.js
+# dev tools & scripts
+/dev_scripts/

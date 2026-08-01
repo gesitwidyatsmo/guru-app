@@ -143,11 +143,15 @@ export default function KelasAbsensiMapelPage() {
 						if (data[0]?.id_row) setExistingId(data[0].id_row);
 					} else {
 						// Data baru: INIT SAJA jika absensi kosong total (bukan reset)
-						const init = {};
-						siswaKelasIni.forEach((s) => {
-							init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+						setAbsensi(prev => {
+							const newAbsensi = { ...prev };
+							siswaKelasIni.forEach((s) => {
+								if (!newAbsensi[s.id]) {
+									newAbsensi[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+								}
+							});
+							return newAbsensi;
 						});
-						setAbsensi(init);
 						setMode('input');
 						setExistingId(null);
 					}
@@ -175,14 +179,34 @@ export default function KelasAbsensiMapelPage() {
 	};
 
 	const handleSimpan = async () => {
-		if (!jamKe || jamKe.trim() === '') {
-			Swal.fire({
-				icon: 'warning',
+		let currentJamKe = jamKe;
+		let isDirectSave = false;
+
+		if (!currentJamKe || currentJamKe.trim() === '') {
+			const { value: inputJamKe } = await Swal.fire({
 				title: 'Jam Belum Diisi',
-				text: 'Harap isi Jam Ke (misal: 1-2) sebelum menyimpan.',
-				confirmButtonColor: '#f59e0b',
+				text: 'Masukkan Jam Ke (misal: 1-2) untuk menyimpan.',
+				input: 'text',
+				inputPlaceholder: 'Contoh: 1-2',
+				showCancelButton: true,
+				confirmButtonColor: '#4F46E5',
+				cancelButtonColor: '#6B7280',
+				confirmButtonText: 'Simpan Absensi',
+				cancelButtonText: 'Batal',
+				inputValidator: (value) => {
+					if (!value || value.trim() === '') {
+						return 'Jam Ke wajib diisi!';
+					}
+				}
 			});
-			return;
+
+			if (inputJamKe) {
+				currentJamKe = inputJamKe;
+				setJamKe(currentJamKe);
+				isDirectSave = true;
+			} else {
+				return;
+			}
 		}
 
 		const hasAbsensiData = siswaKelasIni.some((s) => absensi[s.id]);
@@ -193,18 +217,21 @@ export default function KelasAbsensiMapelPage() {
 
 		if (siswaKelasIni.length === 0) return;
 
-		const result = await Swal.fire({
-			title: 'Simpan Absensi Mapel?',
-			text: `Simpan data ${selectedMapel} jam ke-${jamKe}?`,
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#6B7280',
-			confirmButtonText: 'Ya, Simpan',
-			cancelButtonText: 'Batal',
-		});
+		if (!isDirectSave) {
+			const result = await Swal.fire({
+				title: 'Simpan Absensi Mapel?',
+				text: `Simpan data ${selectedMapel} jam ke-${currentJamKe}?`,
+				icon: 'question',
+				showCancelButton: true,
+				confirmButtonColor: '#4F46E5',
+				cancelButtonColor: '#6B7280',
+				confirmButtonText: 'Ya, Simpan',
+				cancelButtonText: 'Batal',
+			});
 
-		if (!result.isConfirmed) return;
+			if (!result.isConfirmed) return;
+		}
+
 		setSaving(true);
 
 		const dataToSave = siswaKelasIni.map((s) => ({
@@ -218,7 +245,7 @@ export default function KelasAbsensiMapelPage() {
 			tanggal,
 			kelas: selectedKelas,
 			mapel: selectedMapel,
-			jam_ke: jamKe,
+			jam_ke: currentJamKe,
 			data: dataToSave,
 		};
 

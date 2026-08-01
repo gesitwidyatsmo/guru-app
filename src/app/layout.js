@@ -3,6 +3,7 @@ import './globals.css';
 import StyledComponentsRegistry from '@/lib/registry';
 import IdleTimerWrapper from './components/IdleTimerWrapper';
 import KbmBlocker from './components/KbmBlocker';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
 	variable: '--font-plus-jakarta-sans',
@@ -18,10 +19,18 @@ export const metadata = {
 	title: 'Guru App',
 	description: 'Aplikasi yang memfasilitasi pembelajaran untuk guru',
 	manifest: '/manifest.json',
+	appleWebApp: {
+		capable: true,
+		statusBarStyle: 'default',
+		title: 'Guru App',
+	},
+	icons: {
+		apple: '/ios/180.png',
+	},
 };
 
 export const viewport = {
-	themeColor: '#ffffff',
+	themeColor: '#E8451A',
 	width: 'device-width',
 	initialScale: 1,
 	maximumScale: 1,
@@ -35,6 +44,7 @@ export default function RootLayout({ children }) {
 					<StyledComponentsRegistry>
 						{children}
 						<KbmBlocker />
+						<PwaInstallPrompt />
 					</StyledComponentsRegistry>
 				</IdleTimerWrapper>
 			</body>

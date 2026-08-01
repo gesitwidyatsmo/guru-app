@@ -67,6 +67,19 @@ export async function middleware(request) {
 		}
 	}
 
+	// Pengecekan Kustom Sesi (2 Jam vs 7 Hari)
+	if (payload && !request.cookies.has('auth_session_valid')) {
+		if (!isPublicRoute) {
+			if (pathname.startsWith('/api')) {
+				return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });
+			}
+			return NextResponse.redirect(new URL('/login?expired=1', request.url));
+		} else if (pathname === '/login') {
+			// Anggap belum login agar tidak terlempar otomatis ke dashboard
+			payload = null;
+		}
+	}
+
 	// Route Protection Logic
 	if (isPublicRoute && payload && pathname === '/login') {
 		if (payload.role === 'Admin') {
