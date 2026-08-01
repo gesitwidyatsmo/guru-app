@@ -3,7 +3,8 @@ import { createServerClient } from '@supabase/ssr';
 
 export const config = {
 	matcher: [
-		'/((?!_next/static|_next/image|favicon.ico).*)',
+		// Kecualikan semua aset statis Next.js DAN aset PWA agar tidak di-intercept middleware
+		'/((?!_next/static|_next/image|favicon\.ico|favicon\.png|manifest\.json|sw\.js|workbox-.*\.js|fallback-.*\.js|swe-worker-.*\.js|android\/.*|ios\/.*|windows\/.*|screenshots\/.*|icon.*\.png|icon.*\.svg|icon\.svg|gwa\.svg|logo.*\.png).*)',
 	],
 };
 
@@ -34,7 +35,17 @@ export async function middleware(request) {
 	);
 
 	const { pathname } = request.nextUrl;
-	const publicRoutes = ['/login', '/soal', '/api/soal', '/api/login', '/api/logout', '/api/kelas', '/api/siswa'];
+	const publicRoutes = [
+		'/login',
+		'/soal',
+		'/api/soal',
+		'/api/login',
+		'/api/logout',
+		'/api/kelas',
+		'/api/siswa',
+		'/offline',        // PWA: halaman fallback saat offline harus bisa diakses tanpa login
+		'/manifest.json',  // PWA: manifest harus selalu bisa diakses
+	];
 	const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
 	const {
@@ -75,13 +86,27 @@ export async function middleware(request) {
 	//   2. Cookie sudah melewati maxAge (2 jam / 7 hari)
 	//   3. Logout tidak membersihkan cookie ini dengan benar
 	const isDev = process.env.NODE_ENV === 'development';
+
+	// Deteksi request dari PWA standalone mode.
+	// Standalone webview (terutama iOS) tidak selalu mewarisi cookie browser,
+	// sehingga auth_session_valid bisa tidak ada meski session Supabase valid.
+	// Kita anggap request dari standalone valid jika Supabase session ada.
+	const isStandalone = request.headers.get('sec-fetch-mode') === 'navigate'
+		&& (
+			request.headers.get('sec-fetch-dest') === 'document'
+			// iOS standalone tidak mengirim sec-fetch headers, cek referer kosong + user agent
+			|| !request.headers.get('sec-fetch-site')
+		);
+
 	if (payload && !isDev && !request.cookies.has('auth_session_valid')) {
-		if (!isPublicRoute) {
+		// Jika berjalan dalam standalone mode, jangan paksa logout —
+		// cookie mungkin tidak diwarisi dari browser ke standalone webview.
+		if (!isStandalone && !isPublicRoute) {
 			if (pathname.startsWith('/api')) {
 				return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });
 			}
 			return NextResponse.redirect(new URL('/login?expired=1', request.url));
-		} else if (pathname === '/login') {
+		} else if (pathname === '/login' && !isStandalone) {
 			// Anggap belum login agar tidak terlempar otomatis ke dashboard
 			payload = null;
 		}

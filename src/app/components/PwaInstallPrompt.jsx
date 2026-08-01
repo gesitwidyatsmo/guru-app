@@ -11,10 +11,15 @@ const DISMISS_KEY = 'pwa_install_dismissed_at';
  * Mendeteksi apakah perangkat adalah iOS (iPhone/iPad/iPod)
  * Safari tidak mendukung event `beforeinstallprompt`, sehingga
  * diperlukan panduan manual khusus untuk pengguna iOS.
+ * Catatan: iPad iOS 13+ menggunakan UA 'MacIntel', deteksi via maxTouchPoints.
  */
 function detectIOS() {
   if (typeof navigator === 'undefined') return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    // iPad iOS 13+ menggunakan UA desktop 'MacIntel' tapi punya touch screen
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
 }
 
 /**

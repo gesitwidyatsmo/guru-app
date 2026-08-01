@@ -7,11 +7,12 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone"],
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
   "background_color": "#FFF5F0",
   "theme_color": "#E8451A",
   "orientation": "portrait",
   "categories": ["education", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/android/launchericon-48x48.png",

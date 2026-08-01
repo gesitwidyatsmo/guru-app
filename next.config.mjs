@@ -10,8 +10,8 @@ const withPWA = withPWAInit({
   },
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
-  // Auto-reload halaman saat koneksi kembali dari offline
-  reloadOnOnline: true,
+  // Jangan reload paksa saat online kembali — bisa memicu redirect ke login di standalone mode
+  reloadOnOnline: false,
   workboxOptions: {
     runtimeCaching: [
       {

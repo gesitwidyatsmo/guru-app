@@ -21,7 +21,7 @@ export const metadata = {
 	manifest: '/manifest.json',
 	appleWebApp: {
 		capable: true,
-		statusBarStyle: 'default',
+		statusBarStyle: 'black-translucent',
 		title: 'Guru App',
 		// Startup images untuk layar putih flash di iOS saat launch
 		startupImage: [
