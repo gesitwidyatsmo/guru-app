@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import * as XLSX from 'xlsx';
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 // --- METHOD GET (Ambil Data) ---
 export async function GET(req) {
@@ -26,7 +27,10 @@ export async function GET(req) {
 			}
 		}
 
-		let query = supabase.from('siswa').select('*').order('nama_lengkap', { ascending: true });
+		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS
+		const supabaseClient = role ? await createClient() : supabaseAdmin;
+
+		let query = supabaseClient.from('siswa').select('*').order('nama_lengkap', { ascending: true });
 
 		if (allowedClasses !== null) {
 			if (allowedClasses.length === 0) return NextResponse.json([]);
@@ -48,7 +52,7 @@ export async function GET(req) {
 
 // --- METHOD POST (Tambah Data Baru - Manual & Bulk) ---
 export async function POST(request) {
-	if (request.headers.get('x-user-role') === 'Guru') {
+	if (request.headers.get('x-user-role') !== 'Admin') {
 		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
 	try {
@@ -126,7 +130,7 @@ export async function POST(request) {
 
 // --- METHOD PUT (Update Data) ---
 export async function PUT(req) {
-	if (req.headers.get('x-user-role') === 'Guru') {
+	if (req.headers.get('x-user-role') !== 'Admin') {
 		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
 	try {
@@ -155,7 +159,7 @@ export async function PUT(req) {
 
 // --- METHOD DELETE (Hapus Data) ---
 export async function DELETE(req) {
-	if (req.headers.get('x-user-role') === 'Guru') {
+	if (req.headers.get('x-user-role') !== 'Admin') {
 		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
 	}
 	try {

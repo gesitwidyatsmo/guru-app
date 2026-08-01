@@ -9,7 +9,8 @@ import { createClient } from '@/utils/supabase/client';
 export default function DetailNilaiPage() {
 	const params = useParams();
 	const router = useRouter();
-	const { id, tugasId } = params;
+	const { id, tugasId: rawTugasId } = params;
+	const tugasId = decodeURIComponent(rawTugasId || '');
 
 	const [tugasData, setTugasData] = useState(null);
 	const [loading, setLoading] = useState(true);
@@ -52,36 +53,67 @@ export default function DetailNilaiPage() {
 				const { data: rawData, error } = await query;
 				if (error) throw error;
 
+				let tugasDetail = null;
+				let submittedSiswa = [];
+
 				if (rawData && rawData.length > 0) {
-					const firstData = rawData[0].nilai_tugas;
-					setTugasData({
-						judul: firstData.kategori,
-						type: firstData.type || 'Formatif',
-						deskripsi: firstData.deskripsi || '',
-						mapel: firstData.mapel,
-						kelas: firstData.kelas,
-						tanggal: firstData.tanggal,
-						siswa: rawData.map((item) => ({
-							id: item.siswa_id,
-							nama_lengkap: item.nama_siswa,
-							nilai: item.nilai,
-						})),
-					});
+					tugasDetail = rawData[0].nilai_tugas;
+					submittedSiswa = rawData;
 				} else {
 					// Fallback if no students inserted but task exists
 					const { data: tugasHead, error: errHead } = await supabase.from('nilai_tugas').select('*').eq('tugas_id', tugasId).single();
 					if (tugasHead) {
 						if (role === 'Guru' && tugasHead.guru_id !== userId) throw new Error('Akses Ditolak');
-						setTugasData({
-							judul: tugasHead.kategori,
-							type: tugasHead.type || 'Formatif',
-							deskripsi: tugasHead.deskripsi || '',
-							mapel: tugasHead.mapel,
-							kelas: tugasHead.kelas,
-							tanggal: tugasHead.tanggal,
-							siswa: [],
-						});
+						tugasDetail = tugasHead;
 					}
+				}
+
+				if (tugasDetail) {
+					// Fetch all students for this class
+					// Kolom 'absen' ternyata tidak ada di DB, jadi hapus dari select dan gunakan nama untuk sorting
+					const { data: daftarSiswa, error: errSiswa } = await supabase
+						.from('siswa')
+						.select('id, nama_lengkap')
+						.eq('kelas', tugasDetail.kelas)
+						.order('nama_lengkap', { ascending: true });
+					
+					if (errSiswa) console.error("Error fetching siswa", errSiswa);
+					
+					let finalSiswaList = [];
+
+					if (daftarSiswa && daftarSiswa.length > 0) {
+						// Gabungkan daftar seluruh siswa dengan nilai yang sudah masuk
+						finalSiswaList = daftarSiswa.map((s, index) => {
+							const found = submittedSiswa.find(sub => sub.siswa_id === s.id);
+							// Nomor absen buatan jika DB tidak ada kolom absen
+							const nomorAbsen = String(index + 1); 
+							return {
+								id: s.id,
+								nama_lengkap: s.nama_lengkap,
+								absen: nomorAbsen,
+								nilai: found && found.nilai !== null ? found.nilai : '-'
+							};
+						});
+					} else {
+						// FALLBACK: Jika daftarSiswa gagal diambil, tampilkan setidaknya yang sudah ada di submittedSiswa
+						console.warn("Daftar siswa kosong untuk kelas:", tugasDetail.kelas);
+						finalSiswaList = submittedSiswa.map((item) => ({
+							id: item.siswa_id,
+							nama_lengkap: item.nama_siswa,
+							absen: '-',
+							nilai: item.nilai,
+						}));
+					}
+
+					setTugasData({
+						judul: tugasDetail.kategori,
+						type: tugasDetail.type || 'Formatif',
+						deskripsi: tugasDetail.deskripsi || '',
+						mapel: tugasDetail.mapel,
+						kelas: tugasDetail.kelas,
+						tanggal: tugasDetail.tanggal,
+						siswa: finalSiswaList,
+					});
 				}
 			} catch (error) {
 				console.error('Error fetching tugas:', error);

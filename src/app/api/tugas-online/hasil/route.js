@@ -48,3 +48,29 @@ export async function GET(request) {
 		return NextResponse.json({ error: 'Gagal mengambil data hasil pengumpulan' }, { status: 500 });
 	}
 }
+
+export async function DELETE(request) {
+	try {
+		const { searchParams } = new URL(request.url);
+		const id = searchParams.get('id');
+
+		if (!id) {
+			return NextResponse.json({ error: 'ID pengumpulan tidak diberikan' }, { status: 400 });
+		}
+
+		const supabase = await createClient();
+
+		const { error } = await supabase
+			.from('pengumpulan_tugas')
+			.delete()
+			.eq('id', id);
+
+		if (error) throw error;
+
+		return NextResponse.json({ success: true, message: 'Hasil pengumpulan berhasil dihapus' });
+	} catch (error) {
+		console.error('API Delete Error:', error);
+		return NextResponse.json({ error: 'Gagal menghapus hasil pengumpulan' }, { status: 500 });
+	}
+}
+

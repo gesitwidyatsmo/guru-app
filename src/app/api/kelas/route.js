@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -31,7 +32,10 @@ export async function GET(request) {
 			allowedClasses = []; // Guest / unauthorized
 		}
 
-		let query = supabase.from('kelas').select(`
+		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS
+		const db = role ? await createClient() : supabaseAdmin;
+
+		let query = db.from('kelas').select(`
 			id,
 			nama_kelas,
 			id_wali_kelas,

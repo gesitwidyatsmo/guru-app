@@ -34,7 +34,7 @@ export async function middleware(request) {
 	);
 
 	const { pathname } = request.nextUrl;
-	const publicRoutes = ['/login', '/soal', '/api/soal', '/api/login', '/api/logout'];
+	const publicRoutes = ['/login', '/soal', '/api/soal', '/api/login', '/api/logout', '/api/kelas', '/api/siswa'];
 	const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
 	const {

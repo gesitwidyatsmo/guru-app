@@ -103,8 +103,8 @@ export default function TugasDashboard() {
 	};
 
 	const copyLink = (task) => {
-		const url = `\${window.location.origin}/soal`;
-		const text = `📋 TUGAS BARU: \${task.judul}\nMata Pelajaran: \${task.mapel}\n\nSilakan kerjakan tugas Anda melalui portal berikut:\n🔗 \${url}\n\n🔑 Gunakan PIN: \${task.pin}`;
+		const url = `${window.location.origin}/soal`;
+		const text = `📋 TUGAS BARU: ${task.judul}\nMata Pelajaran: ${task.mapel}\n\nSilakan kerjakan tugas Anda melalui portal berikut:\n🔗 ${url}\n\n🔑 Gunakan PIN: ${task.pin}`;
 		navigator.clipboard.writeText(text);
 		Swal.fire({
 			title: 'TERSALIN!',
@@ -174,7 +174,7 @@ export default function TugasDashboard() {
 						return (
 						<div
 							key={task.id}
-							className={`\${currentBg} border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] p-6 flex flex-col transition-transform hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] duration-200`}>
+							className={`${currentBg} border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] p-6 flex flex-col transition-transform hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] duration-200`}>
 							
 							<div className='flex justify-between items-start mb-6'>
 								<div className='bg-[#F5C518] text-[#0D0D0D] px-3 py-1 text-sm font-black tracking-widest border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -rotate-3'>
@@ -188,7 +188,7 @@ export default function TugasDashboard() {
 										<LinkIcon className='w-5 h-5' strokeWidth={3} />
 									</button>
 									<Link
-										href={`/tugas/edit/\${task.id}`}
+										href={`/tugas/edit/${task.id}`}
 										className='p-2 bg-white text-[#0D0D0D] border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
 										title='Edit Tugas'>
 										<Edit className='w-5 h-5' strokeWidth={3} />
@@ -202,7 +202,7 @@ export default function TugasDashboard() {
 								</div>
 							</div>
 
-							<h3 className={`text-2xl font-black \${textColor} mb-3 uppercase tracking-wider line-clamp-2 leading-tight`}>{task.judul}</h3>
+							<h3 className={`text-2xl font-black ${textColor} mb-3 uppercase tracking-wider line-clamp-2 leading-tight`}>{task.judul}</h3>
 							
 							<div className='flex flex-wrap gap-2 mb-6'>
 								<span className='text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-white text-[#0D0D0D] border-[2px] border-[#0D0D0D]'>{task.mapel}</span>
@@ -211,11 +211,11 @@ export default function TugasDashboard() {
 
 							<div className={`mt-auto pt-4 border-t-[3px] border-[#0D0D0D] flex flex-col gap-5`}>
 								<div className='flex items-center justify-between'>
-									<div className={`text-xs font-bold \${textColor} flex items-center gap-2 uppercase tracking-wider`}>
+									<div className={`text-xs font-bold ${textColor} flex items-center gap-2 uppercase tracking-wider`}>
 										<Users className='w-5 h-5' strokeWidth={3} />
 										{task.tipe_soal === 'Tunggal' ? '1 SOAL' : 'STUDI KASUS'}
 									</div>
-									<div className={`text-xs font-bold \${subTextColor} uppercase tracking-widest`}>
+									<div className={`text-xs font-bold ${subTextColor} uppercase tracking-widest`}>
 										{new Date(task.createdAt).toLocaleDateString('id-ID', {
 											day: '2-digit',
 											month: 'short',
@@ -224,7 +224,7 @@ export default function TugasDashboard() {
 									</div>
 								</div>
 								<Link
-									href={`/tugas/hasil/\${task.pin}`}
+									href={`/tugas/hasil/${task.pin}`}
 									className='w-full flex items-center justify-center gap-2 py-3 bg-[#0D0D0D] text-white hover:bg-[#F5C518] hover:text-[#0D0D0D] border-[4px] border-[#0D0D0D] font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
 								>
 									LIHAT HASIL

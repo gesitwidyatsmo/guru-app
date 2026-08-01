@@ -211,10 +211,10 @@ export async function POST(request) {
 
 		const { error } = await supabase.from('pengumpulan_tugas').insert({
 			pin: pin.toUpperCase(),
+			siswa_id: siswaId || null,
 			kelas: kelas,
 			nama_siswa: namaSiswa,
 			no_absen: String(noAbsen),
-			siswa_id: siswaId || null,
 			jawaban_teks: finalJawabanTeks,
 			link_file: linkFile,
 			nilai: finalNilai,
@@ -225,20 +225,54 @@ export async function POST(request) {
 			throw error;
 		}
 
-		// Auto Sync Nilai to nilai_tugas if PG and we have siswaId
-		if (siswaId && finalNilai !== null) {
-			const { error: upsertError } = await supabase.from('nilai_tugas').upsert({
-				siswa_id: siswaId,
-				kelas: kelas,
-				mapel: taskMapel,
-				judul_tugas: taskJudul,
-				kategori: taskKategori,
-				type: taskType,
-				nilai: finalNilai
-			}, {
-				onConflict: 'siswa_id, kelas, mapel, judul_tugas'
-			});
-			if (upsertError) console.error('Gagal sinkron nilai_tugas:', upsertError);
+		// Auto Sync Nilai ke nilai_tugas + nilai_siswa jika PG dan ada siswaId
+		// Opsi A: Satu header per kelas — TGS-ONLINE-{PIN}-{KELAS}
+		if (finalNilai !== null) {
+			if (!siswaId) {
+				console.warn(`[Auto-Sync] siswa_id tidak ada untuk PIN ${pin}, kelas ${kelas}. Sinkronisasi dilewati.`);
+			} else {
+				const kelasKey = (kelas && kelas !== '-') ? kelas : 'UMUM';
+				const tugasId = `TGS-ONLINE-${pin.toUpperCase()}-${kelasKey}`;
+				
+				let trueGuruId = null;
+				if (taskRow?.created_by) {
+					if (taskRow.created_by.startsWith('UID-')) {
+						trueGuruId = taskRow.created_by;
+					} else {
+						const { data: guruData } = await supabase.from('users').select('id_user').eq('nama_lengkap', taskRow.created_by).single();
+						if (guruData) trueGuruId = guruData.id_user;
+					}
+				}
+
+				// Upsert Header (nilai_tugas) — satu per kelas
+				const { error: headerError } = await supabase.from('nilai_tugas').upsert({
+					tugas_id: tugasId,
+					guru_id: trueGuruId,
+					kategori: taskKategori,
+					type: taskType,
+					deskripsi: taskJudul,
+					kelas: kelasKey,
+					mapel: taskMapel,
+					tanggal: new Date().toISOString().split('T')[0]
+				}, {
+					onConflict: 'tugas_id'
+				});
+				
+				if (headerError) {
+					console.error('[Auto-Sync] Gagal sinkron header nilai_tugas:', headerError);
+				} else {
+					// Upsert Student Score (nilai_siswa)
+					const { error: detailError } = await supabase.from('nilai_siswa').upsert({
+						tugas_id: tugasId,
+						siswa_id: siswaId,
+						nama_siswa: namaSiswa,
+						nilai: finalNilai
+					}, {
+						onConflict: 'tugas_id, siswa_id'
+					});
+					if (detailError) console.error('[Auto-Sync] Gagal sinkron detail nilai_siswa:', detailError);
+				}
+			}
 		}
 
 		if (calculatedScore !== null) {
