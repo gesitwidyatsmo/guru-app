@@ -17,15 +17,30 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
 	title: 'Guru App',
-	description: 'Aplikasi yang memfasilitasi pembelajaran untuk guru',
+	description: 'Aplikasi manajemen KBM dan Jurnal Mengajar untuk Guru',
 	manifest: '/manifest.json',
 	appleWebApp: {
 		capable: true,
 		statusBarStyle: 'default',
 		title: 'Guru App',
+		// Startup images untuk layar putih flash di iOS saat launch
+		startupImage: [
+			// iPhone 14 Pro Max
+			{ url: '/ios/1024.png', media: '(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)' },
+			// iPhone 14 Pro
+			{ url: '/ios/1024.png', media: '(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)' },
+			// iPhone SE / 8 / 7 / 6
+			{ url: '/ios/512.png', media: '(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)' },
+			// iPad Pro 12.9
+			{ url: '/ios/1024.png', media: '(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)' },
+		],
 	},
 	icons: {
-		apple: '/ios/180.png',
+		apple: [
+			{ url: '/ios/180.png', sizes: '180x180' },
+			{ url: '/ios/152.png', sizes: '152x152' },
+			{ url: '/ios/167.png', sizes: '167x167' },
+		],
 	},
 };
 
@@ -38,7 +53,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
 	return (
-		<html lang='en'>
+		<html lang='id'>
 			<body className={`${plusJakartaSans.variable} ${geistMono.variable} antialiased`}>
 				<IdleTimerWrapper>
 					<StyledComponentsRegistry>

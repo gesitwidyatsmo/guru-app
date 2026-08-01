@@ -1,12 +1,12 @@
 'use client';
 
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
 
-export default function DetailNilaiPage() {
+function DetailNilaiContent() {
 	const router = useRouter();
 	const params = useParams();
 	const searchParams = useSearchParams();
@@ -229,5 +229,19 @@ export default function DetailNilaiPage() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+export default function DetailNilaiPage() {
+	return (
+		<Suspense fallback={
+			<div className='min-h-screen bg-neo-cream flex items-center justify-center'>
+				<div className='neo-card p-8 text-center'>
+					<div className='text-xl font-bold'>Memuat detail nilai...</div>
+				</div>
+			</div>
+		}>
+			<DetailNilaiContent />
+		</Suspense>
 	);
 }

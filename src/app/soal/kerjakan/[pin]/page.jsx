@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, use, useRef, useCallback } from 'react';
+import { useEffect, useState, use, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Upload, Send, CheckCircle, File, AlertTriangle, Monitor, Lock } from 'lucide-react';
 import Swal from 'sweetalert2';
 
-export default function KerjakanSoal({ params }) {
+function KerjakanSoalContent({ params }) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const unwrappedParams = use(params);
@@ -822,5 +822,19 @@ export default function KerjakanSoal({ params }) {
 				</div>
 			</div>
 		</main>
+	);
+}
+
+export default function KerjakanSoal({ params }) {
+	return (
+		<Suspense fallback={
+			<div className='min-h-screen bg-neo-cream flex items-center justify-center'>
+				<div className='neo-card p-8 text-center'>
+					<div className='text-xl font-bold'>Memuat soal...</div>
+				</div>
+			</div>
+		}>
+			<KerjakanSoalContent params={params} />
+		</Suspense>
 	);
 }

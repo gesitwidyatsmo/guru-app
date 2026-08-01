@@ -1,6 +1,5 @@
 'use client';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { useRouter } from 'next/navigation';
 
 // ─── Stream singleton: survives React re-renders & soft navigation ───────────
@@ -383,6 +382,8 @@ export default function HandHockey() {
 			setLoadingMsg('Memuat model AI Hand Tracking… (±10 MB, sekali unduh)');
 			setLoadingStep(3);
 			if (!handLandmarkerRef.current) {
+				// DYNAMIC IMPORT: Load library berat ini hanya saat user klik main
+				const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision');
 				const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm');
 				// Try GPU first, fall back to CPU for older/mobile devices
 				let hl = null;

@@ -58,11 +58,19 @@ export async function POST(req) {
 		// Hapus legacy 'token' cookie agar tidak bentrok
 		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
 
+		// Deteksi apakah request datang dari jaringan lokal (localhost / IP privat).
+		// Cookie dengan secure:true tidak dikirim via HTTP → menyebabkan /login?expired=1
+		// saat testing dari HP di jaringan yang sama via IP (mis. 192.168.x.x).
+		const host = req.headers.get('host') || '';
+		const isLocalNetwork = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(host);
+		const secureCookie = !isLocalNetwork && process.env.NODE_ENV === 'production';
+
 		// Set cookie custom untuk mengatur limit maksimal sesi (2 Jam vs 7 Hari)
 		const maxAge = rememberMe ? 7 * 24 * 60 * 60 : 2 * 60 * 60; // 7 Hari vs 2 Jam
 		response.cookies.set('auth_session_valid', 'true', {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: secureCookie,
+			sameSite: 'lax',
 			path: '/',
 			maxAge: maxAge,
 		});

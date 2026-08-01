@@ -68,7 +68,14 @@ export async function middleware(request) {
 	}
 
 	// Pengecekan Kustom Sesi (2 Jam vs 7 Hari)
-	if (payload && !request.cookies.has('auth_session_valid')) {
+	// auth_session_valid adalah cookie kustom yang di-set saat login.
+	// Jika Supabase session masih valid tapi cookie ini tidak ada → sesi dianggap kedaluwarsa.
+	// CATATAN: cookie ini tidak akan ada jika:
+	//   1. User mengakses via HTTP (bukan HTTPS) dan cookie ter-set dengan secure:true
+	//   2. Cookie sudah melewati maxAge (2 jam / 7 hari)
+	//   3. Logout tidak membersihkan cookie ini dengan benar
+	const isDev = process.env.NODE_ENV === 'development';
+	if (payload && !isDev && !request.cookies.has('auth_session_valid')) {
 		if (!isPublicRoute) {
 			if (pathname.startsWith('/api')) {
 				return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });

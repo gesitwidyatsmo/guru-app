@@ -9,6 +9,22 @@ export default function PengaturanPage() {
 	const [userRole, setUserRole] = useState(null);
 	const [activeTab, setActiveTab] = useState('tentang');
 	const [isBackingUp, setIsBackingUp] = useState(false);
+	const [installPrompt, setInstallPrompt] = useState(null);
+	const [isInstalled, setIsInstalled] = useState(false);
+
+	useEffect(() => {
+		// Cek apakah sudah berjalan dalam mode standalone (sudah diinstall)
+		if (window.matchMedia('(display-mode: standalone)').matches) {
+			setIsInstalled(true);
+		}
+
+		const handler = (e) => {
+			e.preventDefault();
+			setInstallPrompt(e);
+		};
+		window.addEventListener('beforeinstallprompt', handler);
+		return () => window.removeEventListener('beforeinstallprompt', handler);
+	}, []);
 
 	useEffect(() => {
 		const checkRole = async () => {
@@ -27,6 +43,16 @@ export default function PengaturanPage() {
 		};
 		checkRole();
 	}, []);
+
+	const handleInstallApp = async () => {
+		if (!installPrompt) return;
+		installPrompt.prompt();
+		const { outcome } = await installPrompt.userChoice;
+		if (outcome === 'accepted') {
+			setIsInstalled(true);
+			setInstallPrompt(null);
+		}
+	};
 
 	const handleBackup = async () => {
 		try {
@@ -296,6 +322,35 @@ export default function PengaturanPage() {
 
 						<div className='mt-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100'>
 							<p className='text-xs text-indigo-600 text-center'>Dibuat dengan ❤️ untuk memudahkan pengelolaan kelas dan administrasi guru</p>
+						</div>
+
+						{/* Tombol Install PWA */}
+						<div className='mt-6'>
+							{isInstalled ? (
+								<div className='flex items-center justify-center gap-2 py-4 rounded-xl bg-green-50 border border-green-200'>
+									<svg className='w-5 h-5 text-green-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' />
+									</svg>
+									<span className='text-sm font-semibold text-green-700'>Aplikasi Sudah Terinstal</span>
+								</div>
+							) : installPrompt ? (
+								<button
+									onClick={handleInstallApp}
+									className='w-full py-4 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-md hover:shadow-lg hover:scale-[1.01] transition-all flex items-center justify-center gap-3'
+								>
+									<svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' />
+									</svg>
+									Instal Aplikasi ke Perangkat
+								</button>
+							) : (
+								<div className='flex items-center justify-center gap-2 py-4 rounded-xl bg-gray-50 border border-gray-200'>
+									<svg className='w-5 h-5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' />
+									</svg>
+									<span className='text-sm text-gray-500'>Install via menu browser (⋮ → Instal aplikasi)</span>
+								</div>
+							)}
 						</div>
 					</div>
 				)}

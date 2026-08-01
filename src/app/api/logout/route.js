@@ -10,8 +10,16 @@ async function logoutHandler() {
 
 		const response = NextResponse.json({ message: 'Berhasil logout' }, { status: 200 });
 
-		// Bersihkan juga cookie legacy 'token' jika masih tersisa
+		// Bersihkan cookie legacy 'token' jika masih tersisa
 		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
+
+		// Bersihkan cookie sesi kustom — WAJIB agar middleware tidak salah baca state
+		response.cookies.set('auth_session_valid', '', {
+			expires: new Date(0),
+			path: '/',
+			httpOnly: true,
+			sameSite: 'lax',
+		});
 
 		return response;
 	} catch (error) {
