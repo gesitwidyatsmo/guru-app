@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export const config = {
 	matcher: [
 		// Kecualikan semua aset statis Next.js DAN aset PWA agar tidak di-intercept middleware
-		'/((?!_next/static|_next/image|favicon\.ico|favicon\.png|manifest\.json|sw\.js|workbox-.*\.js|fallback-.*\.js|swe-worker-.*\.js|android\/.*|ios\/.*|windows\/.*|screenshots\/.*|icon.*\.png|icon.*\.svg|icon\.svg|gwa\.svg|logo.*\.png).*)',
+		'/((?!_next/static|_next/image|favicon\\.ico|favicon\\.png|manifest\\.json|sw\\.js|workbox-.*\\.js|fallback-.*\\.js|swe-worker-.*\\.js|android\\/.*|ios\\/.*|windows\\/.*|screenshots\\/.*|icon.*\\.png|icon.*\\.svg|icon\\.svg|gwa\\.svg|logo.*\\.png).*)',
 	],
 };
 
-export async function middleware(request) {
+export async function proxy(request) {
 	let supabaseResponse = NextResponse.next({
 		request,
 	});
@@ -22,7 +23,7 @@ export async function middleware(request) {
 					return request.cookies.getAll();
 				},
 				setAll(cookiesToSet) {
-					cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+					cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 					supabaseResponse = NextResponse.next({
 						request,
 					});
@@ -55,19 +56,15 @@ export async function middleware(request) {
 	let payload = null;
 
 	// Jika terautentikasi di Supabase, ambil detail role dan ID dari tabel public.users
+	// Gunakan singleton supabaseAdmin (bukan re-create setiap request)
 	if (user) {
-		const { createClient } = await import('@supabase/supabase-js');
-		const supabaseAdmin = createClient(
-			process.env.NEXT_PUBLIC_SUPABASE_URL,
-			process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-		);
 		const { data: userProfile, error } = await supabaseAdmin
 			.from('users')
 			.select('id_user, role, nama_lengkap')
 			.eq('auth_id', user.id)
 			.single();
-		
-		if (error) console.error('Middleware Profile Fetch Error:', error.message);
+
+		if (error) console.error('Proxy Profile Fetch Error:', error.message);
 
 		if (userProfile) {
 			payload = {
@@ -81,49 +78,67 @@ export async function middleware(request) {
 	// Pengecekan Kustom Sesi (2 Jam vs 7 Hari)
 	// auth_session_valid adalah cookie kustom yang di-set saat login.
 	// Jika Supabase session masih valid tapi cookie ini tidak ada → sesi dianggap kedaluwarsa.
-	// CATATAN: cookie ini tidak akan ada jika:
-	//   1. User mengakses via HTTP (bukan HTTPS) dan cookie ter-set dengan secure:true
-	//   2. Cookie sudah melewati maxAge (2 jam / 7 hari)
-	//   3. Logout tidak membersihkan cookie ini dengan benar
 	const isDev = process.env.NODE_ENV === 'development';
+	const hasCustomSession = request.cookies.has('auth_session_valid');
 
-	// Deteksi request dari PWA standalone mode.
-	// Standalone webview (terutama iOS) tidak selalu mewarisi cookie browser,
-	// sehingga auth_session_valid bisa tidak ada meski session Supabase valid.
-	// Kita anggap request dari standalone valid jika Supabase session ada.
-	const isStandalone = request.headers.get('sec-fetch-mode') === 'navigate'
-		&& (
-			request.headers.get('sec-fetch-dest') === 'document'
-			// iOS standalone tidak mengirim sec-fetch headers, cek referer kosong + user agent
-			|| !request.headers.get('sec-fetch-site')
-		);
+	// Deteksi apakah app berjalan dalam PWA standalone mode.
+	// Di standalone mode, cookie browser tidak selalu diwariskan ke webview (terutama iOS),
+	// sehingga auth_session_valid bisa tidak ada meski Supabase session valid.
+	// Deteksi: sec-fetch-site tidak ada = kemungkinan standalone / direct navigation.
+	const isStandalone =
+		!request.headers.get('sec-fetch-site') ||
+		request.headers.get('display-mode') === 'standalone';
 
-	if (payload && !isDev && !request.cookies.has('auth_session_valid')) {
-		// Jika berjalan dalam standalone mode, jangan paksa logout —
-		// cookie mungkin tidak diwarisi dari browser ke standalone webview.
-		if (!isStandalone && !isPublicRoute) {
-			if (pathname.startsWith('/api')) {
-				return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });
-			}
-			return NextResponse.redirect(new URL('/login?expired=1', request.url));
-		} else if (pathname === '/login' && !isStandalone) {
-			// Anggap belum login agar tidak terlempar otomatis ke dashboard
-			payload = null;
+	// --- FIX UTAMA: Normalisasi payload berdasarkan validitas sesi kustom ---
+	// Jika payload ada (Supabase session OK) TAPI cookie kustom tidak ada
+	// DAN bukan dev DAN bukan standalone → anggap sesi sudah tidak valid
+	if (payload && !isDev && !hasCustomSession && !isStandalone) {
+		// Set payload ke null agar logika routing di bawah menganggap user belum login.
+		// Ini mencegah loop: middleware tidak akan redirect dari /login ke /
+		// karena payload sudah null ketika sampai ke blok route protection di bawah.
+		payload = null;
+
+		// Jika user sudah berada di halaman login, biarkan saja (tidak perlu redirect)
+		if (pathname === '/login') {
+			return supabaseResponse;
+		}
+
+		// Untuk API routes, kembalikan 401
+		if (pathname.startsWith('/api')) {
+			return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });
+		}
+
+		// Redirect ke login dengan flag expired — hanya untuk halaman non-public
+		if (!isPublicRoute) {
+			const loginUrl = new URL('/login?expired=1', request.url);
+			const redirectResponse = NextResponse.redirect(loginUrl);
+			// Salin Supabase cookies ke redirect response agar tidak hilang
+			supabaseResponse.cookies.getAll().forEach(c =>
+				redirectResponse.cookies.set(c.name, c.value, c)
+			);
+			return redirectResponse;
 		}
 	}
 
-	// Route Protection Logic
-	if (isPublicRoute && payload && pathname === '/login') {
-		if (payload.role === 'Admin') {
-			return NextResponse.redirect(new URL('/admin/pengguna', request.url));
-		}
-		return NextResponse.redirect(new URL('/', request.url));
+	// --- Route Protection Logic ---
+
+	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard
+	if (pathname === '/login' && payload) {
+		const destination = payload.role === 'Admin' ? '/admin/pengguna' : '/';
+		return NextResponse.redirect(new URL(destination, request.url));
 	}
 
+	// Area admin: hanya bisa diakses oleh role Admin
 	if (pathname.startsWith('/admin') && payload?.role !== 'Admin') {
+		// FIX: Jika user tidak punya session sama sekali, redirect ke login, bukan ke /
+		// Ini mencegah loop: non-admin tanpa session → / → /login → loop
+		if (!payload) {
+			return NextResponse.redirect(new URL('/login', request.url));
+		}
 		return NextResponse.redirect(new URL('/', request.url));
 	}
 
+	// Route private: harus login
 	if (!isPublicRoute && !payload) {
 		if (pathname.startsWith('/api')) {
 			return NextResponse.json({ error: 'Unauthorized: Harap login terlebih dahulu' }, { status: 401 });
@@ -133,12 +148,6 @@ export async function middleware(request) {
 
 	// Sisipkan custom headers untuk kemudahan API Routes membaca session
 	if (payload) {
-		// Mengirimkan header ke response (jika dibutuhkan)
-		supabaseResponse.headers.set('x-user-role', payload.role);
-		supabaseResponse.headers.set('x-user-id', payload.id);
-		supabaseResponse.headers.set('x-user-name', encodeURIComponent(payload.nama_lengkap));
-
-		// YANG PALING PENTING: Mengirimkan header ke DOWNSTREAM API ROUTES
 		const requestHeaders = new Headers(request.headers);
 		requestHeaders.set('x-user-role', payload.role);
 		requestHeaders.set('x-user-id', payload.id);

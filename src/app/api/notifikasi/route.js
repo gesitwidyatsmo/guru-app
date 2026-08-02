@@ -14,14 +14,17 @@ export async function GET(req) {
 
 		// ======== LAZY EVALUATION UNTUK REMINDER JURNAL (Khusus Guru) ========
 		if (role === 'Guru') {
-			// 1. Dapatkan hari dan tanggal ini
-			const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+			// 1. Dapatkan hari dan tanggal ini (konsisten menggunakan timezone WIB/Asia/Jakarta)
 			const dateObj = new Date();
-			// Sesuaikan timezone ke WIB (GMT+7) jika server di UTC
-			const options = { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' };
-			const formatter = new Intl.DateTimeFormat('en-CA', options);
-			const todayString = formatter.format(dateObj); // YYYY-MM-DD
-			const hariIni = namaHari[dateObj.getDay()];
+			// todayString: YYYY-MM-DD dalam WIB
+			const todayString = new Intl.DateTimeFormat('en-CA', {
+				timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+			}).format(dateObj);
+			// hariIni: nama hari dalam WIB — FIX: sebelumnya pakai getDay() yang UTC-based
+			// (antara jam 00:00–07:00 WIB, server UTC mengembalikan hari sebelumnya)
+			const hariIni = new Intl.DateTimeFormat('id-ID', {
+				timeZone: 'Asia/Jakarta', weekday: 'long',
+			}).format(dateObj); // "Senin", "Selasa", dst — sesuai kolom 'hari' di tabel jadwal
 
 			// 2. Ambil Jadwal hari ini
 			const { data: jadwalHariIni } = await supabase
