@@ -142,11 +142,13 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 			didOpen: () => Swal.showLoading()
 		});
 		try {
-			const dataToSave = groups.map((g) => ({
-				nama_grup: g.nama,
-				metode_generate: metaData.metode || 'manual',
-				anggota_ids: g.members.map((m) => m.id),
-			}));
+			const dataToSave = groups
+				.filter((g) => String(g.id) !== 'excluded')
+				.map((g) => ({
+					nama_grup: g.nama,
+					metode_generate: metaData.metode || 'manual',
+					anggota_ids: g.members.map((m) => m.id),
+				}));
 
 			const isEditMode = !!sessionId;
 			const url = '/api/grup';
@@ -247,8 +249,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}>
 				{/* Board */}
-				<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start'>
-					{groups.map((group) => (
+				<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start mb-6'>
+					{groups.filter(g => String(g.id) !== 'excluded').map((group) => (
 						<DroppableGroupColumn
 							key={group.id}
 							group={group}
@@ -272,6 +274,32 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 					))}
 				</div>
 
+				{/* Pengecualian Siswa (jika ada) */}
+				{groups.find(g => String(g.id) === 'excluded') && (
+					<div className='mt-8 pt-8 border-t-[6px] border-dashed border-[#0D0D0D]'>
+						<DroppableGroupColumn
+							group={groups.find(g => String(g.id) === 'excluded')}
+							isHeterogen={metaData?.metode === 'heterogen'}>
+							<div className='p-4 min-h-[150px] bg-gray-50 flex flex-wrap gap-3'>
+								{groups.find(g => String(g.id) === 'excluded').members.map((member) => (
+									<div key={member.id} className='w-full md:w-[calc(50%-0.375rem)] xl:w-[calc(33.333%-0.5rem)]'>
+										<DraggableMemberCard
+											member={member}
+											fromGroupId={'excluded'}
+										/>
+									</div>
+								))}
+
+								{groups.find(g => String(g.id) === 'excluded').members.length === 0 && (
+									<div className='w-full text-center py-10 border-[3px] border-dashed border-[#0D0D0D] bg-white'>
+										<span className='font-black text-sm uppercase tracking-widest text-[#0D0D0D] bg-[#A3E635] px-3 py-1 border-[2px] border-[#0D0D0D] rotate-2 inline-block'>LEPAS DI SINI UNTUK MENGECUALIKAN SISWA</span>
+									</div>
+								)}
+							</div>
+						</DroppableGroupColumn>
+					</div>
+				)}
+
 				{/* Drag overlay (ghost card yang mengikuti jari/mouse) */}
 				<DragOverlay>
 					{overlayMember ? (
@@ -290,14 +318,15 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 
 function DroppableGroupColumn({ group, isHeterogen, children }) {
 	const { isOver, setNodeRef } = useDroppable({ id: String(group.id) });
+	const isExcluded = String(group.id) === 'excluded';
 
 	return (
 		<div
 			ref={setNodeRef}
-			className={`bg-white rounded-none border-[4px] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col transition-all overflow-hidden ${isOver ? 'border-[#2F80ED] scale-[1.02] shadow-[12px_12px_0px_0px_#2F80ED]' : 'border-[#0D0D0D]'}`}>
-			<div className='p-4 border-b-[4px] border-[#0D0D0D] bg-white flex items-center justify-between gap-3 relative overflow-hidden'>
+			className={`${isExcluded ? 'bg-gray-100' : 'bg-white'} rounded-none border-[4px] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col transition-all overflow-hidden ${isOver ? 'border-[#2F80ED] scale-[1.02] shadow-[12px_12px_0px_0px_#2F80ED]' : 'border-[#0D0D0D]'}`}>
+			<div className={`p-4 border-b-[4px] border-[#0D0D0D] ${isExcluded ? 'bg-[#FF90E8]' : 'bg-white'} flex items-center justify-between gap-3 relative overflow-hidden`}>
 				{/* Deco bg */}
-				<div className='absolute -right-4 -top-4 w-16 h-16 bg-[#F5C518] border-[3px] border-[#0D0D0D] rotate-12 z-0'></div>
+				<div className={`absolute -right-4 -top-4 w-16 h-16 ${isExcluded ? 'bg-white' : 'bg-[#F5C518]'} border-[3px] border-[#0D0D0D] rotate-12 z-0`}></div>
 				
 				<div className='min-w-0 relative z-10'>
 					<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest truncate'>{group.nama}</h3>

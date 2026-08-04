@@ -39,6 +39,8 @@ export default function CreateGroupPage() {
 	const [tugasList, setTugasList] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [loadingPage, setLoadingPage] = useState(true);
+	const [excludedSiswaIds, setExcludedSiswaIds] = useState([]);
+	const [showExclusion, setShowExclusion] = useState(false);
 
 	// State UI
 	const [showBoard, setShowBoard] = useState(false);
@@ -80,6 +82,7 @@ export default function CreateGroupPage() {
 	useEffect(() => {
 		if (!form.kelas) {
 			setSiswaList([]);
+			setExcludedSiswaIds([]);
 			return;
 		}
 
@@ -193,25 +196,37 @@ export default function CreateGroupPage() {
 			return;
 		}
 
-		const shuffled = fisherYatesShuffle(siswaList);
+		const activeSiswa = siswaList.filter(s => !excludedSiswaIds.includes(s.id));
+		const excludedSiswa = siswaList.filter(s => excludedSiswaIds.includes(s.id));
 
-		const k = form.jumlahGrup;
-		const groups = Array.from({ length: k }, (_, i) => ({
-			id: `grup-${i + 1}`,
-			nama: `Grup ${i + 1}`,
+		const shuffled = [...activeSiswa].sort(() => Math.random() - 0.5);
+
+		const groups = Array.from({ length: form.jumlahGrup }, (_, i) => ({
+			id: i + 1,
+			nama: `KELOMPOK ${i + 1}`,
 			members: [],
 		}));
 
-		const startOffset = Math.floor(Math.random() * k);
-
-		shuffled.forEach((s, idx) => {
-			const groupIdx = (startOffset + idx) % k;
-			groups[groupIdx].members.push({
-				id: s.id,
-				nama: s.nama_lengkap,
-				nis: s.nis,
+		shuffled.forEach((siswa, index) => {
+			const groupIndex = index % form.jumlahGrup;
+			groups[groupIndex].members.push({
+				id: siswa.id,
+				nama: siswa.nama_lengkap,
+				nis: siswa.nis,
 			});
 		});
+
+		if (excludedSiswa.length > 0) {
+			groups.push({
+				id: 'excluded',
+				nama: 'TIDAK MASUK KELOMPOK',
+				members: excludedSiswa.map(s => ({
+					id: s.id,
+					nama: s.nama_lengkap,
+					nis: s.nis,
+				})),
+			});
+		}
 
 		setGeneratedGroups(groups);
 		setShowBoard(true);
@@ -269,6 +284,9 @@ export default function CreateGroupPage() {
 			if (!result.isConfirmed) return;
 		}
 
+		const activeSiswa = siswaList.filter(s => !excludedSiswaIds.includes(s.id));
+		const excludedSiswa = siswaList.filter(s => excludedSiswaIds.includes(s.id));
+
 		const getScoreAvg = (siswa) => {
 			if (form.tugasSumber === 'poin_aktif') return siswa.netPoin || 0;
 			if (form.tugasSumber !== 'all') {
@@ -280,15 +298,13 @@ export default function CreateGroupPage() {
 			return totalMutlak / tugasList.length;
 		};
 
-		const sorted = [...siswaList].sort((a, b) => {
-			const scoreA = getScoreAvg(a);
-			const scoreB = getScoreAvg(b);
-			return scoreB - scoreA;
-		});
+		// 1. Urutkan berdasarkan rata-rata atau poin
+		const sorted = [...activeSiswa].sort((a, b) => getScoreAvg(b) - getScoreAvg(a));
 
+		// 2. Siapkan wadah grup
 		const groups = Array.from({ length: form.jumlahGrup }, (_, i) => ({
-			id: `grup-${i + 1}`,
-			nama: `Grup ${i + 1}`,
+			id: i + 1,
+			nama: `KELOMPOK ${i + 1}`,
 			members: [],
 		}));
 
@@ -327,6 +343,19 @@ export default function CreateGroupPage() {
 				});
 			}
 			arahMaju = !arahMaju;
+		}
+
+		if (excludedSiswa.length > 0) {
+			groups.push({
+				id: 'excluded',
+				nama: 'TIDAK MASUK KELOMPOK',
+				members: excludedSiswa.map(s => ({
+					id: s.id,
+					nama: s.nama_lengkap,
+					nis: s.nis,
+					avg: getScoreAvg(s),
+				})),
+			});
 		}
 
 		setGeneratedGroups(groups);
@@ -561,6 +590,63 @@ export default function CreateGroupPage() {
 									</div>
 								</div>
 							</div>
+
+							{/* Pengecualian Siswa */}
+							{form.kelas && siswaList.length > 0 && (
+								<div className='md:col-span-2 pt-4 border-t-[4px] border-[#0D0D0D] mt-4'>
+									<div className='flex items-center justify-between mb-4'>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest'>
+											PENGECUALIAN SISWA
+										</label>
+										<div className='text-xs font-bold bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D]'>
+											{excludedSiswaIds.length} DIKECUALIKAN
+										</div>
+									</div>
+									<p className='text-xs font-bold text-gray-600 uppercase tracking-widest mb-4'>
+										Pilih siswa yang tidak ingin dimasukkan ke dalam kelompok (misal: sakit/izin).
+									</p>
+
+									{!showExclusion ? (
+										<button
+											onClick={() => setShowExclusion(true)}
+											className='w-full sm:w-auto px-6 py-3 bg-white text-[#0D0D0D] border-[3px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all text-sm'>
+											+ PILIH SISWA YANG DIKECUALIKAN
+										</button>
+									) : (
+										<>
+											<button
+												onClick={() => setShowExclusion(false)}
+												className='mb-4 w-full sm:w-auto px-6 py-3 bg-[#FF90E8] text-[#0D0D0D] border-[3px] border-[#0D0D0D] rounded-none font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all text-sm'>
+												- SEMBUNYIKAN DAFTAR
+											</button>
+											<div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto p-2 bg-gray-50 border-[4px] border-[#0D0D0D] shadow-inner'>
+												{siswaList.map(s => {
+													const isExcluded = excludedSiswaIds.includes(s.id);
+													return (
+														<div 
+															key={s.id} 
+															onClick={() => {
+																if (isExcluded) {
+																	setExcludedSiswaIds(prev => prev.filter(id => id !== s.id));
+																} else {
+																	setExcludedSiswaIds(prev => [...prev, s.id]);
+																}
+															}}
+															className={`flex items-center gap-3 p-3 border-[3px] border-[#0D0D0D] cursor-pointer transition-all ${isExcluded ? 'bg-[#FF90E8] shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1' : 'bg-white hover:bg-gray-100'}`}>
+															<div className={`w-5 h-5 flex items-center justify-center border-[2px] border-[#0D0D0D] ${isExcluded ? 'bg-[#0D0D0D] text-white' : 'bg-white'}`}>
+																{isExcluded && <span className='text-xs font-black'>X</span>}
+															</div>
+															<div className='flex-1 truncate'>
+																<p className={`text-sm font-bold truncate ${isExcluded ? 'line-through text-white' : 'text-[#0D0D0D]'}`}>{s.nama_lengkap}</p>
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										</>
+									)}
+								</div>
+							)}
 
 							{/* Action bar */}
 							<div className='flex flex-col-reverse gap-4 border-t-[4px] border-[#0D0D0D] pt-8 sm:flex-row sm:justify-end mt-4'>
