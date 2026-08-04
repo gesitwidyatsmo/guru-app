@@ -90,7 +90,7 @@ export default function AbsensiMapelPage() {
 				setKelasList(dataKelas);
 				setMapelList(dataMapel);
 				setStatusList(dataStatus);
-				setSiswaList(siswaDataUpdated.filter((s) => s.status === 'Aktif'));
+				setSiswaList(siswaDataUpdated);
 
 				if (dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
 				if (dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
@@ -527,7 +527,14 @@ export default function AbsensiMapelPage() {
 												className='hover:bg-[#FFF5F0] transition-colors'>
 												<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
 												<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
-													<p className='font-bold text-[#0D0D0D] text-base'>{siswa.nama_lengkap}</p>
+													<p className='font-bold text-[#0D0D0D] text-base'>
+														{siswa.nama_lengkap}
+														{siswa.status !== 'Aktif' && (
+															<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
+																{siswa.status}
+															</span>
+														)}
+													</p>
 													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis}</p>
 												</td>
 												<td className='px-6 py-4 text-center border-r-2 border-[#0D0D0D]'>{getBadgeRekap(status)}</td>
@@ -552,7 +559,14 @@ export default function AbsensiMapelPage() {
 									<div className='flex justify-between items-start mb-1'>
 										<div className='pr-8'>
 											<div className='flex flex-wrap items-center gap-2 mb-1'>
-												<h3 className='font-bold text-[#0D0D0D] line-clamp-1 text-lg uppercase tracking-tight'>{siswa.nama_lengkap}</h3>
+												<h3 className='font-bold text-[#0D0D0D] line-clamp-1 text-lg uppercase tracking-tight'>
+													{siswa.nama_lengkap}
+													{siswa.status !== 'Aktif' && (
+														<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+															{siswa.status}
+														</span>
+													)}
+												</h3>
 												<div className='flex gap-1 shrink-0'>
 													{siswa.poinPositif > 0 && (
 														<span
@@ -584,7 +598,8 @@ export default function AbsensiMapelPage() {
 												<button
 													key={st.id}
 													onClick={() => handleStatusChange(siswa.id, st.label)}
-													className={getStatusClasses(st.warna, isActive)}>
+													disabled={siswa.status !== 'Aktif'}
+													className={`${getStatusClasses(st.warna, isActive)} ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
 													{st.kode || st.label.substring(0, 1)}
 												</button>
 											);
@@ -597,7 +612,8 @@ export default function AbsensiMapelPage() {
 											placeholder='Keterangan...'
 											value={absensi[siswa.id]?.keterangan || ''}
 											onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-											className='neo-input text-sm'
+											disabled={siswa.status !== 'Aktif'}
+											className='neo-input text-sm disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
 										/>
 									</div>
 								</div>

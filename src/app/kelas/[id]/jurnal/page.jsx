@@ -110,6 +110,50 @@ export default function JurnalKelasPage() {
 		return [];
 	};
 
+	// --- RENOMOR ULANG PERTEMUAN BERDASARKAN TANGGAL ---
+	const renumberPertemuan = async (kelas, mapel) => {
+		try {
+			const supabase = createClient();
+
+			const { data: allJurnal, error } = await supabase
+				.from('jurnal')
+				.select('id, tanggal, jam_ke, pertemuan_ke')
+				.eq('kelas', kelas)
+				.eq('mapel', mapel)
+				.eq('guru_id', userId)
+				.order('tanggal', { ascending: true })
+				.order('jam_ke', { ascending: true });
+
+			if (error || !allJurnal || allJurnal.length === 0) return;
+
+			let currentPertemuan = 1;
+			let prevTanggal = null;
+			const updates = [];
+
+			allJurnal.forEach((j) => {
+				if (prevTanggal !== null && j.tanggal !== prevTanggal) {
+					currentPertemuan++;
+				}
+				const expectedPertemuan = String(currentPertemuan);
+				
+				if (String(j.pertemuan_ke) !== expectedPertemuan) {
+					updates.push({ id: j.id, pertemuan_ke: expectedPertemuan });
+				}
+				prevTanggal = j.tanggal;
+			});
+
+			if (updates.length === 0) return;
+
+			await Promise.all(
+				updates.map(u =>
+					supabase.from('jurnal').update({ pertemuan_ke: u.pertemuan_ke }).eq('id', u.id)
+				)
+			);
+		} catch (err) {
+			console.error('Gagal renumber pertemuan:', err);
+		}
+	};
+
 	// --- LOGIC AUTO-SUGGEST PERTEMUAN ---
 	const calculateMeeting = (cls, mpl) => {
 		// Hanya jalankan jika mode tambah baru (bukan edit)
@@ -154,11 +198,13 @@ export default function JurnalKelasPage() {
 
 		if (result.isConfirmed) {
 			try {
+				const targetJurnal = journals.find(j => j.id === id);
 				const supabase = createClient();
 				const { error } = await supabase.from('jurnal').delete().eq('id', id);
 				if (error) throw error;
 				
 				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
+				if (targetJurnal) await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
 				refreshJurnal();
 			} catch (err) {
 				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
@@ -202,6 +248,8 @@ export default function JurnalKelasPage() {
 				const { error } = await supabase.from('jurnal').insert(insertData);
 				if (error) throw error;
 			}
+
+			await renumberPertemuan(namaKelas, formData.mapel);
 
 			await Swal.fire({
 				icon: 'success',

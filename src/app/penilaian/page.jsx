@@ -42,7 +42,7 @@ export default function PenilaianPage() {
 				const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
 					fetch('/api/kelas?all=false').then(res => res.json()),
 					fetch('/api/mapel?all=false').then(res => res.json()),
-					fetch('/api/siswa?status=Aktif').then(res => res.json())
+					fetch('/api/siswa').then(res => res.json())
 				]);
 
 				setKelasList(dataKelas || []);
@@ -946,14 +946,19 @@ export default function PenilaianPage() {
 											<div
 												key={siswa.id}
 												onClick={() => {
-													if (isEditMode) handleEditNilai(siswa.id, nilaiSiswa);
+													if (isEditMode && siswa.status === 'Aktif') handleEditNilai(siswa.id, nilaiSiswa);
 												}}
-												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${isEditMode ? 'cursor-pointer hover:bg-[#F5C518] group' : 'hover:bg-[#FFF5F0]'}`}>
+												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${siswa.status !== 'Aktif' ? 'bg-gray-100 opacity-60' : isEditMode ? 'cursor-pointer hover:bg-[#F5C518] group' : 'hover:bg-[#FFF5F0]'}`}>
 												<div className='col-span-1 text-center text-[#0D0D0D] font-black'>{idx + 1}</div>
 												<div className='col-span-5 sm:col-span-6'>
 													<div className='flex items-center gap-2'>
 														<p className='font-bold text-[#0D0D0D] text-base group-hover:underline transition-colors'>{siswa.nama_lengkap}</p>
-														{isNewStudentInTask && <span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>}
+														{siswa.status !== 'Aktif' && (
+															<span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#E8451A] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase'>
+																{siswa.status}
+															</span>
+														)}
+														{isNewStudentInTask && siswa.status === 'Aktif' && <span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>}
 													</div>
 													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis || '-'}</p>
 												</div>
@@ -972,10 +977,11 @@ export default function PenilaianPage() {
 															type='number'
 															min='0'
 															max='100'
+															disabled={siswa.status !== 'Aktif'}
 															value={nilaiSiswa}
 															onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
 															onWheel={(e) => e.target.blur()}
-															className='neo-input text-center text-lg font-black w-full px-2 py-2'
+															className='neo-input text-center text-lg font-black w-full px-2 py-2 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed'
 															placeholder='0'
 														/>
 													)}

@@ -88,7 +88,7 @@ export default function AbsensiKelasPage() {
 				const kelas = (dataKelas || []).find((k) => String(k.id) === String(id)) || null;
 				setKelasDetail(kelas);
 				setStatusList(dataStatus || []);
-				setSiswaList(siswaDataUpdated.filter((s) => s.status === 'Aktif'));
+				setSiswaList(siswaDataUpdated);
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -390,7 +390,14 @@ export default function AbsensiKelasPage() {
 									<div className='flex items-center gap-3'>
 										<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold'>{index + 1}</div>
 										<div>
-											<div className='text-sm font-medium text-gray-800'>{siswa.nama_lengkap}</div>
+											<div className='text-sm font-medium text-gray-800'>
+												{siswa.nama_lengkap}
+												{siswa.status !== 'Aktif' && (
+													<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
+														{siswa.status}
+													</span>
+												)}
+											</div>
 											<div className='text-xs text-gray-500'>NIS: {siswa.nis}</div>
 											{absensi.keterangan && <div className='text-xs text-gray-600 italic mt-0.5'>{absensi.keterangan}</div>}
 										</div>
@@ -558,7 +565,14 @@ export default function AbsensiKelasPage() {
 											<td className='px-3 py-2 align-top text-gray-500'>{index + 1}</td>
 											<td className='px-3 py-2 align-top'>
 												<div className='flex items-center gap-1.5'>
-													<div className='font-medium text-gray-800 text-sm'>{siswa.nama_lengkap}</div>
+													<div className='font-medium text-gray-800 text-sm'>
+														{siswa.nama_lengkap}
+														{siswa.status !== 'Aktif' && (
+															<span className='ml-2 inline-flex items-center text-[9px] font-black uppercase tracking-wider text-white bg-red-600 px-1.5 py-0.5 rounded border border-black align-middle'>
+																{siswa.status}
+															</span>
+														)}
+													</div>
 													<div className='flex gap-1 shrink-0'>
 														{siswa.poinPositif > 0 && (
 															<span
@@ -587,8 +601,9 @@ export default function AbsensiKelasPage() {
 														className='px-3 py-2 text-center align-middle'>
 														<button
 															type='button'
+															disabled={siswa.status !== 'Aktif'}
 															onClick={() => handleStatusChange(siswa.id, st.label)}
-															className={`${getStatusClasses(st.warna, active)} h-8 w-8 rounded-full`}>
+															className={`${getStatusClasses(st.warna, active)} h-8 w-8 rounded-full ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
 															{st.kode}
 														</button>
 													</td>
@@ -597,7 +612,8 @@ export default function AbsensiKelasPage() {
 
 											<td className='px-3 py-2 align-middle text-center'>
 												<textarea
-													className='inline-block w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none text-left'
+													disabled={siswa.status !== 'Aktif'}
+													className='inline-block w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none text-left disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
 													rows={2}
 													placeholder='Keterangan (opsional)'
 													value={absensi[siswa.id]?.keterangan || ''}

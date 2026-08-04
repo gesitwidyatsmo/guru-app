@@ -73,7 +73,7 @@ export default function DetailNilaiPage() {
 					// Kolom 'absen' ternyata tidak ada di DB, jadi hapus dari select dan gunakan nama untuk sorting
 					const { data: daftarSiswa, error: errSiswa } = await supabase
 						.from('siswa')
-						.select('id, nama_lengkap')
+						.select('id, nama_lengkap, status')
 						.eq('kelas', tugasDetail.kelas)
 						.order('nama_lengkap', { ascending: true });
 					
@@ -90,6 +90,7 @@ export default function DetailNilaiPage() {
 							return {
 								id: s.id,
 								nama_lengkap: s.nama_lengkap,
+								status: s.status,
 								absen: nomorAbsen,
 								nilai: found && found.nilai !== null ? found.nilai : '-'
 							};
@@ -100,6 +101,7 @@ export default function DetailNilaiPage() {
 						finalSiswaList = submittedSiswa.map((item) => ({
 							id: item.siswa_id,
 							nama_lengkap: item.nama_siswa,
+							status: 'Aktif',
 							absen: '-',
 							nilai: item.nilai,
 						}));
@@ -321,12 +323,19 @@ export default function DetailNilaiPage() {
 								else if (nilaiValue < 60 && !isNaN(nilaiValue)) { badgeBg = 'bg-[#0D0D0D]'; badgeText = 'text-white'; }
 
 								return (
-									<div key={siswa.id} className='p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#F3F4F6] transition-colors'>
+									<div key={siswa.id} className={`p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${siswa.status !== 'Aktif' ? 'bg-gray-100 opacity-60' : 'hover:bg-[#F3F4F6]'}`}>
 										<div className='flex items-center gap-4'>
 											<div className='w-10 h-10 bg-white border-[3px] border-[#0D0D0D] flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>{index + 1}</div>
 											<div>
 												<div className='text-sm font-black text-gray-500 uppercase tracking-widest mb-1'>ID: {siswa.id}</div>
-												<div className='font-black text-[#0D0D0D] text-lg uppercase'>{siswa.nama_lengkap}</div>
+												<div className='font-black text-[#0D0D0D] text-lg uppercase'>
+													{siswa.nama_lengkap}
+													{siswa.status && siswa.status !== 'Aktif' && (
+														<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+															{siswa.status}
+														</span>
+													)}
+												</div>
 											</div>
 										</div>
 										<div className='flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto'>

@@ -85,7 +85,7 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 
 	return (
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0D0D0D]/80 backdrop-blur-sm p-4'>
-			<div className='bg-white w-full max-w-lg border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden rounded-none transform transition-all'>
+			<div className='bg-white w-full max-w-lg border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden rounded-none transform transition-all flex flex-col max-h-[90vh]'>
 				<div className='bg-[#F5C518] px-6 py-5 border-b-[4px] border-[#0D0D0D] flex justify-between items-center'>
 					<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-2'>
 						<IconEdit className='w-6 h-6' /> EDIT DATA
@@ -97,7 +97,7 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 					</button>
 				</div>
 
-				<form onSubmit={handleSubmit} className='p-6 space-y-6 bg-[#FFF5F0]'>
+				<form onSubmit={handleSubmit} className='p-6 space-y-6 bg-[#FFF5F0] overflow-y-auto'>
 					<div>
 						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Nama Lengkap <span className="text-[#E8451A] text-xl">*</span></label>
 						<input
@@ -155,6 +155,9 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 								<option value='Aktif'>AKTIF</option>
 								<option value='Boyong'>BOYONG</option>
 								<option value='Lulus'>LULUS</option>
+								<option value='Pindah'>PINDAH</option>
+								<option value='Salah Kelas'>SALAH KELAS</option>
+								<option value='Non-Aktif'>NON-AKTIF</option>
 							</select>
 						</div>
 					</div>

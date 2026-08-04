@@ -64,7 +64,7 @@ export default function PoinKelasPage() {
 				// 2. Ambil List Siswa
 				const resSiswa = await fetch('/api/siswa');
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-				const siswaKelas = dataSiswa.filter((s) => s.kelas === (currentKelas.kelas || currentKelas.nama_kelas) && s.status === 'Aktif');
+				const siswaKelas = dataSiswa.filter((s) => s.kelas === (currentKelas.kelas || currentKelas.nama_kelas));
 				setSiswaList(siswaKelas);
 
 				// Buat map siswa untuk lookup cepat
@@ -205,13 +205,25 @@ export default function PoinKelasPage() {
 	const totalNegatif = poinList.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
 	const netPoin = totalPositif - totalNegatif;
 
-	// Group by date
+	// Group by date & sort by created_at
 	const groupedPoin = filteredPoin.reduce((acc, p) => {
 		const date = p.tanggal;
 		if (!acc[date]) acc[date] = [];
 		acc[date].push(p);
 		return acc;
 	}, {});
+
+	const sortedGroupedPoin = Object.entries(groupedPoin)
+		.sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
+		.map(([date, items]) => {
+			const sortedItems = [...items].sort((a, b) => {
+				if (a.created_at && b.created_at) {
+					return new Date(b.created_at) - new Date(a.created_at);
+				}
+				return b.id.localeCompare(a.id);
+			});
+			return [date, sortedItems];
+		});
 
 	// Kategori berdasarkan tipe
 	const currentKategoriList = formData.tipe === 'positif' ? kategoriPositif : kategoriNegatif;
@@ -337,7 +349,7 @@ export default function PoinKelasPage() {
 					</div>
 				) : (
 					<div className='space-y-12'>
-						{Object.entries(groupedPoin).map(([date, items]) => (
+						{sortedGroupedPoin.map(([date, items]) => (
 							<div key={date} className='relative'>
 								{/* Tanggal Separator */}
 								<div className='flex items-center gap-4 mb-6 relative z-20'>
@@ -368,10 +380,26 @@ export default function PoinKelasPage() {
 
 														{/* Konten */}
 														<div>
-															<h4 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>{siswa?.nama_lengkap || 'Siswa Unknown'}</h4>
+															<h4 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>
+																{siswa?.nama_lengkap || 'Siswa Unknown'}
+																{siswa && siswa.status !== 'Aktif' && (
+																	<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+																		{siswa.status}
+																	</span>
+																)}
+															</h4>
 															<p className='text-[#0D0D0D] font-bold text-lg leading-snug'>{poin.aktifitas}</p>
 															
-															<div className='flex flex-wrap gap-2 mt-3'>
+															<div className='flex flex-wrap gap-2 mt-3 items-center'>
+																{/* Tanggal & Jam Input */}
+																<span className='bg-[#0D0D0D] text-white px-2 py-1 border-[2px] border-[#0D0D0D] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-[2px_2px_0px_0px_#F5C518]'>
+																	<svg className='w-3 h-3 text-[#F5C518]' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+																		<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2.5} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' />
+																	</svg>
+																	{poin.created_at
+																		? new Date(poin.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB'
+																		: 'Jam: -'}
+																</span>
 																{poin.kategori && (
 																	<span className='bg-white px-2 py-1 border-[3px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
 																		{poin.kategori}
@@ -492,14 +520,21 @@ export default function PoinKelasPage() {
 														.map((s) => (
 															<li
 																key={s.id}
-																className='px-4 py-3 hover:bg-[#F5C518] cursor-pointer text-sm font-bold text-[#0D0D0D] transition-colors'
+																className={`px-4 py-3 text-sm font-bold text-[#0D0D0D] transition-colors ${s.status !== 'Aktif' ? 'cursor-not-allowed bg-gray-200 opacity-60' : 'cursor-pointer hover:bg-[#F5C518]'}`}
 																onMouseDown={(e) => {
 																	e.preventDefault(); // Prevent focus loss on input
+																	if (s.status !== 'Aktif') return; // Cegah pemilihan siswa tidak aktif
 																	setFormData({ ...formData, siswa_id: s.id });
 																	setSearchSiswaModal(`${s.nama_lengkap} (${s.nis})`);
 																	setIsSiswaDropdownOpen(false);
 																}}>
-																{s.nama_lengkap} <span className='text-[#0D0D0D] bg-white px-2 py-0.5 border border-[#0D0D0D] ml-2 text-xs'>{s.nis}</span>
+																{s.nama_lengkap}
+																{s.status !== 'Aktif' && (
+																	<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black'>
+																		{s.status}
+																	</span>
+																)}
+																<span className='text-[#0D0D0D] bg-white px-2 py-0.5 border border-[#0D0D0D] ml-2 text-xs'>{s.nis}</span>
 															</li>
 														))}
 													{siswaList.filter((s) => s.nama_lengkap.toLowerCase().includes(searchSiswaModal.toLowerCase()) || (s.nis && s.nis.toLowerCase().includes(searchSiswaModal.toLowerCase()))).length === 0 && (

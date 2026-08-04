@@ -122,6 +122,53 @@ export default function JurnalPage() {
 		return [];
 	};
 
+	// --- RENOMOR ULANG PERTEMUAN BERDASARKAN TANGGAL ---
+	// Fungsi ini memastikan pertemuan_ke selalu mengikuti urutan tanggal (ascending).
+	// Dipanggil setiap kali ada tambah/ubah/hapus jurnal.
+	const renumberPertemuan = async (kelas, mapel) => {
+		try {
+			const supabase = createClient();
+
+			// Ambil semua jurnal untuk kelas+mapel ini, urutkan berdasarkan tanggal ASC, lalu jam_ke ASC
+			const { data: allJurnal, error } = await supabase
+				.from('jurnal')
+				.select('id, tanggal, jam_ke, pertemuan_ke')
+				.eq('kelas', kelas)
+				.eq('mapel', mapel)
+				.eq('guru_id', userId)
+				.order('tanggal', { ascending: true })
+				.order('jam_ke', { ascending: true });
+
+			if (error || !allJurnal || allJurnal.length === 0) return;
+
+			let currentPertemuan = 1;
+			let prevTanggal = null;
+			const updates = [];
+
+			allJurnal.forEach((j) => {
+				if (prevTanggal !== null && j.tanggal !== prevTanggal) {
+					currentPertemuan++;
+				}
+				const expectedPertemuan = String(currentPertemuan);
+				
+				if (String(j.pertemuan_ke) !== expectedPertemuan) {
+					updates.push({ id: j.id, pertemuan_ke: expectedPertemuan });
+				}
+				prevTanggal = j.tanggal;
+			});
+
+			if (updates.length === 0) return;
+
+			await Promise.all(
+				updates.map(u =>
+					supabase.from('jurnal').update({ pertemuan_ke: u.pertemuan_ke }).eq('id', u.id)
+				)
+			);
+		} catch (err) {
+			console.error('Gagal renumber pertemuan:', err);
+		}
+	};
+
 	// --- AUTO-SAVE DRAFT JURNAL BARU ---
 	useEffect(() => {
 		if (isModalOpen && !isEditing) {
@@ -179,11 +226,15 @@ export default function JurnalPage() {
 
 		if (result.isConfirmed) {
 			try {
+				// Ambil info kelas & mapel sebelum hapus agar bisa renumber setelahnya
+				const targetJurnal = journals.find(j => j.id === id);
 				const supabase = createClient();
 				const { error } = await supabase.from('jurnal').delete().eq('id', id);
 				if (error) throw error;
-				
+
 				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
+				// Renomor ulang setelah hapus
+				if (targetJurnal) await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
 				refreshJurnal();
 			} catch (err) {
 				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
@@ -242,6 +293,9 @@ export default function JurnalPage() {
 			if (!isEditing) {
 				localStorage.removeItem('draft_jurnal_baru');
 			}
+
+			// Renomor ulang pertemuan berdasarkan tanggal (urutan kronologis)
+			await renumberPertemuan(formData.kelas, formData.mapel);
 
 			await Swal.fire({
 				icon: 'success',

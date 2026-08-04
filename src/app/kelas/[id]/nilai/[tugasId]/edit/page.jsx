@@ -89,7 +89,7 @@ export default function EditNilaiPage() {
 					// Kolom 'absen' ternyata tidak ada di DB, jadi hapus dari select dan gunakan nama untuk sorting
 					const { data: daftarSiswa, error: errSiswa } = await supabase
 						.from('siswa')
-						.select('id, nama_lengkap')
+						.select('id, nama_lengkap, status')
 						.eq('kelas', tugasDetail.kelas)
 						.order('nama_lengkap', { ascending: true });
 					
@@ -105,6 +105,7 @@ export default function EditNilaiPage() {
 							return {
 								id: s.id,
 								nama_lengkap: s.nama_lengkap,
+								status: s.status,
 								absen: nomorAbsen,
 								nilai: found && found.nilai !== null ? found.nilai : '',
 								rowId: found ? found.id : null,
@@ -116,6 +117,7 @@ export default function EditNilaiPage() {
 						finalSiswaList = submittedSiswa.map((item) => ({
 							id: item.siswa_id,
 							nama_lengkap: item.nama_siswa,
+							status: 'Aktif',
 							absen: '-',
 							nilai: item.nilai,
 							rowId: item.id,
@@ -417,13 +419,20 @@ export default function EditNilaiPage() {
 							filteredSiswa.map((siswa, index) => (
 								<div
 									key={siswa.id}
-									className='flex items-center justify-between gap-4 p-4 bg-white border-b-[3px] border-[#0D0D0D] hover:bg-[#A3E635] transition-colors group'>
+									className={`flex items-center justify-between gap-4 p-4 transition-colors group border-b-[3px] border-[#0D0D0D] ${siswa.status !== 'Aktif' ? 'bg-gray-100 opacity-60' : 'bg-white hover:bg-[#A3E635]'}`}>
 									
 									<div className='flex items-center gap-4 flex-1'>
 										<div className='w-8 h-8 flex items-center justify-center bg-[#0D0D0D] text-white font-black text-sm rounded-full shadow-[2px_2px_0px_0px_#0D0D0D]'>
 											{index + 1}
 										</div>
-										<div className='text-base font-black text-[#0D0D0D] uppercase'>{siswa.nama_lengkap}</div>
+										<div className='text-base font-black text-[#0D0D0D] uppercase'>
+											{siswa.nama_lengkap}
+											{siswa.status && siswa.status !== 'Aktif' && (
+												<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+													{siswa.status}
+												</span>
+											)}
+										</div>
 									</div>
 
 									<div className='w-24'>
@@ -431,6 +440,7 @@ export default function EditNilaiPage() {
 											type='number'
 											min='0'
 											max='100'
+											disabled={siswa.status && siswa.status !== 'Aktif'}
 											value={nilaiSiswa[siswa.id] || ''}
 											onChange={(e) => {
 												const value = e.target.value;
@@ -444,7 +454,7 @@ export default function EditNilaiPage() {
 												}
 											}}
 											placeholder='0'
-											className='w-full px-2 py-2 text-center bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-[#0D0D0D] font-black text-xl outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
+											className='w-full px-2 py-2 text-center bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-[#0D0D0D] font-black text-xl outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
 										/>
 									</div>
 								</div>

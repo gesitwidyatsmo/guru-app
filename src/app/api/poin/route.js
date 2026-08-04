@@ -31,6 +31,7 @@ export async function GET(req) {
 			aktifitas,
 			poin,
 			keterangan,
+			created_at,
 			siswa!inner (
 				kelas
 			)
@@ -40,22 +41,9 @@ export async function GET(req) {
 		if (tipe) query = query.eq('tipe', tipe);
 		if (kelas) query = query.eq('siswa.kelas', kelas);
 
-		// Filter Hak Akses Guru: Bisa lihat jika dia Wali Kelas, ATAU jika dia Pencatat Poin tersebut
-		if (role === 'Guru' && userName) {
-			const { data: kbmData } = await supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId);
-			const allowedClasses = (kbmData || []).map(r => r.nama_kelas);
-			
-			// Custom filter for RLS alternative:
-			// In Supabase we set RLS for Poin: Guru can see all poin (so they can see students' points if they are homeroom teacher).
-			// If not allowed class, then they can only see their own records.
-			if (allowedClasses.length > 0) {
-				// We can't do OR nicely with nested join directly without complex syntax, 
-				// so we filter after fetching or use `or` syntax if we fetch all.
-				// Since we need to join `siswa` to check `kelas`, let's just fetch and filter in JS if not using RPC.
-			}
-		}
-
-		const { data, error } = await query.order('tanggal', { ascending: false });
+		const { data, error } = await query
+			.order('tanggal', { ascending: false })
+			.order('created_at', { ascending: false });
 		if (error) throw error;
 
 		let result = (data || []).map(d => ({
@@ -68,6 +56,7 @@ export async function GET(req) {
 			aktifitas: d.aktifitas,
 			poin: parseInt(d.poin || '0', 10),
 			keterangan: d.keterangan,
+			created_at: d.created_at,
 			_kelas: d.siswa.kelas // for filtering
 		}));
 

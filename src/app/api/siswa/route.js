@@ -52,12 +52,13 @@ export async function GET(req) {
 
 // --- METHOD POST (Tambah Data Baru - Manual & Bulk) ---
 export async function POST(request) {
-	if (request.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = request.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
 	}
 	try {
 		const contentType = request.headers.get('content-type') || '';
-		const supabase = await createClient();
+
 
 		// === CASE 1: INPUT MANUAL (JSON) ===
 		if (contentType.includes('application/json')) {
@@ -69,7 +70,7 @@ export async function POST(request) {
 			}
 
 			const uniqueId = 'SIS-' + Date.now() + Math.floor(Math.random() * 100);
-			const { error } = await supabase.from('siswa').insert({
+			const { error } = await supabaseAdmin.from('siswa').insert({
 				id: uniqueId,
 				nis: nis || null,
 				nama_lengkap,
@@ -118,7 +119,7 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Data tidak valid. Pastikan kolom Nama terisi.' }, { status: 400 });
 		}
 
-		const { error } = await supabase.from('siswa').insert(studentsToInsert);
+		const { error } = await supabaseAdmin.from('siswa').insert(studentsToInsert);
 		if (error) throw error;
 
 		return NextResponse.json({ success: true, message: 'Import berhasil', total: studentsToInsert.length });
@@ -130,8 +131,9 @@ export async function POST(request) {
 
 // --- METHOD PUT (Update Data) ---
 export async function PUT(req) {
-	if (req.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = req.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
 	}
 	try {
 		const body = await req.json();
@@ -139,15 +141,15 @@ export async function PUT(req) {
 
 		if (!id) return NextResponse.json({ error: 'ID tidak ditemukan' }, { status: 400 });
 
-		const supabase = await createClient();
-		const updates = {};
-		if (nis) updates.nis = nis;
-		if (nama_lengkap) updates.nama_lengkap = nama_lengkap;
-		if (kelas) updates.kelas = kelas;
-		if (jenis_kelamin) updates.jenis_kelamin = jenis_kelamin;
-		if (status) updates.status = status;
 
-		const { error } = await supabase.from('siswa').update(updates).eq('id', id);
+		const updates = {};
+		if (nis !== undefined) updates.nis = nis;
+		if (nama_lengkap !== undefined) updates.nama_lengkap = nama_lengkap;
+		if (kelas !== undefined) updates.kelas = kelas;
+		if (jenis_kelamin !== undefined) updates.jenis_kelamin = jenis_kelamin;
+		if (status !== undefined) updates.status = status;
+
+		const { error } = await supabaseAdmin.from('siswa').update(updates).eq('id', id);
 		if (error) throw error;
 
 		return NextResponse.json({ success: true, message: 'Data berhasil diperbarui' });
@@ -159,8 +161,9 @@ export async function PUT(req) {
 
 // --- METHOD DELETE (Hapus Data) ---
 export async function DELETE(req) {
-	if (req.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = req.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Guru') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
 	}
 	try {
 		const { searchParams } = new URL(req.url);
@@ -168,8 +171,7 @@ export async function DELETE(req) {
 
 		if (!id) return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 });
 
-		const supabase = await createClient();
-		const { error } = await supabase.from('siswa').delete().eq('id', id);
+		const { error } = await supabaseAdmin.from('siswa').delete().eq('id', id);
 		
 		if (error) throw error;
 

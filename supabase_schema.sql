@@ -306,3 +306,51 @@ ALTER TABLE public.pengumpulan_tugas ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Siswa can insert pengumpulan_tugas" ON public.pengumpulan_tugas FOR INSERT TO public WITH CHECK (true);
 CREATE POLICY "Pengumpulan_tugas can be viewed by authenticated users" ON public.pengumpulan_tugas FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Pengumpulan_tugas can be deleted by authenticated users" ON public.pengumpulan_tugas FOR DELETE TO authenticated USING (true);
+
+-- ==========================================
+-- FASE 5: CATATAN PRIBADI GURU
+-- ==========================================
+
+-- 14. TABEL CATATAN
+CREATE TABLE public.catatan (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id TEXT REFERENCES public.users(id_user) ON DELETE CASCADE,
+    judul TEXT,
+    isi TEXT,
+    warna TEXT DEFAULT 'cream',
+    pinned BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.catatan ENABLE ROW LEVEL SECURITY;
+
+-- Hanya pemilik catatan yang bisa melihat, membuat, mengubah, dan menghapus catatannya sendiri
+CREATE POLICY "User can view their own catatan"
+ON public.catatan FOR SELECT TO authenticated
+USING ( user_id = (SELECT id_user FROM public.users WHERE auth_id = auth.uid()) );
+
+CREATE POLICY "User can insert their own catatan"
+ON public.catatan FOR INSERT TO authenticated
+WITH CHECK ( user_id = (SELECT id_user FROM public.users WHERE auth_id = auth.uid()) );
+
+CREATE POLICY "User can update their own catatan"
+ON public.catatan FOR UPDATE TO authenticated
+USING ( user_id = (SELECT id_user FROM public.users WHERE auth_id = auth.uid()) );
+
+CREATE POLICY "User can delete their own catatan"
+ON public.catatan FOR DELETE TO authenticated
+USING ( user_id = (SELECT id_user FROM public.users WHERE auth_id = auth.uid()) );
+
+-- Trigger untuk auto-update kolom updated_at setiap kali catatan diubah
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER catatan_updated_at
+BEFORE UPDATE ON public.catatan
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
