@@ -62,6 +62,13 @@ export default function AdminLayout({ children }) {
 								}`}>
 								Kirim Pengumuman
 							</Link>
+							<Link
+								href='/admin/backup'
+								className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+									pathname === '/admin/backup' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-indigo-600'
+								}`}>
+								Backup & Restore
+							</Link>
 						</nav>
 
 						{/* Quick Action / Logout */}
