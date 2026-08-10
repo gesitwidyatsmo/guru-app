@@ -56,7 +56,6 @@ export async function proxy(request) {
 	let payload = null;
 
 	// Jika terautentikasi di Supabase, ambil detail role dan ID dari tabel public.users
-	// Gunakan singleton supabaseAdmin (bukan re-create setiap request)
 	if (user) {
 		const { data: userProfile, error } = await supabaseAdmin
 			.from('users')
@@ -75,51 +74,6 @@ export async function proxy(request) {
 		}
 	}
 
-	// Pengecekan Kustom Sesi (2 Jam vs 7 Hari)
-	// auth_session_valid adalah cookie kustom yang di-set saat login.
-	// Jika Supabase session masih valid tapi cookie ini tidak ada → sesi dianggap kedaluwarsa.
-	const isDev = process.env.NODE_ENV === 'development';
-	const hasCustomSession = request.cookies.has('auth_session_valid');
-
-	// Deteksi apakah app berjalan dalam PWA standalone mode.
-	// Di standalone mode, cookie browser tidak selalu diwariskan ke webview (terutama iOS),
-	// sehingga auth_session_valid bisa tidak ada meski Supabase session valid.
-	// Deteksi: sec-fetch-site tidak ada = kemungkinan standalone / direct navigation.
-	const isStandalone =
-		!request.headers.get('sec-fetch-site') ||
-		request.headers.get('display-mode') === 'standalone';
-
-	// --- FIX UTAMA: Normalisasi payload berdasarkan validitas sesi kustom ---
-	// Jika payload ada (Supabase session OK) TAPI cookie kustom tidak ada
-	// DAN bukan dev DAN bukan standalone → anggap sesi sudah tidak valid
-	if (payload && !isDev && !hasCustomSession && !isStandalone) {
-		// Set payload ke null agar logika routing di bawah menganggap user belum login.
-		// Ini mencegah loop: middleware tidak akan redirect dari /login ke /
-		// karena payload sudah null ketika sampai ke blok route protection di bawah.
-		payload = null;
-
-		// Jika user sudah berada di halaman login, biarkan saja (tidak perlu redirect)
-		if (pathname === '/login') {
-			return supabaseResponse;
-		}
-
-		// Untuk API routes, kembalikan 401
-		if (pathname.startsWith('/api')) {
-			return NextResponse.json({ error: 'Sesi kedaluwarsa' }, { status: 401 });
-		}
-
-		// Redirect ke login dengan flag expired — hanya untuk halaman non-public
-		if (!isPublicRoute) {
-			const loginUrl = new URL('/login?expired=1', request.url);
-			const redirectResponse = NextResponse.redirect(loginUrl);
-			// Salin Supabase cookies ke redirect response agar tidak hilang
-			supabaseResponse.cookies.getAll().forEach(c =>
-				redirectResponse.cookies.set(c.name, c.value, c)
-			);
-			return redirectResponse;
-		}
-	}
-
 	// --- Route Protection Logic ---
 
 	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard
@@ -130,8 +84,6 @@ export async function proxy(request) {
 
 	// Area admin: hanya bisa diakses oleh role Admin
 	if (pathname.startsWith('/admin') && payload?.role !== 'Admin') {
-		// FIX: Jika user tidak punya session sama sekali, redirect ke login, bukan ke /
-		// Ini mencegah loop: non-admin tanpa session → / → /login → loop
 		if (!payload) {
 			return NextResponse.redirect(new URL('/login', request.url));
 		}
@@ -146,7 +98,7 @@ export async function proxy(request) {
 		return NextResponse.redirect(new URL('/login', request.url));
 	}
 
-	// Sisipkan custom headers untuk kemudahan API Routes membaca session
+	// --- Sisipkan custom headers + auto-renew auth_session_valid ---
 	if (payload) {
 		const requestHeaders = new Headers(request.headers);
 		requestHeaders.set('x-user-role', payload.role);
@@ -163,8 +115,23 @@ export async function proxy(request) {
 			},
 		});
 
-		// Kembalikan cookie-cookie tersebut ke response yang baru
+		// Kembalikan cookie-cookie Supabase ke response yang baru
 		cookiesToPreserve.forEach(c => supabaseResponse.cookies.set(c.name, c.value, c));
+
+		// Auto-renew auth_session_valid jika tidak ada.
+		// Mengatasi masalah Brave mobile/tablet yang memblokir cookie dari API route
+		// atau memblokir header sec-fetch-site sehingga deteksi mode sebelumnya tidak akurat.
+		// Jika Supabase menyatakan user valid, kita PERCAYAI dan perbarui cookie ini.
+		const hasCustomSession = request.cookies.has('auth_session_valid');
+		if (!hasCustomSession) {
+			supabaseResponse.cookies.set('auth_session_valid', 'true', {
+				httpOnly: true,
+				secure: process.env.NODE_ENV === 'production',
+				sameSite: 'lax',
+				path: '/',
+				maxAge: 2 * 60 * 60, // 2 jam (sesi reguler tanpa "Ingat Saya")
+			});
+		}
 	}
 
 	return supabaseResponse;
