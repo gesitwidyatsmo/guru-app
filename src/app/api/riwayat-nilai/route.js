@@ -18,11 +18,14 @@ export async function GET(req) {
 				id,
 				tugas_id,
 				nilai,
+				jumlah_benar,
 				nilai_tugas!inner(
 					tanggal,
 					mapel,
 					kategori,
-					kelas
+					kelas,
+					mode_penilaian,
+					total_soal
 				)
 			`)
 			.eq('siswa_id', siswa_id);
@@ -37,6 +40,9 @@ export async function GET(req) {
 			kategori: r.nilai_tugas.kategori,
 			nilai: Number(r.nilai) || 0,
 			kelas: r.nilai_tugas.kelas,
+			jumlah_benar: r.jumlah_benar,
+			mode_penilaian: r.nilai_tugas.mode_penilaian,
+			total_soal: r.nilai_tugas.total_soal,
 		}));
 
 		// Sort: Terbaru ke terlama

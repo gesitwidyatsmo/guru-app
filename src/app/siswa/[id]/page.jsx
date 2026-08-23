@@ -327,10 +327,47 @@ export default function SiswaPage() {
 		}
 	};
 
+	const handleUbahStatusQuick = async () => {
+		const { value: statusPilihan } = await Swal.fire({
+			title: 'UBAH STATUS SISWA',
+			text: 'Pilih status akademik terbaru untuk siswa ini:',
+			input: 'select',
+			inputOptions: {
+				'Aktif': 'AKTIF (Mengikuti KBM)',
+				'Pindah': 'PINDAH / MUTASI (Keluar Sekolah)',
+				'Lulus': 'LULUS (Alumni)',
+				'Boyong': 'BOYONG',
+				'Salah Kelas': 'SALAH KELAS',
+				'Non-Aktif': 'NON-AKTIF / BERHENTI'
+			},
+			inputValue: siswaData?.status || 'Aktif',
+			showCancelButton: true,
+			confirmButtonText: 'SIMPAN STATUS',
+			cancelButtonText: 'BATAL',
+			background: '#FFF5F0',
+			color: '#0D0D0D',
+			customClass: {
+				popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+				title: 'font-black uppercase tracking-widest',
+				confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 transition-all',
+				cancelButton: 'bg-white text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 transition-all',
+			},
+		});
+
+		if (statusPilihan && statusPilihan !== siswaData?.status) {
+			await handleUpdateSiswa({ ...siswaData, status: statusPilihan });
+		}
+	};
+
 	const handleDeleteSiswa = async () => {
 		const result = await Swal.fire({
 			title: 'HAPUS SISWA?',
-			text: 'Data siswa akan dihapus permanen.',
+			html: `
+				<div class="text-left text-xs space-y-2">
+					<p class="font-bold text-red-600 uppercase">Perhatian:</p>
+					<p>Tindakan ini hanya untuk data salah entri/duplikat. Jika siswa pindah atau lulus, gunakan fitur <b>Ubah Status</b> agar nilai masa lampau tidak ikut hilang.</p>
+				</div>
+			`,
 			icon: 'warning',
 			showCancelButton: true,
 			confirmButtonText: 'YA, HAPUS!',
@@ -364,6 +401,8 @@ export default function SiswaPage() {
 
 		try {
 			const res = await fetch(`/api/siswa?id=${id}`, { method: 'DELETE' });
+			const data = await res.json();
+
 			if (res.ok) {
 				await Swal.fire({
 					title: 'TERHAPUS!',
@@ -380,16 +419,21 @@ export default function SiswaPage() {
 				router.back();
 			} else {
 				Swal.fire({
-					title: 'GAGAL',
-					text: 'Gagal menghapus siswa',
-					icon: 'error',
+					title: data.hasHistory ? 'PROTEKSI ARSIP' : 'GAGAL',
+					text: data.error || 'Gagal menghapus siswa',
+					icon: data.hasHistory ? 'info' : 'error',
 					background: '#FFF5F0',
 					color: '#0D0D0D',
+					confirmButtonText: data.hasHistory ? 'Ubah Status Saja' : 'OK',
 					customClass: {
 						popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
 						title: 'font-black uppercase tracking-widest',
-						confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+						confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
 					},
+				}).then((r) => {
+					if (r.isConfirmed && data.hasHistory) {
+						handleUbahStatusQuick();
+					}
 				});
 			}
 		} catch (e) {
@@ -464,7 +508,7 @@ export default function SiswaPage() {
 										NIS: {siswaData.nis || '-'}
 									</span>
 									<span
-										className={`px-4 py-2 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest \${siswaData.status === 'Aktif' ? 'bg-[#A3E635] text-[#0D0D0D]' : siswaData.status === 'Lulus' ? 'bg-[#2F80ED] text-white' : 'bg-[#E8451A] text-white'}`}>
+										className={`px-4 py-2 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest ${siswaData.status === 'Aktif' ? 'bg-[#A3E635] text-[#0D0D0D]' : siswaData.status === 'Lulus' ? 'bg-[#2F80ED] text-white' : 'bg-[#E8451A] text-white'}`}>
 										{siswaData.status}
 									</span>
 									<span className='px-4 py-2 bg-[#F5C518] border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest text-[#0D0D0D]'>
@@ -483,7 +527,7 @@ export default function SiswaPage() {
 				</div>
 
 				{/* Menu Grid */}
-				<div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
+				<div className='grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3'>
 					<Link
 						href={`/siswa/${id}/riwayat-absensi`}
 						className='group flex items-center gap-5 bg-[#2F80ED] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'>
@@ -509,6 +553,18 @@ export default function SiswaPage() {
 					</Link>
 
 					<button
+						onClick={handleUbahStatusQuick}
+						className='group flex items-center gap-5 bg-[#00A693] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-12 transition-transform text-2xl font-black'>
+							🎓
+						</div>
+						<div>
+							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>MUTASI / STATUS</h3>
+							<p className='text-sm font-bold text-white/80 uppercase'>Pindah, Lulus, dsb</p>
+						</div>
+					</button>
+
+					<button
 						onClick={handleOpenEdit}
 						className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
 						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
@@ -522,13 +578,13 @@ export default function SiswaPage() {
 
 					<button
 						onClick={handleDeleteSiswa}
-						className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+						className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
 						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
 							<IconTrash className='h-8 w-8' />
 						</div>
 						<div>
 							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
-							<p className='text-sm font-bold text-white/80 uppercase'>Hapus permanen</p>
+							<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
 						</div>
 					</button>
 				</div>

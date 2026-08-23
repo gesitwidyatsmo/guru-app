@@ -4,6 +4,7 @@ import StyledComponentsRegistry from '@/lib/registry';
 import IdleTimerWrapper from './components/IdleTimerWrapper';
 import KbmBlocker from './components/KbmBlocker';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import { AcademicProvider } from '@/context/AcademicContext';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
 	variable: '--font-plus-jakarta-sans',
@@ -55,13 +56,15 @@ export default function RootLayout({ children }) {
 	return (
 		<html lang='id'>
 			<body className={`${plusJakartaSans.variable} ${geistMono.variable} antialiased`}>
-				<IdleTimerWrapper>
-					<StyledComponentsRegistry>
-						{children}
-						<KbmBlocker />
-						<PwaInstallPrompt />
-					</StyledComponentsRegistry>
-				</IdleTimerWrapper>
+				<AcademicProvider>
+					<IdleTimerWrapper>
+						<StyledComponentsRegistry>
+							{children}
+							<KbmBlocker />
+							<PwaInstallPrompt />
+						</StyledComponentsRegistry>
+					</IdleTimerWrapper>
+				</AcademicProvider>
 			</body>
 		</html>
 	);

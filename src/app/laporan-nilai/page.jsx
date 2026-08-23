@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import SectionHeader from '../components/SectionHeader';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function RekapNilaiPage() {
+	const { tahunAjar, semester } = useAcademic();
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
 	const [selectedKelas, setSelectedKelas] = useState('');
@@ -60,6 +63,11 @@ export default function RekapNilaiPage() {
 		fetchAll();
 	}, []);
 
+	// Reset rekap saat periode berubah agar user tidak melihat data lama
+	useEffect(() => {
+		setRekapData(null);
+	}, [tahunAjar, semester]);
+
 	// Fetch rekap nilai
 	const fetchRekap = async () => {
 		if (!selectedKelas || !selectedBulan) {
@@ -90,7 +98,9 @@ export default function RekapNilaiPage() {
 			let queryTugas = supabase
 				.from('nilai_tugas')
 				.select('tugas_id, kategori, type, mapel, tanggal')
-				.eq('kelas', selectedKelas);
+				.eq('kelas', selectedKelas)
+				.eq('tahun_ajar', tahunAjar)
+				.eq('semester', semester);
 
 			if (selectedMapel) {
 				queryTugas = queryTugas.eq('mapel', selectedMapel);
@@ -333,6 +343,7 @@ export default function RekapNilaiPage() {
 						</svg>
 					}
 				/>
+				<ArchiveBanner />
 
 				{/* Section 1: Filter */}
 				<div className='bg-white rounded-lg shadow-md p-6 mb-6 mt-6'>

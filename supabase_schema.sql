@@ -149,6 +149,10 @@ CREATE TABLE public.nilai_tugas (
     kelas TEXT,
     mapel TEXT,
     tanggal DATE,
+    mode_penilaian TEXT DEFAULT 'langsung',
+    total_soal INTEGER DEFAULT 100,
+    skala_maks INTEGER DEFAULT 100,
+    pembulatan TEXT DEFAULT 'decimal_1',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -162,6 +166,7 @@ CREATE TABLE public.nilai_siswa (
     siswa_id TEXT REFERENCES public.siswa(id) ON DELETE CASCADE,
     nama_siswa TEXT,
     nilai NUMERIC,
+    jumlah_benar NUMERIC DEFAULT NULL,
     UNIQUE(tugas_id, siswa_id)
 );
 

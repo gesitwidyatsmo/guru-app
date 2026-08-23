@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { Search, Plus, Users, Calendar, BookOpen, ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Loader from '../components/loading';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function ManajemenGrupPage() {
 	const router = useRouter();
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
 
 	const [data, setData] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -15,7 +18,7 @@ export default function ManajemenGrupPage() {
 	const [search, setSearch] = useState('');
 
 	useEffect(() => {
-		fetch('/api/grup')
+		fetch(`/api/grup?${buildPeriodeQuery()}`)
 			.then((res) => res.json())
 			.then((json) => {
 				if (Array.isArray(json)) setData(json);
@@ -26,7 +29,7 @@ export default function ManajemenGrupPage() {
 				setLoading(false);
 			})
 			.finally(() => setLoadingPage(false));
-	}, []);
+	}, [tahunAjar, semester]);
 
 	const filtered = data.filter((item) => item.judul_kegiatan?.toLowerCase().includes(search.toLowerCase()) || item.kelas_id?.toLowerCase().includes(search.toLowerCase()));
 
@@ -48,7 +51,11 @@ export default function ManajemenGrupPage() {
 					<div className='bg-[#F5C518] p-3 border-[4px] border-[#0D0D0D] -rotate-1 inline-block shadow-[4px_4px_0px_0px_#0D0D0D]'>
 						<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>MANAJEMEN GRUP</h1>
 					</div>
+					<AcademicPeriodChip />
 				</div>
+
+				{/* Archive Banner */}
+				<ArchiveBanner />
 
 				{/* Sub-Header & Aksi */}
 				<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 rounded-none'>

@@ -11,6 +11,8 @@ export async function GET(req) {
 		const tanggal = searchParams.get('tanggal');
 		const bulan = searchParams.get('bulan');
 		const tahun = searchParams.get('tahun');
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 
 		if (!kelas) {
 			return NextResponse.json({ error: 'Parameter kelas wajib diisi' }, { status: 400 });
@@ -30,6 +32,10 @@ export async function GET(req) {
 		}
 
 		let query = supabase.from('absensi_harian').select('sesi_id, tanggal, kelas').eq('kelas', kelas);
+
+		// Filter Periode Akademik
+		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
+		if (semester) query = query.eq('semester', parseInt(semester));
 
 		// Filter bulan & tahun
 		if (bulan && tahun) {
@@ -134,7 +140,9 @@ export async function POST(req) {
 			await supabase.from('absensi_harian').insert({
 				sesi_id: sesiId,
 				kelas: kelas,
-				tanggal: newTanggal
+				tanggal: newTanggal,
+				tahun_ajar: body.tahun_ajar || '2026/2027',
+				semester: body.semester ? parseInt(body.semester) : 1,
 			});
 		}
 

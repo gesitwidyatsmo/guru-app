@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
 import { createClient } from '@/utils/supabase/client';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function JurnalPage() {
 	const router = useRouter();
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
 
 	// --- STATE MANAGEMENT ---
 	const [journals, setJournals] = useState([]);
@@ -104,10 +107,19 @@ export default function JurnalPage() {
 		fetchData();
 	}, []);
 
+	// Re-fetch jurnal saat periode aktif berubah
+	useEffect(() => {
+		if (userId && userRole) {
+			refreshJurnal(userId, userRole);
+		}
+	}, [tahunAjar, semester]);
+
 	const refreshJurnal = async (uid = userId, role = userRole) => {
 		try {
 			const supabase = createClient();
-			let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false });
+			let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false })
+				.eq('tahun_ajar', tahunAjar)
+				.eq('semester', semester);
 			if (role === 'Guru' && uid) {
 				query = query.eq('guru_id', uid);
 			}
@@ -284,6 +296,8 @@ export default function JurnalPage() {
 					hambatan: formData.hambatan || '',
 					solusi: formData.solusi || '',
 					tuntas: !!formData.tuntas,
+					tahun_ajar: tahunAjarAktif,
+					semester: semesterAktif,
 				};
 				const { error } = await supabase.from('jurnal').insert(insertData);
 				if (error) throw error;
@@ -348,6 +362,7 @@ export default function JurnalPage() {
 								<p className='text-white font-black tracking-widest uppercase bg-[#0D0D0D] inline-block px-3 py-1 border-[2px] border-white text-xs sm:text-sm'>Catat aktivitas harian</p>
 							</div>
 						</div>
+						<AcademicPeriodChip />
                         <button
                             onClick={() => handleOpenModal()}
                             className='w-full md:w-auto bg-[#00A693] text-white px-8 py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-lg'>
@@ -357,6 +372,7 @@ export default function JurnalPage() {
 					</div>
 				</div>
 			</div>
+			<ArchiveBanner />
 
 			{/* Search & Filter Bar (Overlapping) */}
             <div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>

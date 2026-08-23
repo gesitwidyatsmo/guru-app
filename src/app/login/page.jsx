@@ -64,7 +64,7 @@ export default function LoginPage() {
 
 				// Redirect ke Dashboard Home atau Portal Admin berdasarkan Role
 				if (data.user.role === 'Admin') {
-					router.push('/admin/pengguna');
+					router.push('/admin');
 				} else {
 					router.push('/');
 				}

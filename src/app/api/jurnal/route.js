@@ -14,6 +14,8 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 
 		const supabase = await createClient();
 		let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false });
@@ -26,6 +28,9 @@ export async function GET(req) {
 		// 2. Filter dari Parameter URL
 		if (kelas) query = query.eq('kelas', kelas);
 		if (mapel) query = query.eq('mapel', mapel);
+		// 3. Filter Periode Akademik
+		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
+		if (semester) query = query.eq('semester', parseInt(semester));
 
 		const { data, error } = await query;
 		if (error) throw error;
@@ -42,7 +47,7 @@ export async function POST(req) {
 	try {
 		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas } = body;
+		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas, tahun_ajar, semester } = body;
 
 		const supabase = await createClient();
 		const id = generateId();
@@ -60,6 +65,8 @@ export async function POST(req) {
 			hambatan: hambatan || '',
 			solusi: solusi || '',
 			tuntas: !!tuntas,
+			tahun_ajar: tahun_ajar || '2026/2027',
+			semester: semester ? parseInt(semester) : 1,
 		});
 
 		if (error) throw error;

@@ -231,7 +231,16 @@ export default function RiwayatPenilaianPage() {
 										<tr key={item.id} className='hover:bg-[#FFF5F0] transition-colors'>
 											<td className='px-6 py-4 whitespace-nowrap font-bold text-xs uppercase'>{item.tanggal}</td>
 											<td className='px-6 py-4 font-black text-[#0D0D0D] uppercase'>{item.mapel}</td>
-											<td className='px-6 py-4 font-bold uppercase'>{item.kategori}</td>
+											<td className='px-6 py-4 font-bold uppercase'>
+												<div className='flex flex-wrap items-center gap-2'>
+													<span>{item.kategori}</span>
+													{item.mode_penilaian === 'jumlah_benar' && item.jumlah_benar !== null && item.jumlah_benar !== undefined && (
+														<span className='px-1.5 py-0.5 bg-[#A3E635] text-[#0D0D0D] text-[10px] font-black border border-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]'>
+															⭐ {item.jumlah_benar}/{item.total_soal}
+														</span>
+													)}
+												</div>
+											</td>
 											<td className='px-6 py-4 text-right'>
 												<span className={`inline-flex items-center px-3 py-1 text-sm font-black border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase ${getColorByScore(item.nilai)}`}>
 													{item.nilai}

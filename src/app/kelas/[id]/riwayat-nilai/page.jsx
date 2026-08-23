@@ -60,7 +60,7 @@ export default function RiwayatNilaiPage() {
 				const role = userData?.role;
 				const userId = userData?.id_user;
 
-				let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, type, deskripsi, mapel, tanggal, kelas').eq('kelas', namaKelas);
+				let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, type, deskripsi, mapel, tanggal, kelas, mode_penilaian, total_soal').eq('kelas', namaKelas);
 
 				if (selectedMapel) {
 					query = query.eq('mapel', selectedMapel);
@@ -267,6 +267,11 @@ export default function RiwayatNilaiPage() {
 																<div className='flex flex-wrap items-center gap-2 mb-1'>
 																	<div className='inline-block bg-[#F5C518] px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>{tugas.mapel}</div>
 																	<div className='inline-block bg-[#00A693] text-white px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>{tugas.type || 'Formatif'}</div>
+																	{tugas.mode_penilaian === 'jumlah_benar' && (
+																		<div className='inline-block bg-[#A3E635] text-[#0D0D0D] px-2 py-0.5 border-[2px] border-[#0D0D0D] text-[10px] font-black uppercase tracking-widest shadow-[2px_2px_0px_0px_#0D0D0D]'>
+																			⭐ {tugas.total_soal} Soal
+																		</div>
+																	)}
 																</div>
 																<h4 className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-wider'>{tugas.kategori}</h4>
 																{tugas.deskripsi && (

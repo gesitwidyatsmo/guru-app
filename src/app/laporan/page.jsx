@@ -7,9 +7,12 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function LaporanPage() {
 	const router = useRouter();
+	const { tahunAjar, semester, buildPeriodeQuery } = useAcademic();
 
 	const [activeTab, setActiveTab] = useState('absensi'); // absensi, nilai, jurnal
 	const [loading, setLoading] = useState(true);
@@ -235,7 +238,7 @@ export default function LaporanPage() {
 		try {
 			if (activeTab === 'absensi') {
 				if (!selectedMapel) return;
-				const url = `/api/absensi-mapel?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const url = `/api/absensi-mapel?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}&${buildPeriodeQuery()}`;
 				const res = await fetch(url);
 				if (!res.ok) throw new Error('Gagal memuat data absensi mapel');
 
@@ -267,7 +270,7 @@ export default function LaporanPage() {
 
 			if (activeTab === 'nilai') {
 				if (!selectedMapel) return;
-				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const url = `/api/tugas?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}&${buildPeriodeQuery()}`;
 				const res = await fetch(url);
 				if (!res.ok) throw new Error('Gagal memuat data nilai');
 				const data = await res.json();
@@ -289,7 +292,7 @@ export default function LaporanPage() {
 
 			if (activeTab === 'jurnal') {
 				if (!selectedMapel) return;
-				const url = `/api/jurnal?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}`;
+				const url = `/api/jurnal?kelas=${encodeURIComponent(selectedKelas)}&mapel=${encodeURIComponent(selectedMapel)}&${buildPeriodeQuery()}`;
 				const res = await fetch(url);
 				if (!res.ok) throw new Error('Gagal memuat data jurnal');
 				const data = await res.json();
@@ -310,7 +313,7 @@ export default function LaporanPage() {
 		} finally {
 			setLoadingRekap(false);
 		}
-	}, [activeTab, selectedKelas, selectedMapel, bulan, tahun, processAbsensiMapel]);
+	}, [activeTab, selectedKelas, selectedMapel, bulan, tahun, processAbsensiMapel, tahunAjar, semester]);
 
 	useEffect(() => {
 		if (loading) return;
@@ -496,6 +499,7 @@ export default function LaporanPage() {
 							<div>
 								<h1 className='text-2xl sm:text-4xl font-black text-black uppercase tracking-widest'>Laporan</h1>
 								<p className='text-black font-bold text-sm bg-white border-2 border-black inline-block px-2 py-0.5 rounded shadow-[2px_2px_0px_0px_#0D0D0D] mt-1'>Rekapitulasi {tabs.find((t) => t.id === activeTab)?.name} Bulanan</p>
+								<AcademicPeriodChip />
 							</div>
 						</div>
 						<div className='grid grid-cols-2 md:flex gap-3 mt-4 md:mt-0 w-full md:w-auto'>
@@ -516,6 +520,7 @@ export default function LaporanPage() {
 							</button>
 						</div>
 					</div>
+					<ArchiveBanner />
 
 					{/* Tabs */}
 					<div className='mt-8 grid grid-cols-2 md:flex gap-3 w-full md:w-auto'>

@@ -84,6 +84,19 @@ export async function POST(request) {
 					}
 				}
 
+				// Resolve periode aktif
+				let targetTA = body.tahun_ajar || null;
+				let targetSem = body.semester ? parseInt(body.semester) : null;
+				if (!targetTA || !targetSem) {
+					const { data: taRow } = await supabaseAdmin.from('tahun_ajar').select('nama, semester').eq('is_aktif', true).single();
+					if (taRow) {
+						targetTA = targetTA || taRow.nama;
+						targetSem = targetSem || taRow.semester;
+					}
+				}
+				targetTA = targetTA || '2026/2027';
+				targetSem = targetSem || 1;
+
 				// Upsert Header (nilai_tugas) — satu per kelas
 				const { error: headerError } = await supabaseAdmin.from('nilai_tugas').upsert({
 					tugas_id: tugasId,
@@ -93,7 +106,9 @@ export async function POST(request) {
 					deskripsi: taskJudul,
 					kelas: kelasKey,
 					mapel: taskMapel,
-					tanggal: new Date().toISOString().split('T')[0]
+					tanggal: new Date().toISOString().split('T')[0],
+					tahun_ajar: targetTA,
+					semester: targetSem
 				}, {
 					onConflict: 'tugas_id'
 				});

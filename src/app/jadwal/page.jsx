@@ -6,6 +6,8 @@ import Loader from '../components/loading';
 import Swal from 'sweetalert2';
 import { Clock, Edit2, Trash2, Plus, ChevronLeft } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 const listHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 
@@ -22,6 +24,9 @@ const brutalSwal = Swal.mixin({
 });
 
 export default function JadwalPage() {
+
+	// Academic context
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
 
 	// State
 	const [selectedHari, setSelectedHari] = useState('');
@@ -50,11 +55,18 @@ export default function JadwalPage() {
 				return;
 			}
 			
-			const { data: jadwalArray, error } = await supabase
+			const periodeQuery = buildPeriodeQuery();
+			let query = supabase
 				.from('jadwal')
 				.select('*')
 				.eq('id_user', profile.id_user)
 				.order('jam_ke', { ascending: true });
+			if (periodeQuery) {
+				const params = new URLSearchParams(periodeQuery);
+				if (params.get('tahun_ajar')) query = query.eq('tahun_ajar', params.get('tahun_ajar'));
+				if (params.get('semester')) query = query.eq('semester', params.get('semester'));
+			}
+			const { data: jadwalArray, error } = await query;
 
 			if (error) throw error;
 			const sorted = (jadwalArray || []).sort((a, b) => a.jam_ke - b.jam_ke);
@@ -64,7 +76,7 @@ export default function JadwalPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [tahunAjar, semester, buildPeriodeQuery]);
 
 	// Init
 	useEffect(() => {
@@ -124,6 +136,8 @@ export default function JadwalPage() {
 					jam_ke: formData.jam_ke || '',
 					jam_mulai: formData.jam_mulai,
 					jam_selesai: formData.jam_selesai,
+					tahun_ajar: tahunAjarAktif,
+					semester: semesterAktif,
 				};
 				const { error } = await supabase.from('jadwal').insert(newJadwalItem);
 				if (error) throw error;
@@ -229,7 +243,11 @@ export default function JadwalPage() {
 					<div className='bg-[#A3E635] p-3 border-[4px] border-[#0D0D0D] rotate-1 inline-block'>
 						<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>JADWAL PELAJARAN</h1>
 					</div>
+					<AcademicPeriodChip />
 				</div>
+
+				{/* Archive Banner */}
+				<ArchiveBanner />
 
 				<div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none'>
 					<div className='flex flex-col gap-2'>

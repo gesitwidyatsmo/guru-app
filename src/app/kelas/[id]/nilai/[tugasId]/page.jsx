@@ -35,6 +35,7 @@ export default function DetailNilaiPage() {
 					siswa_id,
 					nama_siswa,
 					nilai,
+					jumlah_benar,
 					nilai_tugas!inner (
 						guru_id,
 						kategori,
@@ -42,7 +43,11 @@ export default function DetailNilaiPage() {
 						deskripsi,
 						kelas,
 						mapel,
-						tanggal
+						tanggal,
+						mode_penilaian,
+						total_soal,
+						skala_maks,
+						pembulatan
 					)
 				`).eq('tugas_id', tugasId);
 
@@ -70,7 +75,6 @@ export default function DetailNilaiPage() {
 
 				if (tugasDetail) {
 					// Fetch all students for this class
-					// Kolom 'absen' ternyata tidak ada di DB, jadi hapus dari select dan gunakan nama untuk sorting
 					const { data: daftarSiswa, error: errSiswa } = await supabase
 						.from('siswa')
 						.select('id, nama_lengkap, status')
@@ -85,14 +89,14 @@ export default function DetailNilaiPage() {
 						// Gabungkan daftar seluruh siswa dengan nilai yang sudah masuk
 						finalSiswaList = daftarSiswa.map((s, index) => {
 							const found = submittedSiswa.find(sub => sub.siswa_id === s.id);
-							// Nomor absen buatan jika DB tidak ada kolom absen
 							const nomorAbsen = String(index + 1); 
 							return {
 								id: s.id,
 								nama_lengkap: s.nama_lengkap,
 								status: s.status,
 								absen: nomorAbsen,
-								nilai: found && found.nilai !== null ? found.nilai : '-'
+								nilai: found && found.nilai !== null ? found.nilai : '-',
+								jumlah_benar: found && found.jumlah_benar !== null && found.jumlah_benar !== undefined ? found.jumlah_benar : null,
 							};
 						});
 					} else {
@@ -104,6 +108,7 @@ export default function DetailNilaiPage() {
 							status: 'Aktif',
 							absen: '-',
 							nilai: item.nilai,
+							jumlah_benar: item.jumlah_benar,
 						}));
 					}
 
@@ -114,6 +119,10 @@ export default function DetailNilaiPage() {
 						mapel: tugasDetail.mapel,
 						kelas: tugasDetail.kelas,
 						tanggal: tugasDetail.tanggal,
+						mode_penilaian: tugasDetail.mode_penilaian || 'langsung',
+						total_soal: tugasDetail.total_soal || 100,
+						skala_maks: tugasDetail.skala_maks || 100,
+						pembulatan: tugasDetail.pembulatan || 'decimal_1',
 						siswa: finalSiswaList,
 					});
 				}
@@ -260,6 +269,15 @@ export default function DetailNilaiPage() {
 						<div className='flex flex-wrap items-center gap-3 mb-2'>
 							<div className='text-2xl md:text-3xl font-black text-[#0D0D0D] uppercase drop-shadow-[1px_1px_0px_#0D0D0D]'>{tugasData.judul}</div>
 							<div className='px-3 py-1 bg-[#00A693] text-white text-sm font-black border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -rotate-2'>{tugasData.type}</div>
+							{tugasData.mode_penilaian === 'jumlah_benar' ? (
+								<div className='px-3 py-1 bg-[#A3E635] text-[#0D0D0D] text-xs font-black border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									⭐ Hitung Benar ({tugasData.total_soal} Soal)
+								</div>
+							) : (
+								<div className='px-3 py-1 bg-white text-[#0D0D0D] text-xs font-black border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									🎯 Nilai Langsung
+								</div>
+							)}
 						</div>
 						{tugasData.deskripsi && (
 							<div className='mt-4 p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
@@ -276,7 +294,7 @@ export default function DetailNilaiPage() {
 
 				{/* Section 2: Detail Tugas */}
 				<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]'>
-					<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+					<div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
 						<div>
 							<div className='text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>KELAS</div>
 							<div className='w-full px-4 py-3 bg-[#A3E635] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-lg uppercase shadow-[4px_4px_0px_0px_#0D0D0D]'>
@@ -287,6 +305,16 @@ export default function DetailNilaiPage() {
 							<div className='text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>MATA PELAJARAN</div>
 							<div className='w-full px-4 py-3 bg-[#FF90E8] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-lg uppercase shadow-[4px_4px_0px_0px_#0D0D0D] truncate' title={tugasData.mapel}>
 								{tugasData.mapel}
+							</div>
+						</div>
+						<div>
+							<div className='text-xs font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>METODE PENILAIAN</div>
+							<div className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black text-xs uppercase shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col justify-center'>
+								{tugasData.mode_penilaian === 'jumlah_benar' ? (
+									<span>⭐ {tugasData.total_soal} Butir Soal</span>
+								) : (
+									<span>🎯 Input Langsung</span>
+								)}
 							</div>
 						</div>
 						<div>
@@ -339,6 +367,11 @@ export default function DetailNilaiPage() {
 											</div>
 										</div>
 										<div className='flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto'>
+											{tugasData.mode_penilaian === 'jumlah_benar' && siswa.jumlah_benar !== null && (
+												<div className='px-3 py-1.5 bg-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-xs font-black text-[#0D0D0D]'>
+													Benar: {siswa.jumlah_benar} / {tugasData.total_soal}
+												</div>
+											)}
 											<div className='font-black text-xs uppercase tracking-widest text-gray-500'>NILAI:</div>
 											<div className={'w-20 h-14 border-[3px] border-[#0D0D0D] flex items-center justify-center text-xl font-black shadow-[4px_4px_0px_0px_#0D0D0D] ' + badgeBg + ' ' + badgeText}>
 												{siswa.nilai}

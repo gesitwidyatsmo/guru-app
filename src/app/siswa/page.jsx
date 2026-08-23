@@ -200,6 +200,7 @@ export default function Page() {
 	const [userName, setUserName] = useState('');
 
 	const [selectedKelas, setSelectedKelas] = useState('Semua');
+	const [selectedStatus, setSelectedStatus] = useState('Semua');
 	const [searchQuery, setSearchQuery] = useState('');
 
 	const [showClassPicker, setShowClassPicker] = useState(false);
@@ -251,12 +252,15 @@ export default function Page() {
 		if (selectedKelas !== 'Semua') {
 			hasil = hasil.filter((s) => s.kelas === selectedKelas);
 		}
+		if (selectedStatus !== 'Semua') {
+			hasil = hasil.filter((s) => s.status === selectedStatus);
+		}
 		if (searchQuery.trim() !== '') {
 			const query = searchQuery.toLowerCase();
 			hasil = hasil.filter((s) => s.nama_lengkap.toLowerCase().includes(query) || (s.nis && s.nis.toLowerCase().includes(query)));
 		}
 		return hasil;
-	}, [selectedKelas, searchQuery, siswaList]);
+	}, [selectedKelas, selectedStatus, searchQuery, siswaList]);
 
 	const handleSaveSiswa = async (newData) => {
 		try {
@@ -421,10 +425,45 @@ export default function Page() {
 					</div>
 				</div>
 
+				{/* STATUS FILTER PILLS */}
+				<div className='flex flex-wrap items-center gap-2'>
+					<span className='text-xs font-black uppercase tracking-widest text-[#0D0D0D] mr-2'>STATUS:</span>
+					{['Semua', 'Aktif', 'Lulus', 'Pindah', 'Boyong', 'Non-Aktif'].map((st) => (
+						<button
+							key={st}
+							onClick={() => setSelectedStatus(st)}
+							className={`px-4 py-2 text-xs font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] transition-all rounded-none ${
+								selectedStatus === st
+									? 'bg-[#0D0D0D] text-white shadow-[3px_3px_0px_0px_#0D0D0D] -translate-y-0.5'
+									: 'bg-white text-[#0D0D0D] hover:bg-[#FFF5F0] hover:shadow-[2px_2px_0px_0px_#0D0D0D]'
+							}`}
+						>
+							{st} {st === 'Semua' ? `(${siswaList.length})` : `(${siswaList.filter(s => s.status === st).length})`}
+						</button>
+					))}
+				</div>
+
 				{/* HASIL PENCARIAN INFO */}
-				{searchQuery && (
-					<div className='bg-[#0D0D0D] text-white p-4 border-[4px] border-[#0D0D0D] font-bold uppercase tracking-widest inline-block'>
-						MENAMPILKAN <span className='text-[#F5C518]'>{filteredSiswa.length}</span> HASIL UNTUK "{searchQuery}"
+				{(searchQuery || selectedStatus !== 'Semua' || selectedKelas !== 'Semua') && (
+					<div className='bg-[#0D0D0D] text-white p-3.5 border-[4px] border-[#0D0D0D] font-bold text-xs uppercase tracking-widest flex items-center justify-between gap-4'>
+						<div>
+							MENAMPILKAN <span className='text-[#F5C518]'>{filteredSiswa.length}</span> SISWA 
+							{selectedKelas !== 'Semua' && ` · KELAS: ${selectedKelas}`}
+							{selectedStatus !== 'Semua' && ` · STATUS: ${selectedStatus}`}
+							{searchQuery && ` · CARI: "${searchQuery}"`}
+						</div>
+						{(selectedKelas !== 'Semua' || selectedStatus !== 'Semua' || searchQuery) && (
+							<button
+								onClick={() => {
+									setSelectedKelas('Semua');
+									setSelectedStatus('Semua');
+									setSearchQuery('');
+								}}
+								className='text-xs font-black text-[#F5C518] underline hover:text-white uppercase'
+							>
+								RESET FILTER
+							</button>
+						)}
 					</div>
 				)}
 
@@ -444,7 +483,7 @@ export default function Page() {
 										<div className='bg-[#0D0D0D] text-white px-3 py-1 text-sm font-black uppercase tracking-widest border-[2px] border-[#0D0D0D]'>
 											{siswa.kelas}
 										</div>
-										<span className={`px-3 py-1 text-sm font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] \${siswa.status === 'Aktif' ? 'bg-[#A3E635] text-[#0D0D0D]' : siswa.status === 'Lulus' ? 'bg-[#2F80ED] text-white' : 'bg-[#E8451A] text-white'}`}>
+										<span className={`px-3 py-1 text-sm font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] ${siswa.status === 'Aktif' ? 'bg-[#A3E635] text-[#0D0D0D]' : siswa.status === 'Lulus' ? 'bg-[#2F80ED] text-white' : 'bg-[#E8451A] text-white'}`}>
 											{siswa.status}
 										</span>
 									</div>

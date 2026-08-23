@@ -5,11 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function BuatTugasKelasPage() {
 	const params = useParams();
 	const classId = params.id;
 	const router = useRouter();
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif } = useAcademic();
 
 	// State Data Master
 	const [kelasList, setKelasList] = useState([]);
@@ -24,6 +27,11 @@ export default function BuatTugasKelasPage() {
 	const [deskripsi, setDeskripsi] = useState('');
 	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
 	const [nilai, setNilai] = useState({}); // Object {siswa_id: nilai}
+	const [jumlahBenar, setJumlahBenar] = useState({}); // Object {siswa_id: jumlah_benar}
+	const [modePenilaian, setModePenilaian] = useState('langsung'); // 'langsung' | 'jumlah_benar'
+	const [totalSoal, setTotalSoal] = useState(25);
+	const [skalaMaks, setSkalaMaks] = useState(100);
+	const [pembulatan, setPembulatan] = useState('decimal_1'); // 'round' | 'decimal_1' | 'decimal_2'
 	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// State UI
@@ -80,6 +88,11 @@ export default function BuatTugasKelasPage() {
 		setType('Formatif');
 		setDeskripsi('');
 		setNilai({});
+		setJumlahBenar({});
+		setModePenilaian('langsung');
+		setTotalSoal(25);
+		setSkalaMaks(100);
+		setPembulatan('decimal_1');
 		setInitialSiswaIds([]);
 		setTanggal(new Date().toISOString().slice(0, 10));
 		setSearchSiswa('');
@@ -93,7 +106,7 @@ export default function BuatTugasKelasPage() {
 				const userId = userData?.id_user;
 				const role = userData?.role;
 
-				let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);
+				let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel).eq('tahun_ajar', tahunAjar).eq('semester', semester);
 				if (role === 'Guru' && userId) {
 					query = query.eq('guru_id', userId);
 				}
@@ -133,7 +146,7 @@ export default function BuatTugasKelasPage() {
 			}
 		};
 		fetchTugas();
-	}, [selectedKelas, selectedMapel]);
+	}, [selectedKelas, selectedMapel, tahunAjar, semester]);
 
 	// --- 3. Load Nilai Detail saat Tugas Dipilih ---
 	useEffect(() => {
@@ -143,6 +156,11 @@ export default function BuatTugasKelasPage() {
 			setType('Formatif');
 			setDeskripsi('');
 			setNilai({});
+			setJumlahBenar({});
+			setModePenilaian('langsung');
+			setTotalSoal(25);
+			setSkalaMaks(100);
+			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
 			return;
 		}
@@ -157,18 +175,25 @@ export default function BuatTugasKelasPage() {
 					setType(headerData.type || 'Formatif');
 					setDeskripsi(headerData.deskripsi || '');
 					setTanggal(headerData.tanggal);
+					setModePenilaian(headerData.mode_penilaian || 'langsung');
+					setTotalSoal(headerData.total_soal || 25);
+					setSkalaMaks(headerData.skala_maks || 100);
+					setPembulatan(headerData.pembulatan || 'decimal_1');
 				}
 
-				const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai').eq('tugas_id', selectedTugasId);
+				const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai, jumlah_benar').eq('tugas_id', selectedTugasId);
 				if (siswaData) {
 					const existingIds = siswaData.map((item) => item.siswa_id);
 					setInitialSiswaIds(existingIds);
 
 					const nilaiMap = {};
+					const benarMap = {};
 					siswaData.forEach((item) => {
-						nilaiMap[item.siswa_id] = item.nilai;
+						nilaiMap[item.siswa_id] = item.nilai !== null ? String(item.nilai) : '';
+						benarMap[item.siswa_id] = item.jumlah_benar !== null && item.jumlah_benar !== undefined ? String(item.jumlah_benar) : '';
 					});
 					setNilai(nilaiMap);
+					setJumlahBenar(benarMap);
 				}
 			} catch (err) {
 				console.error('Error loading nilai tugas:', err);
@@ -203,7 +228,21 @@ export default function BuatTugasKelasPage() {
 		return 'E';
 	};
 
-	// Handle input manual (Mode Tugas Baru)
+	// Kalkulasi Nilai dari Jumlah Benar
+	const calcNilaiFromBenar = (benar, total = totalSoal, skala = skalaMaks, roundType = pembulatan) => {
+		if (benar === '' || benar === undefined || benar === null) return '';
+		const b = parseFloat(benar);
+		const t = parseFloat(total) || 100;
+		const s = parseFloat(skala) || 100;
+		if (isNaN(b) || t <= 0) return '';
+		const clamped = Math.min(Math.max(b, 0), t);
+		const calculated = (clamped / t) * s;
+		if (roundType === 'round') return Math.round(calculated);
+		if (roundType === 'decimal_2') return parseFloat(calculated.toFixed(2));
+		return parseFloat(calculated.toFixed(1));
+	};
+
+	// Handle input manual (Mode Langsung)
 	const handleNilaiChange = (siswaId, value) => {
 		if (value === '' || (parseFloat(value) >= 0 && parseFloat(value) <= 100)) {
 			setNilai((prev) => ({
@@ -213,23 +252,111 @@ export default function BuatTugasKelasPage() {
 		}
 	};
 
+	// Handle input jumlah benar (Mode Jumlah Benar)
+	const handleJumlahBenarChange = (siswaId, value) => {
+		const max = parseFloat(totalSoal) || 100;
+		if (value === '') {
+			setJumlahBenar((prev) => ({ ...prev, [siswaId]: '' }));
+			setNilai((prev) => ({ ...prev, [siswaId]: '' }));
+			return;
+		}
+		let num = parseFloat(value);
+		if (num < 0) num = 0;
+		if (num > max) num = max;
+		const clampedStr = String(num);
+		setJumlahBenar((prev) => ({ ...prev, [siswaId]: clampedStr }));
+		const calculated = calcNilaiFromBenar(clampedStr, totalSoal, skalaMaks, pembulatan);
+		setNilai((prev) => ({ ...prev, [siswaId]: String(calculated) }));
+	};
+
+	// Recalculate saat konfigurasi Total Soal / Skala / Pembulatan berubah
+	const handleTotalSoalChange = (newTotal) => {
+		setTotalSoal(newTotal);
+		const t = parseFloat(newTotal) || 100;
+		const updatedNilai = {};
+		const updatedBenar = {};
+		Object.keys(jumlahBenar).forEach((id) => {
+			const b = jumlahBenar[id];
+			if (b !== '' && b !== undefined && b !== null) {
+				const clamped = Math.min(Math.max(parseFloat(b) || 0, 0), t);
+				updatedBenar[id] = String(clamped);
+				updatedNilai[id] = String(calcNilaiFromBenar(clamped, t, skalaMaks, pembulatan));
+			}
+		});
+		setJumlahBenar((prev) => ({ ...prev, ...updatedBenar }));
+		setNilai((prev) => ({ ...prev, ...updatedNilai }));
+	};
+
+	const handlePembulatanChange = (newPembulatan) => {
+		setPembulatan(newPembulatan);
+		if (modePenilaian === 'jumlah_benar') {
+			const updatedNilai = {};
+			Object.keys(jumlahBenar).forEach((id) => {
+				const b = jumlahBenar[id];
+				if (b !== '' && b !== undefined && b !== null) {
+					updatedNilai[id] = String(calcNilaiFromBenar(b, totalSoal, skalaMaks, newPembulatan));
+				}
+			});
+			setNilai((prev) => ({ ...prev, ...updatedNilai }));
+		}
+	};
+
+	// Quick Actions (Set All Max & Clear)
+	const handleSetAllMax = () => {
+		const newBenar = {};
+		const newNilai = {};
+		const max = parseFloat(totalSoal) || 25;
+		const calculated = calcNilaiFromBenar(max, totalSoal, skalaMaks, pembulatan);
+		filteredSiswa.forEach((s) => {
+			if (s.status === 'Aktif') {
+				newBenar[s.id] = String(max);
+				newNilai[s.id] = String(calculated);
+			}
+		});
+		setJumlahBenar((prev) => ({ ...prev, ...newBenar }));
+		setNilai((prev) => ({ ...prev, ...newNilai }));
+
+		const Toast = Swal.mixin({
+			toast: true,
+			position: 'top-end',
+			showConfirmButton: false,
+			timer: 2000,
+			timerProgressBar: true,
+		});
+		Toast.fire({
+			icon: 'success',
+			title: `Semua siswa diisi ${max} Benar (Nilai ${calculated})`,
+		});
+	};
+
+	const handleClearAll = () => {
+		setNilai({});
+		setJumlahBenar({});
+	};
+
 	// Refresh data setelah edit
 	const refreshCurrentTugasData = async (tugasId) => {
 		if (!tugasId) return;
 		try {
 			const supabase = createClient();
-			const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai').eq('tugas_id', tugasId);
+			const { data: siswaData } = await supabase.from('nilai_siswa').select('siswa_id, nilai, jumlah_benar').eq('tugas_id', tugasId);
 			if (siswaData) {
 				const existingIds = siswaData.map((item) => item.siswa_id);
 				setInitialSiswaIds(existingIds);
 
 				const nilaiMap = {};
+				const benarMap = {};
 				siswaData.forEach((item) => {
-					nilaiMap[item.siswa_id] = item.nilai;
+					nilaiMap[item.siswa_id] = item.nilai !== null ? String(item.nilai) : '';
+					benarMap[item.siswa_id] = item.jumlah_benar !== null && item.jumlah_benar !== undefined ? String(item.jumlah_benar) : '';
 				});
 				setNilai((prev) => ({
 					...prev,
 					...nilaiMap,
+				}));
+				setJumlahBenar((prev) => ({
+					...prev,
+					...benarMap,
 				}));
 			}
 		} catch (err) {
@@ -255,14 +382,23 @@ export default function BuatTugasKelasPage() {
 		const nilaiArray = filteredSiswa.map((s) => ({
 			siswa_id: s.id,
 			nilai: nilai[s.id] || '0',
+			jumlah_benar: modePenilaian === 'jumlah_benar' && jumlahBenar[s.id] !== undefined && jumlahBenar[s.id] !== ''
+				? parseFloat(jumlahBenar[s.id])
+				: null,
 		}));
 
-		const terisi = nilaiArray.filter((n) => n.nilai && parseInt(n.nilai) > 0).length;
+		const terisi = nilaiArray.filter((n) => {
+			if (modePenilaian === 'jumlah_benar') {
+				return n.jumlah_benar !== null && n.jumlah_benar !== undefined;
+			}
+			return n.nilai && parseFloat(n.nilai) > 0;
+		}).length;
+
 		if (terisi === 0) {
 			Swal.fire({
 				icon: 'warning',
 				title: 'Tidak Ada Nilai',
-				text: 'Masukkan minimal 1 nilai siswa',
+				text: 'Masukkan minimal 1 nilai atau jumlah benar siswa',
 				confirmButtonColor: '#4F46E5',
 			});
 			return;
@@ -270,7 +406,7 @@ export default function BuatTugasKelasPage() {
 
 		const result = await Swal.fire({
 			title: 'Simpan Nilai Baru?',
-			text: `Menyimpan nilai untuk ${terisi} siswa`,
+			text: `Menyimpan nilai untuk ${terisi} siswa (${modePenilaian === 'jumlah_benar' ? 'Mode Jumlah Benar' : 'Mode Nilai Langsung'})`,
 			icon: 'question',
 			showCancelButton: true,
 			confirmButtonColor: '#4F46E5',
@@ -290,6 +426,10 @@ export default function BuatTugasKelasPage() {
 			kelas: selectedKelas,
 			mapel: selectedMapel,
 			tanggal,
+			mode_penilaian: modePenilaian,
+			total_soal: parseInt(totalSoal) || 100,
+			skala_maks: parseInt(skalaMaks) || 100,
+			pembulatan,
 			nilai: nilaiArray,
 		};
 
@@ -331,7 +471,13 @@ export default function BuatTugasKelasPage() {
 				deskripsi,
 				kelas: selectedKelas,
 				mapel: selectedMapel,
-				tanggal
+				tanggal,
+				tahun_ajar: tahunAjarAktif,
+				semester: semesterAktif,
+				mode_penilaian: modePenilaian,
+				total_soal: parseInt(totalSoal) || 100,
+				skala_maks: parseInt(skalaMaks) || 100,
+				pembulatan: pembulatan,
 			});
 			if (insertHeaderError) throw insertHeaderError;
 
@@ -342,7 +488,8 @@ export default function BuatTugasKelasPage() {
 					tugas_id: tugasId,
 					siswa_id: n.siswa_id,
 					nama_siswa: siswa?.nama_lengkap || 'Unknown',
-					nilai: n.nilai
+					nilai: parseFloat(n.nilai) || 0,
+					jumlah_benar: n.jumlah_benar,
 				};
 			});
 
@@ -363,7 +510,6 @@ export default function BuatTugasKelasPage() {
 			});
 
 			// Trigger refetch daftar tugas via dependency effect
-			// Tapi kita force select tugas baru agar masuk mode edit
 			setSelectedTugasId(tugasId);
 		} catch (error) {
 			console.error(error);
@@ -379,11 +525,15 @@ export default function BuatTugasKelasPage() {
 	};
 
 	// Edit Nilai Per Siswa (Popup) - Mode Tugas Lama
-	const handleEditNilai = async (siswaId, currentNilai) => {
+	const handleEditNilai = async (siswaId, currentNilai, currentBenar) => {
 		const siswa = getSiswaById(siswaId);
 		if (!siswa) return;
 
-		const { value: newNilai } = await Swal.fire({
+		const isJumlahBenarMode = modePenilaian === 'jumlah_benar';
+		const curBenar = currentBenar !== undefined && currentBenar !== null ? currentBenar : '';
+		const curNilai = currentNilai || 0;
+
+		const { value: resultData } = await Swal.fire({
 			title: `<h3 class="text-2xl font-black text-[#0D0D0D] uppercase tracking-tight">Edit Nilai</h3>`,
 			html: `
         <div class="text-left bg-[#FFF5F0] p-4 mb-6 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]">
@@ -391,18 +541,40 @@ export default function BuatTugasKelasPage() {
           <p class="font-black text-[#0D0D0D] text-lg leading-tight mb-2">${siswa.nama_lengkap}</p>
           <p class="text-[10px] font-bold font-mono text-[#0D0D0D] bg-white border-2 border-[#0D0D0D] inline-block px-2 py-0.5 shadow-[2px_2px_0px_0px_#0D0D0D]">NIS: ${siswa.nis || '-'}</p>
         </div>
+        ${isJumlahBenarMode ? `
+        <div class="mb-4 text-left">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-sm font-black text-[#0D0D0D] uppercase tracking-widest">Jumlah Benar (Maks: ${totalSoal})</label>
+            <span class="text-xs font-black bg-[#F5C518] px-2 py-0.5 border-2 border-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]">Total ${totalSoal} Soal</span>
+          </div>
+          <input 
+            id="swal-input-benar" 
+            type="number" 
+            class="w-full px-4 py-3 border-4 border-[#0D0D0D] bg-white text-3xl text-center font-black text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] outline-none focus:bg-[#A3E635] transition-colors"
+            min="0" 
+            max="${totalSoal}" 
+            value="${curBenar !== '' ? curBenar : (curNilai ? Math.round((parseFloat(curNilai)/100)*totalSoal) : 0)}"
+            placeholder="0"
+          >
+          <div class="mt-4 p-3 bg-[#E8E8E8] border-2 border-[#0D0D0D] flex items-center justify-between shadow-[2px_2px_0px_0px_#0D0D0D]">
+            <span class="text-xs font-black uppercase tracking-wider text-[#0D0D0D]">Nilai Terkonversi:</span>
+            <span id="swal-preview-nilai" class="text-2xl font-black text-[#00A693]">${curNilai || 0}</span>
+          </div>
+        </div>
+        ` : `
         <div class="mb-2 text-left">
-          <label class="block text-sm font-black text-[#0D0D0D] mb-2 uppercase tracking-widest">Input Nilai</label>
+          <label class="block text-sm font-black text-[#0D0D0D] mb-2 uppercase tracking-widest">Input Nilai (0 - 100)</label>
           <input 
             id="swal-input-nilai" 
             type="number" 
             class="w-full px-4 py-3 border-4 border-[#0D0D0D] bg-white text-3xl text-center font-black text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] outline-none focus:bg-[#F5C518] transition-colors"
             min="0" 
             max="100" 
-            value="${currentNilai || 0}"
+            value="${curNilai}"
             placeholder="0"
           >
         </div>
+        `}
       `,
 			showCancelButton: true,
 			confirmButtonText: 'SIMPAN',
@@ -414,17 +586,41 @@ export default function BuatTugasKelasPage() {
 				confirmButton: 'bg-[#00A693] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
 				cancelButton: 'bg-[#E8451A] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
 			},
+			didOpen: () => {
+				if (isJumlahBenarMode) {
+					const inputBenar = document.getElementById('swal-input-benar');
+					const previewEl = document.getElementById('swal-preview-nilai');
+					const updatePreview = () => {
+						const val = inputBenar.value;
+						const score = calcNilaiFromBenar(val, totalSoal, skalaMaks, pembulatan);
+						if (previewEl) previewEl.textContent = score !== '' ? score : '0';
+					};
+					inputBenar.addEventListener('input', updatePreview);
+				}
+			},
 			focusConfirm: false,
 			preConfirm: () => {
-				const val = document.getElementById('swal-input-nilai').value;
-				if (!val || val < 0 || val > 100) {
-					Swal.showValidationMessage('Masukkan nilai valid (0-100)');
+				if (isJumlahBenarMode) {
+					const val = document.getElementById('swal-input-benar').value;
+					const max = parseFloat(totalSoal) || 100;
+					if (val === '' || parseFloat(val) < 0 || parseFloat(val) > max) {
+						Swal.showValidationMessage(`Masukkan jumlah benar valid (0 - ${max})`);
+						return false;
+					}
+					const finalScore = calcNilaiFromBenar(val, totalSoal, skalaMaks, pembulatan);
+					return { finalScore, jumlahBenar: parseFloat(val) };
+				} else {
+					const val = document.getElementById('swal-input-nilai').value;
+					if (val === '' || parseFloat(val) < 0 || parseFloat(val) > 100) {
+						Swal.showValidationMessage('Masukkan nilai valid (0-100)');
+						return false;
+					}
+					return { finalScore: parseFloat(val), jumlahBenar: null };
 				}
-				return val;
 			},
 		});
 
-		if (newNilai) {
+		if (resultData) {
 			try {
 				const supabase = createClient();
 				
@@ -448,20 +644,24 @@ export default function BuatTugasKelasPage() {
 				// Check existing
 				const { data: existingNilai } = await supabase.from('nilai_siswa').select('id').eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId).single();
 				if (existingNilai) {
-					await supabase.from('nilai_siswa').update({ nilai: newNilai }).eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId);
+					await supabase.from('nilai_siswa').update({
+						nilai: resultData.finalScore,
+						jumlah_benar: resultData.jumlahBenar,
+					}).eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId);
 				} else {
 					await supabase.from('nilai_siswa').insert({
 						tugas_id: selectedTugasId,
 						siswa_id: siswaId,
 						nama_siswa: siswa.nama_lengkap,
-						nilai: newNilai
+						nilai: resultData.finalScore,
+						jumlah_benar: resultData.jumlahBenar,
 					});
 				}
 
 				Swal.fire({
 					icon: 'success',
 					title: 'Tersimpan',
-					text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${newNilai}`,
+					text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${resultData.finalScore}`,
 					timer: 1000,
 					showConfirmButton: false,
 				});
@@ -536,6 +736,11 @@ export default function BuatTugasKelasPage() {
 			setType('Formatif');
 			setDeskripsi('');
 			setNilai({});
+			setJumlahBenar({});
+			setModePenilaian('langsung');
+			setTotalSoal(25);
+			setSkalaMaks(100);
+			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
 			setTanggal(new Date().toISOString().slice(0, 10));
 
@@ -585,7 +790,7 @@ export default function BuatTugasKelasPage() {
 		}
 	};
 
-	// Update Judul / Tanggal (Mode Edit)
+	// Update Judul / Tanggal / Konfigurasi (Mode Edit)
 	const handleUpdateInfoTugas = async () => {
 		if (!selectedTugasId) return;
 		if (!judul.trim()) {
@@ -612,7 +817,16 @@ export default function BuatTugasKelasPage() {
 				if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
 			}
 
-			const updates = { kategori: judul, tanggal: tanggal, deskripsi, type };
+			const updates = {
+				kategori: judul,
+				tanggal: tanggal,
+				deskripsi,
+				type,
+				mode_penilaian: modePenilaian,
+				total_soal: parseInt(totalSoal) || 100,
+				skala_maks: parseInt(skalaMaks) || 100,
+				pembulatan,
+			};
 			const { error: updateError } = await supabase.from('nilai_tugas').update(updates).eq('tugas_id', selectedTugasId);
 			if (updateError) throw updateError;
 
@@ -700,7 +914,8 @@ export default function BuatTugasKelasPage() {
 								/>
 							</svg>
 						</button>
-						<h1 className='text-3xl font-black text-[#0D0D0D] uppercase tracking-tight'>Input Penilaian</h1>
+						<h1 className='text-3xl font-black text-[#0D0D0D] uppercase tracking-tight'>Input Penilaian Kelas</h1>
+						<AcademicPeriodChip />
 					</div>
 
 					{/* Filter Section */}
@@ -737,6 +952,8 @@ export default function BuatTugasKelasPage() {
 					</div>
 				</div>
 			</div>
+
+			<ArchiveBanner />
 
 			<div className='max-w-6xl mx-auto px-4 sm:px-8 -mt-6 relative z-10'>
 				<div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
@@ -797,6 +1014,116 @@ export default function BuatTugasKelasPage() {
 					<div className='lg:col-span-3 space-y-6'>
 						{/* Info Tugas Card */}
 						<div className='neo-card bg-white p-6'>
+							{/* Mode Penilaian Switcher */}
+							<div className='mb-6 p-4 bg-[#FFF5F0] border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+								<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
+									Pilih Metode Input Nilai
+								</label>
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+									<button
+										type='button'
+										onClick={() => setModePenilaian('langsung')}
+										className={`py-3 px-4 font-black text-sm uppercase tracking-wider border-3 border-[#0D0D0D] transition-all flex items-center justify-center gap-2 ${
+											modePenilaian === 'langsung'
+												? 'bg-[#0D0D0D] text-white shadow-[3px_3px_0px_0px_#F5C518] -translate-y-0.5'
+												: 'bg-white text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-[#F5C518]'
+										}`}>
+										<span>🎯</span>
+										<span>Nilai Langsung (0 - 100)</span>
+									</button>
+									<button
+										type='button'
+										onClick={() => setModePenilaian('jumlah_benar')}
+										className={`py-3 px-4 font-black text-sm uppercase tracking-wider border-3 border-[#0D0D0D] transition-all flex items-center justify-center gap-2 ${
+											modePenilaian === 'jumlah_benar'
+												? 'bg-[#00A693] text-white shadow-[3px_3px_0px_0px_#0D0D0D] -translate-y-0.5'
+												: 'bg-white text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-[#A3E635]'
+										}`}>
+										<span>⭐</span>
+										<span>Hitung dari Jumlah Benar</span>
+									</button>
+								</div>
+
+								{/* Konfigurasi Mode Jumlah Benar */}
+								{modePenilaian === 'jumlah_benar' && (
+									<div className='mt-4 pt-4 border-t-2 border-[#0D0D0D] space-y-4'>
+										<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+											<div>
+												<label className='block text-[11px] font-black text-[#0D0D0D] uppercase tracking-tight mb-1'>
+													Total Soal / Skor Maksimal
+												</label>
+												<input
+													type='number'
+													min='1'
+													max='500'
+													value={totalSoal}
+													onChange={(e) => handleTotalSoalChange(e.target.value)}
+													onWheel={(e) => e.target.blur()}
+													className='neo-input w-full font-black text-lg text-center bg-white'
+													placeholder='25'
+												/>
+											</div>
+											<div>
+												<label className='block text-[11px] font-black text-[#0D0D0D] uppercase tracking-tight mb-1'>
+													Skala Target Nilai
+												</label>
+												<input
+													type='number'
+													min='10'
+													max='1000'
+													value={skalaMaks}
+													onChange={(e) => setSkalaMaks(e.target.value)}
+													onWheel={(e) => e.target.blur()}
+													className='neo-input w-full font-black text-lg text-center bg-white'
+													placeholder='100'
+												/>
+											</div>
+											<div>
+												<label className='block text-[11px] font-black text-[#0D0D0D] uppercase tracking-tight mb-1'>
+													Format Pembulatan
+												</label>
+												<div className='relative'>
+													<select
+														value={pembulatan}
+														onChange={(e) => handlePembulatanChange(e.target.value)}
+														className='neo-input w-full appearance-none pr-8 cursor-pointer font-bold text-sm bg-white'>
+														<option value='decimal_1'>1 Desimal (cth: 87.5)</option>
+														<option value='decimal_2'>2 Desimal (cth: 87.67)</option>
+														<option value='round'>Bulat Utuh (cth: 88)</option>
+													</select>
+													<div className='absolute inset-y-0 right-3 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
+												</div>
+											</div>
+										</div>
+
+										{/* Quick Presets */}
+										<div className='flex flex-wrap items-center gap-2'>
+											<span className='text-xs font-black uppercase text-gray-600 mr-1'>Preset Soal:</span>
+											{[10, 15, 20, 25, 30, 40, 50].map((preset) => (
+												<button
+													key={preset}
+													type='button'
+													onClick={() => handleTotalSoalChange(preset)}
+													className={`px-3 py-1 text-xs font-black border-2 border-[#0D0D0D] transition-all ${
+														parseInt(totalSoal) === preset
+															? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -translate-y-0.5'
+															: 'bg-white text-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D] hover:bg-gray-100'
+													}`}>
+													{preset} Soal
+												</button>
+											))}
+										</div>
+
+										<div className='text-xs font-bold text-[#0D0D0D] bg-[#A3E635] p-2 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-2'>
+											<span>💡</span>
+											<span>
+												Rumus: <b>(Jumlah Benar ÷ {totalSoal || 25}) × {skalaMaks || 100}</b>. Nilai otomatis dihitung dan disimpan skala 0–100.
+											</span>
+										</div>
+									</div>
+								)}
+							</div>
+
 							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4'>
 								<div className='lg:col-span-2'>
 									<label className='block text-sm font-bold text-[#0D0D0D] mb-1 uppercase tracking-tight'>Judul Tugas / Materi</label>
@@ -818,6 +1145,8 @@ export default function BuatTugasKelasPage() {
 											<option value='Formatif'>Formatif</option>
 											<option value='Sumatif'>Sumatif</option>
 											<option value='SAS'>SAS</option>
+											<option value='PTS'>PTS</option>
+											<option value='PAS'>PAS</option>
 										</select>
 										<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
 									</div>
@@ -860,7 +1189,7 @@ export default function BuatTugasKelasPage() {
 											/>
 										</svg>
 										<span>
-											Sedang mengedit. Klik <b>Simpan</b> untuk menyimpan Judul/Tanggal, atau klik <b>Baris Siswa</b> untuk edit nilai.
+											Sedang mengedit. Klik <b>Simpan Perubahan</b> untuk update info/mode tugas, atau klik <b>Baris Siswa</b> untuk edit nilai.
 										</span>
 									</div>
 									<button
@@ -895,7 +1224,7 @@ export default function BuatTugasKelasPage() {
 
 						{/* Tabel Siswa */}
 						<div className='neo-card p-0 overflow-hidden bg-white'>
-							<div className='p-4 bg-[#F5C518] border-b-4 border-[#0D0D0D]'>
+							<div className='p-4 bg-[#F5C518] border-b-4 border-[#0D0D0D] space-y-3'>
 								<div className='relative'>
 									<div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
 										<svg
@@ -919,11 +1248,44 @@ export default function BuatTugasKelasPage() {
 										className='neo-input neo-input-with-icon bg-white w-full'
 									/>
 								</div>
+
+								{/* Toolbar Cepat untuk Mode Jumlah Benar (Hanya di mode tugas baru) */}
+								{!selectedTugasId && modePenilaian === 'jumlah_benar' && (
+									<div className='flex flex-wrap items-center justify-between gap-2 pt-1'>
+										<div className='flex items-center gap-2'>
+											<button
+												type='button'
+												onClick={handleSetAllMax}
+												className='px-3 py-1.5 bg-[#00A693] text-white font-black text-xs uppercase tracking-wider border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_0px_#0D0D0D] transition-all flex items-center gap-1.5'>
+												<span>✨</span>
+												<span>Isi Semua Benar ({totalSoal})</span>
+											</button>
+											<button
+												type='button'
+												onClick={handleClearAll}
+												className='px-3 py-1.5 bg-white text-[#E8451A] font-black text-xs uppercase tracking-wider border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_0px_#0D0D0D] transition-all'>
+												🧹 Kosongkan
+											</button>
+										</div>
+										<span className='text-xs font-black text-[#0D0D0D] bg-white px-2 py-1 border-2 border-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]'>
+											Maks: {totalSoal} Soal
+										</span>
+									</div>
+								)}
 							</div>
-							<div className='grid grid-cols-12 gap-4 p-4 bg-[#0D0D0D] text-white border-b-4 border-[#0D0D0D] text-sm font-bold uppercase tracking-wider'>
+
+							{/* Header Tabel */}
+							<div className='grid grid-cols-12 gap-3 p-4 bg-[#0D0D0D] text-white border-b-4 border-[#0D0D0D] text-sm font-bold uppercase tracking-wider'>
 								<div className='col-span-1 text-center'>No</div>
-								<div className='col-span-5 sm:col-span-6'>Nama Siswa</div>
-								<div className='col-span-4 sm:col-span-3 text-center'>Nilai</div>
+								<div className={modePenilaian === 'jumlah_benar' ? 'col-span-4 sm:col-span-4' : 'col-span-5 sm:col-span-6'}>Nama Siswa</div>
+								{modePenilaian === 'jumlah_benar' ? (
+									<>
+										<div className='col-span-3 sm:col-span-3 text-center'>Benar (/{totalSoal})</div>
+										<div className='col-span-2 sm:col-span-2 text-center'>Nilai (100)</div>
+									</>
+								) : (
+									<div className='col-span-4 sm:col-span-3 text-center'>Nilai (0-100)</div>
+								)}
 								<div className='col-span-2 text-center'>
 									<span className='block md:hidden'>Ket.</span>
 									<span className='hidden md:block'>Predikat</span>
@@ -936,6 +1298,7 @@ export default function BuatTugasKelasPage() {
 								) : (
 									filteredSiswa.map((siswa, idx) => {
 										const nilaiSiswa = nilai[siswa.id] || '';
+										const benarSiswa = jumlahBenar[siswa.id] !== undefined ? jumlahBenar[siswa.id] : '';
 										const isEditMode = !!selectedTugasId;
 										const isNewStudentInTask = isEditMode && !initialSiswaIds.includes(siswa.id);
 
@@ -943,11 +1306,17 @@ export default function BuatTugasKelasPage() {
 											<div
 												key={siswa.id}
 												onClick={() => {
-													if (isEditMode && siswa.status === 'Aktif') handleEditNilai(siswa.id, nilaiSiswa);
+													if (isEditMode && siswa.status === 'Aktif') handleEditNilai(siswa.id, nilaiSiswa, benarSiswa);
 												}}
-												className={`grid grid-cols-12 gap-4 p-4 items-center transition-all ${siswa.status !== 'Aktif' ? 'bg-gray-100 opacity-60' : isEditMode ? 'cursor-pointer hover:bg-[#F5C518] group' : 'hover:bg-[#FFF5F0]'}`}>
+												className={`grid grid-cols-12 gap-3 p-3.5 items-center transition-all ${
+													siswa.status !== 'Aktif'
+														? 'bg-gray-100 opacity-60'
+														: isEditMode
+														? 'cursor-pointer hover:bg-[#F5C518] group'
+														: 'hover:bg-[#FFF5F0]'
+												}`}>
 												<div className='col-span-1 text-center text-[#0D0D0D] font-black'>{idx + 1}</div>
-												<div className='col-span-5 sm:col-span-6'>
+												<div className={modePenilaian === 'jumlah_benar' ? 'col-span-4 sm:col-span-4' : 'col-span-5 sm:col-span-6'}>
 													<div className='flex items-center gap-2'>
 														<p className='font-bold text-[#0D0D0D] text-base group-hover:underline transition-colors'>{siswa.nama_lengkap}</p>
 														{siswa.status !== 'Aktif' && (
@@ -955,36 +1324,86 @@ export default function BuatTugasKelasPage() {
 																{siswa.status}
 															</span>
 														)}
-														{isNewStudentInTask && siswa.status === 'Aktif' && <span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>}
+														{isNewStudentInTask && siswa.status === 'Aktif' && (
+															<span className='px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#00A693] text-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>BARU</span>
+														)}
 													</div>
-													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis || '-'}</p>
+													<p className='text-xs text-gray-600 font-mono font-bold mt-0.5'>{siswa.nis || '-'}</p>
 												</div>
-												<div className='col-span-4 sm:col-span-3 flex justify-center'>
-													{isEditMode ? (
-														// --- VIEW MODE (Badge) ---
-														<div
-															className={`w-16 h-10 flex items-center justify-center rounded-xl font-black border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] transform transition-transform group-hover:-translate-y-1 group-hover:shadow-[4px_4px_0px_0px_#0D0D0D] ${getNilaiColor(
-																nilaiSiswa,
-															)}`}>
-															{Number(nilaiSiswa) > 0 ? nilaiSiswa : <span className="text-[10px] tracking-widest text-[#E8451A]">KOSONG</span>}
+
+												{modePenilaian === 'jumlah_benar' ? (
+													<>
+														{/* INPUT / VIEW JUMLAH BENAR */}
+														<div className='col-span-3 sm:col-span-3 flex items-center justify-center gap-1'>
+															{isEditMode ? (
+																<div className='px-3 py-1.5 bg-white border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] font-black text-sm text-[#0D0D0D]'>
+																	{benarSiswa !== '' ? `${benarSiswa} / ${totalSoal}` : '-'}
+																</div>
+															) : (
+																<div className='relative w-full max-w-[110px] flex items-center'>
+																	<input
+																		type='number'
+																		min='0'
+																		max={totalSoal}
+																		disabled={siswa.status !== 'Aktif'}
+																		value={benarSiswa}
+																		onChange={(e) => handleJumlahBenarChange(siswa.id, e.target.value)}
+																		onWheel={(e) => e.target.blur()}
+																		className='neo-input text-center text-lg font-black w-full px-2 py-1.5 bg-white disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed'
+																		placeholder='0'
+																	/>
+																	<span className='absolute right-2 text-xs font-bold text-gray-400 pointer-events-none'>/{totalSoal}</span>
+																</div>
+															)}
 														</div>
-													) : (
-														// --- INPUT MODE (Form) ---
-														<input
-															type='number'
-															min='0'
-															max='100'
-															disabled={siswa.status !== 'Aktif'}
-															value={nilaiSiswa}
-															onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
-															onWheel={(e) => e.target.blur()}
-															className='neo-input text-center text-lg font-black w-full px-2 py-2 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed'
-															placeholder='0'
-														/>
-													)}
-												</div>
+
+														{/* NILAI TERKONVERSI */}
+														<div className='col-span-2 sm:col-span-2 flex justify-center'>
+															<div
+																className={`w-16 h-10 flex items-center justify-center rounded-xl font-black border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] ${getNilaiColor(
+																	nilaiSiswa,
+																)}`}>
+																{nilaiSiswa !== '' && Number(nilaiSiswa) >= 0 ? (
+																	nilaiSiswa
+																) : (
+																	<span className='text-[10px] tracking-widest text-gray-500'>-</span>
+																)}
+															</div>
+														</div>
+													</>
+												) : (
+													/* MODE NILAI LANGSUNG (0-100) */
+													<div className='col-span-4 sm:col-span-3 flex justify-center'>
+														{isEditMode ? (
+															// --- VIEW MODE (Badge) ---
+															<div
+																className={`w-16 h-10 flex items-center justify-center rounded-xl font-black border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] transform transition-transform group-hover:-translate-y-1 group-hover:shadow-[4px_4px_0px_0px_#0D0D0D] ${getNilaiColor(
+																	nilaiSiswa,
+																)}`}>
+																{Number(nilaiSiswa) > 0 ? nilaiSiswa : <span className="text-[10px] tracking-widest text-[#E8451A]">KOSONG</span>}
+															</div>
+														) : (
+															// --- INPUT MODE (Form) ---
+															<input
+																type='number'
+																min='0'
+																max='100'
+																disabled={siswa.status !== 'Aktif'}
+																value={nilaiSiswa}
+																onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
+																onWheel={(e) => e.target.blur()}
+																className='neo-input text-center text-lg font-black w-full px-2 py-2 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed'
+																placeholder='0'
+															/>
+														)}
+													</div>
+												)}
+
+												{/* Predikat */}
 												<div className='col-span-2 text-center'>
-													<span className={`inline-block w-8 h-8 leading-7 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] rounded-full font-black text-sm ${nilaiSiswa ? 'bg-[#2F80ED] text-white' : 'bg-white text-[#0D0D0D]'}`}>{getPredikat(nilaiSiswa)}</span>
+													<span className={`inline-block w-8 h-8 leading-7 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] rounded-full font-black text-sm ${nilaiSiswa ? 'bg-[#2F80ED] text-white' : 'bg-white text-[#0D0D0D]'}`}>
+														{getPredikat(nilaiSiswa)}
+													</span>
 												</div>
 											</div>
 										);

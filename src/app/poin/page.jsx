@@ -4,9 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function PoinGlobalPage() {
 	const router = useRouter();
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
 
 	// --- State ---
 	const [kelasList, setKelasList] = useState([]);
@@ -42,6 +45,18 @@ export default function PoinGlobalPage() {
 		keterangan: '',
 	};
 	const [formData, setFormData] = useState(initialForm);
+
+	const fetchPoin = useCallback(async () => {
+		try {
+			const res = await fetch(`/api/poin?${buildPeriodeQuery()}`);
+			if (res.ok) {
+				const data = await res.json();
+				setPoinList(data);
+			}
+		} catch (error) {
+			console.error('Gagal load poin:', error);
+		}
+	}, [buildPeriodeQuery]);
 
 	// --- Fetch Data ---
 	useEffect(() => {
@@ -84,19 +99,13 @@ export default function PoinGlobalPage() {
 		};
 
 		initData();
-	}, [router]);
+	}, [router, fetchPoin]);
 
-	const fetchPoin = useCallback(async () => {
-		try {
-			const res = await fetch(`/api/poin`);
-			if (res.ok) {
-				const data = await res.json();
-				setPoinList(data);
-			}
-		} catch (error) {
-			console.error('Gagal load poin:', error);
-		}
-	}, []);
+	useEffect(() => {
+		fetchPoin();
+	}, [fetchPoin]);
+
+
 
 	// --- Handlers ---
 	const handleOpenModal = (item = null) => {
@@ -154,7 +163,7 @@ export default function PoinGlobalPage() {
 		e.preventDefault();
 		setSaving(true);
 
-		const payload = { ...formData };
+		const payload = { ...formData, ...(isEditing ? {} : { tahun_ajar: tahunAjarAktif, semester: semesterAktif }) };
 
 		try {
 			const res = await fetch('/api/poin', {
@@ -262,6 +271,7 @@ export default function PoinGlobalPage() {
 									Poin Prestasi & Pelanggaran
 								</p>
 							</div>
+							<AcademicPeriodChip />
 						</div>
 						<button
 							onClick={() => handleOpenModal()}
@@ -302,6 +312,8 @@ export default function PoinGlobalPage() {
 					</div>
 				</div>
 			</div>
+
+			<ArchiveBanner />
 
 			{/* Search & Filter Bar */}
 			<div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>

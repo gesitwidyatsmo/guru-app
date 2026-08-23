@@ -17,12 +17,20 @@ export async function GET(req) {
 		}
 
 		const supabase = await createClient();
+		const { searchParams } = new URL(req.url);
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 		
-		const { data: jadwalArray, error } = await supabase
+		let jadwalQuery = supabase
 			.from('jadwal')
 			.select('*')
 			.eq('id_user', userId)
 			.order('jam_ke', { ascending: true });
+
+		if (tahunAjar) jadwalQuery = jadwalQuery.eq('tahun_ajar', tahunAjar);
+		if (semester) jadwalQuery = jadwalQuery.eq('semester', parseInt(semester));
+
+		const { data: jadwalArray, error } = await jadwalQuery;
 
 		if (error) throw error;
 
@@ -53,6 +61,8 @@ export async function POST(req) {
 			jam_ke: body.jam_ke || '',
 			jam_mulai: body.jam_mulai,
 			jam_selesai: body.jam_selesai,
+			tahun_ajar: body.tahun_ajar || '2026/2027',
+			semester: body.semester ? parseInt(body.semester) : 1,
 		};
 
 		const { error } = await supabase.from('jadwal').insert(newJadwalItem);

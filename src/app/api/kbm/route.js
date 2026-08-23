@@ -16,16 +16,26 @@ export async function GET(req) {
 		}
 
 		const supabase = await createClient();
+		const { searchParams } = new URL(req.url);
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 		
-		const { data: kbmData, error } = await supabase
+		let kbmQuery = supabase
 			.from('guru_kbm')
 			.select(`
 				id_kbm,
 				id_user,
 				kelas,
 				mapel,
+				tahun_ajar,
+				semester,
 				users!guru_kbm_id_user_fkey(username, nama_lengkap)
 			`);
+
+		if (tahunAjar) kbmQuery = kbmQuery.eq('tahun_ajar', tahunAjar);
+		if (semester) kbmQuery = kbmQuery.eq('semester', parseInt(semester));
+
+		const { data: kbmData, error } = await kbmQuery;
 
 		if (error) throw error;
 
@@ -71,6 +81,8 @@ export async function POST(req) {
 			id_user: task.id_user,
 			kelas: task.kelas,
 			mapel: task.mapel,
+			tahun_ajar: task.tahun_ajar || '2026/2027',
+			semester: task.semester ? parseInt(task.semester) : 1,
 		}));
 
 		const { error } = await supabase.from('guru_kbm').insert(rowsToInsert);

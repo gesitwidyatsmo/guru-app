@@ -171,6 +171,24 @@ export async function DELETE(req) {
 
 		if (!id) return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 });
 
+		// Cek apakah siswa memiliki riwayat akademik masa lalu (nilai, absensi, poin)
+		const [resNilai, resAbsenH, resAbsenM, resPoin] = await Promise.all([
+			supabaseAdmin.from('nilai_siswa').select('id', { count: 'exact', head: true }).eq('siswa_id', id),
+			supabaseAdmin.from('absensi_harian_siswa').select('id', { count: 'exact', head: true }).eq('siswa_id', id),
+			supabaseAdmin.from('absensi_mapel_siswa').select('id', { count: 'exact', head: true }).eq('siswa_id', id),
+			supabaseAdmin.from('poin').select('id', { count: 'exact', head: true }).eq('siswa_id', id),
+		]);
+
+		const totalRecords = (resNilai.count || 0) + (resAbsenH.count || 0) + (resAbsenM.count || 0) + (resPoin.count || 0);
+
+		if (totalRecords > 0) {
+			return NextResponse.json({
+				error: 'Siswa ini memiliki riwayat akademik (nilai/absensi/poin) pada periode sebelumnya. Untuk menjaga keutuhan data arsip dan rapor sekolah, ubah status siswa menjadi "Pindah", "Lulus", atau "Non-Aktif" alih-alih menghapusnya.',
+				hasHistory: true,
+				totalRecords,
+			}, { status: 400 });
+		}
+
 		const { error } = await supabaseAdmin.from('siswa').delete().eq('id', id);
 		
 		if (error) throw error;
@@ -178,6 +196,6 @@ export async function DELETE(req) {
 		return NextResponse.json({ success: true, message: 'Siswa berhasil dihapus' });
 	} catch (error) {
 		console.error('DELETE Error:', error);
-		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+		return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
 	}
 }

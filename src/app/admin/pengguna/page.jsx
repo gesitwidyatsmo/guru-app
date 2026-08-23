@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Loader from '../../components/loading';
 import Swal from 'sweetalert2';
 
@@ -8,13 +8,16 @@ export default function PenggunaPage() {
 	const [users, setUsers] = useState([]);
 	const [loading, setLoading] = useState(true);
 
+	const [searchQuery, setSearchQuery] = useState('');
+	const [roleFilter, setRoleFilter] = useState('all');
+
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isEditMode, setIsEditMode] = useState(false);
 	const [editId, setEditId] = useState(null);
 
 	const [formData, setFormData] = useState({
 		username: '',
-		password: '', // Untuk create baru wajib, edit bebas
+		password: '', // Untuk create baru wajib, edit opsional
 		nama_lengkap: '',
 		role: 'Guru', // Default
 	});
@@ -38,6 +41,22 @@ export default function PenggunaPage() {
 	useEffect(() => {
 		fetchUsers();
 	}, []);
+
+	const filteredUsers = useMemo(() => {
+		return users.filter((u) => {
+			const matchRole = roleFilter === 'all' || u.role === roleFilter;
+			const q = searchQuery.toLowerCase().trim();
+			const matchSearch =
+				!q ||
+				u.nama_lengkap.toLowerCase().includes(q) ||
+				u.username.toLowerCase().includes(q) ||
+				(u.id_user && u.id_user.toLowerCase().includes(q));
+			return matchRole && matchSearch;
+		});
+	}, [users, roleFilter, searchQuery]);
+
+	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
+	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	const openCreateModal = () => {
 		setIsEditMode(false);
@@ -65,13 +84,13 @@ export default function PenggunaPage() {
 
 	const handleDelete = async (user) => {
 		const result = await Swal.fire({
-			title: 'Hapus Akses Pengguna?',
-			text: `Pengguna ${user.nama_lengkap} akan segera dicabut aksesnya.`,
+			title: 'Cabut Akses Pengguna?',
+			text: `Pengguna "${user.nama_lengkap}" (@${user.username}) akan segera dicabut akses loginnya dari sistem.`,
 			icon: 'warning',
 			showCancelButton: true,
-			confirmButtonColor: '#d33',
-			cancelButtonColor: '#3085d6',
-			confirmButtonText: 'Ya, Hapus!',
+			confirmButtonColor: '#E8451A',
+			cancelButtonColor: '#0D0D0D',
+			confirmButtonText: 'Ya, Cabut Akses!',
 			cancelButtonText: 'Batal',
 		});
 
@@ -89,7 +108,7 @@ export default function PenggunaPage() {
 				Swal.fire('Terhapus!', 'Pengguna telah berhasil dihapus.', 'success');
 				fetchUsers();
 			} catch (err) {
-				Swal.fire('Kegagalan Menghapus', err.message, 'error');
+				Swal.fire('Gagal Menghapus', err.message, 'error');
 			}
 		}
 	};
@@ -97,13 +116,13 @@ export default function PenggunaPage() {
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 
-		if (!formData.username || !formData.nama_lengkap || !formData.role) {
-			Swal.fire('Kolom Wajib', 'Silakan isi parameter Username, Nama Lengkap, & Role!', 'warning');
+		if (!formData.username.trim() || !formData.nama_lengkap.trim() || !formData.role) {
+			Swal.fire('Kolom Wajib', 'Silakan lengkapi parameter Username, Nama Lengkap, & Role!', 'warning');
 			return;
 		}
 
 		if (!isEditMode && !formData.password) {
-			Swal.fire('Sandi Kosong', 'Akun pendaftar baru wajib memiliki sandi!', 'warning');
+			Swal.fire('Sandi Kosong', 'Akun pendaftar baru wajib memiliki kata sandi!', 'warning');
 			return;
 		}
 
@@ -112,37 +131,39 @@ export default function PenggunaPage() {
 			const payload = { ...formData };
 
 			if (isEditMode) {
-				// Modifikasi
 				response = await fetch('/api/users', {
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						id_user: editId,
-						username: payload.username,
-						nama_lengkap: payload.nama_lengkap,
+						username: payload.username.trim(),
+						nama_lengkap: payload.nama_lengkap.trim(),
 						role: payload.role,
-						password_baru: payload.password, // Menerima payload reset pwd API PUT backend
+						password_baru: payload.password ? payload.password : undefined,
 					}),
 				});
 			} else {
-				// Insert Baru
 				response = await fetch('/api/users', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify(payload),
+					body: JSON.stringify({
+						...payload,
+						username: payload.username.trim(),
+						nama_lengkap: payload.nama_lengkap.trim(),
+					}),
 				});
 			}
 
 			const data = await response.json();
 			if (!response.ok) {
-				throw new Error(data.error || 'Terjadi kesalahan tidak wajar pada sistem API.');
+				throw new Error(data.error || 'Terjadi kesalahan pada sistem backend.');
 			}
 
-			Swal.fire('Berhasil!', data.message || 'Tugas selesai!', 'success');
+			Swal.fire('Berhasil!', data.message || 'Data pengguna berhasil disimpan!', 'success');
 			setIsModalOpen(false);
 			fetchUsers();
 		} catch (err) {
-			Swal.fire('Peringatan Proses', err.message, 'error');
+			Swal.fire('Peringatan', err.message, 'error');
 		}
 	};
 
@@ -151,102 +172,208 @@ export default function PenggunaPage() {
 	}
 
 	return (
-		<>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 bg-gray-50 flex-1 relative w-full pb-10 min-h-screen'>
-				<div className='flex flex-col md:flex-row items-start md:items-center justify-between mb-8 pb-6 border-b border-gray-100 gap-4 mt-8'>
-					<div>
-						<h1 className='text-3xl font-extrabold text-gray-800 tracking-tight'>Manajemen Pengguna</h1>
-						<p className='text-sm text-gray-500 mt-2 font-medium'>Eksklusif Admin: Tambah, modifikasi dan reset akses peramban Guru.</p>
+		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
+			{/* Page Header */}
+			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
+				<div>
+					<div className='inline-flex items-center gap-2 px-3 py-1 bg-yellow-300 border-2 border-black rounded-full text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] mb-2'>
+						<span>👥</span> Manajemen Hak Akses
 					</div>
-
-					<button
-						onClick={openCreateModal}
-						className='flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm hover:shadow-md active:scale-95'>
-						<svg
-							className='w-5 h-5'
-							fill='none'
-							stroke='currentColor'
-							viewBox='0 0 24 24'>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M12 4v16m8-8H4'
-							/>
-						</svg>
-						Tambah Pengguna Baru
-					</button>
+					<h1 className='text-2xl sm:text-3xl font-black text-black tracking-tight'>
+						Master Pengguna & Akun
+					</h1>
+					<p className='text-xs sm:text-sm font-medium text-gray-600 mt-1'>
+						Tambah, modifikasi profil, tentukan peran (Role), serta reset kata sandi akun Guru & Administrator.
+					</p>
 				</div>
 
-				<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden'>
-					<div className='overflow-x-auto'>
-						<table className='w-full'>
-							<thead>
-								<tr className='bg-gray-50/50 border-b border-gray-100'>
-									<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Nama Lengkap</th>
-									<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Akses (Role)</th>
-									<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>ID Sistem / Login</th>
-									<th className='px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider'>Pengaturan Cepat</th>
+				<button
+					onClick={openCreateModal}
+					className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
+					<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+					</svg>
+					<span>Tambah Pengguna Baru</span>
+				</button>
+			</div>
+
+			{/* User Statistics Row */}
+			<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+				<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-gray-500'>Total Pengguna</p>
+						<p className='text-2xl font-black text-black mt-0.5'>{users.length}</p>
+					</div>
+					<span className='w-10 h-10 bg-yellow-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						👤
+					</span>
+				</div>
+
+				<div className='bg-emerald-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-emerald-800'>Dewan Guru (Pengajar)</p>
+						<p className='text-2xl font-black text-emerald-900 mt-0.5'>{guruCount}</p>
+					</div>
+					<span className='w-10 h-10 bg-emerald-400 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						👨‍🏫
+					</span>
+				</div>
+
+				<div className='bg-rose-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-rose-800'>Administrator (Master)</p>
+						<p className='text-2xl font-black text-rose-900 mt-0.5'>{adminCount}</p>
+					</div>
+					<span className='w-10 h-10 bg-rose-400 border-2 border-black rounded-xl flex items-center justify-center font-black text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						🛡️
+					</span>
+				</div>
+			</div>
+
+			{/* Search & Filter Bar */}
+			<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-center justify-between gap-3'>
+				<div className='relative w-full sm:w-80'>
+					<svg
+						className='w-5 h-5 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2'
+						fill='none'
+						stroke='currentColor'
+						viewBox='0 0 24 24'
+						strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+					</svg>
+					<input
+						type='text'
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						placeholder='Cari nama, username, atau ID...'
+						className='neo-input neo-input-with-icon !py-2 text-xs sm:text-sm'
+					/>
+				</div>
+
+				<div className='flex flex-wrap items-center gap-1.5 bg-yellow-100 p-1.5 border-2 border-black rounded-xl w-full sm:w-auto shrink-0 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+					{[
+						{ id: 'all', label: 'Semua Role' },
+						{ id: 'Guru', label: 'Guru' },
+						{ id: 'Admin', label: 'Admin' },
+					].map((tab) => (
+						<button
+							key={tab.id}
+							onClick={() => setRoleFilter(tab.id)}
+							className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-black uppercase transition-all whitespace-nowrap border-2 ${
+								roleFilter === tab.id
+									? 'bg-black text-white border-black shadow-[2px_2px_0px_0px_#F5C518]'
+									: 'bg-white text-black border-transparent hover:border-black hover:bg-yellow-200'
+							}`}>
+							{tab.label}
+						</button>
+					))}
+				</div>
+			</div>
+
+			{/* Table Container */}
+			<div className='bg-white border-2 border-black rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] overflow-hidden'>
+				<div className='overflow-x-auto'>
+					<table className='w-full text-left border-collapse'>
+						<thead>
+							<tr className='bg-yellow-300 border-b-2 border-black'>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Pengguna</th>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Role / Hak Akses</th>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Username / ID</th>
+								<th className='px-6 py-3.5 text-right text-xs font-black text-black uppercase tracking-wider'>Aksi</th>
+							</tr>
+						</thead>
+						<tbody className='divide-y-2 divide-black/10'>
+							{filteredUsers.length === 0 ? (
+								<tr>
+									<td
+										colSpan={4}
+										className='px-6 py-12 text-center text-sm font-bold text-gray-500 bg-yellow-50/50'>
+										Tidak ada pengguna yang cocok dengan kriteria pencarian &ldquo;{searchQuery}&rdquo;.
+									</td>
 								</tr>
-							</thead>
-							<tbody className='divide-y divide-gray-100'>
-								{users.length === 0 ? (
-									<tr>
-										<td
-											colSpan={4}
-											className='px-6 py-8 text-center text-sm font-medium text-gray-500 bg-gray-50/50'>
-											Tidak terdapat rekam user terpantau.
-										</td>
-									</tr>
-								) : (
-									users.map((u) => (
+							) : (
+								filteredUsers.map((u) => {
+									const initial = u.nama_lengkap ? u.nama_lengkap.charAt(0).toUpperCase() : '?';
+									const isAdmin = u.role === 'Admin';
+									return (
 										<tr
 											key={u.id_user}
-											className='hover:bg-gray-50/50 transition-colors'>
+											className='hover:bg-yellow-50 transition-colors'>
+											{/* Name & Avatar */}
 											<td className='px-6 py-4'>
-												<span className='font-semibold text-gray-800'>{u.nama_lengkap}</span>
-											</td>
-											<td className='px-6 py-4'>
-												<span className={`px-3 py-1 text-xs font-semibold rounded-full ${u.role === 'Admin' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>{u.role}</span>
-											</td>
-											<td className='px-6 py-4'>
-												<div className='flex items-center flex-col items-start gap-1'>
-													<span className='font-medium text-gray-600 font-mono'>@{u.username}</span>
-													<span className='text-[11px] text-gray-400'>ID: {u.id_user}</span>
+												<div className='flex items-center gap-3'>
+													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : 'bg-teal-300 text-black'}`}>
+														{initial}
+													</div>
+													<div>
+														<span className='font-black text-black block text-sm sm:text-base'>
+															{u.nama_lengkap}
+														</span>
+														<span className='text-[11px] font-bold text-gray-500'>
+															{isAdmin ? 'Akses Penuh Administrator' : 'Tenaga Pendidik / Pengajar'}
+														</span>
+													</div>
 												</div>
 											</td>
+
+											{/* Role Badge */}
 											<td className='px-6 py-4'>
+												<span
+													className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] uppercase ${
+														isAdmin
+															? 'bg-rose-400 text-white'
+															: 'bg-emerald-300 text-black'
+													}`}>
+													<span>{isAdmin ? '🛡️' : '👨‍🏫'}</span>
+													<span>{u.role}</span>
+												</span>
+											</td>
+
+											{/* Username & ID */}
+											<td className='px-6 py-4'>
+												<div className='flex flex-col items-start gap-0.5'>
+													<span className='font-mono font-black text-xs sm:text-sm text-black bg-yellow-100 px-2 py-0.5 rounded border border-black/30'>
+														@{u.username}
+													</span>
+													<span className='text-[10px] font-mono text-gray-500 font-bold'>
+														ID: {u.id_user}
+													</span>
+												</div>
+											</td>
+
+											{/* Action Buttons */}
+											<td className='px-6 py-4 text-right'>
 												<div className='flex items-center justify-end gap-2'>
 													<button
 														onClick={() => openEditModal(u)}
-														className='p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors'
-														title='Ubah Akses Profil'>
+														title='Ubah Profil / Reset Sandi'
+														className='p-2 bg-yellow-200 hover:bg-yellow-400 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
 														<svg
-															className='w-5 h-5'
+															className='w-4 h-4'
 															fill='none'
 															stroke='currentColor'
-															viewBox='0 0 24 24'>
+															viewBox='0 0 24 24'
+															strokeWidth='2.5'>
 															<path
 																strokeLinecap='round'
 																strokeLinejoin='round'
-																strokeWidth={2}
 																d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
 															/>
 														</svg>
 													</button>
 													<button
 														onClick={() => handleDelete(u)}
-														className='p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors'
-														title='Hancurkan Kredensial Pengguna Ini'>
+														title='Cabut Akses Akun Pengguna'
+														className='p-2 bg-rose-200 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
 														<svg
-															className='w-5 h-5'
+															className='w-4 h-4'
 															fill='none'
 															stroke='currentColor'
-															viewBox='0 0 24 24'>
+															viewBox='0 0 24 24'
+															strokeWidth='2.5'>
 															<path
 																strokeLinecap='round'
 																strokeLinejoin='round'
-																strokeWidth={2}
 																d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
 															/>
 														</svg>
@@ -254,100 +381,107 @@ export default function PenggunaPage() {
 												</div>
 											</td>
 										</tr>
-									))
-								)}
-							</tbody>
-						</table>
-					</div>
+									);
+								})
+							)}
+						</tbody>
+					</table>
 				</div>
 			</div>
 
-			{/* Modal UI Pendaftaran Pengguna */}
+			{/* Modal UI Pendaftaran & Edit Pengguna */}
 			{isModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm'>
-					<div className='bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200'>
-						<div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50'>
-							<h3 className='text-lg font-bold text-gray-800'>{isEditMode ? 'Edit Pengaturan Akses & Profil' : 'Pendaftaran Pengguna Baru'}</h3>
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs'>
+					<div className='bg-white border-3 border-black rounded-2xl shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150'>
+						{/* Modal Header */}
+						<div className='px-6 py-4 border-b-2 border-black flex items-center justify-between bg-yellow-300'>
+							<h3 className='text-lg font-black text-black uppercase tracking-tight flex items-center gap-2'>
+								<span>{isEditMode ? '✏️' : '✨'}</span>
+								<span>{isEditMode ? 'Edit Profil & Akses Pengguna' : 'Pendaftaran Pengguna Baru'}</span>
+							</h3>
 							<button
 								onClick={() => setIsModalOpen(false)}
-								className='text-gray-400 hover:text-gray-600 transition-colors p-1'>
-								<svg
-									className='w-5 h-5'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M6 18L18 6M6 6l12 12'
-									/>
-								</svg>
+								className='w-8 h-8 bg-white border-2 border-black rounded-lg flex items-center justify-center text-black font-black hover:bg-rose-400 hover:text-white transition-colors shadow-[2px_2px_0px_0px_#0D0D0D]'>
+								✕
 							</button>
 						</div>
 
-						<div className='p-6'>
+						{/* Modal Body */}
+						<div className='p-6 bg-[var(--background)]'>
 							<form
 								onSubmit={handleSubmit}
 								className='space-y-4'>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Nama Lengkap</label>
+									<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+										Nama Lengkap & Gelar <span className='text-rose-600'>*</span>
+									</label>
 									<input
 										type='text'
 										required
 										value={formData.nama_lengkap}
 										onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
-										className='w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm text-gray-600'
-										placeholder='Budi Santoso S.Pd'
+										className='neo-input text-sm'
+										placeholder='Contoh: Drs. Budi Santoso, M.Pd'
 									/>
 								</div>
 
-								<div className='grid grid-cols-2 gap-4'>
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Username</label>
+										<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+											Username Login <span className='text-rose-600'>*</span>
+										</label>
 										<input
 											type='text'
 											required
 											value={formData.username}
 											onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-											className='w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm text-gray-600'
-											placeholder='budi77'
+											className='neo-input text-sm font-mono'
+											placeholder='budi_santoso'
 										/>
 									</div>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Role Pangkat</label>
+										<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+											Peran / Role <span className='text-rose-600'>*</span>
+										</label>
 										<select
 											value={formData.role}
 											onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-											className='w-full px-4 py-2 border border-gray-200 text-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm bg-white'>
-											<option value='Guru'>Guru (Wali/Pengajar)</option>
-											<option value='Admin'>Kepala Admin (Master)</option>
+											className='neo-input text-sm bg-white font-bold'>
+											<option value='Guru'>👨‍🏫 Guru (Pengajar/Wali)</option>
+											<option value='Admin'>🛡️ Admin (Super Master)</option>
 										</select>
 									</div>
 								</div>
 
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>{isEditMode ? 'Ganti Sandi Pengguna (Kosongkan bila sandi lawas masih aman)' : 'Kata Sandi / Password'}</label>
+									<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+										{isEditMode ? 'Ganti Kata Sandi (Kosongkan bila tidak diubah)' : 'Kata Sandi Awal *'}
+									</label>
 									<input
 										type='password'
 										value={formData.password}
 										onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-										className='w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm text-gray-600'
-										placeholder={isEditMode ? 'Ketik sandi mutakhir' : 'Wajib diisikan saat pendaftaran baru'}
+										className='neo-input text-sm font-mono'
+										placeholder={isEditMode ? 'Ketik sandi baru untuk mereset...' : 'Minimal 6 karakter kombinasi'}
 									/>
+									<p className='text-[11px] font-bold text-gray-500 mt-1'>
+										{isEditMode
+											? 'Biarkan kosong jika kata sandi lama masih ingin dipertahankan.'
+											: 'Kredensial ini akan langsung digunakan guru untuk masuk ke GuruApp.'}
+									</p>
 								</div>
 
-								<div className='pt-4 flex gap-3'>
+								<div className='pt-4 border-t-2 border-black/10 flex gap-3'>
 									<button
 										type='button'
 										onClick={() => setIsModalOpen(false)}
-										className='flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-medium'>
+										className='neo-btn-outline flex-1 text-center justify-center text-xs sm:text-sm !py-2.5'>
 										Batal
 									</button>
 									<button
 										type='submit'
-										className='flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium'>
-										{isEditMode ? 'Simpan Data Pengguna' : 'Tambahkan'}
+										className='neo-btn-primary flex-1 text-center justify-center text-xs sm:text-sm !py-2.5 bg-black text-white'>
+										{isEditMode ? 'Simpan Perubahan' : 'Daftarkan Akun'}
 									</button>
 								</div>
 							</form>
@@ -355,6 +489,6 @@ export default function PenggunaPage() {
 					</div>
 				</div>
 			)}
-		</>
+		</div>
 	);
 }

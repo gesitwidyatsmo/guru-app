@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
@@ -11,6 +11,9 @@ export default function PenugasanPage() {
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
 	const [loading, setLoading] = useState(true);
+
+	const [searchQuery, setSearchQuery] = useState('');
+	const [filterKelas, setFilterKelas] = useState('all');
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [formData, setFormData] = useState({
@@ -24,41 +27,44 @@ export default function PenugasanPage() {
 			setLoading(true);
 			const supabase = createClient();
 
-			const { data: { user } } = await supabase.auth.getUser();
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
 			if (!user) throw new Error('Sesi telah habis, silakan login ulang.');
-			
+
 			const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
 			if (profile?.role !== 'Admin') throw new Error('Akses KBM Ditolak.');
 
-			// KBM
+			// 1. Ambil data Penugasan KBM
 			const { data: kbmData, error: kbmError } = await supabase.from('guru_kbm').select(`
 				id_kbm, id_user, kelas, mapel, users!guru_kbm_id_user_fkey(username, nama_lengkap)
 			`);
 			if (kbmError) throw kbmError;
-			
-			const formattedKBM = (kbmData || []).map((r) => ({
-				id_kbm: r.id_kbm,
-				id_user: r.id_user,
-				username: r.users?.username || 'Akun Terhapus',
-				nama_guru: r.users?.nama_lengkap || 'Akun Terhapus',
-				kelas: r.kelas,
-				mapel: r.mapel,
-			})).sort((a, b) => a.nama_guru.localeCompare(b.nama_guru));
-			
+
+			const formattedKBM = (kbmData || [])
+				.map((r) => ({
+					id_kbm: r.id_kbm,
+					id_user: r.id_user,
+					username: r.users?.username || 'Akun Terhapus',
+					nama_guru: r.users?.nama_lengkap || 'Akun Terhapus',
+					kelas: r.kelas,
+					mapel: r.mapel,
+				}))
+				.sort((a, b) => a.nama_guru.localeCompare(b.nama_guru));
+
 			setPenugasanList(formattedKBM);
 
-			// Guru
-			const { data: guruData } = await supabase.from('users').select('*').eq('role', 'Guru');
+			// 2. Ambil daftar Guru
+			const { data: guruData } = await supabase.from('users').select('*').eq('role', 'Guru').order('nama_lengkap', { ascending: true });
 			if (guruData) setGuruList(guruData);
 
-			// Kelas
+			// 3. Ambil daftar Kelas
 			const { data: kelasData } = await supabase.from('kelas').select('*').order('nama_kelas', { ascending: true });
 			if (kelasData) setKelasList(kelasData);
 
-			// Mapel
+			// 4. Ambil daftar Mapel
 			const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
 			if (mapelData) setMapelList(mapelData);
-
 		} catch (error) {
 			Swal.fire('Terjadi Kesalahan', error.message, 'error');
 		} finally {
@@ -78,7 +84,7 @@ export default function PenugasanPage() {
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		if (!formData.id_user || !formData.kelas || !formData.mapel) {
-			Swal.fire('Perhatian', 'Harap isi (Pilih) Guru, Kelas, dan Mapel!', 'warning');
+			Swal.fire('Perhatian', 'Harap pilih Guru, Kelas, dan Mata Pelajaran!', 'warning');
 			return;
 		}
 
@@ -88,12 +94,12 @@ export default function PenugasanPage() {
 				id_kbm: 'KBM-' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase(),
 				id_user: formData.id_user,
 				kelas: formData.kelas,
-				mapel: formData.mapel
+				mapel: formData.mapel,
 			};
 			const { error } = await supabase.from('guru_kbm').insert([newKBM]);
 			if (error) throw error;
 
-			Swal.fire('Ditugaskan!', 'Jadwal mengajar telah berhasil diformalkan.', 'success');
+			Swal.fire('Ditugaskan!', 'Relasi mengajar KBM telah berhasil diformalkan.', 'success');
 			setIsModalOpen(false);
 			fetchAllData();
 		} catch (error) {
@@ -101,15 +107,16 @@ export default function PenugasanPage() {
 		}
 	};
 
-	const handleDelete = async (kbmId) => {
+	const handleDelete = async (kbmId, infoTugas) => {
 		const result = await Swal.fire({
-			title: 'Cabut Wewenang?',
-			text: `Beban mengajar (Kelas/Mapel ini) akan dihapus dari Guru tersebut.`,
+			title: 'Cabut Wewenang Mengajar?',
+			text: `Wewenang mengampu "${infoTugas.mapel}" di kelas "${infoTugas.kelas}" akan dicabut dari ${infoTugas.nama_guru}.`,
 			icon: 'warning',
 			showCancelButton: true,
-			confirmButtonColor: '#d33',
-			cancelButtonColor: '#3085d6',
+			confirmButtonColor: '#E8451A',
+			cancelButtonColor: '#0D0D0D',
 			confirmButtonText: 'Ya, Cabut!',
+			cancelButtonText: 'Batal',
 		});
 
 		if (result.isConfirmed) {
@@ -117,8 +124,8 @@ export default function PenugasanPage() {
 				const supabase = createClient();
 				const { error } = await supabase.from('guru_kbm').delete().eq('id_kbm', kbmId);
 				if (error) throw error;
-				
-				Swal.fire('Dicabut', 'Tugas berhasil dihentikan.', 'success');
+
+				Swal.fire('Dicabut', 'Penugasan KBM berhasil dihapus.', 'success');
 				fetchAllData();
 			} catch (error) {
 				Swal.fire('Error', error.message, 'error');
@@ -126,106 +133,226 @@ export default function PenugasanPage() {
 		}
 	};
 
+	// Filter data berdasarkan pencarian & filter kelas
+	const filteredList = useMemo(() => {
+		return penugasanList.filter((item) => {
+			const matchKelas = filterKelas === 'all' || item.kelas === filterKelas;
+			const q = searchQuery.toLowerCase().trim();
+			const matchSearch =
+				!q ||
+				item.nama_guru.toLowerCase().includes(q) ||
+				item.username.toLowerCase().includes(q) ||
+				item.mapel.toLowerCase().includes(q) ||
+				item.kelas.toLowerCase().includes(q);
+			return matchKelas && matchSearch;
+		});
+	}, [penugasanList, filterKelas, searchQuery]);
+
+	// Kelompokkan per Guru
+	const groupedByGuru = useMemo(() => {
+		return filteredList.reduce((acc, curr) => {
+			if (!acc[curr.username]) {
+				acc[curr.username] = {
+					nama: curr.nama_guru,
+					username: curr.username,
+					tugas: [],
+				};
+			}
+			acc[curr.username].tugas.push(curr);
+			return acc;
+		}, {});
+	}, [filteredList]);
+
 	if (loading && penugasanList.length === 0) return <Loader />;
 
-	// Mengelompokkan tabel ke dalam baris yang disinergikan per Guru untuk UI (Grouping)
-	const groupedByGuru = penugasanList.reduce((acc, curr) => {
-		if (!acc[curr.username]) acc[curr.username] = { nama: curr.nama_guru, tugas: [] };
-		acc[curr.username].tugas.push(curr);
-		return acc;
-	}, {});
+	const activeGuruWithKBM = new Set(penugasanList.map((p) => p.username)).size;
 
 	return (
-		<div className='max-w-7xl mx-auto'>
-			<div className='flex flex-col md:flex-row items-start md:items-center justify-between mb-8 pb-6 border-b border-gray-100 gap-4 mt-8'>
+		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
+			{/* Page Header */}
+			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 				<div>
-					<h1 className='text-3xl font-extrabold text-gray-800 tracking-tight'>Beban Mengajar & Penugasan</h1>
-					<p className='text-sm text-gray-500 mt-2 font-medium'>Atur relasi wewenang _Role-Based Access_ dari Guru terhadap yurisdiksi Kelas/Mapel.</p>
+					<div className='inline-flex items-center gap-2 px-3 py-1 bg-teal-300 border-2 border-black rounded-full text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] mb-2'>
+						<span>📋</span> Distribusi Beban Mengajar
+					</div>
+					<h1 className='text-2xl sm:text-3xl font-black text-black tracking-tight'>
+						Penugasan KBM & Rombel
+					</h1>
+					<p className='text-xs sm:text-sm font-medium text-gray-600 mt-1'>
+						Atur relasi kewenangan akses mengajar guru terhadap kelas dan mata pelajaran yang diampu.
+					</p>
 				</div>
+
 				<button
 					onClick={openModal}
-					className='flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-sm hover:shadow-md active:scale-95'>
-					<svg
-						className='w-5 h-5'
-						fill='none'
-						stroke='currentColor'
-						viewBox='0 0 24 24'>
-						<path
-							strokeLinecap='round'
-							strokeLinejoin='round'
-							strokeWidth={2}
-							d='M12 4v16m8-8H4'
-						/>
+					className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
+					<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
 					</svg>
-					Tambahkan Relasi Mengajar
+					<span>Tambah Relasi Mengajar</span>
 				</button>
 			</div>
 
-			<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-12'>
+			{/* Stat Highlights Bar */}
+			<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+				<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-gray-500'>Total Relasi Mengajar</p>
+						<p className='text-2xl font-black text-black mt-0.5'>{penugasanList.length}</p>
+					</div>
+					<span className='w-10 h-10 bg-teal-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						📋
+					</span>
+				</div>
+
+				<div className='bg-yellow-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-yellow-800'>Guru Aktif Mengajar</p>
+						<p className='text-2xl font-black text-black mt-0.5'>{activeGuruWithKBM} / {guruList.length}</p>
+					</div>
+					<span className='w-10 h-10 bg-yellow-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						👨‍🏫
+					</span>
+				</div>
+
+				<div className='bg-purple-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-purple-800'>Rombongan Belajar</p>
+						<p className='text-2xl font-black text-black mt-0.5'>{kelasList.length} Kelas</p>
+					</div>
+					<span className='w-10 h-10 bg-purple-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						🏫
+					</span>
+				</div>
+			</div>
+
+			{/* Search & Filter Bar */}
+			<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-center justify-between gap-3'>
+				<div className='relative w-full sm:w-80'>
+					<svg
+						className='w-5 h-5 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2'
+						fill='none'
+						stroke='currentColor'
+						viewBox='0 0 24 24'
+						strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+					</svg>
+					<input
+						type='text'
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						placeholder='Cari guru, kelas, atau mapel...'
+						className='neo-input neo-input-with-icon !py-2 text-xs sm:text-sm'
+					/>
+				</div>
+
+				<div className='flex items-center gap-2 w-full sm:w-auto'>
+					<label className='text-xs font-black uppercase text-black whitespace-nowrap'>Filter Kelas:</label>
+					<select
+						value={filterKelas}
+						onChange={(e) => setFilterKelas(e.target.value)}
+						className='neo-input !py-2 text-xs sm:text-sm bg-white font-bold max-w-[200px]'>
+						<option value='all'>Semua Kelas ({kelasList.length})</option>
+						{kelasList.map((k) => (
+							<option key={k.id || k.kelas || k.nama_kelas} value={k.nama_kelas || k.kelas}>
+								{k.nama_kelas || k.kelas}
+							</option>
+						))}
+					</select>
+				</div>
+			</div>
+
+			{/* Table Container */}
+			<div className='bg-white border-2 border-black rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] overflow-hidden'>
 				<div className='overflow-x-auto'>
-					<table className='w-full'>
+					<table className='w-full text-left border-collapse'>
 						<thead>
-							<tr className='bg-gray-50/50 border-b border-gray-100'>
-								<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Nama Pengajar (Sistem / Guru)</th>
-								<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kelas Yang Diasuh</th>
-								<th className='px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Mata Pelajaran Diampu</th>
-								<th className='px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider'>Cabut / Hapus</th>
+							<tr className='bg-teal-300 border-b-2 border-black'>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Guru Pengajar</th>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Kelas Binaan</th>
+								<th className='px-6 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Mata Pelajaran</th>
+								<th className='px-6 py-3.5 text-right text-xs font-black text-black uppercase tracking-wider'>Aksi</th>
 							</tr>
 						</thead>
-						<tbody className='divide-y divide-gray-100'>
+						<tbody className='divide-y-2 divide-black/10'>
 							{Object.keys(groupedByGuru).length === 0 ? (
 								<tr>
 									<td
 										colSpan={4}
-										className='px-6 py-8 text-center text-sm font-medium text-gray-500 bg-gray-50/50'>
-										Belum ada satupun jadwal Penugasan Aktif (Kosong).
+										className='px-6 py-12 text-center text-sm font-bold text-gray-500 bg-teal-50/50'>
+										Tidak ada jadwal penugasan KBM yang sesuai filter.
 									</td>
 								</tr>
 							) : (
 								Object.entries(groupedByGuru).map(([username, info]) =>
 									info.tugas.map((tugas, idx) => (
 										<tr
-											key={tugas.id_kbm || idx}
-											className='hover:bg-indigo-50/30 transition-colors'>
-											{/* Trik merging Kolom baris (Rowspan per Guru) agar terlihat estetik */}
+											key={tugas.id_kbm || `${username}-${idx}`}
+											className='hover:bg-teal-50/50 transition-colors'>
+											{/* Guru Column (Merged Rowspan) */}
 											{idx === 0 && (
 												<td
-													className='px-6 py-4 align-top border-r border-gray-50'
+													className='px-6 py-4 align-top border-r-2 border-black/10 bg-yellow-50/40'
 													rowSpan={info.tugas.length}>
-													<div className='flex flex-col gap-1'>
-														<span className='font-bold text-gray-800'>{info.nama}</span>
-														<span className='font-mono text-xs text-indigo-500 font-medium bg-indigo-50 px-2 py-0.5 rounded-md self-start'>@{username}</span>
+													<div className='flex items-start gap-3'>
+														<div className='w-10 h-10 rounded-xl bg-yellow-300 border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
+															{info.nama.charAt(0).toUpperCase()}
+														</div>
+														<div>
+															<span className='font-black text-black block text-sm sm:text-base'>
+																{info.nama}
+															</span>
+															<span className='font-mono text-xs font-bold text-gray-700 bg-white px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_0px_#0D0D0D] inline-block mt-1'>
+																@{username}
+															</span>
+															<div className='mt-2'>
+																<span className='text-[10px] font-black uppercase px-2 py-0.5 bg-black text-white rounded-md'>
+																	{info.tugas.length} Beban Tugas
+																</span>
+															</div>
+														</div>
 													</div>
 												</td>
 											)}
+
+											{/* Kelas Column */}
 											<td className='px-6 py-4'>
-												<span className='inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700'>{tugas.kelas}</span>
+												<span className='inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black bg-orange-200 text-orange-950 border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													<span>🏫</span>
+													<span>{tugas.kelas}</span>
+												</span>
 											</td>
+
+											{/* Mapel Column */}
 											<td className='px-6 py-4'>
-												<span className='inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700'>{tugas.mapel}</span>
+												<span className='inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black bg-teal-200 text-teal-950 border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													<span>📚</span>
+													<span>{tugas.mapel}</span>
+												</span>
 											</td>
-											{console.log(tugas.kelas)}
+
+											{/* Action Column */}
 											<td className='px-6 py-4 text-right'>
 												<button
-													onClick={() => handleDelete(tugas.id_kbm)}
-													className='p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors'
-													title='Hapus Baris Beban Mengajar Ini'>
+													onClick={() => handleDelete(tugas.id_kbm, tugas)}
+													className='p-2 bg-rose-100 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'
+													title='Hapus Penugasan Ini'>
 													<svg
-														className='w-5 h-5'
+														className='w-4 h-4'
 														fill='none'
 														stroke='currentColor'
-														viewBox='0 0 24 24'>
+														viewBox='0 0 24 24'
+														strokeWidth='2.5'>
 														<path
 															strokeLinecap='round'
 															strokeLinejoin='round'
-															strokeWidth={2}
 															d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
 														/>
 													</svg>
 												</button>
 											</td>
 										</tr>
-									)),
+									))
 								)
 							)}
 						</tbody>
@@ -233,44 +360,36 @@ export default function PenugasanPage() {
 				</div>
 			</div>
 
-			{/* Modal Penugasan */}
+			{/* Modal UI Registrasi Penugasan */}
 			{isModalOpen && (
-				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm'>
-					<div className='bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200'>
-						<div className='px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50'>
-							<h3 className='text-lg font-bold text-gray-800'>Registrasi Penugasan Guru Baru</h3>
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs'>
+					<div className='bg-white border-3 border-black rounded-2xl shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-150'>
+						<div className='px-6 py-4 border-b-2 border-black flex items-center justify-between bg-teal-300'>
+							<h3 className='text-lg font-black text-black uppercase tracking-tight flex items-center gap-2'>
+								<span>📋</span>
+								<span>Registrasi Penugasan KBM</span>
+							</h3>
 							<button
 								onClick={() => setIsModalOpen(false)}
-								className='text-gray-400 hover:text-gray-600 transition-colors p-1'>
-								<svg
-									className='w-5 h-5'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										strokeWidth={2}
-										d='M6 18L18 6M6 6l12 12'
-									/>
-								</svg>
+								className='w-8 h-8 bg-white border-2 border-black rounded-lg flex items-center justify-center text-black font-black hover:bg-rose-400 hover:text-white transition-colors shadow-[2px_2px_0px_0px_#0D0D0D]'>
+								✕
 							</button>
 						</div>
 
-						<div className='p-6'>
+						<div className='p-6 bg-[var(--background)]'>
 							<form
 								onSubmit={handleSubmit}
-								className='space-y-5'>
+								className='space-y-4'>
 								<div>
-									<label className='block text-sm font-semibold text-gray-700 mb-1.5'>
-										Pilih Identitas Guru <span className='text-rose-500'>*</span>
+									<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+										Pilih Guru Pengajar <span className='text-rose-600'>*</span>
 									</label>
 									<select
 										value={formData.id_user}
 										onChange={(e) => setFormData({ ...formData, id_user: e.target.value })}
-										className='w-full px-4 py-2 border border-gray-200 text-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm bg-white'
+										className='neo-input text-sm bg-white font-bold'
 										required>
-										<option value=''>-- Pilih dari Akun Terdaftar --</option>
+										<option value=''>-- Pilih Guru dari Akun Terdaftar --</option>
 										{guruList.map((g) => (
 											<option
 												key={g.id_user}
@@ -281,39 +400,40 @@ export default function PenugasanPage() {
 									</select>
 								</div>
 
-								<div className='grid grid-cols-2 gap-4'>
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1.5'>
-											Kelas Target <span className='text-rose-500'>*</span>
+										<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+											Kelas Target <span className='text-rose-600'>*</span>
 										</label>
 										<select
 											value={formData.kelas}
 											onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
-											className='w-full px-4 py-2 border border-gray-200 text-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm'
+											className='neo-input text-sm bg-white font-bold'
 											required>
-											<option value=''>-- Master Kelas --</option>
+											<option value=''>-- Pilih Kelas --</option>
 											{kelasList.map((k) => (
 												<option
-													key={k.id}
-													value={k.kelas}>
-													{k.kelas}
+													key={k.id || k.kelas || k.nama_kelas}
+													value={k.nama_kelas || k.kelas}>
+													{k.nama_kelas || k.kelas}
 												</option>
 											))}
 										</select>
 									</div>
+
 									<div>
-										<label className='block text-sm font-semibold text-gray-700 mb-1.5'>
-											Mata Pelajaran <span className='text-rose-500'>*</span>
+										<label className='block text-xs font-black text-black uppercase tracking-wider mb-1.5'>
+											Mata Pelajaran <span className='text-rose-600'>*</span>
 										</label>
 										<select
 											value={formData.mapel}
 											onChange={(e) => setFormData({ ...formData, mapel: e.target.value })}
-											className='w-full px-4 py-2 border border-gray-200 text-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-sm bg-white'
+											className='neo-input text-sm bg-white font-bold'
 											required>
-											<option value=''>-- Master Mapel --</option>
+											<option value=''>-- Pilih Mapel --</option>
 											{mapelList.map((m) => (
 												<option
-													key={m.id}
+													key={m.id || m.mapel}
 													value={m.mapel}>
 													{m.mapel}
 												</option>
@@ -322,16 +442,16 @@ export default function PenugasanPage() {
 									</div>
 								</div>
 
-								<div className='pt-6 flex gap-3'>
+								<div className='pt-4 border-t-2 border-black/10 flex gap-3'>
 									<button
 										type='button'
 										onClick={() => setIsModalOpen(false)}
-										className='flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors font-medium'>
+										className='neo-btn-outline flex-1 text-center justify-center text-xs sm:text-sm !py-2.5'>
 										Batal
 									</button>
 									<button
 										type='submit'
-										className='flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-md shadow-indigo-600/20'>
+										className='neo-btn-primary flex-1 text-center justify-center text-xs sm:text-sm !py-2.5 bg-black text-white'>
 										Simpan Penugasan
 									</button>
 								</div>

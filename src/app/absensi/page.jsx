@@ -6,9 +6,12 @@ import { createClient } from '@/utils/supabase/client';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
 import ButtonBack from '../components/button/ButtonBack';
+import { useAcademic } from '@/context/AcademicContext';
+import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
 export default function AbsensiMapelPage() {
 	const router = useRouter();
+	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
 
 	// --- State UI ---
 	const [kelasList, setKelasList] = useState([]);
@@ -67,7 +70,13 @@ export default function AbsensiMapelPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/status-absensi'), fetch('/api/siswa'), fetch('/api/poin')]);
+				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([
+					fetch('/api/kelas'),
+					fetch('/api/mapel'),
+					fetch('/api/status-absensi'),
+					fetch('/api/siswa'),
+					fetch(`/api/poin?${buildPeriodeQuery()}`),
+				]);
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
 				const dataStatus = resStatus.ok ? await resStatus.json() : [];
@@ -119,7 +128,7 @@ export default function AbsensiMapelPage() {
 					tanggal: tanggal,
 					jam_ke: jamKe,
 				});
-				const res = await fetch(`/api/absensi-mapel?${params.toString()}`);
+				const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`);
 
 				if (res.ok) {
 					const data = await res.json();
@@ -167,7 +176,7 @@ export default function AbsensiMapelPage() {
 		};
 
 		checkAbsensi();
-	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni, statusList]); // Tambah statusList ke deps
+	}, [selectedKelas, selectedMapel, tanggal, jamKe, siswaKelasIni, statusList, tahunAjar, semester]); // Tambah statusList ke deps
 
 	const handleStatusChange = (siswaId, labelStatus) => {
 		setAbsensi((prev) => {
@@ -279,6 +288,8 @@ export default function AbsensiMapelPage() {
 			mapel: selectedMapel,
 			jam_ke: currentJamKe,
 			data: dataToSave,
+			tahun_ajar: tahunAjarAktif,
+			semester: semesterAktif,
 		};
 
 		try {
@@ -387,7 +398,10 @@ export default function AbsensiMapelPage() {
 					{/* Title Row */}
 					<div className='flex justify-between items-center'>
 						<div>
-							<h1 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-tight'>Absensi Mapel</h1>
+							<div className='flex items-center gap-3'>
+								<h1 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-tight'>Absensi Mapel</h1>
+								<AcademicPeriodChip />
+							</div>
 							<div className='flex items-center gap-2 mt-2'>
 								{mode === 'rekap' ? (
 									<span className='px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border-2 border-[#0D0D0D] bg-[#2F80ED] text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>Data Tersimpan (Rekap)</span>
@@ -466,6 +480,9 @@ export default function AbsensiMapelPage() {
 					</div>
 				</div>
 			</div>
+
+			{/* Archive Banner */}
+			<ArchiveBanner />
 
 			{/* --- MAIN CONTENT --- */}
 			<div className='max-w-5xl mx-auto px-4 py-6'>

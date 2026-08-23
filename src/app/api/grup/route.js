@@ -14,12 +14,18 @@ export async function GET(req) {
 		const supabase = await createClient();
 
 		// 1. Ambil Data Grup
+		const { searchParams } = new URL(req.url);
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 		let query = supabase.from('grup').select('*').order('tanggal', { ascending: false });
 
 		// Implementasikan Isolasi Kepemilikan (Khusus Guru)
 		if (role === 'Guru' && userId) {
 			query = query.eq('guru_id', userId);
 		}
+		// Filter Periode Akademik
+		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
+		if (semester) query = query.eq('semester', parseInt(semester));
 
 		const { data: rowsGrup, error: grupError } = await query;
 		if (grupError) throw grupError;
@@ -92,6 +98,8 @@ export async function POST(req) {
 			mapel_id: body.mapel_id || '-',
 			tanggal: new Date().toISOString().split('T')[0],
 			data_json: body.data_grup,
+			tahun_ajar: body.tahun_ajar || '2026/2027',
+			semester: body.semester ? parseInt(body.semester) : 1,
 		});
 
 		if (error) throw error;

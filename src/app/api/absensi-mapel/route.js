@@ -23,7 +23,12 @@ export async function GET(req) {
 		}
 
 		const supabase = await createClient();
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 		let query = supabase.from('absensi_mapel').select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel').eq('kelas', kelas).eq('mapel', mapel);
+
+		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
+		if (semester) query = query.eq('semester', parseInt(semester));
 
 		if (role === 'Guru' && userId) {
 			query = query.eq('guru_id', userId);
@@ -140,7 +145,9 @@ export async function POST(req) {
 				tanggal: newTanggal,
 				jam_ke: newJamKe,
 				kelas: kelas,
-				mapel: mapel
+				mapel: mapel,
+				tahun_ajar: body.tahun_ajar || '2026/2027',
+				semester: body.semester ? parseInt(body.semester) : 1,
 			});
 		}
 

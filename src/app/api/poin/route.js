@@ -18,6 +18,8 @@ export async function GET(req) {
 		const kelas = searchParams.get('kelas');
 		const siswa_id = searchParams.get('siswa_id');
 		const tipe = searchParams.get('tipe');
+		const tahunAjar = searchParams.get('tahun_ajar');
+		const semester = searchParams.get('semester');
 
 		const supabase = await createClient();
 
@@ -40,6 +42,9 @@ export async function GET(req) {
 		if (siswa_id) query = query.eq('siswa_id', siswa_id);
 		if (tipe) query = query.eq('tipe', tipe);
 		if (kelas) query = query.eq('siswa.kelas', kelas);
+		// Filter Periode Akademik
+		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
+		if (semester) query = query.eq('semester', parseInt(semester));
 
 		const { data, error } = await query
 			.order('tanggal', { ascending: false })
@@ -88,7 +93,7 @@ export async function POST(req) {
 	try {
 		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		const { siswa_id, tanggal, tipe, kategori, aktifitas, poin, keterangan } = body;
+		const { siswa_id, tanggal, tipe, kategori, aktifitas, poin, keterangan, tahun_ajar, semester } = body;
 
 		if (!siswa_id || !tanggal || !tipe || !aktifitas || poin === undefined) {
 			return NextResponse.json({ error: 'Field wajib: siswa_id, tanggal, tipe, aktifitas, poin' }, { status: 400 });
@@ -107,6 +112,8 @@ export async function POST(req) {
 			aktifitas,
 			poin: parseInt(poin, 10),
 			keterangan: keterangan || '',
+			tahun_ajar: tahun_ajar || '2026/2027',
+			semester: semester ? parseInt(semester) : 1,
 		});
 
 		if (error) throw error;

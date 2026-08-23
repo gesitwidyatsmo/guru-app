@@ -6,6 +6,7 @@ import { Save, Loader2, GripVertical } from 'lucide-react';
 import { DndContext, PointerSensor, TouchSensor, useDroppable, useDraggable, useSensor, useSensors, DragOverlay, closestCenter } from '@dnd-kit/core';
 import Swal from 'sweetalert2';
 import { swalProcess, swalSuccess, swalError } from '@/lib/swal';
+import { useAcademic } from '@/context/AcademicContext';
 
 // Neobrutalism SweetAlert Mixin
 const brutalSwal = Swal.mixin({
@@ -21,6 +22,7 @@ const brutalSwal = Swal.mixin({
 
 const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 	const router = useRouter();
+	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [groups, setGroups] = useState(initialGroups);
 	const [isSaving, setIsSaving] = useState(false);
 
@@ -161,6 +163,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId }) => {
 						kelas_id: metaData.kelas,
 						mapel_id: metaData.mapel,
 						data_grup: dataToSave,
+						tahun_ajar: tahunAjarAktif,
+						semester: semesterAktif,
 					};
 
 			const response = await fetch(url, {

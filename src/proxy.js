@@ -78,7 +78,7 @@ export async function proxy(request) {
 
 	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard
 	if (pathname === '/login' && payload) {
-		const destination = payload.role === 'Admin' ? '/admin/pengguna' : '/';
+		const destination = payload.role === 'Admin' ? '/admin' : '/';
 		return NextResponse.redirect(new URL(destination, request.url));
 	}
 

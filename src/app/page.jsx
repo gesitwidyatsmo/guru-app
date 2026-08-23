@@ -13,6 +13,7 @@ import Leaderboard from './components/dashboard/Leaderboard';
 import JadwalWidget from './components/dashboard/JadwalWidget';
 import NotificationBell from './components/dashboard/NotificationBell';
 import DashboardCharts from './components/dashboard/DashboardCharts';
+import AcademicPeriodChip from './components/AcademicPeriodChip';
 
 export default function Home() {
 	const [stat, setStat] = useState({
@@ -450,6 +451,8 @@ export default function Home() {
 					<div
 						className='flex items-center gap-2 w-full md:w-auto relative'
 						ref={searchRef}>
+						{/* Academic Period Chip */}
+						<AcademicPeriodChip />
 						<div className={`relative flex items-center transition-all duration-300 ${isSearchOpen ? 'w-full md:w-64' : 'w-auto md:w-64'}`}>
 							<input
 								type='text'
@@ -539,6 +542,26 @@ export default function Home() {
 						</div>
 
 						<NotificationBell />
+
+						{userRole === 'Admin' && (
+							<Link
+								href='/admin'
+								title='Portal Admin'
+								className={`flex-shrink-0 p-3 neo-card flex items-center justify-center bg-yellow-300 hover:bg-yellow-400 transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
+								<svg
+									className='w-6 h-6 group-hover:scale-110 transition-transform'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'
+									strokeWidth='2'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										d='M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4'
+									/>
+								</svg>
+							</Link>
+						)}
 
 						<button
 							onClick={handleLogout}
