@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
@@ -20,10 +20,12 @@ export default function RiwayatAbsensiPage() {
 	const [daftarSesi, setDaftarSesi] = useState([]);
 	const [selectedTanggal, setSelectedTanggal] = useState('');
 	const [loadingSesi, setLoadingSesi] = useState(false);
+	const [searchSesi, setSearchSesi] = useState('');
 
 	// State Form Detail
 	const [tanggalEdit, setTanggalEdit] = useState('');
 	const [absensiMap, setAbsensiMap] = useState({}); // {siswa_id: { status, keterangan }}
+	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// State UI
 	const [loading, setLoading] = useState(true);
@@ -82,6 +84,24 @@ export default function RiwayatAbsensiPage() {
 	useEffect(() => {
 		fetchRiwayatSesi();
 	}, [fetchRiwayatSesi]);
+
+	const filteredSesi = useMemo(() => {
+		if (!searchSesi.trim()) return daftarSesi;
+		const q = searchSesi.toLowerCase().trim();
+		return daftarSesi.filter((tgl) => {
+			const formatted = new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).toLowerCase();
+			return tgl.toLowerCase().includes(q) || formatted.includes(q);
+		});
+	}, [daftarSesi, searchSesi]);
+
+	const filteredSiswa = useMemo(() => {
+		if (!searchSiswa.trim()) return siswaList;
+		const q = searchSiswa.toLowerCase().trim();
+		return siswaList.filter((s) =>
+			(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+			(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [siswaList, searchSiswa]);
 
 	// --- 3. Load Detail Sesi ketika sesi dipilih ---
 	useEffect(() => {
@@ -263,6 +283,22 @@ export default function RiwayatAbsensiPage() {
 									<div className='w-2 h-2 rounded-full bg-indigo-500'></div>
 									<span>Daftar Sesi Perekaman</span>
 								</div>
+								{/* Search Sesi */}
+								<div className='relative mt-3'>
+									<input
+										type='text'
+										placeholder='Cari tanggal sesi...'
+										value={searchSesi}
+										onChange={(e) => setSearchSesi(e.target.value)}
+										className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
+									/>
+									<svg className='w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+									</svg>
+									{searchSesi && (
+										<button onClick={() => setSearchSesi('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
+									)}
+								</div>
 							</div>
 
 							<div className='flex-1 overflow-y-auto p-3 space-y-2'>
@@ -284,8 +320,12 @@ export default function RiwayatAbsensiPage() {
 										</svg>
 										<p className='text-sm'>Belum ada riwayat terekam.</p>
 									</div>
+								) : filteredSesi.length === 0 ? (
+									<div className='py-8 text-center text-sm text-gray-400'>
+										Tidak ada sesi &quot;{searchSesi}&quot;
+									</div>
 								) : (
-									daftarSesi.map((tgl, idx) => {
+									filteredSesi.map((tgl, idx) => {
 										const isSelected = selectedTanggal === tgl;
 										return (
 											<button
@@ -420,81 +460,111 @@ export default function RiwayatAbsensiPage() {
 										{siswaList.length === 0 ? (
 											<div className='p-8 text-center text-gray-500'>Tidak ada siswa di kelas ini.</div>
 										) : (
-											<div className='overflow-x-auto'>
-												<table className='w-full min-w-[500px]'>
-													<thead>
-														<tr className='bg-gray-50 border-b border-gray-200'>
-															<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[40%]'>Data Siswa</th>
-															<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kehadiran & Keterangan</th>
-														</tr>
-													</thead>
-													<tbody className='divide-y divide-gray-100'>
-														{siswaList.map((siswa, idx) => {
-															const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
+											<>
+												{/* Search Siswa Toolbar */}
+												<div className='p-3 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+													<div className='relative flex-1 max-w-sm'>
+														<input
+															type='text'
+															placeholder='Cari nama atau NIS siswa...'
+															value={searchSiswa}
+															onChange={(e) => setSearchSiswa(e.target.value)}
+															className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
+														/>
+														<svg className='w-4 h-4 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+															<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+														</svg>
+														{searchSiswa && (
+															<button onClick={() => setSearchSiswa('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
+														)}
+													</div>
+													<div className='text-xs text-gray-500'>
+														{searchSiswa.trim() ? `Menampilkan ${filteredSiswa.length} dari ${siswaList.length} siswa` : `Total ${siswaList.length} siswa`}
+													</div>
+												</div>
 
-															return (
-																<tr
-																	key={siswa.id}
-																	className='hover:bg-gray-50 transition-colors group'>
-																	{/* Info Siswa */}
-																	<td className='px-6 py-4 align-top'>
-																		<div className='flex items-center gap-4'>
-																			<div className='w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0'>
-																				{idx + 1}
-																			</div>
-																			<div>
-																				<p className='font-bold text-gray-900 group-hover:text-indigo-600 transition-colors'>{siswa.nama_lengkap}</p>
-																				<p className='text-xs text-gray-500 mt-0.5 uppercase tracking-wide'>NIS: {siswa.nis || '-'}</p>
-																			</div>
-																		</div>
-																	</td>
-
-																	{/* Edit Absensi UI */}
-																	<td className='px-6 py-4'>
-																		<div className='flex flex-wrap gap-2 mb-3'>
-																			{[
-																				{ val: 'Hadir', label: 'Hadir', colors: 'text-green-700 bg-green-50 border-green-200 ring-green-500', icon: 'bg-green-500' },
-																				{ val: 'Izin', label: 'Izin', colors: 'text-blue-700 bg-blue-50 border-blue-200 ring-blue-500', icon: 'bg-blue-500' },
-																				{ val: 'Sakit', label: 'Sakit', colors: 'text-yellow-700 bg-yellow-50 border-yellow-200 ring-yellow-500', icon: 'bg-yellow-500' },
-																				{ val: 'Alpha', label: 'Alpha', colors: 'text-red-700 bg-red-50 border-red-200 ring-red-500', icon: 'bg-red-500' },
-																			].map((opt) => {
-																				const isSelected = currentVal.status === opt.val;
-																				return (
-																					<label
-																						key={opt.val}
-																						className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-																							isSelected ? `${opt.colors} shadow-sm border-transparent` : 'text-gray-500 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
-																						}`}>
-																						<input
-																							type='radio'
-																							name={`status-${siswa.id}`}
-																							value={opt.val}
-																							checked={isSelected}
-																							onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
-																							className='sr-only'
-																						/>
-																						<div className={`w-2 h-2 rounded-full ${isSelected ? opt.icon : 'bg-gray-300'}`}></div>
-																						<span className='text-sm font-semibold'>{opt.label}</span>
-																					</label>
-																				);
-																			})}
-																		</div>
-
-																		{/* Input Keterangan */}
-																		<input
-																			type='text'
-																			placeholder='Keterangan (Opsional / Alasan Sakit)'
-																			value={currentVal.keterangan || ''}
-																			onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-																			className='w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500'
-																		/>
-																	</td>
+												{filteredSiswa.length === 0 ? (
+													<div className='p-8 text-center text-gray-500 text-sm'>
+														Tidak ada siswa yang cocok dengan &quot;{searchSiswa}&quot;
+													</div>
+												) : (
+													<div className='overflow-x-auto'>
+														<table className='w-full min-w-[500px]'>
+															<thead>
+																<tr className='bg-gray-50 border-b border-gray-200'>
+																	<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[40%]'>Data Siswa</th>
+																	<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kehadiran & Keterangan</th>
 																</tr>
-															);
-														})}
-													</tbody>
-												</table>
-											</div>
+															</thead>
+															<tbody className='divide-y divide-gray-100'>
+																{filteredSiswa.map((siswa, idx) => {
+																	const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
+
+																	return (
+																		<tr
+																			key={siswa.id}
+																			className='hover:bg-gray-50 transition-colors group'>
+																			{/* Info Siswa */}
+																			<td className='px-6 py-4 align-top'>
+																				<div className='flex items-center gap-4'>
+																					<div className='w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0'>
+																						{idx + 1}
+																					</div>
+																					<div>
+																						<p className='font-bold text-gray-900 group-hover:text-indigo-600 transition-colors'>{siswa.nama_lengkap}</p>
+																						<p className='text-xs text-gray-500 mt-0.5 uppercase tracking-wide'>NIS: {siswa.nis || '-'}</p>
+																					</div>
+																				</div>
+																			</td>
+
+																			{/* Edit Absensi UI */}
+																			<td className='px-6 py-4'>
+																				<div className='flex flex-wrap gap-2 mb-3'>
+																					{[
+																						{ val: 'Hadir', label: 'Hadir', colors: 'text-green-700 bg-green-50 border-green-200 ring-green-500', icon: 'bg-green-500' },
+																						{ val: 'Izin', label: 'Izin', colors: 'text-blue-700 bg-blue-50 border-blue-200 ring-blue-500', icon: 'bg-blue-500' },
+																						{ val: 'Sakit', label: 'Sakit', colors: 'text-yellow-700 bg-yellow-50 border-yellow-200 ring-yellow-500', icon: 'bg-yellow-500' },
+																						{ val: 'Alpha', label: 'Alpha', colors: 'text-red-700 bg-red-50 border-red-200 ring-red-500', icon: 'bg-red-500' },
+																					].map((opt) => {
+																						const isSelected = currentVal.status === opt.val;
+																						return (
+																							<label
+																								key={opt.val}
+																								className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
+																									isSelected ? `${opt.colors} shadow-sm border-transparent` : 'text-gray-500 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+																								}`}>
+																								<input
+																									type='radio'
+																									name={`status-${siswa.id}`}
+																									value={opt.val}
+																									checked={isSelected}
+																									onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
+																									className='sr-only'
+																								/>
+																								<div className={`w-2 h-2 rounded-full ${isSelected ? opt.icon : 'bg-gray-300'}`}></div>
+																								<span className='text-sm font-semibold'>{opt.label}</span>
+																							</label>
+																						);
+																					})}
+																				</div>
+
+																				{/* Input Keterangan */}
+																				<input
+																					type='text'
+																					placeholder='Keterangan (Opsional / Alasan Sakit)'
+																					value={currentVal.keterangan || ''}
+																					onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+																					className='w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500'
+																				/>
+																			</td>
+																		</tr>
+																	);
+																})}
+															</tbody>
+														</table>
+													</div>
+												)}
+											</>
 										)}
 									</div>
 								</div>

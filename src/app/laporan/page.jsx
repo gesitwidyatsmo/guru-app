@@ -26,6 +26,7 @@ export default function LaporanPage() {
 	const [selectedMapel, setSelectedMapel] = useState('');
 	const [bulan, setBulan] = useState(() => String(new Date().getMonth() + 1).padStart(2, '0'));
 	const [tahun, setTahun] = useState(() => new Date().getFullYear());
+	const [searchQuery, setSearchQuery] = useState('');
 
 	// Data
 	const [dataRekap, setDataRekap] = useState(null);
@@ -154,6 +155,17 @@ export default function LaporanPage() {
 		// Asumsi dataRekap.data berisi array raw absensi mapel
 		return processAbsensiMapel(dataRekap?.data || []);
 	}, [activeTab, dataRekap, processAbsensiMapel]);
+
+	const filteredBarisSiswa = useMemo(() => {
+		if (!pivotedAbsensi?.barisSiswa) return [];
+		if (!searchQuery.trim()) return pivotedAbsensi.barisSiswa;
+		const q = searchQuery.toLowerCase().trim();
+		return pivotedAbsensi.barisSiswa.filter(
+			(row) =>
+				(row.nama && row.nama.toLowerCase().includes(q)) ||
+				(row.nis && String(row.nis).toLowerCase().includes(q))
+		);
+	}, [pivotedAbsensi?.barisSiswa, searchQuery]);
 
 	// --- Logic Baru: Pivot Nilai (Rata-rata memperhitungkan nilai 0) ---
 	const pivotNilai = (dataRaw) => {
@@ -644,75 +656,95 @@ export default function LaporanPage() {
 					<div className='bg-white rounded-3xl shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-black overflow-hidden'>
 						{/* --- TABEL ABSENSI MAPEL --- */}
 						{activeTab === 'absensi' && pivotedAbsensi && (
-							<div className='overflow-x-auto'>
-								<table className='w-full min-w-[1000px]'>
-									<thead className='bg-[#F5C518] border-b-[4px] border-black'>
-										<tr>
-											<th className='px-4 py-4 text-left text-sm font-black text-black uppercase sticky left-0 bg-[#F5C518] z-10 border-r-[3px] border-black'>No</th>
-											<th className='px-4 py-4 text-left text-sm font-black text-black uppercase lg:sticky left-12 bg-[#F5C518] z-10 w-64 border-r-[3px] border-black'>Nama Siswa</th>
-											{/* Header Pertemuan */}
-											{pivotedAbsensi.kolomTanggal.map((p) => (
-												<th
-													key={p.id}
-													className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black min-w-[60px]'>
-													<div>{p.label}</div>
-													<div className='text-[10px]'>{p.jam_ke}</div>
-												</th>
-											))}
-											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#C4F0EB]'>H</th>
-											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#E2D4F0]'>I</th>
-											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFE8DC]'>S</th>
-											<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFD6D6]'>A</th>
-											<th className='px-2 py-3 text-center text-sm font-black text-black bg-[#F5C518]'>%</th>
-										</tr>
-									</thead>
-									<tbody className='divide-y-[3px] divide-black'>
-										{pivotedAbsensi.barisSiswa.length === 0 ? (
-											<tr>
-												<td
-													colSpan='100'
-													className='p-8 text-center text-black font-bold uppercase'>
-													Belum ada data absensi bulan ini
-												</td>
-											</tr>
-										) : (
-											pivotedAbsensi.barisSiswa.map((row, idx) => (
-												<tr
-													key={row.id}
-													className='hover:bg-gray-100 transition-colors'>
-													<td className='px-4 py-3 text-sm font-bold text-black sticky left-0 bg-white border-r-[3px] border-black'>{idx + 1}</td>
-													<td className='px-4 py-3 lg:sticky left-12 bg-white border-r-[3px] border-black shadow-[4px_0_0px_0px_rgba(0,0,0,0.1)]'>
-														<p className='text-sm font-black text-black truncate w-60'>{row.nama}</p>
-														<p className='text-[10px] font-bold text-black font-mono'>{row.nis}</p>
-													</td>
-													{/* Status per pertemuan */}
-													{pivotedAbsensi.kolomTanggal.map((p) => {
-														const kode = row.kehadiran[p.id];
-														let colorClass = 'text-black';
-														if (kode === 'H') colorClass = 'text-[#00A693] font-black text-lg';
-														if (kode === 'S') colorClass = 'text-[#F5C518] font-black text-lg';
-														if (kode === 'I') colorClass = 'text-[#2F80ED] font-black text-lg';
-														if (kode === 'A') colorClass = 'text-[#E8451A] font-black text-lg';
-
-														return (
-															<td
-																key={p.id}
-																className='px-2 py-3 text-center border-r-[3px] border-black'>
-																<span className={colorClass}>{kode}</span>
-															</td>
-														);
-													})}
-													{/* Ringkasan */}
-													<td className='px-2 py-3 text-center font-black text-[#00A693] border-r-[3px] border-black bg-[#C4F0EB]/30'>{row.stats.H}</td>
-													<td className='px-2 py-3 text-center font-black text-[#2F80ED] border-r-[3px] border-black bg-[#E2D4F0]/30'>{row.stats.I}</td>
-													<td className='px-2 py-3 text-center font-black text-[#F5C518] border-r-[3px] border-black bg-[#FFE8DC]/30'>{row.stats.S}</td>
-													<td className='px-2 py-3 text-center font-black text-[#E8451A] border-r-[3px] border-black bg-[#FFD6D6]/30'>{row.stats.A}</td>
-													<td className='px-2 py-3 text-center font-black text-black bg-[#F5C518]/20'>{row.persentase}%</td>
-												</tr>
-											))
+							<div>
+								{/* Search Bar Toolbar */}
+								<div className='p-4 bg-[#FFE8DC] border-b-[4px] border-black flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+									<div className='relative flex-1 max-w-md'>
+										<input
+											type='text'
+											placeholder='Cari nama atau NIS siswa...'
+											value={searchQuery}
+											onChange={(e) => setSearchQuery(e.target.value)}
+											className='w-full pl-9 pr-8 py-2 bg-white border-[3px] border-black font-bold text-xs outline-none focus:shadow-[3px_3px_0px_0px_#0D0D0D]'
+										/>
+										<svg className='w-4 h-4 absolute left-2.5 top-2.5 text-black' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+											<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+										</svg>
+										{searchQuery && (
+											<button onClick={() => setSearchQuery('')} className='absolute right-2 top-2 text-black font-black text-xs'>✕</button>
 										)}
-									</tbody>
-								</table>
+									</div>
+									<div className='text-xs font-black uppercase text-black bg-white border-[2px] border-black px-3 py-1.5 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										{searchQuery.trim() ? `Menampilkan ${filteredBarisSiswa.length} dari ${pivotedAbsensi.barisSiswa.length} siswa` : `Total ${pivotedAbsensi.barisSiswa.length} siswa`}
+									</div>
+								</div>
+
+								{filteredBarisSiswa.length === 0 ? (
+									<div className='p-12 text-center text-black font-black uppercase text-sm'>
+										{pivotedAbsensi.barisSiswa.length === 0 ? 'Belum ada data absensi bulan ini' : `Tidak ada siswa yang cocok dengan "${searchQuery}"`}
+									</div>
+								) : (
+									<div className='overflow-x-auto'>
+										<table className='w-full min-w-[1000px]'>
+											<thead className='bg-[#F5C518] border-b-[4px] border-black'>
+												<tr>
+													<th className='px-4 py-4 text-left text-sm font-black text-black uppercase sticky left-0 bg-[#F5C518] z-10 border-r-[3px] border-black'>No</th>
+													<th className='px-4 py-4 text-left text-sm font-black text-black uppercase lg:sticky left-12 bg-[#F5C518] z-10 w-64 border-r-[3px] border-black'>Nama Siswa</th>
+													{/* Header Pertemuan */}
+													{pivotedAbsensi.kolomTanggal.map((p) => (
+														<th
+															key={p.id}
+															className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black min-w-[60px]'>
+															<div>{p.label}</div>
+															<div className='text-[10px]'>{p.jam_ke}</div>
+														</th>
+													))}
+													<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#C4F0EB]'>H</th>
+													<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#E2D4F0]'>I</th>
+													<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFE8DC]'>S</th>
+													<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#FFD6D6]'>A</th>
+													<th className='px-2 py-3 text-center text-sm font-black text-black bg-[#F5C518]'>%</th>
+												</tr>
+											</thead>
+											<tbody className='divide-y-[3px] divide-black'>
+												{filteredBarisSiswa.map((row, idx) => (
+													<tr
+														key={row.id}
+														className='hover:bg-gray-100 transition-colors'>
+														<td className='px-4 py-3 text-sm font-bold text-black sticky left-0 bg-white border-r-[3px] border-black'>{idx + 1}</td>
+														<td className='px-4 py-3 lg:sticky left-12 bg-white border-r-[3px] border-black shadow-[4px_0_0px_0px_rgba(0,0,0,0.1)]'>
+															<p className='text-sm font-black text-black truncate w-60'>{row.nama}</p>
+															<p className='text-[10px] font-bold text-black font-mono'>{row.nis}</p>
+														</td>
+														{/* Status per pertemuan */}
+														{pivotedAbsensi.kolomTanggal.map((p) => {
+															const kode = row.kehadiran[p.id];
+															let colorClass = 'text-black';
+															if (kode === 'H') colorClass = 'text-[#00A693] font-black text-lg';
+															if (kode === 'S') colorClass = 'text-[#F5C518] font-black text-lg';
+															if (kode === 'I') colorClass = 'text-[#2F80ED] font-black text-lg';
+															if (kode === 'A') colorClass = 'text-[#E8451A] font-black text-lg';
+
+															return (
+																<td
+																	key={p.id}
+																	className='px-2 py-3 text-center border-r-[3px] border-black'>
+																	<span className={colorClass}>{kode}</span>
+																</td>
+															);
+														})}
+														{/* Ringkasan */}
+														<td className='px-2 py-3 text-center font-black text-[#00A693] border-r-[3px] border-black bg-[#C4F0EB]/30'>{row.stats.H}</td>
+														<td className='px-2 py-3 text-center font-black text-[#2F80ED] border-r-[3px] border-black bg-[#E2D4F0]/30'>{row.stats.I}</td>
+														<td className='px-2 py-3 text-center font-black text-[#F5C518] border-r-[3px] border-black bg-[#FFE8DC]/30'>{row.stats.S}</td>
+														<td className='px-2 py-3 text-center font-black text-[#E8451A] border-r-[3px] border-black bg-[#FFD6D6]/30'>{row.stats.A}</td>
+														<td className='px-2 py-3 text-center font-black text-black bg-[#F5C518]/20'>{row.persentase}%</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+								)}
 							</div>
 						)}
 

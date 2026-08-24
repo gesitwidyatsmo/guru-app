@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
@@ -23,11 +23,13 @@ export default function RiwayatAbsensiMapelPage() {
 	const [selectedTanggal, setSelectedTanggal] = useState('');
 	const [selectedJamKe, setSelectedJamKe] = useState('');
 	const [loadingSesi, setLoadingSesi] = useState(false);
+	const [searchSesi, setSearchSesi] = useState('');
 
 	// State Form Detail
 	const [tanggalEdit, setTanggalEdit] = useState('');
 	const [jamKeEdit, setJamKeEdit] = useState('');
 	const [absensiMap, setAbsensiMap] = useState({}); // {siswa_id: { status, keterangan }}
+	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// State UI
 	const [loading, setLoading] = useState(true);
@@ -102,6 +104,25 @@ export default function RiwayatAbsensiMapelPage() {
 		setSelectedTanggal('');
 		setSelectedJamKe('');
 	}, [fetchRiwayatSesi]);
+
+	const filteredSesi = useMemo(() => {
+		if (!searchSesi.trim()) return daftarSesi;
+		const q = searchSesi.toLowerCase().trim();
+		return daftarSesi.filter((item) => {
+			const formatted = new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).toLowerCase();
+			const jamStr = String(item.jam_ke || '').toLowerCase();
+			return item.tanggal.toLowerCase().includes(q) || formatted.includes(q) || jamStr.includes(q);
+		});
+	}, [daftarSesi, searchSesi]);
+
+	const filteredSiswa = useMemo(() => {
+		if (!searchSiswa.trim()) return siswaList;
+		const q = searchSiswa.toLowerCase().trim();
+		return siswaList.filter((s) =>
+			(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+			(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [siswaList, searchSiswa]);
 
 	// --- 3. Load Detail Sesi ketika sesi dipilih ---
 	useEffect(() => {
@@ -309,6 +330,22 @@ export default function RiwayatAbsensiMapelPage() {
 										<div className='w-3 h-3 border-2 border-black bg-black'></div>
 										<span className='uppercase'>{selectedMapel}</span>
 									</div>
+									{/* Search Sesi */}
+									<div className='relative mt-3'>
+										<input
+											type='text'
+											placeholder='Cari sesi (tanggal/jam)...'
+											value={searchSesi}
+											onChange={(e) => setSearchSesi(e.target.value)}
+											className='w-full pl-8 pr-7 py-2 bg-white border-[3px] border-black font-bold text-xs outline-none'
+										/>
+										<svg className='w-3.5 h-3.5 absolute left-2.5 top-3 text-black' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+											<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+										</svg>
+										{searchSesi && (
+											<button onClick={() => setSearchSesi('')} className='absolute right-2 top-2 text-black font-black text-xs'>✕</button>
+										)}
+									</div>
 								</div>
 
 								<div className='flex-1 overflow-y-auto p-4 space-y-3 bg-[#FFF5F0]'>
@@ -330,8 +367,12 @@ export default function RiwayatAbsensiMapelPage() {
 											</svg>
 											<p className='text-sm font-black uppercase'>Belum ada riwayat terekam.</p>
 										</div>
+									) : filteredSesi.length === 0 ? (
+										<div className='py-8 text-center text-xs font-bold text-black uppercase'>
+											Tidak ada sesi &quot;{searchSesi}&quot;
+										</div>
 									) : (
-										daftarSesi.map((item, idx) => {
+										filteredSesi.map((item, idx) => {
 											const isSelected = selectedTanggal === item.tanggal && selectedJamKe === item.jam_ke;
 											return (
 												<button
@@ -481,80 +522,110 @@ export default function RiwayatAbsensiMapelPage() {
 											{siswaList.length === 0 ? (
 												<div className='p-8 text-center text-black font-black uppercase'>Tidak ada siswa di kelas ini.</div>
 											) : (
-												<div className='overflow-x-auto'>
-													<table className='w-full min-w-[500px]'>
-														<thead>
-															<tr className='bg-[#C4F0EB] border-b-[4px] border-black'>
-																<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider w-[40%] border-r-[4px] border-black'>Data Siswa</th>
-																<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider'>Kehadiran & Keterangan</th>
-															</tr>
-														</thead>
-														<tbody className='divide-y-[4px] divide-black'>
-															{siswaList.map((siswa, idx) => {
-																const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
+												<>
+													{/* Search Siswa Toolbar */}
+													<div className='p-4 bg-[#FFE8DC] border-b-[4px] border-black flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+														<div className='relative flex-1 max-w-md'>
+															<input
+																type='text'
+																placeholder='Cari nama atau NIS siswa...'
+																value={searchSiswa}
+																onChange={(e) => setSearchSiswa(e.target.value)}
+																className='w-full pl-9 pr-8 py-2 bg-white border-[3px] border-black font-bold text-xs outline-none focus:shadow-[3px_3px_0px_0px_#0D0D0D]'
+															/>
+															<svg className='w-4 h-4 absolute left-2.5 top-2.5 text-black' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+																<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+															</svg>
+															{searchSiswa && (
+																<button onClick={() => setSearchSiswa('')} className='absolute right-2 top-2 text-black font-black text-xs'>✕</button>
+															)}
+														</div>
+														<div className='text-xs font-black uppercase text-black bg-white border-[2px] border-black px-3 py-1.5 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+															{searchSiswa.trim() ? `Menampilkan ${filteredSiswa.length} dari ${siswaList.length} siswa` : `Total ${siswaList.length} siswa`}
+														</div>
+													</div>
 
-																return (
-																	<tr
-																		key={siswa.id}
-																		className='hover:bg-gray-100 transition-colors group'>
-																		{/* Info Siswa */}
-																		<td className='px-4 sm:px-6 py-4 align-top border-r-[4px] border-black'>
-																			<div className='flex items-center gap-4'>
-																				<div className='w-10 h-10 border-[3px] border-black bg-[#E2D4F0] text-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>
-																					{idx + 1}
-																				</div>
-																				<div>
-																					<p className='font-black text-black text-lg group-hover:text-[#2F80ED] transition-colors'>{siswa.nama_lengkap}</p>
-																					<p className='text-xs font-bold text-gray-600 mt-0.5 uppercase tracking-widest'>NIS: {siswa.nis || '-'}</p>
-																				</div>
-																			</div>
-																		</td>
-
-																		{/* Edit Absensi UI */}
-																		<td className='px-4 sm:px-6 py-4'>
-																			<div className='flex flex-wrap gap-3 mb-3'>
-																				{[
-																					{ val: 'Hadir', label: 'Hadir', activeBg: 'bg-[#00A693]', activeText: 'text-white' },
-																					{ val: 'Izin', label: 'Izin', activeBg: 'bg-[#2F80ED]', activeText: 'text-white' },
-																					{ val: 'Sakit', label: 'Sakit', activeBg: 'bg-[#F5C518]', activeText: 'text-black' },
-																					{ val: 'Alpa', label: 'Alpa', activeBg: 'bg-[#E8451A]', activeText: 'text-white' },
-																				].map((opt) => {
-																					const isSelected = currentVal.status === opt.val || (opt.val === 'Alpa' && currentVal.status === 'Alpha');
-																					return (
-																						<label
-																							key={opt.val}
-																							className={`relative flex items-center justify-center px-4 py-2 border-[3px] border-black font-black uppercase cursor-pointer transition-transform duration-200 ${
-																								isSelected ? `${opt.activeBg} ${opt.activeText} shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1 -translate-x-1` : 'bg-white text-black hover:bg-gray-50 hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
-																							}`}>
-																							<input
-																								type='radio'
-																								name={`status-${siswa.id}`}
-																								value={opt.val}
-																								checked={isSelected}
-																								onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
-																								className='sr-only'
-																							/>
-																							<span>{opt.label}</span>
-																						</label>
-																					);
-																				})}
-																			</div>
-
-																			{/* Input Keterangan */}
-																			<input
-																				type='text'
-																				placeholder='Keterangan (Opsional / Alasan Sakit)'
-																				value={currentVal.keterangan || ''}
-																				onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-																				className='w-full mt-2 text-sm font-bold text-black px-4 py-3 bg-white border-[3px] border-black rounded-none focus:outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all'
-																			/>
-																		</td>
+													{filteredSiswa.length === 0 ? (
+														<div className='p-8 text-center text-black font-black uppercase text-sm'>
+															Tidak ada siswa yang cocok dengan &quot;{searchSiswa}&quot;
+														</div>
+													) : (
+														<div className='overflow-x-auto'>
+															<table className='w-full min-w-[500px]'>
+																<thead>
+																	<tr className='bg-[#C4F0EB] border-b-[4px] border-black'>
+																		<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider w-[40%] border-r-[4px] border-black'>Data Siswa</th>
+																		<th className='px-4 sm:px-6 py-4 text-left text-sm font-black text-black uppercase tracking-wider'>Kehadiran & Keterangan</th>
 																	</tr>
-																);
-															})}
-														</tbody>
-													</table>
-												</div>
+																</thead>
+																<tbody className='divide-y-[4px] divide-black'>
+																	{filteredSiswa.map((siswa, idx) => {
+																		const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
+
+																		return (
+																			<tr
+																				key={siswa.id}
+																				className='hover:bg-gray-100 transition-colors group'>
+																				{/* Info Siswa */}
+																				<td className='px-4 sm:px-6 py-4 align-top border-r-[4px] border-black'>
+																					<div className='flex items-center gap-4'>
+																						<div className='w-10 h-10 border-[3px] border-black bg-[#E2D4F0] text-black flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>
+																							{idx + 1}
+																						</div>
+																						<div>
+																							<p className='font-black text-black text-lg group-hover:text-[#2F80ED] transition-colors'>{siswa.nama_lengkap}</p>
+																							<p className='text-xs font-bold text-gray-600 mt-0.5 uppercase tracking-widest'>NIS: {siswa.nis || '-'}</p>
+																						</div>
+																					</div>
+																				</td>
+
+																				{/* Edit Absensi UI */}
+																				<td className='px-4 sm:px-6 py-4'>
+																					<div className='flex flex-wrap gap-3 mb-3'>
+																						{[
+																							{ val: 'Hadir', label: 'Hadir', activeBg: 'bg-[#00A693]', activeText: 'text-white' },
+																							{ val: 'Izin', label: 'Izin', activeBg: 'bg-[#2F80ED]', activeText: 'text-white' },
+																							{ val: 'Sakit', label: 'Sakit', activeBg: 'bg-[#F5C518]', activeText: 'text-black' },
+																							{ val: 'Alpa', label: 'Alpa', activeBg: 'bg-[#E8451A]', activeText: 'text-white' },
+																						].map((opt) => {
+																							const isSelected = currentVal.status === opt.val || (opt.val === 'Alpa' && currentVal.status === 'Alpha');
+																							return (
+																								<label
+																									key={opt.val}
+																									className={`relative flex items-center justify-center px-4 py-2 border-[3px] border-black font-black uppercase cursor-pointer transition-transform duration-200 ${
+																										isSelected ? `${opt.activeBg} ${opt.activeText} shadow-[4px_4px_0px_0px_#0D0D0D] -translate-y-1 -translate-x-1` : 'bg-white text-black hover:bg-gray-50 hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
+																									}`}>
+																									<input
+																										type='radio'
+																										name={`status-${siswa.id}`}
+																										value={opt.val}
+																										checked={isSelected}
+																										onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
+																										className='sr-only'
+																									/>
+																									<span>{opt.label}</span>
+																								</label>
+																							);
+																						})}
+																					</div>
+
+																					{/* Input Keterangan */}
+																					<input
+																						type='text'
+																						placeholder='Keterangan (Opsional / Alasan Sakit)'
+																						value={currentVal.keterangan || ''}
+																						onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+																						className='w-full mt-2 text-sm font-bold text-black px-4 py-3 bg-white border-[3px] border-black rounded-none focus:outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all'
+																					/>
+																				</td>
+																			</tr>
+																		);
+																	})}
+																</tbody>
+															</table>
+														</div>
+													)}
+												</>
 											)}
 										</div>
 									</div>

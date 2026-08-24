@@ -24,6 +24,7 @@ export default function AbsensiMapelPage() {
 	const [selectedMapel, setSelectedMapel] = useState('');
 	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
 	const [jamKe, setJamKe] = useState('');
+	const [searchQuery, setSearchQuery] = useState('');
 
 	// --- Data State ---
 	const [absensi, setAbsensi] = useState({});
@@ -113,6 +114,15 @@ export default function AbsensiMapelPage() {
 	}, []);
 
 	const siswaKelasIni = useMemo(() => siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim()), [siswaList, selectedKelas]);
+
+	const filteredSiswa = useMemo(() => {
+		if (!searchQuery.trim()) return siswaKelasIni;
+		const q = searchQuery.toLowerCase().trim();
+		return siswaKelasIni.filter((s) =>
+			(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+			(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [siswaKelasIni, searchQuery]);
 
 	// 2. Check Absensi Mapel
 	useEffect(() => {
@@ -492,151 +502,198 @@ export default function AbsensiMapelPage() {
 						<div className='text-6xl mb-4 drop-shadow-[4px_4px_0px_#0D0D0D]'>🎓</div>
 						<p className='text-[#0D0D0D] font-bold text-xl border-2 border-[#0D0D0D] px-6 py-3 rounded-xl bg-white shadow-[4px_4px_0px_0px_#0D0D0D]'>Tidak ada siswa di kelas ini</p>
 					</div>
-				) : mode === 'rekap' ? (
-					/* 2. MODE REKAPITULASI (Tabel Read Only) */
-					<div className='neo-card p-0 overflow-hidden'>
-						<div className='px-6 py-5 border-b-4 border-[#0D0D0D] flex flex-col sm:flex-row justify-between sm:items-center items-start gap-4 bg-[#F5C518]'>
-							<div>
-								<h2 className='font-black text-[#0D0D0D] text-xl uppercase tracking-tight'>Rekapitulasi Kehadiran</h2>
-								<p className='text-sm font-bold text-[#0D0D0D]'>
-									{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
-								</p>
-							</div>
-							<div className='flex flex-wrap gap-3'>
-								<button
-									onClick={handleHapus}
-									className='neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
-									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
-									<span className='hidden sm:inline'>Hapus</span>
-								</button>
-								<button
-									onClick={goToRiwayat}
-									className='neo-btn-outline bg-[#2F80ED] text-white hover:bg-white hover:text-[#2F80ED] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
-									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/></svg>
-									<span className='hidden sm:inline'>Riwayat</span>
-								</button>
-								<button
-									onClick={() => setMode('edit')}
-									className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
-									<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'/></svg>
-									<span className='hidden sm:inline'>Edit</span>
-								</button>
-							</div>
-						</div>
-
-						<div className='overflow-x-auto'>
-							<table className='w-full'>
-								<thead className='bg-[#0D0D0D] text-white text-xs uppercase tracking-wider font-bold border-b-4 border-[#0D0D0D]'>
-									<tr>
-										<th className='px-6 py-4 text-left w-16 border-r-2 border-[#0D0D0D]'>No</th>
-										<th className='px-6 py-4 text-left border-r-2 border-[#0D0D0D]'>Nama Siswa</th>
-										<th className='px-6 py-4 text-center w-32 border-r-2 border-[#0D0D0D]'>Status</th>
-										<th className='px-6 py-4 text-left w-1/3'>Keterangan</th>
-									</tr>
-								</thead>
-								<tbody className='divide-y-2 divide-[#0D0D0D] bg-white'>
-									{siswaKelasIni.map((siswa, idx) => {
-										const status = absensi[siswa.id]?.status || '-';
-										const ket = absensi[siswa.id]?.keterangan || '-';
-										return (
-											<tr
-												key={siswa.id}
-												className='hover:bg-[#FFF5F0] transition-colors'>
-												<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
-												<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
-													<p className='font-bold text-[#0D0D0D] text-base'>
-														{siswa.nama_lengkap}
-														{siswa.status !== 'Aktif' && (
-															<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
-																{siswa.status}
-															</span>
-														)}
-													</p>
-													<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis}</p>
-												</td>
-												<td className='px-6 py-4 text-center border-r-2 border-[#0D0D0D]'>{getBadgeRekap(status)}</td>
-												<td className='px-6 py-4 text-sm font-semibold text-[#0D0D0D]'>{ket !== '-' ? ket : <span className='text-gray-400 italic'>Tidak ada keterangan</span>}</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						</div>
-					</div>
 				) : (
-					/* 3. MODE INPUT / EDIT (Card UI) */
-					<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
-						{siswaKelasIni.map((siswa, idx) => {
-							const currentStatus = absensi[siswa.id]?.status || 'Hadir';
+					<>
+						{/* Search Bar */}
+						<div className='mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 border-2 border-[#0D0D0D] rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D]'>
+							<div className='relative flex-1'>
+								<div className='absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500'>
+									<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2.5} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+									</svg>
+								</div>
+								<input
+									type='text'
+									placeholder='Cari nama atau NIS siswa...'
+									value={searchQuery}
+									onChange={(e) => setSearchQuery(e.target.value)}
+									className='w-full pl-10 pr-10 py-2 bg-transparent text-[#0D0D0D] font-bold text-sm outline-none placeholder:text-gray-400'
+								/>
+								{searchQuery && (
+									<button
+										onClick={() => setSearchQuery('')}
+										className='absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-black font-black text-sm'
+										title='Hapus pencarian'>
+										✕
+									</button>
+								)}
+							</div>
+							<div className='text-xs font-bold text-[#0D0D0D] bg-[#FFF5F0] border-2 border-[#0D0D0D] px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0 text-center sm:text-left'>
+								{searchQuery.trim() ? (
+									<span>Menampilkan <b>{filteredSiswa.length}</b> dari {siswaKelasIni.length} siswa</span>
+								) : (
+									<span>Total: <b>{siswaKelasIni.length}</b> siswa</span>
+								)}
+							</div>
+						</div>
 
-							return (
-								<div
-									key={siswa.id}
-									className='neo-card flex flex-col gap-3 relative'>
-									<div className='flex justify-between items-start mb-1'>
-										<div className='pr-8'>
-											<div className='flex flex-wrap items-center gap-2 mb-1'>
-												<h3 className='font-bold text-[#0D0D0D] line-clamp-1 text-lg uppercase tracking-tight'>
-													{siswa.nama_lengkap}
-													{siswa.status !== 'Aktif' && (
-														<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
-															{siswa.status}
-														</span>
-													)}
-												</h3>
-												<div className='flex gap-1 shrink-0'>
-													{siswa.poinPositif > 0 && (
-														<span
-															className='text-[10px] font-bold text-white bg-[#00A693] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
-															title='Poin +'>
-															+{siswa.poinPositif}
-														</span>
-													)}
-													{siswa.poinNegatif > 0 && (
-														<span
-															className='text-[10px] font-bold text-white bg-[#E8451A] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
-															title='Pelanggaran -'>
-															-{siswa.poinNegatif}
-														</span>
-													)}
-												</div>
-											</div>
-											<p className='text-xs text-[#0D0D0D] font-mono font-bold'>{siswa.nis || '-'}</p>
-										</div>
-										<span className='absolute top-4 right-4 text-sm font-black text-[#0D0D0D] border-2 border-[#0D0D0D] w-8 h-8 flex items-center justify-center rounded-full bg-[#F5C518] shadow-[2px_2px_0px_0px_#0D0D0D]'>
-											{idx + 1}
-										</span>
+						{filteredSiswa.length === 0 ? (
+							<div className='bg-white border-2 border-[#0D0D0D] rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] p-8 text-center my-4'>
+								<div className='text-4xl mb-2'>🔍</div>
+								<p className='font-bold text-[#0D0D0D] text-base'>Tidak ada siswa yang cocok dengan &quot;{searchQuery}&quot;</p>
+								<button
+									onClick={() => setSearchQuery('')}
+									className='mt-3 neo-btn-outline bg-[#F5C518] text-[#0D0D0D] text-xs py-1.5 px-4 rounded-xl font-bold'>
+									Reset Pencarian
+								</button>
+							</div>
+						) : mode === 'rekap' ? (
+							/* 2. MODE REKAPITULASI (Tabel Read Only) */
+							<div className='neo-card p-0 overflow-hidden'>
+								<div className='px-6 py-5 border-b-4 border-[#0D0D0D] flex flex-col sm:flex-row justify-between sm:items-center items-start gap-4 bg-[#F5C518]'>
+									<div>
+										<h2 className='font-black text-[#0D0D0D] text-xl uppercase tracking-tight'>Rekapitulasi Kehadiran</h2>
+										<p className='text-sm font-bold text-[#0D0D0D]'>
+											{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
+										</p>
 									</div>
-
-									<div className='grid grid-cols-4 gap-2 my-2'>
-										{statusList.map((st) => {
-											const isActive = currentStatus === st.label;
-											return (
-												<button
-													key={st.id}
-													onClick={() => handleStatusChange(siswa.id, st.label)}
-													disabled={siswa.status !== 'Aktif'}
-													className={`${getStatusClasses(st.warna, isActive)} ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
-													{st.kode || st.label.substring(0, 1)}
-												</button>
-											);
-										})}
-									</div>
-
-									<div className='relative'>
-										<input
-											type='text'
-											placeholder='Keterangan...'
-											value={absensi[siswa.id]?.keterangan || ''}
-											onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-											disabled={siswa.status !== 'Aktif'}
-											className='neo-input text-sm disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
-										/>
+									<div className='flex flex-wrap gap-3'>
+										<button
+											onClick={handleHapus}
+											className='neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+											<span className='hidden sm:inline'>Hapus</span>
+										</button>
+										<button
+											onClick={goToRiwayat}
+											className='neo-btn-outline bg-[#2F80ED] text-white hover:bg-white hover:text-[#2F80ED] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/></svg>
+											<span className='hidden sm:inline'>Riwayat</span>
+										</button>
+										<button
+											onClick={() => setMode('edit')}
+											className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'/></svg>
+											<span className='hidden sm:inline'>Edit</span>
+										</button>
 									</div>
 								</div>
-							);
-						})}
-					</div>
+
+								<div className='overflow-x-auto'>
+									<table className='w-full'>
+										<thead className='bg-[#0D0D0D] text-white text-xs uppercase tracking-wider font-bold border-b-4 border-[#0D0D0D]'>
+											<tr>
+												<th className='px-6 py-4 text-left w-16 border-r-2 border-[#0D0D0D]'>No</th>
+												<th className='px-6 py-4 text-left border-r-2 border-[#0D0D0D]'>Nama Siswa</th>
+												<th className='px-6 py-4 text-center w-32 border-r-2 border-[#0D0D0D]'>Status</th>
+												<th className='px-6 py-4 text-left w-1/3'>Keterangan</th>
+											</tr>
+										</thead>
+										<tbody className='divide-y-2 divide-[#0D0D0D] bg-white'>
+											{filteredSiswa.map((siswa, idx) => {
+												const status = absensi[siswa.id]?.status || '-';
+												const ket = absensi[siswa.id]?.keterangan || '-';
+												return (
+													<tr
+														key={siswa.id}
+														className='hover:bg-[#FFF5F0] transition-colors'>
+														<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
+														<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
+															<p className='font-bold text-[#0D0D0D] text-base'>
+																{siswa.nama_lengkap}
+																{siswa.status !== 'Aktif' && (
+																	<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
+																		{siswa.status}
+																	</span>
+																)}
+															</p>
+															<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis}</p>
+														</td>
+														<td className='px-6 py-4 text-center border-r-2 border-[#0D0D0D]'>{getBadgeRekap(status)}</td>
+														<td className='px-6 py-4 text-sm font-semibold text-[#0D0D0D]'>{ket !== '-' ? ket : <span className='text-gray-400 italic'>Tidak ada keterangan</span>}</td>
+													</tr>
+												);
+											})}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						) : (
+							/* 3. MODE INPUT / EDIT (Card UI) */
+							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+								{filteredSiswa.map((siswa, idx) => {
+									const currentStatus = absensi[siswa.id]?.status || 'Hadir';
+
+									return (
+										<div
+											key={siswa.id}
+											className='neo-card flex flex-col gap-3 relative'>
+											<div className='flex justify-between items-start mb-1'>
+												<div className='pr-8'>
+													<div className='flex flex-wrap items-center gap-2 mb-1'>
+														<h3 className='font-bold text-[#0D0D0D] line-clamp-1 text-lg uppercase tracking-tight'>
+															{siswa.nama_lengkap}
+															{siswa.status !== 'Aktif' && (
+																<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+																	{siswa.status}
+																</span>
+															)}
+														</h3>
+														<div className='flex gap-1 shrink-0'>
+															{siswa.poinPositif > 0 && (
+																<span
+																	className='text-[10px] font-bold text-white bg-[#00A693] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
+																	title='Poin +'>
+																	+{siswa.poinPositif}
+																</span>
+															)}
+															{siswa.poinNegatif > 0 && (
+																<span
+																	className='text-[10px] font-bold text-white bg-[#E8451A] border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2 py-0.5 rounded-md'
+																	title='Pelanggaran -'>
+																	-{siswa.poinNegatif}
+																</span>
+															)}
+														</div>
+													</div>
+													<p className='text-xs text-[#0D0D0D] font-mono font-bold'>{siswa.nis || '-'}</p>
+												</div>
+												<span className='absolute top-4 right-4 text-sm font-black text-[#0D0D0D] border-2 border-[#0D0D0D] w-8 h-8 flex items-center justify-center rounded-full bg-[#F5C518] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													{idx + 1}
+												</span>
+											</div>
+
+											<div className='grid grid-cols-4 gap-2 my-2'>
+												{statusList.map((st) => {
+													const isActive = currentStatus === st.label;
+													return (
+														<button
+															key={st.id}
+															onClick={() => handleStatusChange(siswa.id, st.label)}
+															disabled={siswa.status !== 'Aktif'}
+															className={`${getStatusClasses(st.warna, isActive)} ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+															{st.kode || st.label.substring(0, 1)}
+														</button>
+													);
+												})}
+											</div>
+
+											<div className='relative'>
+												<input
+													type='text'
+													placeholder='Keterangan...'
+													value={absensi[siswa.id]?.keterangan || ''}
+													onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+													disabled={siswa.status !== 'Aktif'}
+													className='neo-input text-sm disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
+												/>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						)}
+					</>
 				)}
 			</div>
 

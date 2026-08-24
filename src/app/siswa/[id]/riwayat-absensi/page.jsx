@@ -59,6 +59,7 @@ export default function RiwayatAbsensiSiswaPage() {
 	const [monthOffset, setMonthOffset] = useState(0);
 	const [viewMode, setViewMode] = useState('kelas');
 	const [selectedMapel, setSelectedMapel] = useState('');
+	const [searchLog, setSearchLog] = useState('');
 
 	useEffect(() => {
 		if (!id) return;
@@ -129,6 +130,25 @@ export default function RiwayatAbsensiSiswaPage() {
 		const parts = name.trim().split(/\s+/).filter(Boolean);
 		return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || 'S';
 	}, [siswa]);
+
+	const filteredRiwayatList = useMemo(() => {
+		let list = riwayat;
+		if (viewMode === 'kelas') {
+			list = list.filter((i) => !i.mapel || i.mapel === '-');
+		} else {
+			list = list.filter((i) => i.mapel === selectedMapel);
+		}
+		if (!searchLog.trim()) return list;
+		const q = searchLog.toLowerCase().trim();
+		return list.filter((item) => {
+			const formatted = new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).toLowerCase();
+			const tglStr = String(item.tanggal || '').toLowerCase();
+			const stStr = String(item.status || '').toLowerCase();
+			const ketStr = String(item.keterangan || '').toLowerCase();
+			const mapelStr = String(item.mapel || '').toLowerCase();
+			return formatted.includes(q) || tglStr.includes(q) || stStr.includes(q) || ketStr.includes(q) || mapelStr.includes(q);
+		});
+	}, [riwayat, viewMode, selectedMapel, searchLog]);
 
 	const activeMonthDate = useMemo(() => {
 		const now = new Date();
@@ -357,6 +377,79 @@ export default function RiwayatAbsensiSiswaPage() {
 							<span className='h-6 w-6 border-[3px] border-[#0D0D0D] bg-[#E8451A] shadow-[2px_2px_0px_0px_#0D0D0D]'></span> ALFA
 						</span>
 					</div>
+				</div>
+
+				{/* DAFTAR LOG RIWAYAT DENGAN PENCARIAN */}
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] rounded-none p-6 sm:p-8'>
+					<div className='mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+						<div>
+							<h3 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>Log Riwayat Presensi</h3>
+							<p className='text-xs font-bold text-gray-500 uppercase mt-0.5'>Presensi {viewMode === 'kelas' ? 'Harian Kelas' : `Mapel ${selectedMapel || ''}`}</p>
+						</div>
+						<div className='relative w-full sm:w-72'>
+							<input
+								type='text'
+								placeholder='Cari tanggal / status / keterangan...'
+								value={searchLog}
+								onChange={(e) => setSearchLog(e.target.value)}
+								className='w-full pl-9 pr-8 py-2 bg-white border-[3px] border-[#0D0D0D] font-bold text-xs outline-none focus:shadow-[3px_3px_0px_0px_#0D0D0D]'
+							/>
+							<svg className='w-4 h-4 absolute left-2.5 top-2.5 text-black' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+								<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+							</svg>
+							{searchLog && (
+								<button onClick={() => setSearchLog('')} className='absolute right-2.5 top-2 text-black font-black text-xs'>✕</button>
+							)}
+						</div>
+					</div>
+
+					{filteredRiwayatList.length === 0 ? (
+						<div className='p-8 text-center bg-[#FFF5F0] border-[3px] border-[#0D0D0D]'>
+							<p className='text-sm font-black text-[#0D0D0D] uppercase'>
+								{searchLog ? `Tidak ada presensi yang cocok dengan "${searchLog}"` : 'Belum ada data presensi terekam'}
+							</p>
+						</div>
+					) : (
+						<div className='overflow-x-auto border-[3px] border-[#0D0D0D]'>
+							<table className='w-full border-collapse'>
+								<thead>
+									<tr className='bg-[#F5C518] text-[#0D0D0D] border-b-[3px] border-[#0D0D0D]'>
+										<th className='px-4 py-3 text-left text-xs font-black uppercase border-r-[3px] border-[#0D0D0D] w-12'>No</th>
+										<th className='px-4 py-3 text-left text-xs font-black uppercase border-r-[3px] border-[#0D0D0D]'>Tanggal</th>
+										{viewMode === 'mapel' && <th className='px-4 py-3 text-left text-xs font-black uppercase border-r-[3px] border-[#0D0D0D]'>Jam Ke</th>}
+										<th className='px-4 py-3 text-center text-xs font-black uppercase border-r-[3px] border-[#0D0D0D] w-28'>Status</th>
+										<th className='px-4 py-3 text-left text-xs font-black uppercase'>Keterangan</th>
+									</tr>
+								</thead>
+								<tbody className='divide-y-[2px] divide-[#0D0D0D] bg-white'>
+									{filteredRiwayatList.map((item, idx) => {
+										const meta = statusMeta(item.status);
+										return (
+											<tr key={idx} className='hover:bg-[#FFF5F0] transition-colors'>
+												<td className='px-4 py-3 text-xs font-bold text-[#0D0D0D] border-r-[3px] border-[#0D0D0D]'>{idx + 1}</td>
+												<td className='px-4 py-3 text-xs font-black text-[#0D0D0D] border-r-[3px] border-[#0D0D0D]'>
+													{new Date(item.tanggal).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+												</td>
+												{viewMode === 'mapel' && (
+													<td className='px-4 py-3 text-xs font-bold text-[#0D0D0D] border-r-[3px] border-[#0D0D0D]'>
+														Jam ke-{item.jam_ke || '-'}
+													</td>
+												)}
+												<td className='px-4 py-3 text-center border-r-[3px] border-[#0D0D0D]'>
+													<span className={`inline-block px-2.5 py-1 text-[11px] font-black uppercase border-[2px] border-[#0D0D0D] ${meta.bg} ${meta.text} shadow-[2px_2px_0px_0px_#0D0D0D]`}>
+														{meta.label}
+													</span>
+												</td>
+												<td className='px-4 py-3 text-xs font-bold text-gray-700'>
+													{item.keterangan || '-'}
+												</td>
+											</tr>
+										);
+									})}
+								</tbody>
+							</table>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

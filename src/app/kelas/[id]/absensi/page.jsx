@@ -30,6 +30,7 @@ export default function AbsensiKelasPage() {
 	// ✅ NEW: State untuk data absensi yang sudah tersimpan
 	const [dataAbsensiTersimpan, setDataAbsensiTersimpan] = useState([]);
 	const [loadingAbsensi, setLoadingAbsensi] = useState(false);
+	const [searchQuery, setSearchQuery] = useState('');
 
 	const getStatusClasses = (warna, active) => {
 		const base = 'text-xs px-2 py-1 rounded-full border transition';
@@ -102,6 +103,29 @@ export default function AbsensiKelasPage() {
 
 	const namaKelas = kelasDetail?.kelas || kelasDetail?.nama_kelas || '';
 	const siswaKelasIni = useMemo(() => siswaList.filter((s) => namaKelas && s.kelas === namaKelas), [siswaList, namaKelas]);
+
+	const filteredSiswaInput = useMemo(() => {
+		if (!searchQuery.trim()) return siswaKelasIni;
+		const q = searchQuery.toLowerCase().trim();
+		return siswaKelasIni.filter(
+			(s) =>
+				(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+				(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [siswaKelasIni, searchQuery]);
+
+	const filteredAbsensiTersimpan = useMemo(() => {
+		if (!searchQuery.trim()) return dataAbsensiTersimpan;
+		const q = searchQuery.toLowerCase().trim();
+		return dataAbsensiTersimpan.filter((abs) => {
+			const s = siswaList.find((item) => item.id === abs.siswa_id);
+			if (!s) return false;
+			return (
+				(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+				(s.nis && String(s.nis).toLowerCase().includes(q))
+			);
+		});
+	}, [dataAbsensiTersimpan, siswaList, searchQuery]);
 
 	// Reset absensi saat tanggal berubah
 	useEffect(() => {
@@ -370,59 +394,82 @@ export default function AbsensiKelasPage() {
 
 				{/* Section 2: List Siswa dengan Status */}
 				<div className='p-4'>
-					<h3 className='text-sm font-semibold text-gray-700 mb-3 flex items-center justify-between'>
-						<span>👥 Daftar Siswa</span>
-					</h3>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3'>
+						<h3 className='text-sm font-semibold text-gray-700'>
+							<span>👥 Daftar Siswa</span>
+						</h3>
+						<div className='relative w-full sm:w-64'>
+							<input
+								type='text'
+								placeholder='Cari nama atau NIS...'
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
+							/>
+							<svg className='w-4 h-4 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+								<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+							</svg>
+							{searchQuery && (
+								<button onClick={() => setSearchQuery('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
+							)}
+						</div>
+					</div>
 					<div className='bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm mb-4 border border-yellow-200'>
 						Absensi untuk pertemuan ini telah tersimpan. Jika ada kesalahan, klik tombol <b>Riwayat Absensi</b> di bawah untuk mengubah status atau mengganti tanggal sesi secara interaktif.
 					</div>
-					<div className='space-y-2'>
-						{dataAbsensiTersimpan.map((absensi, index) => {
-							const siswa = siswaList.find((s) => s.id === absensi.siswa_id);
-							if (!siswa) return null;
+					{filteredAbsensiTersimpan.length === 0 ? (
+						<div className='p-6 text-center text-gray-500 text-sm'>
+							Tidak ada siswa yang cocok dengan &quot;{searchQuery}&quot;
+						</div>
+					) : (
+						<div className='space-y-2'>
+							{filteredAbsensiTersimpan.map((absensi, index) => {
+								const siswa = siswaList.find((s) => s.id === absensi.siswa_id);
+								if (!siswa) return null;
 
-							const statusData = statusList.find((st) => st.label === absensi.status);
+								const statusData = statusList.find((st) => st.label === absensi.status);
 
-							return (
-								<div
-									key={absensi.siswa_id || index}
-									className='w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-100 transition text-left'>
-									<div className='flex items-center gap-3'>
-										<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold'>{index + 1}</div>
-										<div>
-											<div className='text-sm font-medium text-gray-800'>
-												{siswa.nama_lengkap}
-												{siswa.status !== 'Aktif' && (
-													<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
-														{siswa.status}
-													</span>
-												)}
+								return (
+									<div
+										key={absensi.siswa_id || index}
+										className='w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-100 transition text-left'>
+										<div className='flex items-center gap-3'>
+											<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold'>{index + 1}</div>
+											<div>
+												<div className='text-sm font-medium text-gray-800'>
+													{siswa.nama_lengkap}
+													{siswa.status !== 'Aktif' && (
+														<span className='ml-2 text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'>
+															{siswa.status}
+														</span>
+													)}
+												</div>
+												<div className='text-xs text-gray-500'>NIS: {siswa.nis}</div>
+												{absensi.keterangan && <div className='text-xs text-gray-600 italic mt-0.5'>{absensi.keterangan}</div>}
 											</div>
-											<div className='text-xs text-gray-500'>NIS: {siswa.nis}</div>
-											{absensi.keterangan && <div className='text-xs text-gray-600 italic mt-0.5'>{absensi.keterangan}</div>}
+										</div>
+										<div className='flex items-center gap-2'>
+											<span
+												className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold
+												${
+													statusData?.warna === 'green'
+														? 'bg-green-500 text-white'
+														: statusData?.warna === 'red'
+															? 'bg-red-500 text-white'
+															: statusData?.warna === 'yellow'
+																? 'bg-yellow-400 text-white'
+																: statusData?.warna === 'blue'
+																	? 'bg-blue-500 text-white'
+																	: 'bg-purple-500 text-white'
+												}  `}>
+												{statusData?.kode || absensi.status}
+											</span>
 										</div>
 									</div>
-									<div className='flex items-center gap-2'>
-										<span
-											className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold
-											${
-												statusData?.warna === 'green'
-													? 'bg-green-500 text-white'
-													: statusData?.warna === 'red'
-														? 'bg-red-500 text-white'
-														: statusData?.warna === 'yellow'
-															? 'bg-yellow-400 text-white'
-															: statusData?.warna === 'blue'
-																? 'bg-blue-500 text-white'
-																: 'bg-purple-500 text-white'
-											}  `}>
-											{statusData?.kode || absensi.status}
-										</span>
-									</div>
-								</div>
-							);
-						})}
-					</div>
+								);
+							})}
+						</div>
+					)}
 				</div>
 			</>
 		);
@@ -534,96 +581,126 @@ export default function AbsensiKelasPage() {
 					) : siswaKelasIni.length === 0 ? (
 						<div className='p-6 text-center text-gray-400 text-sm'>Tidak ada siswa aktif di kelas {namaKelas}.</div>
 					) : (
-						<div className='overflow-x-auto'>
-							<table className='min-w-full text-sm'>
-								<thead>
-									<tr className='bg-gray-50 border-b border-gray-100'>
-										<th className='px-3 py-2 text-left w-8'>No</th>
-										<th className='px-3 py-2 text-left'>Nama Siswa</th>
+						<div>
+							{/* Search Toolbar */}
+							<div className='p-3 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+								<div className='relative flex-1 max-w-sm'>
+									<input
+										type='text'
+										placeholder='Cari nama atau NIS siswa...'
+										value={searchQuery}
+										onChange={(e) => setSearchQuery(e.target.value)}
+										className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
+									/>
+									<svg className='w-4 h-4 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+									</svg>
+									{searchQuery && (
+										<button onClick={() => setSearchQuery('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
+									)}
+								</div>
+								<div className='text-xs text-gray-500'>
+									{searchQuery.trim() ? `Menampilkan ${filteredSiswaInput.length} dari ${siswaKelasIni.length} siswa` : `Total ${siswaKelasIni.length} siswa`}
+								</div>
+							</div>
 
-										{statusList.map((st) => (
-											<th
-												key={st.id}
-												className='px-3 py-2 text-center'>
-												<button
-													type='button'
-													onClick={() => handleTandaiSemua(st.label)}
-													className={`${getStatusClasses(st.warna, true)} h-8 w-8 rounded-full`}>
-													{st.kode}
-												</button>
-											</th>
-										))}
+							{filteredSiswaInput.length === 0 ? (
+								<div className='p-8 text-center text-gray-500 text-sm'>
+									Tidak ada siswa yang cocok dengan &quot;{searchQuery}&quot;
+								</div>
+							) : (
+								<div className='overflow-x-auto'>
+									<table className='min-w-full text-sm'>
+										<thead>
+											<tr className='bg-gray-50 border-b border-gray-100'>
+												<th className='px-3 py-2 text-left w-8'>No</th>
+												<th className='px-3 py-2 text-left'>Nama Siswa</th>
 
-										<th className='px-3 py-2 text-left w-56'>Keterangan</th>
-									</tr>
-								</thead>
-								<tbody>
-									{siswaKelasIni.map((siswa, index) => (
-										<tr
-											key={siswa.id}
-											className='border-b border-gray-50 hover:bg-gray-50'>
-											<td className='px-3 py-2 align-top text-gray-500'>{index + 1}</td>
-											<td className='px-3 py-2 align-top'>
-												<div className='flex items-center gap-1.5'>
-													<div className='font-medium text-gray-800 text-sm'>
-														{siswa.nama_lengkap}
-														{siswa.status !== 'Aktif' && (
-															<span className='ml-2 inline-flex items-center text-[9px] font-black uppercase tracking-wider text-white bg-red-600 px-1.5 py-0.5 rounded border border-black align-middle'>
-																{siswa.status}
-															</span>
-														)}
-													</div>
-													<div className='flex gap-1 shrink-0'>
-														{siswa.poinPositif > 0 && (
-															<span
-																className='text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1 py-0.5 rounded-sm'
-																title='Poin +'>
-																+{siswa.poinPositif}
-															</span>
-														)}
-														{siswa.poinNegatif > 0 && (
-															<span
-																className='text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1 py-0.5 rounded-sm'
-																title='Pelanggaran -'>
-																-{siswa.poinNegatif}
-															</span>
-														)}
-													</div>
-												</div>
-												<div className='text-[11px] text-gray-400 mt-0.5'>NIS: {siswa.nis}</div>
-											</td>
-
-											{statusList.map((st) => {
-												const active = absensi[siswa.id]?.status === st.label;
-												return (
-													<td
+												{statusList.map((st) => (
+													<th
 														key={st.id}
-														className='px-3 py-2 text-center align-middle'>
+														className='px-3 py-2 text-center'>
 														<button
 															type='button'
-															disabled={siswa.status !== 'Aktif'}
-															onClick={() => handleStatusChange(siswa.id, st.label)}
-															className={`${getStatusClasses(st.warna, active)} h-8 w-8 rounded-full ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+															onClick={() => handleTandaiSemua(st.label)}
+															className={`${getStatusClasses(st.warna, true)} h-8 w-8 rounded-full`}>
 															{st.kode}
 														</button>
-													</td>
-												);
-											})}
+													</th>
+												))}
 
-											<td className='px-3 py-2 align-middle text-center'>
-												<textarea
-													disabled={siswa.status !== 'Aktif'}
-													className='inline-block w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none text-left disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
-													rows={2}
-													placeholder='Keterangan (opsional)'
-													value={absensi[siswa.id]?.keterangan || ''}
-													onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-												/>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
+												<th className='px-3 py-2 text-left w-56'>Keterangan</th>
+											</tr>
+										</thead>
+										<tbody>
+											{filteredSiswaInput.map((siswa, index) => (
+												<tr
+													key={siswa.id}
+													className='border-b border-gray-50 hover:bg-gray-50'>
+													<td className='px-3 py-2 align-top text-gray-500'>{index + 1}</td>
+													<td className='px-3 py-2 align-top'>
+														<div className='flex items-center gap-1.5'>
+															<div className='font-medium text-gray-800 text-sm'>
+																{siswa.nama_lengkap}
+																{siswa.status !== 'Aktif' && (
+																	<span className='ml-2 inline-flex items-center text-[9px] font-black uppercase tracking-wider text-white bg-red-600 px-1.5 py-0.5 rounded border border-black align-middle'>
+																		{siswa.status}
+																	</span>
+																)}
+															</div>
+															<div className='flex gap-1 shrink-0'>
+																{siswa.poinPositif > 0 && (
+																	<span
+																		className='text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1 py-0.5 rounded-sm'
+																		title='Poin +'>
+																		+{siswa.poinPositif}
+																	</span>
+																)}
+																{siswa.poinNegatif > 0 && (
+																	<span
+																		className='text-[9px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1 py-0.5 rounded-sm'
+																		title='Pelanggaran -'>
+																		-{siswa.poinNegatif}
+																	</span>
+																)}
+															</div>
+														</div>
+														<div className='text-[11px] text-gray-400 mt-0.5'>NIS: {siswa.nis}</div>
+													</td>
+
+													{statusList.map((st) => {
+														const active = absensi[siswa.id]?.status === st.label;
+														return (
+															<td
+																key={st.id}
+																className='px-3 py-2 text-center align-middle'>
+																<button
+																	type='button'
+																	disabled={siswa.status !== 'Aktif'}
+																	onClick={() => handleStatusChange(siswa.id, st.label)}
+																	className={`${getStatusClasses(st.warna, active)} h-8 w-8 rounded-full ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
+																	{st.kode}
+																</button>
+															</td>
+														);
+													})}
+
+													<td className='px-3 py-2 align-middle text-center'>
+														<textarea
+															disabled={siswa.status !== 'Aktif'}
+															className='inline-block w-40 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none text-left disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
+															rows={2}
+															placeholder='Keterangan (opsional)'
+															value={absensi[siswa.id]?.keterangan || ''}
+															onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
+														/>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							)}
 						</div>
 					)}
 				</div>

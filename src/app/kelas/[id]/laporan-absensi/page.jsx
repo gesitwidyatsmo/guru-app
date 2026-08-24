@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import SectionHeader from '../../../components/SectionHeader';
 import * as XLSX from 'xlsx';
 import { useParams } from 'next/navigation';
@@ -18,9 +18,21 @@ export default function LaporanAbsensiPage() {
 	const [rekapData, setRekapData] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
+	const [searchQuery, setSearchQuery] = useState('');
 
 	// Tampilan style: 'jumlah' | 'persentase'
 	const [tampilanStyle, setTampilanStyle] = useState('jumlah');
+
+	const filteredSiswa = useMemo(() => {
+		if (!rekapData?.siswa) return [];
+		if (!searchQuery.trim()) return rekapData.siswa;
+		const q = searchQuery.toLowerCase().trim();
+		return rekapData.siswa.filter(
+			(s) =>
+				(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+				(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [rekapData?.siswa, searchQuery]);
 
 	const bulanOptions = [
 		{ value: 'all', label: 'Semua Bulan' },
@@ -473,89 +485,119 @@ export default function LaporanAbsensiPage() {
 						{rekapData.siswa && Array.isArray(rekapData.siswa) && rekapData.siswa.length > 0 ? (
 							<>
 								<div className='p-6'>
-									{/* Keterangan Status (dipindah ke atas) */}
-									<div className='mb-6 flex flex-wrap gap-3'>
-										<div className='flex items-center gap-2 bg-green-50 px-4 py-2 rounded-xl border border-green-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-green-500 text-white font-bold text-sm shadow-sm'>H</span>
-											<span className='text-sm font-medium text-green-900'>Hadir</span>
+									{/* Baris Status & Pencarian */}
+									<div className='mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4'>
+										{/* Keterangan Status */}
+										<div className='flex flex-wrap gap-2 sm:gap-3'>
+											<div className='flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-xl border border-green-200'>
+												<span className='w-7 h-7 flex items-center justify-center rounded-lg bg-green-500 text-white font-bold text-xs shadow-sm'>H</span>
+												<span className='text-xs font-medium text-green-900'>Hadir</span>
+											</div>
+											<div className='flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200'>
+												<span className='w-7 h-7 flex items-center justify-center rounded-lg bg-blue-500 text-white font-bold text-xs shadow-sm'>I</span>
+												<span className='text-xs font-medium text-blue-900'>Izin</span>
+											</div>
+											<div className='flex items-center gap-2 bg-yellow-50 px-3 py-1.5 rounded-xl border border-yellow-200'>
+												<span className='w-7 h-7 flex items-center justify-center rounded-lg bg-yellow-500 text-white font-bold text-xs shadow-sm'>S</span>
+												<span className='text-xs font-medium text-yellow-900'>Sakit</span>
+											</div>
+											<div className='flex items-center gap-2 bg-red-50 px-3 py-1.5 rounded-xl border border-red-200'>
+												<span className='w-7 h-7 flex items-center justify-center rounded-lg bg-red-500 text-white font-bold text-xs shadow-sm'>A</span>
+												<span className='text-xs font-medium text-red-900'>Alpha</span>
+											</div>
 										</div>
-										<div className='flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-xl border border-blue-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-blue-500 text-white font-bold text-sm shadow-sm'>I</span>
-											<span className='text-sm font-medium text-blue-900'>Izin</span>
-										</div>
-										<div className='flex items-center gap-2 bg-yellow-50 px-4 py-2 rounded-xl border border-yellow-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-yellow-500 text-white font-bold text-sm shadow-sm'>S</span>
-											<span className='text-sm font-medium text-yellow-900'>Sakit</span>
-										</div>
-										<div className='flex items-center gap-2 bg-red-50 px-4 py-2 rounded-xl border border-red-200 transition-all hover:scale-105 hover:shadow-md'>
-											<span className='w-8 h-8 flex items-center justify-center rounded-lg bg-red-500 text-white font-bold text-sm shadow-sm'>A</span>
-											<span className='text-sm font-medium text-red-900'>Alpha</span>
+
+										{/* Search Bar */}
+										<div className='relative w-full md:w-72'>
+											<input
+												type='text'
+												placeholder='Cari nama atau NIS siswa...'
+												value={searchQuery}
+												onChange={(e) => setSearchQuery(e.target.value)}
+												className='w-full pl-9 pr-8 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all'
+											/>
+											<svg className='w-4 h-4 absolute left-3 top-2.5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+												<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+											</svg>
+											{searchQuery && (
+												<button onClick={() => setSearchQuery('')} className='absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
+											)}
 										</div>
 									</div>
 
-									{/* Container Tabel dengan Shadow */}
-									<div className='overflow-x-auto rounded-xl border border-gray-200 shadow-lg'>
-										<table className='min-w-full border-collapse'>
-											<thead>
-												<tr className='bg-gradient-to-r from-gray-50 to-gray-100'>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sticky left-0 bg-gradient-to-r from-gray-50 to-gray-100 z-20 shadow-sm'>
-														No
-													</th>
-													<th className='border-b-2 border-gray-300 px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider bg-gradient-to-r from-gray-50 to-gray-100 shadow-sm'>Nama Siswa</th>
+									{filteredSiswa.length === 0 ? (
+										<div className='p-12 text-center bg-gray-50 rounded-2xl border border-gray-100'>
+											<p className='text-sm text-gray-500 font-medium'>Tidak ada siswa yang cocok dengan &quot;{searchQuery}&quot;</p>
+											<button
+												onClick={() => setSearchQuery('')}
+												className='mt-3 px-4 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors'>
+												Reset Pencarian
+											</button>
+										</div>
+									) : (
+										/* Container Tabel dengan Shadow */
+										<div className='overflow-x-auto rounded-xl border border-gray-200 shadow-lg'>
+											<table className='min-w-full border-collapse'>
+												<thead>
+													<tr className='bg-gradient-to-r from-gray-50 to-gray-100'>
+														<th className='border-b-2 border-gray-300 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sticky left-0 bg-gradient-to-r from-gray-50 to-gray-100 z-20 shadow-sm'>
+															No
+														</th>
+														<th className='border-b-2 border-gray-300 px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider bg-gradient-to-r from-gray-50 to-gray-100 shadow-sm'>Nama Siswa</th>
 
-													{/* Kolom Tanggal dengan style lebih baik */}
-													{getDatesInMonth(rekapData.tanggalList).map((tanggal, idx) => {
-														const date = new Date(tanggal);
-														const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
-														const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+														{/* Kolom Tanggal dengan style lebih baik */}
+														{getDatesInMonth(rekapData.tanggalList).map((tanggal, idx) => {
+															const date = new Date(tanggal);
+															const dayName = date.toLocaleDateString('id-ID', { weekday: 'short' });
+															const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+															return (
+																<th
+																	key={tanggal}
+																	className={`border-b-2 border-gray-300 px-3 py-4 text-center min-w-[60px] group hover:bg-indigo-50 transition-colors ${isWeekend ? 'bg-red-50/50' : ''}`}>
+																	<div className='text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors'>{date.getDate()}</div>
+																	<div className={`text-[10px] font-medium mt-0.5 ${isWeekend ? 'text-red-600' : 'text-gray-500'} group-hover:text-indigo-500 transition-colors`}>{dayName}</div>
+																</th>
+															);
+														})}
+
+														{/* Kolom Ringkasan dengan gradient */}
+														<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-green-50 to-green-100 text-green-700'>
+															<div className='flex flex-col items-center gap-1'>
+																<span className='text-lg'>✓</span>
+																<span>H</span>
+															</div>
+														</th>
+														<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700'>
+															<div className='flex flex-col items-center gap-1'>
+																<span className='text-lg'>ℹ</span>
+																<span>I</span>
+															</div>
+														</th>
+														<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-700'>
+															<div className='flex flex-col items-center gap-1'>
+																<span className='text-lg'>⚕</span>
+																<span>S</span>
+															</div>
+														</th>
+														<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-red-50 to-red-100 text-red-700'>
+															<div className='flex flex-col items-center gap-1'>
+																<span className='text-lg'>✕</span>
+																<span>A</span>
+															</div>
+														</th>
+													</tr>
+												</thead>
+												<tbody className='bg-white divide-y divide-gray-100'>
+													{filteredSiswa.map((siswa, index) => {
+														const totalPertemuan = Math.max(rekapData.tanggalList ? rekapData.tanggalList.length : 1, 1);
+
+														const renderNilai = (val) => {
+															if (tampilanStyle === 'jumlah') return val;
+															return Math.round((val / totalPertemuan) * 100) + '%';
+														};
 
 														return (
-															<th
-																key={tanggal}
-																className={`border-b-2 border-gray-300 px-3 py-4 text-center min-w-[60px] group hover:bg-indigo-50 transition-colors ${isWeekend ? 'bg-red-50/50' : ''}`}>
-																<div className='text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors'>{date.getDate()}</div>
-																<div className={`text-[10px] font-medium mt-0.5 ${isWeekend ? 'text-red-600' : 'text-gray-500'} group-hover:text-indigo-500 transition-colors`}>{dayName}</div>
-															</th>
-														);
-													})}
-
-													{/* Kolom Ringkasan dengan gradient */}
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-green-50 to-green-100 text-green-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>✓</span>
-															<span>H</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>ℹ</span>
-															<span>I</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-yellow-50 to-yellow-100 text-yellow-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>⚕</span>
-															<span>S</span>
-														</div>
-													</th>
-													<th className='border-b-2 border-gray-300 px-4 py-4 text-center text-xs font-bold uppercase tracking-wider bg-gradient-to-br from-red-50 to-red-100 text-red-700'>
-														<div className='flex flex-col items-center gap-1'>
-															<span className='text-lg'>✕</span>
-															<span>A</span>
-														</div>
-													</th>
-												</tr>
-											</thead>
-											<tbody className='bg-white divide-y divide-gray-100'>
-												{rekapData.siswa.map((siswa, index) => {
-													const totalPertemuan = Math.max(rekapData.tanggalList ? rekapData.tanggalList.length : 1, 1);
-
-													const renderNilai = (val) => {
-														if (tampilanStyle === 'jumlah') return val;
-														return Math.round((val / totalPertemuan) * 100) + '%';
-													};
-
-													return (
 														<tr
 															key={siswa.id}
 															className='hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 group'>
@@ -633,9 +675,10 @@ export default function LaporanAbsensiPage() {
 											</tbody>
 										</table>
 									</div>
-								</div>
-							</>
-						) : (
+								)}
+							</div>
+						</>
+					) : (
 							<div className='p-12 text-center'>
 								<div className='inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4'>
 									<svg
