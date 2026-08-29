@@ -14,8 +14,8 @@ if (!serviceRoleKey) {
 }
 
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
   {
     auth: {
       // Admin client tidak perlu menyimpan sesi atau auto-refresh token
