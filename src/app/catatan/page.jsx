@@ -201,32 +201,89 @@ export default function CatatanPage() {
 
   useEffect(() => {
     const init = async () => {
+      let currentUid = '';
+      let currentAuthUid = '';
+
+      // 1. Coba baca identitas dan data dari cache IndexedDB dulu
       try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/login'); return; }
-        const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
-        if (!profile) { router.push('/login'); return; }
-        setUserId(profile.id_user);
-        setAuthUid(user.id);
-        await fetchCatatan(supabase, profile.id_user);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+        const { getAll, getUserSession } = await import('@/lib/offlineDb');
+        const [cachedUser, cachedNotes] = await Promise.all([
+          getUserSession(),
+          getAll('catatan'),
+        ]);
+
+        if (cachedUser) {
+          currentUid = cachedUser.id || cachedUser.id_user || '';
+          currentAuthUid = cachedUser.auth_id || cachedUser.id || '';
+          setUserId(currentUid);
+          setAuthUid(currentAuthUid);
+        }
+
+        if (cachedNotes && cachedNotes.length > 0) {
+          const userNotes = cachedNotes.filter((c) => !currentUid || c.user_id === currentUid);
+          setCatatan(userNotes);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.warn('Error reading cached notes:', e);
       }
+
+      // 2. Jika online, sinkronkan profil dan data dari API
+      if (typeof window !== 'undefined' && window.navigator.onLine) {
+        try {
+          const resAuth = await fetch('/api/auth/me');
+          if (resAuth.ok) {
+            const authData = await resAuth.json();
+            if (authData.user) {
+              currentUid = authData.user.id;
+              currentAuthUid = authData.user.id;
+              setUserId(currentUid);
+              setAuthUid(currentAuthUid);
+            }
+          }
+
+          const resNotes = await fetch('/api/catatan');
+          if (resNotes.ok) {
+            const notesData = await resNotes.json();
+            if (Array.isArray(notesData)) {
+              setCatatan(notesData);
+              try {
+                const { bulkPut } = await import('@/lib/offlineDb');
+                bulkPut('catatan', notesData);
+              } catch (e) {}
+            }
+          }
+        } catch (err) {
+          console.warn('Network fetch notes error, using offline cache:', err);
+        }
+      }
+      setLoading(false);
     };
     init();
   }, []);
 
-  const fetchCatatan = async (supabase, uid) => {
-    const { data, error } = await supabase.from('catatan').select('*').eq('user_id', uid).order('pinned', { ascending: false }).order('updated_at', { ascending: false });
-    if (!error) setCatatan(data || []);
-  };
-
   const refresh = useCallback(async () => {
-    const supabase = createClient();
-    await fetchCatatan(supabase, userId);
+    try {
+      if (typeof window !== 'undefined' && window.navigator.onLine) {
+        const res = await fetch('/api/catatan');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setCatatan(data);
+            const { bulkPut } = await import('@/lib/offlineDb');
+            bulkPut('catatan', data);
+            return;
+          }
+        }
+      }
+
+      const { getAll } = await import('@/lib/offlineDb');
+      const allCached = await getAll('catatan');
+      const filtered = (allCached || []).filter((c) => !userId || c.user_id === userId);
+      setCatatan(filtered);
+    } catch (e) {
+      console.warn('Refresh notes error:', e);
+    }
   }, [userId]);
 
   // Upload foto ke Supabase Storage
@@ -255,43 +312,125 @@ export default function CatatanPage() {
 
   const handleSave = async (form, fotoFile, hapusFoto, oldFotoUrl) => {
     if (!form.judul.trim() && !form.isi.trim() && !fotoFile && !editTarget?.foto_url) {
-      swalError('Catatan Kosong', 'Isi judul, isi catatan, atau lampirkan foto terlebih dahulu.'); return;
+      swalError('Catatan Kosong', 'Isi judul, isi catatan, atau lampirkan foto terlebih dahulu.');
+      return;
     }
+
     setIsSaving(true);
+    const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+
     try {
-      const supabase = createClient();
+      const noteId = editTarget ? editTarget.id : 'note_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
       let foto_url = editTarget?.foto_url || null;
 
-      // Hapus foto lama jika diminta
-      if (hapusFoto && oldFotoUrl) {
-        await deleteFotoFromStorage(supabase, oldFotoUrl);
-        foto_url = null;
+      if (hapusFoto) foto_url = null;
+
+      // Jika ada file foto baru
+      if (fotoFile) {
+        if (isOffline) {
+          // Convert to base64 preview for offline viewing
+          foto_url = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(fotoFile);
+          });
+        } else {
+          try {
+            const supabase = createClient();
+            foto_url = await uploadFoto(supabase, fotoFile, noteId);
+          } catch (uploadErr) {
+            console.warn('Upload foto storage gagal, simpan offline:', uploadErr);
+          }
+        }
       }
 
-      if (editTarget) {
-        // Jika ada file baru, upload dulu
-        if (fotoFile) {
-          foto_url = await uploadFoto(supabase, fotoFile, editTarget.id);
+      const notePayload = {
+        id: noteId,
+        user_id: userId,
+        judul: form.judul,
+        isi: form.isi,
+        warna: form.warna,
+        pinned: editTarget ? editTarget.pinned : false,
+        foto_url,
+        updated_at: new Date().toISOString(),
+        created_at: editTarget ? editTarget.created_at : new Date().toISOString(),
+      };
+
+      if (isOffline) {
+        const { putItem } = await import('@/lib/offlineDb');
+        const { enqueueAction } = await import('@/lib/syncEngine');
+
+        await putItem('catatan', notePayload);
+        await enqueueAction({
+          type: 'CATATAN',
+          endpoint: '/api/catatan',
+          method: editTarget ? 'PUT' : 'POST',
+          payload: notePayload,
+          description: `Catatan: ${form.judul || 'Tanpa judul'}`,
+        });
+
+        if (editTarget) {
+          setCatatan((prev) => prev.map((c) => (c.id === noteId ? notePayload : c)));
+        } else {
+          setCatatan((prev) => [notePayload, ...prev]);
         }
-        const { error } = await supabase.from('catatan').update({ judul: form.judul, isi: form.isi, warna: form.warna, foto_url }).eq('id', editTarget.id);
-        if (error) throw error;
+
+        setIsEditorOpen(false);
+        setEditTarget(null);
+        swalSuccess(editTarget ? 'Catatan Diperbarui!' : 'Catatan Tersimpan!', 'Disimpan di perangkat dan akan disinkronkan saat online.');
       } else {
-        // Insert dulu untuk dapat id, lalu upload foto
-        const newId = crypto.randomUUID();
-        if (fotoFile) {
-          foto_url = await uploadFoto(supabase, fotoFile, newId);
-        }
-        const { error } = await supabase.from('catatan').insert({ id: newId, judul: form.judul, isi: form.isi, warna: form.warna, foto_url, user_id: userId });
-        if (error) throw error;
-      }
+        const res = await fetch('/api/catatan', {
+          method: editTarget ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(notePayload),
+        });
 
-      setIsEditorOpen(false);
-      setEditTarget(null);
-      await refresh();
-      swalSuccess(editTarget ? 'Catatan Diperbarui!' : 'Catatan Tersimpan!', '');
+        if (res.ok) {
+          const { putItem } = await import('@/lib/offlineDb');
+          await putItem('catatan', notePayload);
+          setIsEditorOpen(false);
+          setEditTarget(null);
+          await refresh();
+          swalSuccess(editTarget ? 'Catatan Diperbarui!' : 'Catatan Tersimpan!', '');
+        } else {
+          throw new Error('Gagal menyimpan di server');
+        }
+      }
     } catch (err) {
-      console.error(err);
-      swalError('Gagal Menyimpan', err.message || 'Coba lagi sebentar.');
+      console.warn('Gagal online save, fallback ke offline queue:', err);
+      try {
+        const { putItem } = await import('@/lib/offlineDb');
+        const { enqueueAction } = await import('@/lib/syncEngine');
+
+        const fallbackId = editTarget ? editTarget.id : 'note_' + Math.random().toString(36).substring(2, 9);
+        const fallbackPayload = {
+          id: fallbackId,
+          user_id: userId,
+          judul: form.judul,
+          isi: form.isi,
+          warna: form.warna,
+          pinned: editTarget ? editTarget.pinned : false,
+          foto_url: editTarget?.foto_url || null,
+          updated_at: new Date().toISOString(),
+          created_at: editTarget ? editTarget.created_at : new Date().toISOString(),
+        };
+
+        await putItem('catatan', fallbackPayload);
+        await enqueueAction({
+          type: 'CATATAN',
+          endpoint: '/api/catatan',
+          method: editTarget ? 'PUT' : 'POST',
+          payload: fallbackPayload,
+          description: `Catatan: ${form.judul || 'Tanpa judul'}`,
+        });
+
+        setIsEditorOpen(false);
+        setEditTarget(null);
+        await refresh();
+        swalSuccess('Tersimpan Offline!', 'Catatan aman di perangkat dan akan disinkronkan saat koneksi pulih.');
+      } catch (fallbackErr) {
+        swalError('Gagal Menyimpan', err.message || 'Coba lagi sebentar.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -300,26 +439,76 @@ export default function CatatanPage() {
   const handleDelete = async (id, fotoUrl) => {
     const result = await swalConfirmDelete('Hapus Catatan?', 'Catatan dan foto lampirannya tidak bisa dikembalikan.');
     if (!result.isConfirmed) return;
+
+    const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+
     try {
-      const supabase = createClient();
-      if (fotoUrl) await deleteFotoFromStorage(supabase, fotoUrl);
-      const { error } = await supabase.from('catatan').delete().eq('id', id);
-      if (error) throw error;
-      await refresh();
-      swalSuccess('Terhapus!', 'Catatan berhasil dihapus.');
+      const { deleteItem } = await import('@/lib/offlineDb');
+      const { enqueueAction } = await import('@/lib/syncEngine');
+
+      await deleteItem('catatan', id);
+      setCatatan((prev) => prev.filter((c) => c.id !== id));
+
+      if (isOffline) {
+        await enqueueAction({
+          type: 'CATATAN_DELETE',
+          endpoint: `/api/catatan?id=${id}`,
+          method: 'DELETE',
+          payload: { id },
+          description: `Hapus Catatan ID ${id}`,
+        });
+        swalSuccess('Terhapus Lokal!', 'Catatan dihapus dari perangkat.');
+      } else {
+        const res = await fetch(`/api/catatan?id=${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Gagal hapus di server');
+        swalSuccess('Terhapus!', 'Catatan berhasil dihapus.');
+      }
     } catch (err) {
-      swalError('Gagal Menghapus', err.message || 'Coba lagi.');
+      console.warn('Gagal online delete, fallback ke queue:', err);
+      try {
+        const { enqueueAction } = await import('@/lib/syncEngine');
+        await enqueueAction({
+          type: 'CATATAN_DELETE',
+          endpoint: `/api/catatan?id=${id}`,
+          method: 'DELETE',
+          payload: { id },
+          description: `Hapus Catatan ID ${id}`,
+        });
+        swalSuccess('Terhapus Lokal!', 'Catatan dihapus dari perangkat.');
+      } catch (e) {
+        swalError('Gagal Menghapus', err.message || 'Coba lagi.');
+      }
     }
   };
 
   const handleTogglePin = async (item) => {
+    const updated = { ...item, pinned: !item.pinned, updated_at: new Date().toISOString() };
+    const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+
     try {
-      const supabase = createClient();
-      const { error } = await supabase.from('catatan').update({ pinned: !item.pinned }).eq('id', item.id);
-      if (error) throw error;
-      await refresh();
+      const { putItem } = await import('@/lib/offlineDb');
+      const { enqueueAction } = await import('@/lib/syncEngine');
+
+      await putItem('catatan', updated);
+      setCatatan((prev) => prev.map((c) => (c.id === item.id ? updated : c)));
+
+      if (isOffline) {
+        await enqueueAction({
+          type: 'CATATAN',
+          endpoint: '/api/catatan',
+          method: 'PUT',
+          payload: updated,
+          description: `Pin Catatan: ${item.judul || ''}`,
+        });
+      } else {
+        await fetch('/api/catatan', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+      }
     } catch (err) {
-      swalError('Gagal', err.message);
+      console.warn('Gagal toggle pin online:', err);
     }
   };
 

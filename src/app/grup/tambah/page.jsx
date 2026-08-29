@@ -46,32 +46,48 @@ export default function CreateGroupPage() {
 	const [showBoard, setShowBoard] = useState(false);
 	const [generatedGroups, setGeneratedGroups] = useState([]);
 
-	// Fetch Data Kelas
+	// Fetch Data Kelas & Mapel (Offline-First)
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const supabase = createClient();
-				const [{ data: dataKelas }, { data: mapelData }] = await Promise.all([
-					supabase.from('kelas').select('*'),
-					supabase.from('mapel').select('*')
+				const { getAll } = await import('@/lib/offlineDb');
+				const [cachedKelas, cachedMapel] = await Promise.all([
+					getAll('kelas'),
+					getAll('mapel'),
 				]);
 
-				const sortedKelas = (dataKelas || []).sort((a, b) => {
-					const nameA = a.nama_kelas || a.kelas || '';
-					const nameB = b.nama_kelas || b.kelas || '';
-					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-				});
+				if (cachedKelas && cachedKelas.length > 0) {
+					const sortedKelas = cachedKelas.sort((a, b) => (a.nama_kelas || a.kelas || '').localeCompare(b.nama_kelas || b.kelas || ''));
+					const sortedMapel = (cachedMapel || []).sort((a, b) => (a.nama_mapel || a.mapel || '').localeCompare(b.nama_mapel || b.mapel || ''));
+					setKelasList(sortedKelas);
+					setMapelList(sortedMapel);
+					setLoadingPage(false);
+				}
 
-				const sortedMapel = (mapelData || []).sort((a, b) => {
-					const nameA = a.nama_mapel || a.mapel || '';
-					const nameB = b.nama_mapel || b.mapel || '';
-					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-				});
+				if (typeof window !== 'undefined' && window.navigator.onLine) {
+					const supabase = createClient();
+					const [{ data: dataKelas }, { data: mapelData }] = await Promise.all([
+						supabase.from('kelas').select('*'),
+						supabase.from('mapel').select('*')
+					]);
 
-				setKelasList(sortedKelas);
-				setMapelList(sortedMapel);
+					const sortedKelas = (dataKelas || []).sort((a, b) => {
+						const nameA = a.nama_kelas || a.kelas || '';
+						const nameB = b.nama_kelas || b.kelas || '';
+						return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+					});
+
+					const sortedMapel = (mapelData || []).sort((a, b) => {
+						const nameA = a.nama_mapel || a.mapel || '';
+						const nameB = b.nama_mapel || b.mapel || '';
+						return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+					});
+
+					setKelasList(sortedKelas);
+					setMapelList(sortedMapel);
+				}
 			} catch (err) {
-				console.error('Error fetching kelas:', err);
+				console.warn('Offline mode for grup tambah:', err);
 			} finally {
 				setLoadingPage(false);
 			}
@@ -89,48 +105,63 @@ export default function CreateGroupPage() {
 		const fetchSiswa = async () => {
 			setLoading(true);
 			try {
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				const { data: userData } = await supabase.from('users').select('id_user, role').eq('auth_id', user?.id).single();
-				const userId = userData?.id_user;
-				const role = userData?.role;
+				const { getAll } = await import('@/lib/offlineDb');
+				const cachedSiswa = await getAll('siswa');
+				const cachedSiswaKelas = (cachedSiswa || []).filter(s => s.kelas === form.kelas && s.status === 'Aktif');
 
-				// Fetch siswa
-				const { data: siswaDataRaw } = await supabase.from('siswa').select('id, nis, nama_lengkap, status, kelas').eq('kelas', form.kelas).eq('status', 'Aktif');
-				let siswaData = siswaDataRaw || [];
-
-				// Fetch poin aktif
-				const { data: poinData } = await supabase.from('poin_siswa').select('siswa_id, tipe, poin').eq('kelas', form.kelas);
-				const poinMap = {};
-				(poinData || []).forEach(p => {
-					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = 0;
-					if (p.tipe === 'positif') poinMap[p.siswa_id] += p.poin || 0;
-					if (p.tipe === 'negatif') poinMap[p.siswa_id] -= p.poin || 0;
-				});
-
-				// Fetch tugas (to get the list of assignments)
-				let tugasQuery = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, mapel').eq('kelas', form.kelas);
-				if (form.mapel) tugasQuery = tugasQuery.eq('mapel', form.mapel);
-				if (role === 'Guru' && userId) tugasQuery = tugasQuery.eq('guru_id', userId);
-				const { data: tugasData } = await tugasQuery;
-				const tugasList = tugasData || [];
-
-				// Fetch nilai
-				const tugasIds = tugasList.map(t => t.tugas_id);
-				let nilaiMap = {};
-				let countNilaiMap = {};
-				if (tugasIds.length > 0) {
-					const { data: allNilai } = await supabase.from('nilai_siswa').select('siswa_id, tugas_id, nilai').in('tugas_id', tugasIds);
-					if (allNilai) {
-						allNilai.forEach(n => {
-							if (!nilaiMap[n.siswa_id]) nilaiMap[n.siswa_id] = {};
-							nilaiMap[n.siswa_id][n.tugas_id] = parseFloat(n.nilai) || 0;
-
-							if (!countNilaiMap[n.siswa_id]) countNilaiMap[n.siswa_id] = 0;
-							countNilaiMap[n.siswa_id]++;
-						});
-					}
+				if (cachedSiswaKelas.length > 0) {
+					const mappedCached = cachedSiswaKelas.map(s => ({
+						...s,
+						poin: 0,
+						rataRata: 0,
+						nilai: {},
+					}));
+					setSiswaList(mappedCached);
 				}
+
+				if (typeof window !== 'undefined' && window.navigator.onLine) {
+					const supabase = createClient();
+					const { data: { user } } = await supabase.auth.getUser();
+					const { data: userData } = await supabase.from('users').select('id_user, role').eq('auth_id', user?.id).single();
+					const userId = userData?.id_user;
+					const role = userData?.role;
+
+					// Fetch siswa
+					const { data: siswaDataRaw } = await supabase.from('siswa').select('id, nis, nama_lengkap, status, kelas').eq('kelas', form.kelas).eq('status', 'Aktif');
+					let siswaData = siswaDataRaw || [];
+
+					// Fetch poin aktif
+					const { data: poinData } = await supabase.from('poin_siswa').select('siswa_id, tipe, poin').eq('kelas', form.kelas);
+					const poinMap = {};
+					(poinData || []).forEach(p => {
+						if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = 0;
+						if (p.tipe === 'positif') poinMap[p.siswa_id] += p.poin || 0;
+						if (p.tipe === 'negatif') poinMap[p.siswa_id] -= p.poin || 0;
+					});
+
+					// Fetch tugas
+					let tugasQuery = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, mapel').eq('kelas', form.kelas);
+					if (form.mapel) tugasQuery = tugasQuery.eq('mapel', form.mapel);
+					if (role === 'Guru' && userId) tugasQuery = tugasQuery.eq('guru_id', userId);
+					const { data: tugasData } = await tugasQuery;
+					const tugasList = tugasData || [];
+
+					// Fetch nilai
+					const tugasIds = tugasList.map(t => t.tugas_id);
+					let nilaiMap = {};
+					let countNilaiMap = {};
+					if (tugasIds.length > 0) {
+						const { data: allNilai } = await supabase.from('nilai_siswa').select('siswa_id, tugas_id, nilai').in('tugas_id', tugasIds);
+						if (allNilai) {
+							allNilai.forEach(n => {
+								if (!nilaiMap[n.siswa_id]) nilaiMap[n.siswa_id] = {};
+								nilaiMap[n.siswa_id][n.tugas_id] = parseFloat(n.nilai) || 0;
+
+								if (!countNilaiMap[n.siswa_id]) countNilaiMap[n.siswa_id] = 0;
+								countNilaiMap[n.siswa_id]++;
+							});
+						}
+					}
 
 				const siswaDataUpdated = siswaData.map(s => {
 					let total = 0;
@@ -160,6 +191,7 @@ export default function CreateGroupPage() {
 						text: `TIDAK ADA SISWA AKTIF DI KELAS ${form.kelas}`,
 						icon: 'info'
 					});
+				}
 				}
 			} catch (err) {
 				brutalSwal.fire({

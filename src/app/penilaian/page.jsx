@@ -45,29 +45,53 @@ export default function PenilaianPage() {
 	// --- 1. Fetch Data Awal (Kelas, Mapel, Siswa) ---
 	useEffect(() => {
 		const fetchAll = async () => {
+			// A. Coba baca dari IndexedDB dulu
 			try {
-				const supabase = createClient();
-				const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
-					fetch('/api/kelas?all=false').then(res => res.json()),
-					fetch(`/api/mapel?all=false&${buildPeriodeQuery()}`).then(res => res.json()),
-					fetch('/api/siswa').then(res => res.json())
+				const { getAll } = await import('@/lib/offlineDb');
+				const [cachedKelas, cachedMapel, cachedSiswa] = await Promise.all([
+					getAll('kelas'),
+					getAll('mapel'),
+					getAll('siswa'),
 				]);
 
-				setKelasList(dataKelas || []);
-				setMapelList(dataMapel || []);
-				setSiswaList(dataSiswa || []);
-
-				if (dataKelas && dataKelas.length > 0) {
-					setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
+				if (cachedKelas && cachedKelas.length > 0) {
+					setKelasList(cachedKelas);
+					setMapelList(cachedMapel || []);
+					setSiswaList(cachedSiswa || []);
+					setSelectedKelas(cachedKelas[0].kelas || cachedKelas[0].nama_kelas);
+					if (cachedMapel && cachedMapel.length > 0) {
+						setSelectedMapel(cachedMapel[0].mapel || cachedMapel[0].nama_mapel);
+					}
+					setLoading(false);
 				}
-				if (dataMapel && dataMapel.length > 0) {
-					setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
-				}
-			} catch (err) {
-				console.error(err);
-			} finally {
-				setLoading(false);
+			} catch (e) {
+				console.warn('Error reading cached master data for penilaian:', e);
 			}
+
+			// B. Jika online, fetch fresh data
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				try {
+					const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
+						fetch('/api/kelas?all=false').then(res => res.json()).catch(() => []),
+						fetch(`/api/mapel?all=false&${buildPeriodeQuery()}`).then(res => res.json()).catch(() => []),
+						fetch('/api/siswa').then(res => res.json()).catch(() => [])
+					]);
+
+					if (Array.isArray(dataKelas) && dataKelas.length > 0) setKelasList(dataKelas);
+					if (Array.isArray(dataMapel) && dataMapel.length > 0) setMapelList(dataMapel);
+					if (Array.isArray(dataSiswa) && dataSiswa.length > 0) setSiswaList(dataSiswa);
+
+					if (dataKelas && dataKelas.length > 0 && !selectedKelas) {
+						setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
+					}
+					if (dataMapel && dataMapel.length > 0 && !selectedMapel) {
+						setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
+					}
+				} catch (err) {
+					console.warn('Offline penilaian mode active');
+				}
+			}
+			setLoading(false);
 		};
 		fetchAll();
 	}, []);
@@ -96,53 +120,96 @@ export default function PenilaianPage() {
 		const fetchTugas = async () => {
 			try {
 				setLoadingTugas(true);
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const userId = userData?.id_user;
-				const role = userData?.role;
 
-				let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel).eq('tahun_ajar', tahunAjar).eq('semester', semester);
-				if (role === 'Guru' && userId) {
-					query = query.eq('guru_id', userId);
+				// Coba baca dari IndexedDB dulu
+				const { getAll, getUserSession } = await import('@/lib/offlineDb');
+				const [cachedTugas, cachedUser] = await Promise.all([
+					getAll('nilai_tugas'),
+					getUserSession(),
+				]);
+
+				const userRole = cachedUser?.role;
+				const userId = cachedUser?.id || cachedUser?.id_user;
+
+				const currentClassStudents = siswaList.filter(s => s.kelas === selectedKelas).length;
+
+				if (cachedTugas && cachedTugas.length > 0) {
+					const filteredCached = cachedTugas.filter(
+						t => t.kelas === selectedKelas &&
+							t.mapel === selectedMapel &&
+							(!t.tahun_ajar || t.tahun_ajar === tahunAjar) &&
+							(!t.semester || Number(t.semester) === Number(semester)) &&
+							(userRole !== 'Guru' || !userId || t.guru_id === userId)
+					);
+					if (filteredCached.length > 0) {
+						const mappedCached = filteredCached.map(t => ({
+							...t,
+							tugas_id: t.tugas_id,
+							judul: t.judul || t.kategori || 'Tugas',
+							kategori: t.kategori || t.judul,
+							tanggal: t.tanggal,
+							kelas: t.kelas,
+							mapel: t.mapel,
+							jumlahSiswaMengumpulkan: t.jumlahSiswaMengumpulkan ?? t.jumlah_siswa_terisi ?? 0,
+							totalSiswa: t.totalSiswa || currentClassStudents || 0,
+						}));
+						setDaftarTugas(mappedCached.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+					}
 				}
 
-				const { data: tugasData } = await query;
-				
-				if (tugasData) {
-					const tugasIds = tugasData.map(t => t.tugas_id);
-					let counts = {};
-					if (tugasIds.length > 0) {
-						const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
-						if (siswaData) {
-							siswaData.forEach(s => {
-								if (s.nilai && parseInt(s.nilai) > 0) {
-									counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
-								}
-							});
-						}
+				if (typeof window !== 'undefined' && window.navigator.onLine) {
+					const supabase = createClient();
+					let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel).eq('tahun_ajar', tahunAjar).eq('semester', semester);
+					if (userRole === 'Guru' && userId) {
+						query = query.eq('guru_id', userId);
 					}
 
-					const mappedTugas = tugasData.map(t => ({
-						tugas_id: t.tugas_id,
-						judul: t.kategori,
-						tanggal: t.tanggal,
-						kelas: t.kelas,
-						mapel: t.mapel,
-						jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
-						totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
-					}));
+					const { data: tugasData } = await query;
+					
+					if (tugasData) {
+						const tugasIds = tugasData.map(t => t.tugas_id);
+						let counts = {};
+						if (tugasIds.length > 0) {
+							const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
+							if (siswaData) {
+								siswaData.forEach(s => {
+									if (s.nilai && parseInt(s.nilai) > 0) {
+										counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+									}
+								});
+							}
+						}
 
-					setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+						const mappedTugas = tugasData.map(t => ({
+							...t,
+							tugas_id: t.tugas_id,
+							judul: t.kategori || t.judul,
+							kategori: t.kategori,
+							tanggal: t.tanggal,
+							kelas: t.kelas,
+							mapel: t.mapel,
+							jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
+							totalSiswa: currentClassStudents || siswaList.filter(s => s.kelas === t.kelas).length || 0,
+						}));
+
+						setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
+
+						// Simpan ke IndexedDB
+						try {
+							const { bulkPut } = await import('@/lib/offlineDb');
+							bulkPut('nilai_tugas', tugasData);
+						} catch (e) {}
+					}
 				}
 			} catch (err) {
-				console.error('Error fetching tugas:', err);
+				console.warn('Gagal fetch tugas online, staying on cached tasks:', err);
 			} finally {
 				setLoadingTugas(false);
 			}
 		};
+
 		fetchTugas();
-	}, [selectedKelas, selectedMapel, tahunAjar, semester]);
+	}, [selectedKelas, selectedMapel, tahunAjar, semester, siswaList]);
 
 	// --- 3. Load Nilai Detail saat Tugas Dipilih ---
 	useEffect(() => {
@@ -429,92 +496,125 @@ export default function PenilaianPage() {
 			nilai: nilaiArray,
 		};
 
-		// Jika tidak ada koneksi, simpan ke antrian lokal
-		if (!navigator.onLine) {
-			addToQueue('nilai', payload, 'POST', '/api/nilai_local_queue');
-			await Swal.fire({
-				icon: 'info',
-				title: 'Disimpan Sementara',
-				text: 'Tidak ada koneksi internet. Data penilaian disimpan lokal dan akan dikirim otomatis saat online.',
-				timer: 3000,
-				showConfirmButton: false,
-			});
-			setSaving(false);
-			return;
-		}
+		const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+		const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+		const headerPayload = {
+			tugas_id: tugasId,
+			guru_id: null,
+			kategori: judul,
+			type,
+			deskripsi,
+			kelas: selectedKelas,
+			mapel: selectedMapel,
+			tanggal,
+			tahun_ajar: tahunAjarAktif,
+			semester: semesterAktif,
+			mode_penilaian: modePenilaian,
+			total_soal: parseInt(totalSoal) || 100,
+			skala_maks: parseInt(skalaMaks) || 100,
+			pembulatan: pembulatan,
+		};
+
+		const validGrades = payload.nilai.map(n => {
+			const siswa = getSiswaById(n.siswa_id);
+			return {
+				tugas_id: tugasId,
+				siswa_id: n.siswa_id,
+				nama_siswa: siswa?.nama_lengkap || 'Unknown',
+				nilai: parseFloat(n.nilai) || 0,
+				jumlah_benar: n.jumlah_benar,
+			};
+		});
 
 		try {
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-			const userId = userData?.id_user;
-			const role = userData?.role;
+			if (isOffline) {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
 
-			// Validate
-			if (role === 'Guru' && userId) {
-				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', selectedKelas).eq('mapel', selectedMapel).single();
-				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak mengajar mapel ini di kelas tersebut.');
-			}
+				await putItem('nilai_tugas', headerPayload);
+				await enqueueAction({
+					type: 'NILAI_BARU',
+					endpoint: '/api/nilai',
+					method: 'POST',
+					payload: { ...headerPayload, nilai: validGrades },
+					description: `Nilai Tugas: ${judul} (${selectedMapel} - ${selectedKelas})`,
+				});
 
-			// Generate ID
-			const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+				setDaftarTugas(prev => [{ ...headerPayload, jumlah_siswa_terisi: validGrades.length }, ...prev]);
+				setSelectedTugasId(tugasId);
 
-			const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert({
-				tugas_id: tugasId,
-				guru_id: userId,
-				kategori: judul,
-				type,
-				deskripsi,
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				tanggal,
-				tahun_ajar: tahunAjarAktif,
-				semester: semesterAktif,
-				mode_penilaian: modePenilaian,
-				total_soal: parseInt(totalSoal) || 100,
-				skala_maks: parseInt(skalaMaks) || 100,
-				pembulatan: pembulatan,
-			});
-			if (insertHeaderError) throw insertHeaderError;
+				await Swal.fire({
+					icon: 'success',
+					title: 'Tersimpan di Perangkat!',
+					text: 'Nilai tersimpan secara offline dan akan disinkronkan ke server saat online.',
+					confirmButtonColor: '#00A693',
+				});
+			} else {
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+				const userId = userData?.id_user;
+				headerPayload.guru_id = userId;
 
-			// Insert scores
-			const validGrades = payload.nilai.map(n => {
-				const siswa = getSiswaById(n.siswa_id);
-				return {
-					tugas_id: tugasId,
-					siswa_id: n.siswa_id,
-					nama_siswa: siswa?.nama_lengkap || 'Unknown',
-					nilai: parseFloat(n.nilai) || 0,
-					jumlah_benar: n.jumlah_benar,
-				};
-			});
+				const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert(headerPayload);
+				if (insertHeaderError) throw insertHeaderError;
 
-			if (validGrades.length > 0) {
-				const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
-				if (insertScoreError) {
-					await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
-					throw insertScoreError;
+				if (validGrades.length > 0) {
+					const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
+					if (insertScoreError) {
+						await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
+						throw insertScoreError;
+					}
 				}
+
+				try {
+					const { putItem } = await import('@/lib/offlineDb');
+					await putItem('nilai_tugas', headerPayload);
+				} catch (e) {}
+
+				await Swal.fire({
+					icon: 'success',
+					title: 'Berhasil!',
+					text: 'Tugas baru berhasil dibuat',
+					timer: 1500,
+					showConfirmButton: false,
+				});
+
+				setSelectedTugasId(tugasId);
 			}
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil!',
-				text: 'Tugas baru berhasil dibuat',
-				timer: 1500,
-				showConfirmButton: false,
-			});
-
-			// Trigger refetch daftar tugas via dependency effect
-			setSelectedTugasId(tugasId);
 		} catch (error) {
-			console.error(error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menyimpan',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
-			});
+			console.warn('Gagal simpan online, fallback ke queue:', error);
+			try {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+
+				await putItem('nilai_tugas', headerPayload);
+				await enqueueAction({
+					type: 'NILAI_BARU',
+					endpoint: '/api/nilai',
+					method: 'POST',
+					payload: { ...headerPayload, nilai: validGrades },
+					description: `Nilai Tugas: ${judul} (${selectedMapel} - ${selectedKelas})`,
+				});
+
+				setDaftarTugas(prev => [{ ...headerPayload, jumlah_siswa_terisi: validGrades.length }, ...prev]);
+				setSelectedTugasId(tugasId);
+
+				await Swal.fire({
+					icon: 'info',
+					title: 'Tersimpan Offline!',
+					text: 'Koneksi terganggu. Nilai aman di perangkat dan akan disinkronkan saat terhubung kembali.',
+					confirmButtonColor: '#00A693',
+				});
+			} catch (enqueueErr) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Gagal Menyimpan',
+					text: error.message,
+					confirmButtonColor: '#4F46E5',
+				});
+			}
 		} finally {
 			setSaving(false);
 		}
@@ -992,17 +1092,17 @@ export default function PenilaianPage() {
 												selectedTugasId === t.tugas_id ? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]' : 'bg-white text-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-[1px] hover:-translate-x-[1px] hover:shadow-[4px_4px_0px_0px_#0D0D0D]'
 											}`}>
 											<div className='flex justify-between items-start mb-1'>
-												<p className='font-bold text-sm line-clamp-1'>{t.judul}</p>
+												<p className='font-bold text-sm line-clamp-1'>{t.judul || t.kategori || 'Tugas'}</p>
 												<span className='text-[10px] bg-white border-2 border-[#0D0D0D] px-1.5 py-0.5 rounded font-mono font-bold shadow-[1px_1px_0px_0px_#0D0D0D]'>
-													{new Date(t.tanggal).toLocaleDateString('id-ID', {
+													{t.tanggal ? new Date(t.tanggal).toLocaleDateString('id-ID', {
 														day: '2-digit',
 														month: 'short',
-													})}
+													}) : '-'}
 												</span>
 											</div>
 											<div className='flex justify-between items-center mt-2'>
 												<span className='text-xs font-bold text-[#0D0D0D] bg-white border-2 border-[#0D0D0D] px-2 py-0.5 rounded-md shadow-[1px_1px_0px_0px_#0D0D0D]'>
-													{t.jumlahSiswaMengumpulkan}/{t.totalSiswa} Siswa
+													{t.jumlahSiswaMengumpulkan ?? t.jumlah_siswa_terisi ?? 0}/{t.totalSiswa || siswaList.filter(s => s.kelas === (t.kelas || selectedKelas)).length || 0} Siswa
 												</span>
 												{selectedTugasId === t.tugas_id && <span className='w-3 h-3 rounded-full border-2 border-[#0D0D0D] bg-[#E8451A] animate-pulse shadow-[1px_1px_0px_0px_#0D0D0D]'></span>}
 											</div>

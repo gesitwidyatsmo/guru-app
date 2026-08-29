@@ -52,6 +52,8 @@ export const viewport = {
 	maximumScale: 1,
 };
 
+import OfflineSyncIndicator from './components/OfflineSyncIndicator';
+
 export default function RootLayout({ children }) {
 	return (
 		<html lang='id'>
@@ -60,6 +62,7 @@ export default function RootLayout({ children }) {
 					<IdleTimerWrapper>
 						<StyledComponentsRegistry>
 							{children}
+							<OfflineSyncIndicator />
 							<KbmBlocker />
 							<PwaInstallPrompt />
 						</StyledComponentsRegistry>

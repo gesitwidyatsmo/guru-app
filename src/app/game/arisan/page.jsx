@@ -36,16 +36,25 @@ export default function DashboardArisan() {
 		const fetchKelas = async () => {
 			setLoadingKelas(true);
 			try {
-				const res = await fetch('/api/kelas');
-				if (res.ok) {
-					const data = await res.json();
-					setKelasList(data);
-					if (data.length > 0) {
-						setSelectedKelas(data[0].kelas);
+				const { getAll } = await import('@/lib/offlineDb');
+				const cachedKelas = await getAll('kelas');
+				if (cachedKelas && cachedKelas.length > 0) {
+					setKelasList(cachedKelas);
+					setSelectedKelas(cachedKelas[0].kelas || cachedKelas[0].nama_kelas);
+				}
+
+				if (typeof window !== 'undefined' && window.navigator.onLine) {
+					const res = await fetch('/api/kelas');
+					if (res.ok) {
+						const data = await res.json();
+						if (Array.isArray(data) && data.length > 0) {
+							setKelasList(data);
+							if (!selectedKelas) setSelectedKelas(data[0].kelas || data[0].nama_kelas);
+						}
 					}
 				}
 			} catch (error) {
-				console.error("Error fetching kelas:", error);
+				console.warn("Offline arisan kelas load:", error);
 			} finally {
 				setLoadingKelas(false);
 			}
@@ -60,15 +69,29 @@ export default function DashboardArisan() {
 		const fetchSiswa = async () => {
 			setLoadingSiswa(true);
 			try {
-				const res = await fetch(`/api/siswa?kelas=${selectedKelas}`);
-				if (res.ok) {
-					const data = await res.json();
-					const activeSiswa = data.filter(s => s.status !== 'Alumni');
-					setSiswaList(activeSiswa);
-					setSelectedSiswaIds(activeSiswa.map(s => s.id));
+				const { getAll } = await import('@/lib/offlineDb');
+				const cachedSiswa = await getAll('siswa');
+				if (cachedSiswa && cachedSiswa.length > 0) {
+					const filtered = cachedSiswa.filter(s => s.kelas === selectedKelas && s.status !== 'Alumni');
+					if (filtered.length > 0) {
+						setSiswaList(filtered);
+						setSelectedSiswaIds(filtered.map(s => s.id));
+					}
+				}
+
+				if (typeof window !== 'undefined' && window.navigator.onLine) {
+					const res = await fetch(`/api/siswa?kelas=${encodeURIComponent(selectedKelas)}`);
+					if (res.ok) {
+						const data = await res.json();
+						if (Array.isArray(data)) {
+							const activeSiswa = data.filter(s => s.status !== 'Alumni');
+							setSiswaList(activeSiswa);
+							setSelectedSiswaIds(activeSiswa.map(s => s.id));
+						}
+					}
 				}
 			} catch (error) {
-				console.error("Error fetching siswa:", error);
+				console.warn("Offline arisan siswa load:", error);
 			} finally {
 				setLoadingSiswa(false);
 			}

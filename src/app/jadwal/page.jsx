@@ -42,37 +42,42 @@ export default function JadwalPage() {
 	const fetchJadwal = useCallback(async () => {
 		setLoading(true);
 		try {
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			if (!user) {
-				setAllJadwal([]);
-				return;
-			}
-			const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
-			
-			if (profile?.role === 'Admin') {
-				setAllJadwal([]);
-				return;
-			}
-			
-			const periodeQuery = buildPeriodeQuery();
-			let query = supabase
-				.from('jadwal')
-				.select('*')
-				.eq('id_user', profile.id_user)
-				.order('jam_ke', { ascending: true });
-			if (periodeQuery) {
-				const params = new URLSearchParams(periodeQuery);
-				if (params.get('tahun_ajar')) query = query.eq('tahun_ajar', params.get('tahun_ajar'));
-				if (params.get('semester')) query = query.eq('semester', params.get('semester'));
-			}
-			const { data: jadwalArray, error } = await query;
+			// 1. Coba baca dari IndexedDB dulu
+			const { getAll, getUserSession } = await import('@/lib/offlineDb');
+			const [cachedJadwal, cachedUser] = await Promise.all([
+				getAll('jadwal'),
+				getUserSession(),
+			]);
 
-			if (error) throw error;
-			const sorted = (jadwalArray || []).sort((a, b) => a.jam_ke - b.jam_ke);
-			setAllJadwal(sorted);
+			const userId = cachedUser?.id || cachedUser?.id_user;
+			if (cachedJadwal && cachedJadwal.length > 0) {
+				const filtered = cachedJadwal
+					.filter(
+						(j) =>
+							(!userId || j.id_user === userId) &&
+							(!j.tahun_ajar || j.tahun_ajar === tahunAjar) &&
+							(!j.semester || Number(j.semester) === Number(semester))
+					)
+					.sort((a, b) => a.jam_ke - b.jam_ke);
+				setAllJadwal(filtered);
+				setLoading(false);
+			}
+
+			// 2. Fetch fresh data jika online
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				const res = await fetch(`/api/jadwal?${buildPeriodeQuery()}`);
+				if (res.ok) {
+					const jadwalArray = await res.json();
+					if (Array.isArray(jadwalArray)) {
+						const sorted = jadwalArray.sort((a, b) => a.jam_ke - b.jam_ke);
+						setAllJadwal(sorted);
+						const { bulkPut } = await import('@/lib/offlineDb');
+						bulkPut('jadwal', sorted);
+					}
+				}
+			}
 		} catch (err) {
-			console.error(err);
+			console.warn('Offline jadwal mode active:', err);
 		} finally {
 			setLoading(false);
 		}
@@ -99,6 +104,8 @@ export default function JadwalPage() {
 	// --- HANDLERS ---
 
 	const handleSaveJadwal = async (formData) => {
+		const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+
 		try {
 			brutalSwal.fire({
 				title: 'MENYIMPAN...',
@@ -109,26 +116,82 @@ export default function JadwalPage() {
 				},
 			});
 
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			if (!user) throw new Error('Unauthenticated');
-			const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
-			const userId = profile.id_user;
+			const { getUserSession, putItem } = await import('@/lib/offlineDb');
+			const { enqueueAction } = await import('@/lib/syncEngine');
+			const cachedUser = await getUserSession();
+			const userId = cachedUser?.id || cachedUser?.id_user || '';
 
-			if (isEditMode) {
-				const updates = {
-					mapel: formData.mapel,
-					kelas: formData.kelas,
-					hari: formData.hari,
-					jam_ke: formData.jam_ke,
-					jam_mulai: formData.jam_mulai,
-					jam_selesai: formData.jam_selesai,
-				};
-				const { error } = await supabase.from('jadwal').update(updates).eq('id', editData.id).eq('id_user', userId);
-				if (error) throw error;
+			const finalId = isEditMode ? editData.id : Math.floor(Math.random() * 100000).toString();
+			const jadwalPayload = {
+				id: finalId,
+				id_user: userId,
+				mapel: formData.mapel,
+				kelas: formData.kelas,
+				hari: formData.hari,
+				jam_ke: formData.jam_ke || '',
+				jam_mulai: formData.jam_mulai,
+				jam_selesai: formData.jam_selesai,
+				tahun_ajar: tahunAjarAktif,
+				semester: semesterAktif,
+			};
+
+			if (isOffline) {
+				await putItem('jadwal', jadwalPayload);
+				await enqueueAction({
+					type: 'JADWAL',
+					endpoint: '/api/jadwal',
+					method: isEditMode ? 'PUT' : 'POST',
+					payload: jadwalPayload,
+					description: `Jadwal: ${formData.mapel} (${formData.hari}, Jam ${formData.jam_ke})`,
+				});
+
+				setIsModalOpen(false);
+				if (isEditMode) {
+					setAllJadwal(prev => prev.map(j => j.id === finalId ? jadwalPayload : j));
+				} else {
+					setAllJadwal(prev => [...prev, jadwalPayload].sort((a, b) => a.jam_ke - b.jam_ke));
+				}
+
+				brutalSwal.fire({
+					icon: 'success',
+					title: 'TERSIMPAN LOKAL!',
+					text: 'Jadwal disimpan di perangkat dan akan disinkronkan saat online.',
+					timer: 1500,
+					showConfirmButton: false,
+				});
 			} else {
-				const newJadwalItem = {
-					id: Math.floor(Math.random() * 100000).toString(),
+				const res = await fetch('/api/jadwal', {
+					method: isEditMode ? 'PUT' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(jadwalPayload),
+				});
+
+				if (res.ok) {
+					await putItem('jadwal', jadwalPayload);
+					setIsModalOpen(false);
+					await fetchJadwal();
+					brutalSwal.fire({
+						icon: 'success',
+						title: 'BERHASIL!',
+						text: `JADWAL BERHASIL ${isEditMode ? 'DIPERBARUI' : 'DITAMBAHKAN'}`,
+						timer: 1500,
+						showConfirmButton: false,
+					});
+				} else {
+					throw new Error('Gagal simpan di server');
+				}
+			}
+		} catch (error) {
+			console.warn('Gagal online save jadwal, fallback to queue:', error);
+			try {
+				const { getUserSession, putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+				const cachedUser = await getUserSession();
+				const userId = cachedUser?.id || cachedUser?.id_user || '';
+				const finalId = isEditMode ? editData.id : Math.floor(Math.random() * 100000).toString();
+
+				const fallbackPayload = {
+					id: finalId,
 					id_user: userId,
 					mapel: formData.mapel,
 					kelas: formData.kelas,
@@ -139,27 +202,37 @@ export default function JadwalPage() {
 					tahun_ajar: tahunAjarAktif,
 					semester: semesterAktif,
 				};
-				const { error } = await supabase.from('jadwal').insert(newJadwalItem);
-				if (error) throw error;
+
+				await putItem('jadwal', fallbackPayload);
+				await enqueueAction({
+					type: 'JADWAL',
+					endpoint: '/api/jadwal',
+					method: isEditMode ? 'PUT' : 'POST',
+					payload: fallbackPayload,
+					description: `Jadwal: ${formData.mapel} (${formData.hari}, Jam ${formData.jam_ke})`,
+				});
+
+				setIsModalOpen(false);
+				if (isEditMode) {
+					setAllJadwal(prev => prev.map(j => j.id === finalId ? fallbackPayload : j));
+				} else {
+					setAllJadwal(prev => [...prev, fallbackPayload].sort((a, b) => a.jam_ke - b.jam_ke));
+				}
+
+				brutalSwal.fire({
+					icon: 'info',
+					title: 'TERSIMPAN OFFLINE!',
+					text: 'Koneksi terganggu. Jadwal aman di perangkat dan akan disinkronkan saat online.',
+					timer: 2000,
+					showConfirmButton: false,
+				});
+			} catch (e) {
+				brutalSwal.fire({
+					icon: 'error',
+					title: 'GAGAL',
+					text: 'TERJADI KESALAHAN SAAT MENYIMPAN JADWAL.',
+				});
 			}
-
-			setIsModalOpen(false);
-			await fetchJadwal(); // Refresh data
-
-			brutalSwal.fire({
-				icon: 'success',
-				title: 'BERHASIL!',
-				text: `JADWAL BERHASIL ${isEditMode ? 'DIPERBARUI' : 'DITAMBAHKAN'}`,
-				timer: 1500,
-				showConfirmButton: false,
-			});
-		} catch (error) {
-			console.error(error);
-			brutalSwal.fire({
-				icon: 'error',
-				title: 'GAGAL',
-				text: 'TERJADI KESALAHAN SAAT MENYIMPAN JADWAL.',
-			});
 		}
 	};
 

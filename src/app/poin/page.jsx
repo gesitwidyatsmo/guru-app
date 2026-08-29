@@ -48,54 +48,103 @@ export default function PoinGlobalPage() {
 
 	const fetchPoin = useCallback(async () => {
 		try {
-			const res = await fetch(`/api/poin?${buildPeriodeQuery()}`);
-			if (res.ok) {
-				const data = await res.json();
-				setPoinList(data);
+			// 1. Coba baca dari IndexedDB dulu
+			const { getAll } = await import('@/lib/offlineDb');
+			const cachedPoin = await getAll('poin');
+			if (cachedPoin && cachedPoin.length > 0) {
+				const filtered = cachedPoin.filter(
+					(p) =>
+						(!p.tahun_ajar || p.tahun_ajar === tahunAjar) &&
+						(!p.semester || Number(p.semester) === Number(semester))
+				);
+				setPoinList(filtered);
+			}
+
+			// 2. Fetch fresh data jika online
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				const res = await fetch(`/api/poin?${buildPeriodeQuery()}`);
+				if (res.ok) {
+					const data = await res.json();
+					if (Array.isArray(data)) {
+						setPoinList(data);
+						const { bulkPut } = await import('@/lib/offlineDb');
+						bulkPut('poin', data);
+					}
+				}
 			}
 		} catch (error) {
-			console.error('Gagal load poin:', error);
+			console.warn('Gagal load poin online, using offline data:', error);
 		}
-	}, [buildPeriodeQuery]);
+	}, [buildPeriodeQuery, tahunAjar, semester]);
 
 	// --- Fetch Data ---
 	useEffect(() => {
 		const initData = async () => {
+			// A. Coba baca master data dari IndexedDB dulu
 			try {
-				// 1. Ambil List Kelas
-				const resKelas = await fetch('/api/kelas');
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				setKelasList(dataKelas.sort((a, b) => (a.nama_kelas || a.kelas).localeCompare(b.nama_kelas || b.kelas)));
+				const { getAll } = await import('@/lib/offlineDb');
+				const [cachedKelas, cachedSiswa, cachedKategori] = await Promise.all([
+					getAll('kelas'),
+					getAll('siswa'),
+					getAll('poin_kategori'),
+				]);
 
-				// 2. Ambil List Siswa (Semua)
-				const resSiswa = await fetch('/api/siswa');
-				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-				const siswaAktif = dataSiswa;
-				setSiswaList(siswaAktif);
-
-				// Buat map siswa untuk lookup cepat
-				const map = {};
-				siswaAktif.forEach((s) => {
-					map[s.id] = s;
-				});
-				setSiswaMap(map);
-
-				// 3. Ambil Kategori
-				const resKategori = await fetch('/api/poin/kategori');
-				if (resKategori.ok) {
-					const dataKategori = await resKategori.json();
-					setKategoriPositif(dataKategori.positif || []);
-					setKategoriNegatif(dataKategori.negatif || []);
-					setBadges(dataKategori.badges || []);
+				if (cachedKelas && cachedKelas.length > 0) {
+					setKelasList(cachedKelas.sort((a, b) => (a.nama_kelas || a.kelas || '').localeCompare(b.nama_kelas || b.kelas || '')));
 				}
 
-				// 4. Ambil Poin
+				if (cachedSiswa && cachedSiswa.length > 0) {
+					setSiswaList(cachedSiswa);
+					const map = {};
+					cachedSiswa.forEach((s) => {
+						map[s.id] = s;
+					});
+					setSiswaMap(map);
+				}
+
+				if (cachedKategori && cachedKategori.length > 0) {
+					setKategoriPositif(cachedKategori.filter(k => k.tipe === 'positif'));
+					setKategoriNegatif(cachedKategori.filter(k => k.tipe === 'negatif'));
+				}
+
 				await fetchPoin();
-			} catch (err) {
-				console.error(err);
-			} finally {
 				setLoading(false);
+			} catch (e) {
+				console.warn('IndexedDB initial load error for poin:', e);
 			}
+
+			// B. Jika online, perbarui master data
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				try {
+					const [resKelas, resSiswa, resKategori] = await Promise.all([
+						fetch('/api/kelas').then(r => r.json()).catch(() => []),
+						fetch('/api/siswa').then(r => r.json()).catch(() => []),
+						fetch('/api/poin/kategori').then(r => r.json()).catch(() => ({})),
+					]);
+
+					if (Array.isArray(resKelas) && resKelas.length > 0) {
+						setKelasList(resKelas.sort((a, b) => (a.nama_kelas || a.kelas || '').localeCompare(b.nama_kelas || b.kelas || '')));
+					}
+
+					if (Array.isArray(resSiswa) && resSiswa.length > 0) {
+						setSiswaList(resSiswa);
+						const map = {};
+						resSiswa.forEach((s) => {
+							map[s.id] = s;
+						});
+						setSiswaMap(map);
+					}
+
+					if (resKategori && (resKategori.positif || resKategori.negatif)) {
+						setKategoriPositif(resKategori.positif || []);
+						setKategoriNegatif(resKategori.negatif || []);
+						setBadges(resKategori.badges || []);
+					}
+				} catch (err) {
+					console.warn('Poin offline mode active');
+				}
+			}
+			setLoading(false);
 		};
 
 		initData();
@@ -104,8 +153,6 @@ export default function PoinGlobalPage() {
 	useEffect(() => {
 		fetchPoin();
 	}, [fetchPoin]);
-
-
 
 	// --- Handlers ---
 	const handleOpenModal = (item = null) => {
@@ -147,15 +194,42 @@ export default function PoinGlobalPage() {
 		});
 
 		if (result.isConfirmed) {
-			await fetch(`/api/poin?id=${id}`, { method: 'DELETE' });
-			fetchPoin();
-			Swal.fire({
-				title: 'TERHAPUS!',
-				icon: 'success',
-				timer: 1000,
-				showConfirmButton: false,
-				customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
-			});
+			const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+			try {
+				const { deleteItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+
+				await deleteItem('poin', id);
+				setPoinList((prev) => prev.filter((p) => p.id !== id));
+
+				if (isOffline) {
+					await enqueueAction({
+						type: 'POIN_DELETE',
+						endpoint: `/api/poin?id=${id}`,
+						method: 'DELETE',
+						payload: { id },
+						description: `Hapus Poin ID ${id}`,
+					});
+					Swal.fire({
+						title: 'TERHAPUS LOKAL!',
+						icon: 'success',
+						timer: 1000,
+						showConfirmButton: false,
+						customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
+					});
+				} else {
+					await fetch(`/api/poin?id=${id}`, { method: 'DELETE' });
+					Swal.fire({
+						title: 'TERHAPUS!',
+						icon: 'success',
+						timer: 1000,
+						showConfirmButton: false,
+						customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
+					});
+				}
+			} catch (e) {
+				console.warn('Delete poin fallback:', e);
+			}
 		}
 	};
 
@@ -163,30 +237,99 @@ export default function PoinGlobalPage() {
 		e.preventDefault();
 		setSaving(true);
 
-		const payload = { ...formData, ...(isEditing ? {} : { tahun_ajar: tahunAjarAktif, semester: semesterAktif }) };
+		const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
+		const finalId = isEditing ? formData.id : 'poin_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+		const payload = {
+			...formData,
+			id: finalId,
+			...(isEditing ? {} : { tahun_ajar: tahunAjarAktif, semester: semesterAktif })
+		};
 
 		try {
-			const res = await fetch('/api/poin', {
-				method: isEditing ? 'PUT' : 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
+			if (isOffline) {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
 
-			if (res.ok) {
+				await putItem('poin', payload);
+				await enqueueAction({
+					type: 'POIN',
+					endpoint: '/api/poin',
+					method: isEditing ? 'PUT' : 'POST',
+					payload,
+					description: `Poin ${payload.tipe}: ${payload.aktifitas || payload.kategori}`,
+				});
+
+				if (isEditing) {
+					setPoinList((prev) => prev.map((p) => (p.id === finalId ? payload : p)));
+				} else {
+					setPoinList((prev) => [payload, ...prev]);
+				}
+
 				setIsModalOpen(false);
-				fetchPoin();
 				Swal.fire({
 					icon: 'success',
-					title: 'TERSIMPAN!',
-					timer: 1500,
+					title: 'TERSIMPAN DI PERANGKAT!',
+					text: 'Data poin tersimpan secara offline dan akan disinkronkan saat online.',
+					timer: 2000,
 					showConfirmButton: false,
 					customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
 				});
 			} else {
-				throw new Error('Gagal API');
+				const res = await fetch('/api/poin', {
+					method: isEditing ? 'PUT' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+
+				if (res.ok) {
+					const { putItem } = await import('@/lib/offlineDb');
+					await putItem('poin', payload);
+					setIsModalOpen(false);
+					fetchPoin();
+					Swal.fire({
+						icon: 'success',
+						title: 'TERSIMPAN!',
+						timer: 1500,
+						showConfirmButton: false,
+						customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
+					});
+				} else {
+					throw new Error('Gagal API');
+				}
 			}
 		} catch (error) {
-			Swal.fire('Error', 'Gagal menyimpan data', 'error');
+			console.warn('Gagal simpan online, fallback ke offline queue:', error);
+			try {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+
+				await putItem('poin', payload);
+				await enqueueAction({
+					type: 'POIN',
+					endpoint: '/api/poin',
+					method: isEditing ? 'PUT' : 'POST',
+					payload,
+					description: `Poin ${payload.tipe}: ${payload.aktifitas || payload.kategori}`,
+				});
+
+				if (isEditing) {
+					setPoinList((prev) => prev.map((p) => (p.id === finalId ? payload : p)));
+				} else {
+					setPoinList((prev) => [payload, ...prev]);
+				}
+
+				setIsModalOpen(false);
+				Swal.fire({
+					icon: 'info',
+					title: 'TERSIMPAN OFFLINE!',
+					text: 'Koneksi terganggu. Poin tersimpan di perangkat dan akan disinkronkan saat terhubung.',
+					timer: 2000,
+					showConfirmButton: false,
+					customClass: { popup: 'rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]' },
+				});
+			} catch (fallbackErr) {
+				Swal.fire('Error', 'Gagal menyimpan data', 'error');
+			}
 		} finally {
 			setSaving(false);
 		}

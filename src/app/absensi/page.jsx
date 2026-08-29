@@ -9,6 +9,13 @@ import ButtonBack from '../components/button/ButtonBack';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 
+const DEFAULT_STATUS_LIST = [
+	{ id: 'st_hadir', label: 'Hadir', kode: 'H', warna: 'green' },
+	{ id: 'st_sakit', label: 'Sakit', kode: 'S', warna: 'yellow' },
+	{ id: 'st_izin', label: 'Izin', kode: 'I', warna: 'blue' },
+	{ id: 'st_alpha', label: 'Alpha', kode: 'A', warna: 'red' },
+];
+
 export default function AbsensiMapelPage() {
 	const router = useRouter();
 	const { tahunAjar, semester, tahunAjarAktif, semesterAktif, buildPeriodeQuery } = useAcademic();
@@ -16,7 +23,7 @@ export default function AbsensiMapelPage() {
 	// --- State UI ---
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
-	const [statusList, setStatusList] = useState([]);
+	const [statusList, setStatusList] = useState(DEFAULT_STATUS_LIST);
 	const [siswaList, setSiswaList] = useState([]);
 
 	// --- Filter State ---
@@ -59,17 +66,55 @@ export default function AbsensiMapelPage() {
 
 		const style = 'px-3 py-1 rounded-md text-xs font-bold uppercase tracking-wide border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] inline-block';
 		switch (warna) {
-			case 'green': return <span className={`${style} bg-[#00A693] text-white`}>Hadir</span>;
-			case 'yellow': return <span className={`${style} bg-[#F5C518] text-[#0D0D0D]`}>Sakit</span>;
-			case 'blue': return <span className={`${style} bg-[#2F80ED] text-white`}>Izin</span>;
-			case 'red': return <span className={`${style} bg-[#E8451A] text-white`}>Alpha</span>;
-			default: return <span className={`${style} bg-[#E8E8E8] text-[#0D0D0D]`}>{status}</span>;
+			case 'green': return <span className={`${style} bg-[#00A693] text-white`}>HADIR</span>;
+			case 'yellow': return <span className={`${style} bg-[#F5C518] text-[#0D0D0D]`}>SAKIT</span>;
+			case 'blue': return <span className={`${style} bg-[#2F80ED] text-white`}>IZIN</span>;
+			case 'red': return <span className={`${style} bg-[#E8451A] text-white`}>ALPHA</span>;
+			default: return <span className={`${style} bg-gray-200 text-gray-700`}>{status || '-'}</span>;
 		}
 	};
 
-	// 1. Fetch Master Data
+	// 1. Fetch Master Data (Offline-First)
 	useEffect(() => {
 		const fetchAll = async () => {
+			// A. Coba baca dari IndexedDB dulu untuk render cepat / offline
+			try {
+				const { getAll } = await import('@/lib/offlineDb');
+				const [cachedKelas, cachedMapel, cachedSiswa, cachedPoin] = await Promise.all([
+					getAll('kelas'),
+					getAll('mapel'),
+					getAll('siswa'),
+					getAll('poin'),
+				]);
+
+				if (cachedKelas && cachedKelas.length > 0) {
+					setKelasList(cachedKelas);
+					setMapelList(cachedMapel || []);
+					setStatusList(DEFAULT_STATUS_LIST);
+
+					const poinMap = {};
+					(cachedPoin || []).forEach((p) => {
+						if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+						if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+						else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+					});
+
+					const siswaCached = (cachedSiswa || []).map((s) => ({
+						...s,
+						poinPositif: poinMap[s.id]?.positif || 0,
+						poinNegatif: poinMap[s.id]?.negatif || 0,
+					}));
+					setSiswaList(siswaCached);
+
+					if (cachedKelas.length > 0) setSelectedKelas(cachedKelas[0].kelas || cachedKelas[0].nama_kelas);
+					if (cachedMapel && cachedMapel.length > 0) setSelectedMapel(cachedMapel[0].mapel || cachedMapel[0].nama_mapel);
+					setLoading(false);
+				}
+			} catch (e) {
+				console.warn('Error reading from IndexedDB:', e);
+			}
+
+			// B. Fetch fresh data jika online
 			try {
 				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([
 					fetch('/api/kelas'),
@@ -84,28 +129,30 @@ export default function AbsensiMapelPage() {
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
 				const dataPoin = resPoin.ok ? await resPoin.json() : [];
 
-				const poinMap = {};
-				dataPoin.forEach((p) => {
-					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
-					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
-					if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
-				});
+				if (Array.isArray(dataKelas) && dataKelas.length > 0) {
+					const poinMap = {};
+					dataPoin.forEach((p) => {
+						if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+						if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+						else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+					});
 
-				const siswaDataUpdated = dataSiswa.map((s) => ({
-					...s,
-					poinPositif: poinMap[s.id]?.positif || 0,
-					poinNegatif: poinMap[s.id]?.negatif || 0,
-				}));
+					const siswaDataUpdated = dataSiswa.map((s) => ({
+						...s,
+						poinPositif: poinMap[s.id]?.positif || 0,
+						poinNegatif: poinMap[s.id]?.negatif || 0,
+					}));
 
-				setKelasList(dataKelas);
-				setMapelList(dataMapel);
-				setStatusList(dataStatus);
-				setSiswaList(siswaDataUpdated);
+					setKelasList(dataKelas);
+					setMapelList(dataMapel);
+					if (dataStatus && dataStatus.length > 0) setStatusList(dataStatus);
+					setSiswaList(siswaDataUpdated);
 
-				if (dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
-				if (dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
+					if (!selectedKelas && dataKelas.length > 0) setSelectedKelas(dataKelas[0].kelas || dataKelas[0].nama_kelas);
+					if (!selectedMapel && dataMapel.length > 0) setSelectedMapel(dataMapel[0].mapel || dataMapel[0].nama_mapel);
+				}
 			} catch (err) {
-				console.error(err);
+				console.warn('Offline mode: Using cached master data for absensi');
 			} finally {
 				setLoading(false);
 			}
@@ -219,16 +266,7 @@ export default function AbsensiMapelPage() {
 	};
 
 	const handleSimpan = async () => {
-		// Pengecekan offline
-		if (typeof window !== 'undefined' && !window.navigator.onLine) {
-			Swal.fire({
-				icon: 'info',
-				title: 'Anda Sedang Offline',
-				text: 'Pekerjaan Anda otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan" kembali saat internet terhubung.',
-				confirmButtonColor: '#E8451A',
-			});
-			return;
-		}
+		let isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
 
 		let currentJamKe = jamKe;
 		let isDirectSave = false;
@@ -303,37 +341,78 @@ export default function AbsensiMapelPage() {
 		};
 
 		try {
-			const res = await fetch('/api/absensi-mapel', {
-				method: 'POST', // POST untuk Upsert (Insert/Update handled by backend or ID)
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
-			});
+			if (isOffline) {
+				const { enqueueAction } = await import('@/lib/syncEngine');
+				await enqueueAction({
+					type: 'ABSENSI_MAPEL',
+					endpoint: '/api/absensi-mapel',
+					method: 'POST',
+					payload,
+					description: `Absensi ${selectedMapel} - ${selectedKelas} (Jam ${currentJamKe})`,
+				});
 
-			if (res.ok) {
-				const responseData = await res.json();
-				
-				// Bersihkan draft lokal karena sudah tersimpan di server
+				// Bersihkan draft lokal
 				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${currentJamKe}`;
 				localStorage.removeItem(draftKey);
 
 				await Swal.fire({
 					icon: 'success',
-					title: 'Berhasil!',
-					text: 'Data absensi mapel tersimpan.',
-					timer: 1500,
-					showConfirmButton: false,
+					title: 'Tersimpan di Perangkat!',
+					text: 'Data absensi mapel tersimpan offline dan akan otomatis disinkronkan ke server saat internet terhubung.',
+					confirmButtonColor: '#00A693',
 				});
 
-				// Setelah simpan, pindah ke mode Rekap
 				setMode('rekap');
-				// Update ID jika ini insert baru
-				if (!existingId && responseData.id) setExistingId(responseData.id);
 			} else {
-				throw new Error('Gagal menyimpan');
+				const res = await fetch('/api/absensi-mapel', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+
+				if (res.ok) {
+					const responseData = await res.json();
+					const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${currentJamKe}`;
+					localStorage.removeItem(draftKey);
+
+					await Swal.fire({
+						icon: 'success',
+						title: 'Berhasil!',
+						text: 'Data absensi mapel tersimpan.',
+						timer: 1500,
+						showConfirmButton: false,
+					});
+
+					setMode('rekap');
+					if (!existingId && responseData.id) setExistingId(responseData.id);
+				} else {
+					throw new Error('Gagal menyimpan di server');
+				}
 			}
 		} catch (error) {
-			console.error(error);
-			Swal.fire('Error', 'Gagal menyimpan data', 'error');
+			console.warn('Simpan server gagal, beralih ke antrean offline:', error);
+			try {
+				const { enqueueAction } = await import('@/lib/syncEngine');
+				await enqueueAction({
+					type: 'ABSENSI_MAPEL',
+					endpoint: '/api/absensi-mapel',
+					method: 'POST',
+					payload,
+					description: `Absensi ${selectedMapel} - ${selectedKelas} (Jam ${currentJamKe})`,
+				});
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${currentJamKe}`;
+				localStorage.removeItem(draftKey);
+
+				await Swal.fire({
+					icon: 'info',
+					title: 'Tersimpan Offline!',
+					text: 'Koneksi terganggu. Data absensi aman di perangkat dan akan disinkronkan saat terhubung kembali.',
+					confirmButtonColor: '#00A693',
+				});
+				setMode('rekap');
+			} catch (enqueueErr) {
+				Swal.fire('Error', 'Gagal menyimpan data', 'error');
+			}
 		} finally {
 			setSaving(false);
 		}
@@ -438,9 +517,9 @@ export default function AbsensiMapelPage() {
 								onChange={(e) => setSelectedKelas(e.target.value)}
 								disabled={mode === 'edit'} // Kunci saat edit
 								className='neo-input appearance-none bg-white pr-10 cursor-pointer disabled:bg-gray-200 disabled:cursor-not-allowed'>
-								{kelasList.map((k) => (
+								{kelasList.map((k, idx) => (
 									<option
-										key={k.id}
+										key={k.id || k.kelas || k.nama_kelas || `kelas_${idx}`}
 										value={k.kelas || k.nama_kelas}>
 										{k.kelas || k.nama_kelas}
 									</option>
@@ -456,9 +535,9 @@ export default function AbsensiMapelPage() {
 								onChange={(e) => setSelectedMapel(e.target.value)}
 								disabled={mode === 'edit'}
 								className='neo-input appearance-none bg-white pr-10 cursor-pointer disabled:bg-gray-200 disabled:cursor-not-allowed'>
-								{mapelList.map((m) => (
+								{mapelList.map((m, idx) => (
 									<option
-										key={m.id}
+										key={m.id || m.mapel || m.nama_mapel || `mapel_${idx}`}
 										value={m.mapel || m.nama_mapel}>
 										{m.mapel || m.nama_mapel}
 									</option>
@@ -595,7 +674,7 @@ export default function AbsensiMapelPage() {
 												const ket = absensi[siswa.id]?.keterangan || '-';
 												return (
 													<tr
-														key={siswa.id}
+														key={siswa.id || `siswa_row_${idx}`}
 														className='hover:bg-[#FFF5F0] transition-colors'>
 														<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
 														<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
@@ -626,7 +705,7 @@ export default function AbsensiMapelPage() {
 
 									return (
 										<div
-											key={siswa.id}
+											key={siswa.id || `siswa_card_${idx}`}
 											className='neo-card flex flex-col gap-3 relative'>
 											<div className='flex justify-between items-start mb-1'>
 												<div className='pr-8'>
@@ -664,11 +743,11 @@ export default function AbsensiMapelPage() {
 											</div>
 
 											<div className='grid grid-cols-4 gap-2 my-2'>
-												{statusList.map((st) => {
+												{statusList.map((st, stIdx) => {
 													const isActive = currentStatus === st.label;
 													return (
 														<button
-															key={st.id}
+															key={st.id || st.label || st.kode || `st_${stIdx}`}
 															onClick={() => handleStatusChange(siswa.id, st.label)}
 															disabled={siswa.status !== 'Aktif'}
 															className={`${getStatusClasses(st.warna, isActive)} ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>

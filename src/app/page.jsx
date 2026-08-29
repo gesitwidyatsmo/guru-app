@@ -58,6 +58,49 @@ export default function Home() {
 	// FETCH DATA STATISTIK DAN JADWAL
 	useEffect(() => {
 		const fetchData = async () => {
+			// 1. Coba baca data cepat dari IndexedDB dulu untuk render instan
+			try {
+				const { getAll, getUserSession, bulkPut } = await import('@/lib/offlineDb');
+				const [cachedSiswa, cachedMapel, cachedKelas, cachedJadwal, cachedJurnal, cachedPoin, cachedUser] = await Promise.all([
+					getAll('siswa'),
+					getAll('mapel'),
+					getAll('kelas'),
+					getAll('jadwal'),
+					getAll('jurnal'),
+					getAll('poin'),
+					getUserSession(),
+				]);
+
+				if (cachedUser) {
+					setUserRole(cachedUser.role);
+					setUserName(cachedUser.nama_lengkap || cachedUser.username || '');
+				}
+
+				if (cachedSiswa && cachedSiswa.length > 0) {
+					const cachedSiswaAktif = cachedSiswa.filter((s) => s.status === 'Aktif');
+					setAllSiswa(cachedSiswaAktif);
+					setStat({
+						siswa: cachedSiswaAktif.length,
+						mapel: cachedMapel?.length || 0,
+						kelas: cachedKelas?.length || 0,
+						jurnal: cachedJurnal?.length || 0,
+					});
+
+					const jadwalFilteredCached = (cachedJadwal || [])
+						.filter((jadwal) => jadwal.hari === hariIni)
+						.sort((a, b) => {
+							const [hA, mA] = (a.jam_mulai || '00:00').split(':').map(Number);
+							const [hB, mB] = (b.jam_mulai || '00:00').split(':').map(Number);
+							return hA * 60 + mA - (hB * 60 + mB);
+						});
+					setJadwalHariIni(jadwalFilteredCached);
+					setLoading(false);
+				}
+			} catch (e) {
+				console.warn('Error reading from IndexedDB:', e);
+			}
+
+			// 2. Fetch fresh data dari network / Service Worker
 			try {
 				const [resSiswa, resMapel, resKelas, resJadwal, resJurnal, resPoin, resAuth] = await Promise.all([
 					fetch('/api/siswa'),
@@ -82,28 +125,28 @@ export default function Home() {
 					setUserName(dataAuth.user.nama_lengkap);
 				}
 
-				const siswaAktif = dataSiswa.filter((siswa) => siswa.status === 'Aktif');
+				const siswaAktif = Array.isArray(dataSiswa) ? dataSiswa.filter((siswa) => siswa.status === 'Aktif') : [];
 				setAllSiswa(siswaAktif);
 
 				// Filter jadwal hari ini
-				const jadwalFiltered = dataJadwal
+				const jadwalFiltered = (Array.isArray(dataJadwal) ? dataJadwal : [])
 					.filter((jadwal) => jadwal.hari === hariIni)
 					.sort((a, b) => {
-						const [hA, mA] = a.jam_mulai.split(':').map(Number);
-						const [hB, mB] = b.jam_mulai.split(':').map(Number);
+						const [hA, mA] = (a.jam_mulai || '00:00').split(':').map(Number);
+						const [hB, mB] = (b.jam_mulai || '00:00').split(':').map(Number);
 						return hA * 60 + mA - (hB * 60 + mB);
 					});
 
 				setStat({
 					siswa: siswaAktif.length,
-					mapel: dataMapel.length,
-					kelas: dataKelas.length,
-					jurnal: dataJurnal.length,
+					mapel: Array.isArray(dataMapel) ? dataMapel.length : 0,
+					kelas: Array.isArray(dataKelas) ? dataKelas.length : 0,
+					jurnal: Array.isArray(dataJurnal) ? dataJurnal.length : 0,
 				});
 
 				// Kalkulasi Poin Leaderboard
 				const poinMap = {};
-				dataPoin.forEach((p) => {
+				(Array.isArray(dataPoin) ? dataPoin : []).forEach((p) => {
 					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
 					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
 					else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
@@ -126,8 +169,21 @@ export default function Home() {
 
 				setLeaderboard({ topPositif, topNegatif });
 				setJadwalHariIni(jadwalFiltered);
+
+				// 3. Simpan ke IndexedDB untuk ketersediaan offline di seluruh halaman
+				try {
+					const { bulkPut } = await import('@/lib/offlineDb');
+					if (Array.isArray(dataSiswa) && dataSiswa.length > 0) bulkPut('siswa', dataSiswa);
+					if (Array.isArray(dataMapel) && dataMapel.length > 0) bulkPut('mapel', dataMapel);
+					if (Array.isArray(dataKelas) && dataKelas.length > 0) bulkPut('kelas', dataKelas);
+					if (Array.isArray(dataJadwal) && dataJadwal.length > 0) bulkPut('jadwal', dataJadwal);
+					if (Array.isArray(dataJurnal) && dataJurnal.length > 0) bulkPut('jurnal', dataJurnal);
+					if (Array.isArray(dataPoin) && dataPoin.length > 0) bulkPut('poin', dataPoin);
+				} catch (e) {
+					console.warn('Error saving master data to IndexedDB:', e);
+				}
 			} catch (error) {
-				console.error('Gagal mengambil data:', error);
+				console.error('Gagal mengambil data online:', error);
 			} finally {
 				setLoading(false);
 			}

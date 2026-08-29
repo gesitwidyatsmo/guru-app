@@ -9,7 +9,7 @@ export const config = {
 	],
 };
 
-export async function proxy(request) {
+export async function middleware(request) {
 	let supabaseResponse = NextResponse.next({
 		request,
 	});
@@ -63,7 +63,7 @@ export async function proxy(request) {
 			.eq('auth_id', user.id)
 			.single();
 
-		if (error) console.error('Proxy Profile Fetch Error:', error.message);
+		if (error) console.error('Middleware Profile Fetch Error:', error.message);
 
 		if (userProfile) {
 			payload = {
@@ -119,9 +119,6 @@ export async function proxy(request) {
 		cookiesToPreserve.forEach(c => supabaseResponse.cookies.set(c.name, c.value, c));
 
 		// Auto-renew auth_session_valid jika tidak ada.
-		// Mengatasi masalah Brave mobile/tablet yang memblokir cookie dari API route
-		// atau memblokir header sec-fetch-site sehingga deteksi mode sebelumnya tidak akurat.
-		// Jika Supabase menyatakan user valid, kita PERCAYAI dan perbarui cookie ini.
 		const hasCustomSession = request.cookies.has('auth_session_valid');
 		if (!hasCustomSession) {
 			supabaseResponse.cookies.set('auth_session_valid', 'true', {

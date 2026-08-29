@@ -47,62 +47,95 @@ export default function JurnalPage() {
 	};
 	const [formData, setFormData] = useState(initialForm);
 
-	// --- 1. FETCH DATA ---
+	// --- 1. FETCH DATA (Offline-First) ---
 	useEffect(() => {
 		const fetchData = async () => {
+			// A. Coba ambil identitas dan data dari cache IndexedDB dulu
+			let currentUserId = '';
+			let currentUserRole = '';
+
 			try {
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				if (!user) {
-					router.push('/login');
-					return;
-				}
-				
-				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
-				let currentUserId = '';
-				let currentUserRole = '';
-				if (profile) {
-					currentUserId = profile.id_user;
-					currentUserRole = profile.role;
+				const { getAll, getUserSession } = await import('@/lib/offlineDb');
+				const [cachedUser, cachedKelas, cachedMapel, cachedJurnal] = await Promise.all([
+					getUserSession(),
+					getAll('kelas'),
+					getAll('mapel'),
+					getAll('jurnal'),
+				]);
+
+				if (cachedUser) {
+					currentUserId = cachedUser.id || cachedUser.id_user || '';
+					currentUserRole = cachedUser.role || '';
 					setUserId(currentUserId);
 					setUserRole(currentUserRole);
-				} else {
-					router.push('/login');
-					return;
 				}
-				
-				const { data: kelasData } = await supabase.from('kelas').select('*').order('nama_kelas', { ascending: true });
-				setKelasList(kelasData || []);
-				
-				const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
-				setMapelList(mapelData || []);
 
-				const fetchedJournals = await refreshJurnal(currentUserId, currentUserRole);
-
-				// Auto-open modal from query params
-				const searchParams = new URLSearchParams(window.location.search);
-				if (searchParams.get('action') === 'new') {
-					const qMapel = searchParams.get('mapel') || '';
-					const qKelas = searchParams.get('kelas') || '';
-					const qJam = searchParams.get('jam_ke') || '';
-
-					const existingCount = fetchedJournals.filter((j) => j.kelas === qKelas && j.mapel === qMapel).length;
-					const suggestion = existingCount + 1;
-
-					setFormData((prev) => ({
-						...prev,
-						mapel: qMapel,
-						kelas: qKelas,
-						jam_ke: qJam,
-						pertemuan_ke: suggestion.toString()
-					}));
-					setIsModalOpen(true);
+				if (cachedKelas && cachedKelas.length > 0) setKelasList(cachedKelas);
+				if (cachedMapel && cachedMapel.length > 0) setMapelList(cachedMapel);
+				if (cachedJurnal && cachedJurnal.length > 0) {
+					const filtered = cachedJurnal.filter(
+						(j) =>
+							(!j.tahun_ajar || j.tahun_ajar === tahunAjar) &&
+							(!j.semester || Number(j.semester) === Number(semester)) &&
+							(currentUserRole !== 'Guru' || !currentUserId || j.guru_id === currentUserId)
+					);
+					setJournals(filtered);
+					setLoading(false);
 				}
-			} catch (err) {
-				console.error(err);
-			} finally {
-				setLoading(false);
+			} catch (e) {
+				console.warn('Error reading cached jurnal data:', e);
 			}
+
+			// B. Jika online, perbarui dari server / Supabase
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				try {
+					const resAuth = await fetch('/api/auth/me');
+					if (resAuth.ok) {
+						const authData = await resAuth.json();
+						if (authData.user) {
+							currentUserId = authData.user.id;
+							currentUserRole = authData.user.role;
+							setUserId(currentUserId);
+							setUserRole(currentUserRole);
+						}
+					}
+
+					const [resKelas, resMapel] = await Promise.all([
+						fetch('/api/kelas'),
+						fetch('/api/mapel'),
+					]);
+					const kelasData = resKelas.ok ? await resKelas.json() : [];
+					const mapelData = resMapel.ok ? await resMapel.json() : [];
+
+					if (Array.isArray(kelasData) && kelasData.length > 0) setKelasList(kelasData);
+					if (Array.isArray(mapelData) && mapelData.length > 0) setMapelList(mapelData);
+
+					const fetchedJournals = await refreshJurnal(currentUserId, currentUserRole);
+
+					// Auto-open modal from query params
+					const searchParams = new URLSearchParams(window.location.search);
+					if (searchParams.get('action') === 'new') {
+						const qMapel = searchParams.get('mapel') || '';
+						const qKelas = searchParams.get('kelas') || '';
+						const qJam = searchParams.get('jam_ke') || '';
+
+						const existingCount = (fetchedJournals || []).filter((j) => j.kelas === qKelas && j.mapel === qMapel).length;
+						const suggestion = existingCount + 1;
+
+						setFormData((prev) => ({
+							...prev,
+							mapel: qMapel,
+							kelas: qKelas,
+							jam_ke: qJam,
+							pertemuan_ke: suggestion.toString()
+						}));
+						setIsModalOpen(true);
+					}
+				} catch (err) {
+					console.warn('Network error, staying on offline jurnal mode:', err);
+				}
+			}
+			setLoading(false);
 		};
 		fetchData();
 	}, []);
@@ -116,18 +149,38 @@ export default function JurnalPage() {
 
 	const refreshJurnal = async (uid = userId, role = userRole) => {
 		try {
-			const supabase = createClient();
-			let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false })
-				.eq('tahun_ajar', tahunAjar)
-				.eq('semester', semester);
-			if (role === 'Guru' && uid) {
-				query = query.eq('guru_id', uid);
+			// Coba fetch dari API / Supabase jika online
+			if (typeof window !== 'undefined' && window.navigator.onLine) {
+				const queryParams = new URLSearchParams({
+					tahun_ajar: tahunAjar,
+					semester: semester.toString(),
+				});
+				const res = await fetch(`/api/jurnal?${queryParams.toString()}`);
+				if (res.ok) {
+					const data = await res.json();
+					if (Array.isArray(data)) {
+						setJournals(data);
+						// Simpan ke IndexedDB
+						try {
+							const { bulkPut } = await import('@/lib/offlineDb');
+							bulkPut('jurnal', data);
+						} catch (e) {}
+						return data;
+					}
+				}
 			}
-			const { data, error } = await query;
-			if (!error) {
-				setJournals(data || []);
-				return data || [];
-			}
+
+			// Fallback ke IndexedDB jika offline atau API gagal
+			const { getAll } = await import('@/lib/offlineDb');
+			const allCached = await getAll('jurnal');
+			const filtered = (allCached || []).filter(
+				(j) =>
+					(!j.tahun_ajar || j.tahun_ajar === tahunAjar) &&
+					(!j.semester || Number(j.semester) === Number(semester)) &&
+					(role !== 'Guru' || !uid || j.guru_id === uid)
+			);
+			setJournals(filtered);
+			return filtered;
 		} catch (error) {
 			console.error('Gagal memuat jurnal:', error);
 		}
@@ -237,91 +290,162 @@ export default function JurnalPage() {
 		});
 
 		if (result.isConfirmed) {
+			const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
 			try {
-				// Ambil info kelas & mapel sebelum hapus agar bisa renumber setelahnya
-				const targetJurnal = journals.find(j => j.id === id);
-				const supabase = createClient();
-				const { error } = await supabase.from('jurnal').delete().eq('id', id);
-				if (error) throw error;
+				const targetJurnal = journals.find((j) => j.id === id);
 
-				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
-				// Renomor ulang setelah hapus
-				if (targetJurnal) await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
-				refreshJurnal();
+				if (isOffline) {
+					const { deleteItem } = await import('@/lib/offlineDb');
+					const { enqueueAction } = await import('@/lib/syncEngine');
+					await deleteItem('jurnal', id);
+					await enqueueAction({
+						type: 'JURNAL_DELETE',
+						endpoint: `/api/jurnal?id=${id}`,
+						method: 'DELETE',
+						payload: { id },
+						description: `Hapus Jurnal ${targetJurnal?.mapel || ''} - ${targetJurnal?.kelas || ''}`,
+					});
+					setJournals((prev) => prev.filter((j) => j.id !== id));
+					Swal.fire('Terhapus Lokal!', 'Jurnal dihapus di perangkat dan akan disinkronkan.', 'success');
+				} else {
+					const res = await fetch(`/api/jurnal?id=${id}`, { method: 'DELETE' });
+					if (!res.ok) throw new Error('Gagal menghapus');
+					setJournals((prev) => prev.filter((j) => j.id !== id));
+					Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
+					if (targetJurnal) await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
+					refreshJurnal();
+				}
 			} catch (err) {
-				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
+				console.warn('Gagal online delete, fallback ke queue:', err);
+				try {
+					const { deleteItem } = await import('@/lib/offlineDb');
+					const { enqueueAction } = await import('@/lib/syncEngine');
+					await deleteItem('jurnal', id);
+					await enqueueAction({
+						type: 'JURNAL_DELETE',
+						endpoint: `/api/jurnal?id=${id}`,
+						method: 'DELETE',
+						payload: { id },
+						description: `Hapus Jurnal ID ${id}`,
+					});
+					setJournals((prev) => prev.filter((j) => j.id !== id));
+					Swal.fire('Terhapus Lokal!', 'Jurnal dihapus di perangkat.', 'info');
+				} catch (e) {
+					Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
+				}
 			}
 		}
 	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-
-		// Pengecekan offline
-		if (typeof window !== 'undefined' && !window.navigator.onLine) {
-			Swal.fire({
-				icon: 'info',
-				title: 'Anda Sedang Offline',
-				text: 'Internet terputus. Data Anda sudah otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan Jurnal" kembali saat koneksi internet sudah aktif.',
-				confirmButtonColor: '#E8451A',
-			});
-			return;
-		}
+		const isOffline = typeof window !== 'undefined' && !window.navigator.onLine;
 
 		setSaving(true);
 
+		const finalId = isEditing ? formData.id : Math.random().toString(36).substring(2, 11);
+		const payloadData = {
+			id: finalId,
+			guru_id: userId || null,
+			tanggal: formData.tanggal,
+			jam_ke: formData.jam_ke || '',
+			pertemuan_ke: formData.pertemuan_ke || '',
+			kelas: formData.kelas,
+			mapel: formData.mapel,
+			materi: formData.materi,
+			kegiatan: formData.kegiatan || '',
+			hambatan: formData.hambatan || '',
+			solusi: formData.solusi || '',
+			tuntas: !!formData.tuntas,
+			tahun_ajar: tahunAjarAktif,
+			semester: semesterAktif,
+		};
+
 		try {
-			const supabase = createClient();
-			
-			if (isEditing) {
-				const { id, pertemuan_ke, ...others } = formData;
-				const updates = { ...others };
-				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
-				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
-				
-				const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
-				if (error) throw error;
+			if (isOffline) {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+
+				await putItem('jurnal', payloadData);
+				await enqueueAction({
+					type: 'JURNAL',
+					endpoint: '/api/jurnal',
+					method: isEditing ? 'PUT' : 'POST',
+					payload: payloadData,
+					description: `Jurnal ${formData.mapel} - ${formData.kelas} (Pertemuan ${formData.pertemuan_ke})`,
+				});
+
+				if (!isEditing) {
+					localStorage.removeItem('draft_jurnal_baru');
+					setJournals((prev) => [payloadData, ...prev]);
+				} else {
+					setJournals((prev) => prev.map((j) => (j.id === finalId ? payloadData : j)));
+				}
+
+				await Swal.fire({
+					icon: 'success',
+					title: 'Tersimpan di Perangkat!',
+					text: `Jurnal berhasil disimpan secara offline dan akan disinkronkan saat online.`,
+					confirmButtonColor: '#00A693',
+				});
+				setIsModalOpen(false);
 			} else {
-				const newId = Math.random().toString(36).substring(2, 11);
-				const insertData = {
-					id: newId,
-					guru_id: userId || null,
-					tanggal: formData.tanggal,
-					jam_ke: formData.jam_ke || '',
-					pertemuan_ke: formData.pertemuan_ke || '',
-					kelas: formData.kelas,
-					mapel: formData.mapel,
-					materi: formData.materi,
-					kegiatan: formData.kegiatan || '',
-					hambatan: formData.hambatan || '',
-					solusi: formData.solusi || '',
-					tuntas: !!formData.tuntas,
-					tahun_ajar: tahunAjarAktif,
-					semester: semesterAktif,
-				};
-				const { error } = await supabase.from('jurnal').insert(insertData);
-				if (error) throw error;
+				const res = await fetch('/api/jurnal', {
+					method: isEditing ? 'PUT' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payloadData),
+				});
+
+				if (res.ok) {
+					if (!isEditing) {
+						localStorage.removeItem('draft_jurnal_baru');
+					}
+					await renumberPertemuan(formData.kelas, formData.mapel);
+					await Swal.fire({
+						icon: 'success',
+						title: 'Berhasil!',
+						text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
+						timer: 1500,
+						showConfirmButton: false,
+					});
+					setIsModalOpen(false);
+					refreshJurnal();
+				} else {
+					throw new Error('Gagal menyimpan di server');
+				}
 			}
-
-			// Bersihkan draft jika mode tambah baru berhasil
-			if (!isEditing) {
-				localStorage.removeItem('draft_jurnal_baru');
-			}
-
-			// Renomor ulang pertemuan berdasarkan tanggal (urutan kronologis)
-			await renumberPertemuan(formData.kelas, formData.mapel);
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil!',
-				text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
-				timer: 1500,
-				showConfirmButton: false,
-			});
-			setIsModalOpen(false);
-			refreshJurnal();
 		} catch (err) {
-			Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
+			console.warn('Gagal simpan online, fallback ke offline queue:', err);
+			try {
+				const { putItem } = await import('@/lib/offlineDb');
+				const { enqueueAction } = await import('@/lib/syncEngine');
+
+				await putItem('jurnal', payloadData);
+				await enqueueAction({
+					type: 'JURNAL',
+					endpoint: '/api/jurnal',
+					method: isEditing ? 'PUT' : 'POST',
+					payload: payloadData,
+					description: `Jurnal ${formData.mapel} - ${formData.kelas} (Pertemuan ${formData.pertemuan_ke})`,
+				});
+
+				if (!isEditing) {
+					localStorage.removeItem('draft_jurnal_baru');
+					setJournals((prev) => [payloadData, ...prev]);
+				} else {
+					setJournals((prev) => prev.map((j) => (j.id === finalId ? payloadData : j)));
+				}
+
+				await Swal.fire({
+					icon: 'info',
+					title: 'Tersimpan Offline!',
+					text: 'Koneksi terganggu. Jurnal aman tersimpan di perangkat dan akan disinkronkan saat terhubung kembali.',
+					confirmButtonColor: '#00A693',
+				});
+				setIsModalOpen(false);
+			} catch (fallbackErr) {
+				Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
+			}
 		} finally {
 			setSaving(false);
 		}
