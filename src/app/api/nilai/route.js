@@ -9,6 +9,7 @@ export async function POST(req) {
 	try {
 		const body = await req.json();
 		const {
+			tugasId: customTugasId,
 			judul,
 			type,
 			deskripsi,
@@ -46,7 +47,7 @@ export async function POST(req) {
 			}
 		}
 
-		const tugasId = 'TGS-' + generateId();
+		const tugasId = customTugasId || ('TGS-' + generateId());
 		const numTotalSoal = parseInt(total_soal) || 100;
 		const numSkalaMaks = parseInt(skala_maks) || 100;
 		
@@ -90,7 +91,7 @@ export async function POST(req) {
 				if (mode_penilaian === 'jumlah_benar') {
 					return n.jumlah_benar !== undefined && n.jumlah_benar !== null && String(n.jumlah_benar).trim() !== '';
 				}
-				return n.nilai && parseFloat(n.nilai) > 0;
+				return n.nilai !== undefined && n.nilai !== null && String(n.nilai).trim() !== '';
 			});
 
 			const siswaIds = validItems.map(n => n.siswa_id);
@@ -144,6 +145,7 @@ export async function GET(req) {
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
 		const tugasId = searchParams.get('tugasId');
+		const tugasIdPrefix = searchParams.get('tugasIdPrefix');
 		const tahunAjar = searchParams.get('tahun_ajar');
 		const semester = searchParams.get('semester');
 
@@ -176,6 +178,7 @@ export async function GET(req) {
 
 		// Filter
 		if (tugasId) query = query.eq('tugas_id', tugasId);
+		if (tugasIdPrefix) query = query.ilike('tugas_id', `${tugasIdPrefix}%`);
 		if (kelas) query = query.eq('nilai_tugas.kelas', kelas);
 		if (mapel) query = query.eq('nilai_tugas.mapel', mapel);
 		// Filter Periode Akademik

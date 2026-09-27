@@ -55,7 +55,8 @@ export async function GET(req) {
 				parsedJson = [];
 			}
 
-			const hydratedJson = parsedJson.map((group) => ({
+			const hydratedJson = parsedJson.map((group, index) => ({
+				id: group.id || `grup-${index + 1}`,
 				...group,
 				members: (group.anggota_ids || []).map((siswaId) => {
 					return siswaMap[siswaId] || { id: siswaId, nama: 'Siswa Tidak Dikenal' };

@@ -225,9 +225,11 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId, isTabMode =
 			confirmButtonText: 'YA, HAPUS',
 			cancelButtonText: 'BATAL',
 			customClass: {
-				...brutalCustomClass,
-				confirmButton:
-					'bg-[#E8451A] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+				popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+				title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
+				htmlContainer: 'font-bold text-[#0D0D0D]',
+				confirmButton: 'bg-[#E8451A] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+				cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
 			},
 		});
 
@@ -354,7 +356,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId, isTabMode =
 			didOpen: () => Swal.showLoading(),
 		});
 		try {
-			const dataToSave = regularGroups.map((g) => ({
+			const dataToSave = regularGroups.map((g, idx) => ({
+				id: g.id || `grup-${idx + 1}`,
 				nama_grup: g.nama,
 				metode_generate: metaData?.metode || 'manual',
 				anggota_ids: g.members.map((m) => m.id),

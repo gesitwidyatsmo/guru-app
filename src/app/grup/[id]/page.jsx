@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
 	Users,
@@ -19,9 +19,11 @@ import {
 	Share2,
 	LayoutGrid,
 	AlertCircle,
-	CheckCircle2
+	CheckCircle2,
+	Award
 } from 'lucide-react';
 import DragDropBoard from '@/app/components/DragDropBoard';
+import GroupScoringView from '@/app/components/GroupScoringView';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
@@ -58,10 +60,45 @@ export default function DetailGrupPage() {
 	const [sessionData, setSessionData] = useState(null);
 	const [classSiswa, setClassSiswa] = useState([]);
 	const [loading, setLoading] = useState(true);
-	const [activeTab, setActiveTab] = useState('overview');
+	const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'edit' | 'penilaian'
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [isCopied, setIsCopied] = useState(false);
+
+	// State Penilaian Terintegrasi
+	const [assessmentsSummary, setAssessmentsSummary] = useState([]);
+	const [mapelList, setMapelList] = useState([]);
+
+	// Fetch Ringkasan Penilaian Sesi Grup ini dari DB
+	const fetchAssessmentSummary = useCallback(async () => {
+		if (!id) return;
+		try {
+			const supabase = createClient();
+			const prefix = `TGS-GRP-${id}`;
+			const { data: tugasData, error: errTugas } = await supabase
+				.from('nilai_tugas')
+				.select(`
+					tugas_id,
+					kategori,
+					type,
+					tanggal,
+					nilai_siswa (
+						siswa_id,
+						nilai
+					)
+				`)
+				.ilike('tugas_id', `${prefix}%`)
+				.order('created_at', { ascending: true });
+
+			if (!errTugas && tugasData) {
+				setAssessmentsSummary(tugasData);
+			} else {
+				setAssessmentsSummary([]);
+			}
+		} catch (e) {
+			console.error('Error fetching assessment summary:', e);
+		}
+	}, [id]);
 
 	// Fetch Data Detail Grup by ID dan seluruh siswa aktif di kelas tersebut
 	useEffect(() => {
@@ -104,7 +141,14 @@ export default function DetailGrupPage() {
 		};
 
 		fetchData();
-	}, [id]);
+		fetchAssessmentSummary();
+
+		// Fetch daftar mapel untuk fallback
+		fetch('/api/mapel?all=false')
+			.then((res) => (res.ok ? res.json() : []))
+			.then((data) => setMapelList(Array.isArray(data) ? data : []))
+			.catch((err) => console.error('Error fetching mapel list:', err));
+	}, [id, fetchAssessmentSummary]);
 
 	const groups = sessionData?.raw_json || [];
 
@@ -157,6 +201,18 @@ export default function DetailGrupPage() {
 		const totalExcluded = unassignedSiswa.length;
 		return { totalGroups, totalAssigned, avgPerGroup, totalExcluded };
 	}, [groups, unassignedSiswa]);
+
+	// Peta skor dari penilaian terakhir untuk ditampilkan di tab overview
+	const latestAssessment = assessmentsSummary[assessmentsSummary.length - 1];
+	const latestScoresMap = useMemo(() => {
+		const map = {};
+		if (latestAssessment?.nilai_siswa) {
+			latestAssessment.nilai_siswa.forEach((s) => {
+				map[s.siswa_id] = s.nilai;
+			});
+		}
+		return map;
+	}, [latestAssessment]);
 
 	// Salin format WhatsApp
 	const handleCopyWA = async () => {
@@ -357,6 +413,25 @@ export default function DetailGrupPage() {
 										<span>{unassignedSiswa.length} DIKECUALIKAN</span>
 									</div>
 								)}
+
+								{/* Status Penilaian Chip */}
+								{assessmentsSummary.length > 0 ? (
+									<button
+										type='button'
+										onClick={() => setActiveTab('penilaian')}
+										className='inline-flex items-center gap-1.5 border-[2px] sm:border-[3px] border-[#0D0D0D] bg-[#A3E635] text-[#0D0D0D] px-3 py-1.5 font-black uppercase tracking-widest text-xs shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all'>
+										<Award className='w-3.5 h-3.5' strokeWidth={3} />
+										<span>{assessmentsSummary.length} TAHAP PENILAIAN TERCATAT</span>
+									</button>
+								) : (
+									<button
+										type='button'
+										onClick={() => setActiveTab('penilaian')}
+										className='inline-flex items-center gap-1.5 border-[2px] sm:border-[3px] border-[#0D0D0D] bg-white text-[#0D0D0D] px-3 py-1.5 font-black uppercase tracking-widest text-xs shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all'>
+										<Award className='w-3.5 h-3.5 text-[#0D0D0D]' strokeWidth={3} />
+										<span>BELUM DINILAI (+ BERI NILAI)</span>
+									</button>
+								)}
 							</div>
 						</div>
 
@@ -385,7 +460,7 @@ export default function DetailGrupPage() {
 					</div>
 
 					{/* Segmented Tab Nav */}
-					<div className='border-t-[3px] sm:border-t-[4px] border-[#0D0D0D] bg-gray-100 p-2 sm:p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3'>
+					<div className='border-t-[3px] sm:border-t-[4px] border-[#0D0D0D] bg-gray-100 p-2 sm:p-3 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3'>
 						<button
 							type='button'
 							onClick={() => setActiveTab('overview')}
@@ -417,12 +492,78 @@ export default function DetailGrupPage() {
 								INTERAKTIF
 							</span>
 						</button>
+
+						<button
+							type='button'
+							onClick={() => setActiveTab('penilaian')}
+							className={`py-3 px-4 font-black uppercase tracking-wider text-xs sm:text-sm border-[3px] border-[#0D0D0D] transition-all flex items-center justify-center gap-2 ${
+								activeTab === 'penilaian'
+									? 'bg-[#0D0D0D] text-white shadow-[4px_4px_0px_0px_#A3E635] -translate-y-0.5'
+									: 'bg-white text-[#0D0D0D] hover:bg-gray-50 shadow-[2px_2px_0px_0px_#0D0D0D]'
+							}`}>
+							<Award className='w-4 h-4' strokeWidth={3} />
+							<span>PENILAIAN KELOMPOK</span>
+							<span className={`px-2 py-0.5 text-[10px] font-black border-[2px] border-[#0D0D0D] ${
+								assessmentsSummary.length > 0 ? 'bg-[#A3E635] text-[#0D0D0D]' : 'bg-[#F5C518] text-[#0D0D0D]'
+							}`}>
+								{assessmentsSummary.length > 0 ? `${assessmentsSummary.length} TAHAP` : 'BELUM DINILAI'}
+							</span>
+						</button>
 					</div>
 				</div>
 
 				{/* Tab 1: OVERVIEW */}
 				{activeTab === 'overview' && (
 					<div className='space-y-6 sm:space-y-8 animate-in fade-in duration-200'>
+						
+						{/* Banner Status Penilaian Kelompok */}
+						{assessmentsSummary.length > 0 ? (
+							<div className='bg-[#A3E635]/20 border-[3px] sm:border-[4px] border-[#0D0D0D] p-3.5 sm:p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+								<div className='flex items-center gap-2.5 min-w-0'>
+									<span className='p-2 bg-[#A3E635] border-[2px] border-[#0D0D0D] text-[#0D0D0D] shrink-0'>
+										<Award className='w-4 h-4 sm:w-5 sm:h-5' strokeWidth={3} />
+									</span>
+									<div className='min-w-0'>
+										<p className='font-black text-xs sm:text-sm uppercase tracking-wider text-[#0D0D0D] truncate'>
+											PENILAIAN TERCATAT: {assessmentsSummary.length} TAHAP (TERAKHIR: {latestAssessment?.kategori || 'PENILAIAN'})
+										</p>
+										<p className='text-[10px] sm:text-xs font-bold text-[#0D0D0D]/70 uppercase tracking-widest mt-0.5'>
+											Nilai kegiatan kelompok ini telah masuk ke database nilai_tugas dan rapor siswa.
+										</p>
+									</div>
+								</div>
+								<button
+									type='button'
+									onClick={() => setActiveTab('penilaian')}
+									className='px-3.5 py-2 bg-white text-[#0D0D0D] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] font-black uppercase text-xs tracking-wider hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-1.5 shrink-0'>
+									<span>KELOLA PENILAIAN</span>
+									<ArrowRight className='w-3.5 h-3.5' strokeWidth={3} />
+								</button>
+							</div>
+						) : (
+							<div className='bg-[#FFFDF0] border-[3px] sm:border-[4px] border-[#0D0D0D] p-3.5 sm:p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+								<div className='flex items-center gap-2.5 min-w-0'>
+									<span className='p-2 bg-[#F5C518] border-[2px] border-[#0D0D0D] text-[#0D0D0D] shrink-0'>
+										<Award className='w-4 h-4 sm:w-5 sm:h-5' strokeWidth={3} />
+									</span>
+									<div className='min-w-0'>
+										<p className='font-black text-xs sm:text-sm uppercase tracking-wider text-[#0D0D0D]'>
+											KEGIATAN KELOMPOK INI BELUM DINILAI
+										</p>
+										<p className='text-[10px] sm:text-xs font-bold text-[#0D0D0D]/70 uppercase tracking-widest mt-0.5'>
+											Berikan nilai per kelompok atau per individu agar langsung tercatat ke database nilai kelas.
+										</p>
+									</div>
+								</div>
+								<button
+									type='button'
+									onClick={() => setActiveTab('penilaian')}
+									className='px-3.5 py-2 bg-[#2F80ED] text-white border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] font-black uppercase text-xs tracking-wider hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center justify-center gap-1.5 shrink-0'>
+									<span>BERI NILAI KELOMPOK</span>
+									<ArrowRight className='w-3.5 h-3.5' strokeWidth={3} />
+								</button>
+							</div>
+						)}
 						
 						{/* Search Bar & Result Indicator */}
 						<div className='bg-white border-[3px] sm:border-[4px] border-[#0D0D0D] p-3 sm:p-4 shadow-[4px_4px_0px_0px_#0D0D0D] sm:shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
@@ -488,6 +629,24 @@ export default function DetailGrupPage() {
 													</h3>
 												</div>
 												<div className='flex items-center gap-1.5 shrink-0'>
+													{/* Skor Penilaian Kelompok jika ada */}
+													{(() => {
+														const memberScoreVals = (group.members || [])
+															.map((m) => latestScoresMap[m.id])
+															.filter((sc) => sc !== undefined && sc !== null && sc !== '');
+														if (memberScoreVals.length > 0) {
+															const avgScore = (
+																memberScoreVals.reduce((a, b) => a + parseFloat(b), 0) / memberScoreVals.length
+															).toFixed(1);
+															return (
+																<span className='text-xs bg-[#0D0D0D] text-[#A3E635] border-[2px] border-[#0D0D0D] px-2 py-1 font-black uppercase tracking-wider'>
+																	NILAI: {avgScore}
+																</span>
+															);
+														}
+														return null;
+													})()}
+
 													<span className='text-xs bg-white text-[#0D0D0D] border-[2px] sm:border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] px-2.5 py-1 font-black uppercase tracking-widest'>
 														{memberCount} SISWA
 													</span>
@@ -536,6 +695,13 @@ export default function DetailGrupPage() {
 																			)}
 																		</div>
 																	</div>
+
+																	{/* Skor dari Penilaian Terakhir */}
+																	{latestScoresMap[member.id] !== undefined && latestScoresMap[member.id] !== null && String(latestScoresMap[member.id]).trim() !== '' && (
+																		<span className='text-[10px] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] bg-[#A3E635] text-[#0D0D0D] uppercase shrink-0 shadow-[1px_1px_0px_0px_#0D0D0D]'>
+																			NILAI: {latestScoresMap[member.id]}
+																		</span>
+																	)}
 
 																	{typeof member.avg !== 'undefined' && (
 																		<span className='text-[10px] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] bg-white text-[#0D0D0D] uppercase shrink-0'>
@@ -645,6 +811,19 @@ export default function DetailGrupPage() {
 					</div>
 				)}
 
+				{/* Tab 3: PENILAIAN KELOMPOK */}
+				{activeTab === 'penilaian' && (
+					<div className='animate-in fade-in duration-200'>
+						<GroupScoringView
+							sessionData={sessionData}
+							groups={groups}
+							unassignedSiswa={unassignedSiswa}
+							mapelList={mapelList}
+							onAssessmentUpdated={fetchAssessmentSummary}
+						/>
+					</div>
+				)}
+
 			</div>
 		</div>
 	);
@@ -657,7 +836,7 @@ function transformDataForBoard(savedGroups, unassignedList = []) {
 	);
 
 	const boardGroups = regularGroups.map((g, i) => ({
-		id: `g-edit-${i}`,
+		id: g.id || `g-edit-${i}`,
 		nama: g.nama_grup,
 		members: g.members || [],
 	}));
