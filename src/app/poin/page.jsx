@@ -43,6 +43,7 @@ export default function PoinGlobalPage() {
 		aktifitas: '',
 		poin: 5,
 		keterangan: '',
+		jumlah: 1,
 	};
 	const [formData, setFormData] = useState(initialForm);
 
@@ -163,7 +164,21 @@ export default function PoinGlobalPage() {
 		e.preventDefault();
 		setSaving(true);
 
-		const payload = { ...formData, ...(isEditing ? {} : { tahun_ajar: tahunAjarAktif, semester: semesterAktif }) };
+		// Handle multiplier (jumlah)
+		let finalPoin = formData.poin;
+		let finalAktifitas = formData.aktifitas;
+		
+		if (!isEditing && formData.jumlah > 1) {
+			finalPoin = formData.poin * formData.jumlah;
+			finalAktifitas = `${formData.aktifitas} ${formData.jumlah}X`;
+		}
+
+		const payload = { 
+			...formData, 
+			poin: finalPoin,
+			aktifitas: finalAktifitas,
+			...(isEditing ? {} : { tahun_ajar: tahunAjarAktif, semester: semesterAktif }) 
+		};
 
 		try {
 			const res = await fetch('/api/poin', {
@@ -558,9 +573,17 @@ export default function PoinGlobalPage() {
 											{/* Indikator Pilihan */}
 											<div className='absolute right-4 top-1/2 -translate-y-1/2'>
 												{formData.siswa_id ? (
-													<div className='bg-[#00A693] text-white p-1 border-[2px] border-[#0D0D0D]'>
-														<svg className='w-4 h-4' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M5 13l4 4L19 7'/></svg>
-													</div>
+													<button
+														type='button'
+														onClick={() => {
+															setFormData({ ...formData, siswa_id: '' });
+															setSearchSiswaModal('');
+														}}
+														className='bg-[#E8451A] text-white p-1 border-[2px] border-[#0D0D0D] hover:bg-[#0D0D0D] transition-colors cursor-pointer flex items-center justify-center'
+														title='Hapus pilihan siswa'
+													>
+														<svg className='w-4 h-4' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12'/></svg>
+													</button>
 												) : (
 													<span className='text-2xl'>🔍</span>
 												)}
@@ -605,8 +628,8 @@ export default function PoinGlobalPage() {
 										<div className='order-2 md:order-1 bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] relative'>
 											<div className='absolute -top-4 -left-4 bg-[#00A693] text-white px-3 py-1 border-[3px] border-[#0D0D0D] font-black uppercase text-sm shadow-[2px_2px_0px_0px_#0D0D0D] -rotate-2'>DETAIL</div>
 											
-											{/* Tanggal & Poin */}
-											<div className={formData.kategori === 'Lainnya' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4' : 'mt-4'}>
+											{/* Tanggal, Frekuensi & Poin */}
+											<div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4`}>
 												<div>
 													<label className='block text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest mb-2 bg-[#F5C518] inline-block px-2 border-[2px] border-[#0D0D0D]'>Tanggal</label>
 													<input
@@ -617,8 +640,39 @@ export default function PoinGlobalPage() {
 														className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none'
 													/>
 												</div>
-												{formData.kategori === 'Lainnya' && (
+												{!isEditing && (
 													<div>
+														<label className='block text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest mb-2 bg-[#F5C518] inline-block px-2 border-[2px] border-[#0D0D0D]'>Berapa Kali (x)</label>
+														<div className='flex items-center shadow-[4px_4px_0px_0px_#0D0D0D] focus-within:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all bg-white'>
+															<button
+																type='button'
+																onClick={() => setFormData({ ...formData, jumlah: Math.max(1, (formData.jumlah || 1) - 1) })}
+																className='w-12 flex-shrink-0 self-stretch bg-[#F5C518] text-[#0D0D0D] border-[3px] border-[#0D0D0D] border-r-0 flex items-center justify-center font-black text-2xl hover:bg-[#0D0D0D] hover:text-white transition-colors'
+															>
+																-
+															</button>
+															<input
+																type='number'
+																required
+																min='1'
+																max='50'
+																onWheel={(e) => e.target.blur()}
+																value={formData.jumlah || 1}
+																onChange={(e) => setFormData({ ...formData, jumlah: e.target.value === '' ? '' : (parseInt(e.target.value) || 1) })}
+																className='w-full px-2 py-3 text-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black outline-none rounded-none'
+															/>
+															<button
+																type='button'
+																onClick={() => setFormData({ ...formData, jumlah: Math.min(50, (formData.jumlah || 1) + 1) })}
+																className='w-12 flex-shrink-0 self-stretch bg-[#F5C518] text-[#0D0D0D] border-[3px] border-[#0D0D0D] border-l-0 flex items-center justify-center font-black text-2xl hover:bg-[#0D0D0D] hover:text-white transition-colors'
+															>
+																+
+															</button>
+														</div>
+													</div>
+												)}
+												{formData.kategori === 'Lainnya' && (
+													<div className={`${!isEditing ? 'sm:col-span-2' : ''}`}>
 														<label className='block text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest mb-2 bg-[#F5C518] inline-block px-2 border-[2px] border-[#0D0D0D]'>Jumlah Poin</label>
 														<div className='relative'>
 															<div className={`absolute inset-y-0 left-0 w-10 flex items-center justify-center border-r-[3px] border-[#0D0D0D] font-black text-lg ${formData.tipe === 'positif' ? 'bg-[#00A693] text-white' : 'bg-[#E8451A] text-white'}`}>
