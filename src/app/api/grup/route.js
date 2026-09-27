@@ -30,8 +30,8 @@ export async function GET(req) {
 		const { data: rowsGrup, error: grupError } = await query;
 		if (grupError) throw grupError;
 
-		// 2. Ambil Data Siswa (untuk Lookup Nama)
-		const { data: rowsSiswa, error: siswaError } = await supabase.from('siswa').select('id, nama_lengkap');
+		// 2. Ambil Data Siswa (untuk Lookup Nama & NIS)
+		const { data: rowsSiswa, error: siswaError } = await supabase.from('siswa').select('id, nis, nama_lengkap');
 		if (siswaError) throw siswaError;
 
 		const siswaMap = {};
@@ -39,6 +39,7 @@ export async function GET(req) {
 			siswaMap[row.id] = {
 				id: row.id,
 				nama: row.nama_lengkap,
+				nis: row.nis,
 			};
 		});
 

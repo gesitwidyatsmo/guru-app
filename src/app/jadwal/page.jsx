@@ -12,14 +12,16 @@ import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeri
 const listHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 
 // Neobrutalism SweetAlert Mixin
+const brutalCustomClass = {
+	popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+	title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
+	htmlContainer: 'font-bold text-[#0D0D0D]',
+	confirmButton: 'bg-[#0D0D0D] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3',
+	cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3'
+};
+
 const brutalSwal = Swal.mixin({
-	customClass: {
-		popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
-		title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
-		htmlContainer: 'font-bold text-[#0D0D0D]',
-		confirmButton: 'bg-[#0D0D0D] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3',
-		cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3'
-	},
+	customClass: brutalCustomClass,
 	buttonsStyling: false
 });
 
@@ -172,7 +174,7 @@ export default function JadwalPage() {
 			confirmButtonText: 'YA, HAPUS!',
 			cancelButtonText: 'BATAL',
 			customClass: {
-				...brutalSwal.options.customClass,
+				...brutalCustomClass,
 				confirmButton: 'bg-[#E8451A] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
 				cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
 			}

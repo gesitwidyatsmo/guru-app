@@ -8,14 +8,16 @@ import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
 
 // Neobrutalism SweetAlert Mixin
+const brutalCustomClass = {
+	popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
+	title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
+	htmlContainer: 'font-bold text-[#0D0D0D]',
+	confirmButton: 'bg-[#2F80ED] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
+	cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
+};
+
 const brutalSwal = Swal.mixin({
-	customClass: {
-		popup: 'border-[4px] border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
-		title: 'font-black uppercase tracking-widest text-[#0D0D0D]',
-		htmlContainer: 'font-bold text-[#0D0D0D]',
-		confirmButton: 'bg-[#2F80ED] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
-		cancelButton: 'bg-white text-[#0D0D0D] font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3'
-	},
+	customClass: brutalCustomClass,
 	buttonsStyling: false
 });
 
@@ -216,17 +218,15 @@ export default function CreateGroupPage() {
 			});
 		});
 
-		if (excludedSiswa.length > 0) {
-			groups.push({
-				id: 'excluded',
-				nama: 'TIDAK MASUK KELOMPOK',
-				members: excludedSiswa.map(s => ({
-					id: s.id,
-					nama: s.nama_lengkap,
-					nis: s.nis,
-				})),
-			});
-		}
+		groups.push({
+			id: 'excluded',
+			nama: 'TIDAK MASUK KELOMPOK',
+			members: excludedSiswa.map(s => ({
+				id: s.id,
+				nama: s.nama_lengkap,
+				nis: s.nis,
+			})),
+		});
 
 		setGeneratedGroups(groups);
 		setShowBoard(true);
@@ -277,7 +277,7 @@ export default function CreateGroupPage() {
 				confirmButtonText: 'YA, LANJUTKAN',
 				cancelButtonText: 'BATAL',
 				customClass: {
-					...brutalSwal.options.customClass,
+					...brutalCustomClass,
 					confirmButton: 'bg-[#E8451A] text-white font-black uppercase tracking-widest border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none hover:-translate-y-1 transition-all px-6 py-3 mr-3',
 				}
 			});
@@ -345,18 +345,16 @@ export default function CreateGroupPage() {
 			arahMaju = !arahMaju;
 		}
 
-		if (excludedSiswa.length > 0) {
-			groups.push({
-				id: 'excluded',
-				nama: 'TIDAK MASUK KELOMPOK',
-				members: excludedSiswa.map(s => ({
-					id: s.id,
-					nama: s.nama_lengkap,
-					nis: s.nis,
-					avg: getScoreAvg(s),
-				})),
-			});
-		}
+		groups.push({
+			id: 'excluded',
+			nama: 'TIDAK MASUK KELOMPOK',
+			members: excludedSiswa.map(s => ({
+				id: s.id,
+				nama: s.nama_lengkap,
+				nis: s.nis,
+				avg: getScoreAvg(s),
+			})),
+		});
 
 		setGeneratedGroups(groups);
 		setShowBoard(true);
