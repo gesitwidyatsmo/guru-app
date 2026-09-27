@@ -8,8 +8,8 @@ export default function IdleTimerWrapper({ children }) {
 	const router = useRouter();
 
 	const handleOnIdle = async () => {
-		// Jangan lakukan auto-logout jika pengguna sudah berada di halaman login
-		if (pathname === '/login') return;
+		// Jangan lakukan auto-logout jika pengguna sudah berada di halaman login atau game
+		if (pathname === '/login' || pathname?.startsWith('/game')) return;
 
 		try {
 			console.log('Sesi kedaluwarsa karena tidak ada aktivitas (Idle timeout).');

@@ -15,7 +15,7 @@ export async function GET(request) {
 
 		let allowedClasses = null;
 
-		if (showAll || role === 'Admin') {
+		if (showAll || role === 'Admin' || !role) {
 			allowedClasses = null; // Ambil semua
 		} else if (role === 'Guru' && userId) {
 			const { data: kbmData } = await supabase
@@ -29,7 +29,7 @@ export async function GET(request) {
 				allowedClasses = [];
 			}
 		} else {
-			allowedClasses = []; // Guest / unauthorized
+			allowedClasses = []; // Unauthorized
 		}
 
 		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS

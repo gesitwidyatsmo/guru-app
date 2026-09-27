@@ -75,7 +75,7 @@ export default function KbmBlocker() {
 	if (loading || !isBlocked) return null;
 
 	// Tentukan halaman mana saja yang bebas diakses meskipun belum punya KBM
-	const allowedPaths = ['/kelas', '/mapel', '/profil', '/pengaturan', '/login'];
+	const allowedPaths = ['/kelas', '/mapel', '/profil', '/pengaturan', '/login', '/game', '/soal'];
 	const isAllowed = allowedPaths.some(path => pathname.startsWith(path));
 
 	if (isAllowed) return null;

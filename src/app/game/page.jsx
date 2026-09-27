@@ -32,12 +32,27 @@ export default function GameMenu() {
 				</div>
 			</div>
 
-			<div className='w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-8'>
+			<div className='w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-8'>
 				
+				{/* Card Chemistry of Champion */}
+				<Link href="/game/chemistry-of-champion" className='block'>
+					<div className='group relative bg-[#06B6D4] border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:shadow-[12px_12px_0px_0px_#0D0D0D] hover:-translate-y-2 transition-all p-8 flex flex-col items-center text-center h-full'>
+						<div className='bg-white p-4 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] mb-6 group-hover:rotate-12 transition-transform'>
+							<span className='text-4xl'>🧪</span>
+						</div>
+						<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-wider mb-2 bg-white px-3 py-1 border-[3px] border-[#0D0D0D] rotate-1'>
+							CHEMISTRY OF CHAMPION
+						</h2>
+						<p className='text-sm font-bold text-[#0D0D0D] mt-2 bg-white/90 p-2 border-2 border-[#0D0D0D]'>
+							Arena 100 Soal & Cerdas Cermat 6 Tim!
+						</p>
+					</div>
+				</Link>
+
 				{/* Card Arisan */}
 				<div 
 					onClick={handleArisanClick}
-					className='cursor-pointer group relative bg-[#FF90E8] border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:shadow-[12px_12px_0px_0px_#0D0D0D] hover:-translate-y-2 transition-all p-8 flex flex-col items-center text-center'>
+					className='cursor-pointer group relative bg-[#FF90E8] border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:shadow-[12px_12px_0px_0px_#0D0D0D] hover:-translate-y-2 transition-all p-8 flex flex-col items-center text-center h-full'>
 					<div className='bg-white p-4 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] mb-6 group-hover:rotate-12 transition-transform'>
 						<Users className='w-16 h-16 text-[#0D0D0D]' strokeWidth={2.5} />
 					</div>

@@ -38,12 +38,14 @@ export async function proxy(request) {
 	const { pathname } = request.nextUrl;
 	const publicRoutes = [
 		'/login',
+		'/game',
 		'/soal',
 		'/api/soal',
 		'/api/login',
 		'/api/logout',
 		'/api/kelas',
 		'/api/siswa',
+		'/api/game',    // Game API: packages, questions, sessions — auth divalidasi di level halaman
 		'/offline',        // PWA: halaman fallback saat offline harus bisa diakses tanpa login
 		'/manifest.json',  // PWA: manifest harus selalu bisa diakses
 	];

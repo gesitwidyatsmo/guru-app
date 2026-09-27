@@ -36,7 +36,7 @@ export default function DashboardArisan() {
 		const fetchKelas = async () => {
 			setLoadingKelas(true);
 			try {
-				const res = await fetch('/api/kelas');
+				const res = await fetch('/api/kelas?all=true');
 				if (res.ok) {
 					const data = await res.json();
 					setKelasList(data);
