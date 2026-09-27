@@ -75,64 +75,64 @@ export async function proxy(request) {
 	}
 
 	// --- Route Protection Logic ---
+	let finalResponse;
 
 	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard
 	if (pathname === '/login' && payload) {
 		const destination = payload.role === 'Admin' ? '/admin' : '/';
-		return NextResponse.redirect(new URL(destination, request.url));
+		finalResponse = NextResponse.redirect(new URL(destination, request.url));
 	}
-
 	// Area admin: hanya bisa diakses oleh role Admin
-	if (pathname.startsWith('/admin') && payload?.role !== 'Admin') {
+	else if (pathname.startsWith('/admin') && payload?.role !== 'Admin') {
 		if (!payload) {
-			return NextResponse.redirect(new URL('/login', request.url));
+			finalResponse = NextResponse.redirect(new URL('/login', request.url));
+		} else {
+			finalResponse = NextResponse.redirect(new URL('/', request.url));
 		}
-		return NextResponse.redirect(new URL('/', request.url));
 	}
-
 	// Route private: harus login
-	if (!isPublicRoute && !payload) {
+	else if (!isPublicRoute && !payload) {
 		if (pathname.startsWith('/api')) {
-			return NextResponse.json({ error: 'Unauthorized: Harap login terlebih dahulu' }, { status: 401 });
+			finalResponse = NextResponse.json({ error: 'Unauthorized: Harap login terlebih dahulu' }, { status: 401 });
+		} else {
+			finalResponse = NextResponse.redirect(new URL('/login', request.url));
 		}
-		return NextResponse.redirect(new URL('/login', request.url));
 	}
-
-	// --- Sisipkan custom headers + auto-renew auth_session_valid ---
-	if (payload) {
+	// Lolos pengecekan dan memiliki sesi valid
+	else if (payload) {
 		const requestHeaders = new Headers(request.headers);
 		requestHeaders.set('x-user-role', payload.role);
 		requestHeaders.set('x-user-id', payload.id);
 		requestHeaders.set('x-user-name', encodeURIComponent(payload.nama_lengkap));
 
-		// Ambil cookie yang mungkin sudah di-set oleh Supabase di response sebelumnya
-		const cookiesToPreserve = supabaseResponse.cookies.getAll();
-
 		// Buat response baru dengan request headers yang dimodifikasi
-		supabaseResponse = NextResponse.next({
+		finalResponse = NextResponse.next({
 			request: {
 				headers: requestHeaders,
 			},
 		});
 
-		// Kembalikan cookie-cookie Supabase ke response yang baru
-		cookiesToPreserve.forEach(c => supabaseResponse.cookies.set(c.name, c.value, c));
-
-		// Auto-renew auth_session_valid jika tidak ada.
-		// Mengatasi masalah Brave mobile/tablet yang memblokir cookie dari API route
-		// atau memblokir header sec-fetch-site sehingga deteksi mode sebelumnya tidak akurat.
-		// Jika Supabase menyatakan user valid, kita PERCAYAI dan perbarui cookie ini.
+		// Auto-renew auth_session_valid
 		const hasCustomSession = request.cookies.has('auth_session_valid');
 		if (!hasCustomSession) {
-			supabaseResponse.cookies.set('auth_session_valid', 'true', {
+			finalResponse.cookies.set('auth_session_valid', 'true', {
 				httpOnly: true,
 				secure: process.env.NODE_ENV === 'production',
 				sameSite: 'lax',
 				path: '/',
-				maxAge: 2 * 60 * 60, // 2 jam (sesi reguler tanpa "Ingat Saya")
+				maxAge: 2 * 60 * 60, // 2 jam
 			});
 		}
+	} 
+	// Route publik tanpa login
+	else {
+		finalResponse = NextResponse.next({ request });
 	}
 
-	return supabaseResponse;
+	// PENTING: Kembalikan semua cookie yang telah di-set atau dihapus oleh Supabase
+	// ke finalResponse. Hal ini agar browser mendapatkan update (seperti logout).
+	const cookiesToPreserve = supabaseResponse.cookies.getAll();
+	cookiesToPreserve.forEach(c => finalResponse.cookies.set(c.name, c.value, c));
+
+	return finalResponse;
 }
