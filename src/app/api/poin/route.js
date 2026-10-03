@@ -93,18 +93,22 @@ export async function POST(req) {
 	try {
 		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		const { siswa_id, tanggal, tipe, kategori, aktifitas, poin, keterangan, tahun_ajar, semester } = body;
+		const { siswa_id, siswa_ids, tanggal, tipe, kategori, aktifitas, poin, keterangan, tahun_ajar, semester } = body;
 
-		if (!siswa_id || !tanggal || !tipe || !aktifitas || poin === undefined) {
-			return NextResponse.json({ error: 'Field wajib: siswa_id, tanggal, tipe, aktifitas, poin' }, { status: 400 });
+		// Check if we have either a single siswa_id or an array of siswa_ids
+		const targetSiswa = (siswa_ids && Array.isArray(siswa_ids) && siswa_ids.length > 0) 
+			? siswa_ids 
+			: (siswa_id ? [siswa_id] : []);
+
+		if (targetSiswa.length === 0 || !tanggal || !tipe || !aktifitas || poin === undefined) {
+			return NextResponse.json({ error: 'Field wajib: siswa_id/siswa_ids, tanggal, tipe, aktifitas, poin' }, { status: 400 });
 		}
 
 		const supabase = await createClient();
-		const id = generateId();
-
-		const { error } = await supabase.from('poin').insert({
-			id,
-			siswa_id,
+		
+		const inserts = targetSiswa.map((id, index) => ({
+			id: generateId() + (index > 0 ? `-${index}` : ''),
+			siswa_id: id,
 			guru_id: userId || null,
 			tanggal,
 			tipe,
@@ -114,11 +118,13 @@ export async function POST(req) {
 			keterangan: keterangan || '',
 			tahun_ajar: tahun_ajar || '2026/2027',
 			semester: semester ? parseInt(semester) : 1,
-		});
+		}));
+
+		const { error } = await supabase.from('poin').insert(inserts);
 
 		if (error) throw error;
 
-		return NextResponse.json({ success: true, id }, { status: 201 });
+		return NextResponse.json({ success: true, count: inserts.length }, { status: 201 });
 	} catch (error) {
 		console.error('❌ Error POST poin:', error);
 		return NextResponse.json({ error: 'Gagal menyimpan poin' }, { status: 500 });

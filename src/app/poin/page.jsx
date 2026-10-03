@@ -38,6 +38,7 @@ export default function PoinGlobalPage() {
 		id: '',
 		tanggal: new Date().toISOString().slice(0, 10),
 		siswa_id: '',
+		siswa_ids: [],
 		tipe: 'positif',
 		kategori: '',
 		aktifitas: '',
@@ -112,7 +113,7 @@ export default function PoinGlobalPage() {
 	const handleOpenModal = (item = null) => {
 		if (item) {
 			setIsEditing(true);
-			setFormData(item);
+			setFormData({ ...item, siswa_ids: [item.siswa_id] });
 			const tmpsiswa = siswaList.find((s) => s.id === item.siswa_id) || siswaMap[item.siswa_id];
 			setSearchSiswaModal(tmpsiswa ? `${tmpsiswa.nama_lengkap} (${tmpsiswa.nis})` : '');
 			setModalFilterKelas(tmpsiswa?.kelas || 'Semua');
@@ -533,50 +534,87 @@ export default function PoinGlobalPage() {
 										
 										{/* Pilihan Kelas Modal */}
 										<div className='mt-4 mb-4 relative'>
-											<select
-												value={modalFilterKelas}
-												onChange={(e) => {
-													setModalFilterKelas(e.target.value);
-													setSearchSiswaModal('');
-													if (formData.siswa_id) setFormData({ ...formData, siswa_id: '' });
-													setIsSiswaDropdownOpen(false);
-												}}
-												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none appearance-none cursor-pointer'>
-												<option value='Semua'>SEMUA KELAS</option>
-												{kelasList.map((k) => (
-													<option key={k.id} value={k.nama_kelas || k.kelas}>
-														{k.nama_kelas || k.kelas}
-													</option>
-												))}
-											</select>
-											<div className='absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none'>
-												<svg className='w-5 h-5 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 9l-7 7-7-7'/></svg>
+											<div className='flex gap-2 flex-col sm:flex-row'>
+												<div className='relative flex-1'>
+													<select
+														value={modalFilterKelas}
+														onChange={(e) => {
+															setModalFilterKelas(e.target.value);
+															setSearchSiswaModal('');
+															setIsSiswaDropdownOpen(false);
+														}}
+														className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none appearance-none cursor-pointer'>
+														<option value='Semua'>SEMUA KELAS</option>
+														{kelasList.map((k) => (
+															<option key={k.id} value={k.nama_kelas || k.kelas}>
+																{k.nama_kelas || k.kelas}
+															</option>
+														))}
+													</select>
+													<div className='absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none'>
+														<svg className='w-5 h-5 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 9l-7 7-7-7'/></svg>
+													</div>
+												</div>
+												{!isEditing && modalFilterKelas !== 'Semua' && (
+													<button
+														type='button'
+														onClick={() => {
+															const classStudents = siswaList.filter(s => s.kelas === modalFilterKelas && s.status === 'Aktif').map(s => s.id);
+															const newIds = Array.from(new Set([...formData.siswa_ids, ...classStudents]));
+															setFormData({ ...formData, siswa_ids: newIds });
+														}}
+														className='bg-[#2F80ED] text-white px-4 py-3 font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:bg-[#0D0D0D] transition-colors whitespace-nowrap'>
+														+ SEMUA DI KELAS INI
+													</button>
+												)}
 											</div>
 										</div>
+
+										{/* Selected Chips */}
+										{!isEditing && formData.siswa_ids && formData.siswa_ids.length > 0 && (
+											<div className='flex flex-wrap gap-2 mb-4'>
+												{formData.siswa_ids.map(id => {
+													const s = siswaMap[id];
+													if (!s) return null;
+													return (
+														<span key={id} className='inline-flex items-center gap-1 bg-[#00A693] text-white px-2 py-1 border-[2px] border-[#0D0D0D] text-xs font-bold uppercase tracking-wider'>
+															{s.nama_lengkap}
+															<button type='button' onClick={() => {
+																setFormData({ ...formData, siswa_ids: formData.siswa_ids.filter(sid => sid !== id) });
+															}} className='hover:text-[#F5C518] ml-1 focus:outline-none'>
+																<svg className='w-4 h-4' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12'/></svg>
+															</button>
+														</span>
+													);
+												})}
+											</div>
+										)}
 
 										{/* Pencarian Siswa */}
 										<div className='relative'>
 											<input
 												type='text'
-												required={!formData.siswa_id}
+												required={isEditing ? !formData.siswa_id : formData.siswa_ids.length === 0}
 												placeholder='Ketik nama siswa...'
 												value={searchSiswaModal}
 												onChange={(e) => {
 													setSearchSiswaModal(e.target.value);
 													setIsSiswaDropdownOpen(true);
-													if (formData.siswa_id) setFormData({ ...formData, siswa_id: '' });
+													if (isEditing && formData.siswa_id) {
+														setFormData({ ...formData, siswa_id: '', siswa_ids: [] });
+													}
 												}}
 												onFocus={() => setIsSiswaDropdownOpen(true)}
 												onBlur={() => setTimeout(() => setIsSiswaDropdownOpen(false), 200)}
 												className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none'
 											/>
-											{/* Indikator Pilihan */}
+											{/* Indikator Pilihan (Hanya saat edit) */}
 											<div className='absolute right-4 top-1/2 -translate-y-1/2'>
-												{formData.siswa_id ? (
+												{isEditing && formData.siswa_id ? (
 													<button
 														type='button'
 														onClick={() => {
-															setFormData({ ...formData, siswa_id: '' });
+															setFormData({ ...formData, siswa_id: '', siswa_ids: [] });
 															setSearchSiswaModal('');
 														}}
 														className='bg-[#E8451A] text-white p-1 border-[2px] border-[#0D0D0D] hover:bg-[#0D0D0D] transition-colors cursor-pointer flex items-center justify-center'
@@ -602,9 +640,17 @@ export default function PoinGlobalPage() {
 																onMouseDown={(e) => {
 																	e.preventDefault(); // Prevent focus loss on input
 																	if (s.status !== 'Aktif') return; // Cegah pemilihan siswa tidak aktif
-																	setFormData({ ...formData, siswa_id: s.id });
-																	setSearchSiswaModal(`${s.nama_lengkap} (${s.nis})`);
-																	setIsSiswaDropdownOpen(false);
+																	
+																	if (isEditing) {
+																		setFormData({ ...formData, siswa_id: s.id, siswa_ids: [s.id] });
+																		setSearchSiswaModal(`${s.nama_lengkap} (${s.nis})`);
+																		setIsSiswaDropdownOpen(false);
+																	} else {
+																		if (!formData.siswa_ids.includes(s.id)) {
+																			setFormData({ ...formData, siswa_ids: [...formData.siswa_ids, s.id] });
+																		}
+																		setSearchSiswaModal('');
+																	}
 																}}>
 																{s.nama_lengkap}
 																{s.status !== 'Aktif' && (
