@@ -406,11 +406,11 @@ export default function AbsensiMapelPage() {
 				<div className='max-w-5xl mx-auto px-4 py-4 space-y-4'>
 					<ButtonBack />
 					{/* Title Row */}
-					<div className='flex justify-between items-center'>
+					<div className='flex flex-wrap justify-between items-center gap-3'>
 						<div>
-							<div className='flex items-center gap-3'>
-								<h1 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-tight'>Absensi Mapel</h1>
-								<AcademicPeriodChip />
+							<div className='flex flex-wrap items-center gap-2 sm:gap-3'>
+								<h1 className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-tight'>Absensi Mapel</h1>
+								<AcademicPeriodChip align='left' />
 							</div>
 							<div className='flex items-center gap-2 mt-2'>
 								{mode === 'rekap' ? (

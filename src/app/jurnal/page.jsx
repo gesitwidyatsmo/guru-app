@@ -351,22 +351,26 @@ export default function JurnalPage() {
 
 				<div className='max-w-5xl mx-auto relative z-10'>
 					<div className='flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8'>
-						<div className='flex items-center gap-4'>
-							<button
-								onClick={() => router.back()}
-								className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] text-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
-								<svg className='w-8 h-8' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
-							</button>
-							<div>
-								<h1 className='text-4xl sm:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-2'>Jurnal Guru</h1>
-								<p className='text-white font-black tracking-widest uppercase bg-[#0D0D0D] inline-block px-3 py-1 border-[2px] border-white text-xs sm:text-sm'>Catat aktivitas harian</p>
+						<div className='flex flex-wrap items-center justify-between sm:justify-start gap-4'>
+							<div className='flex items-center gap-3 sm:gap-4'>
+								<button
+									onClick={() => router.back()}
+									className='p-2.5 sm:p-3 bg-white border-[3px] sm:border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] sm:shadow-[6px_6px_0px_0px_#0D0D0D] text-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none shrink-0'>
+									<svg className='w-6 h-6 sm:w-8 sm:h-8' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
+								</button>
+								<div>
+									<h1 className='text-3xl sm:text-4xl md:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-1 sm:mb-2'>Jurnal Guru</h1>
+									<p className='text-white font-black tracking-widest uppercase bg-[#0D0D0D] inline-block px-3 py-1 border-[2px] border-white text-xs sm:text-sm'>Catat aktivitas harian</p>
+								</div>
+							</div>
+							<div className='shrink-0 ml-auto sm:ml-2'>
+								<AcademicPeriodChip align='right' />
 							</div>
 						</div>
-						<AcademicPeriodChip />
                         <button
                             onClick={() => handleOpenModal()}
-                            className='w-full md:w-auto bg-[#00A693] text-white px-8 py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-lg'>
-                            <svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
+                            className='w-full md:w-auto bg-[#00A693] text-white px-6 sm:px-8 py-3.5 sm:py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-base sm:text-lg'>
+                            <svg className='w-6 h-6 sm:w-7 sm:h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
                             BUAT JURNAL BARU
                         </button>
 					</div>

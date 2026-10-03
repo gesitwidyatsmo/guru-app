@@ -639,7 +639,7 @@ export default function PengaturanPage() {
 								<div className='text-center text-gray-400 py-8'>Belum ada tahun ajar</div>
 							) : (
 								daftarTahunAjar.map((ta) => (
-									<div key={ta.id} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${ta.is_aktif ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
+									<div key={ta.id} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border-2 transition-all ${ta.is_aktif ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
 										<div>
 											<div className='flex items-center gap-2'>
 												<span className='font-bold text-gray-800'>TA {ta.nama} — Semester {ta.semester}</span>
@@ -657,7 +657,7 @@ export default function PengaturanPage() {
 											<button
 												onClick={() => handleSetAktif(ta.id, ta.nama, ta.semester)}
 												disabled={isSettingAktif}
-												className='text-xs font-semibold bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors whitespace-nowrap'
+												className='text-xs font-semibold bg-white border border-emerald-300 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-50 disabled:opacity-50 transition-colors whitespace-nowrap self-start sm:self-auto'
 											>
 												Jadikan Aktif
 											</button>

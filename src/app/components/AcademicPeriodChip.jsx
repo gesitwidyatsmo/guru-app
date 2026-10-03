@@ -5,10 +5,11 @@ import { useAcademic } from '@/context/AcademicContext';
 
 /**
  * AcademicPeriodChip
- * Chip kecil bergaya Neobrutalism di header setiap halaman.
+ * Chip bergaya Neobrutalism di header setiap halaman.
  * Menampilkan periode aktif yang sedang dilihat dan memungkinkan user untuk menggantinya.
+ * Mendukung responsivitas mobile dan auto-alignment agar dropdown tidak keluar layar.
  */
-export default function AcademicPeriodChip() {
+export default function AcademicPeriodChip({ align = 'auto' }) {
 	const {
 		tahunAjar,
 		semester,
@@ -21,43 +22,68 @@ export default function AcademicPeriodChip() {
 	} = useAcademic();
 
 	const [isOpen, setIsOpen] = useState(false);
+	const [resolvedAlign, setResolvedAlign] = useState(align === 'left' ? 'left' : 'right');
 	const dropdownRef = useRef(null);
 
-	// Tutup dropdown saat klik di luar
+	// Tentukan alignment (left / right) secara otomatis agar tidak keluar batas layar
 	useEffect(() => {
-		function handleClickOutside(e) {
+		if (isOpen) {
+			if (align === 'left' || align === 'right') {
+				setResolvedAlign(align);
+			} else if (dropdownRef.current) {
+				const rect = dropdownRef.current.getBoundingClientRect();
+				// Jika elemen berada dekat tepi kiri layar (< 220px), buka ke arah kanan (left-0)
+				// Jika di kanan, buka ke arah kiri (right-0)
+				if (rect.left < 220) {
+					setResolvedAlign('left');
+				} else {
+					setResolvedAlign('right');
+				}
+			}
+		}
+	}, [isOpen, align]);
+
+	// Tutup dropdown saat klik atau sentuh di luar
+	useEffect(() => {
+		function handleInteractionOutside(e) {
 			if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
 				setIsOpen(false);
 			}
 		}
-		document.addEventListener('mousedown', handleClickOutside);
-		return () => document.removeEventListener('mousedown', handleClickOutside);
+		document.addEventListener('mousedown', handleInteractionOutside);
+		document.addEventListener('touchstart', handleInteractionOutside, { passive: true });
+		return () => {
+			document.removeEventListener('mousedown', handleInteractionOutside);
+			document.removeEventListener('touchstart', handleInteractionOutside);
+		};
 	}, []);
 
 	if (isLoading) {
 		return (
-			<div className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] bg-white animate-pulse rounded-lg">
+			<div className="inline-flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] bg-white animate-pulse rounded-lg shrink-0">
 				<div className="w-20 h-3 bg-gray-200 rounded" />
 			</div>
 		);
 	}
 
 	// Label: versi pendek untuk mobile, versi lengkap untuk md+
-	const chipLabelShort = `${tahunAjar.split('/')[0]} · S${semester}`;
-	const chipLabelFull = `TA ${tahunAjar} · Sem ${semester}`;
+	const safeTahunAjar = tahunAjar || '';
+	const chipLabelShort = `${safeTahunAjar.split('/')[0] || safeTahunAjar} · S${semester}`;
+	const chipLabelFull = `TA ${safeTahunAjar} · Sem ${semester}`;
 
 	// Warna chip berdasarkan status
 	const isActive = isViewingActive;
 
 	return (
-		<div className="relative inline-block" ref={dropdownRef}>
+		<div className="relative inline-block shrink-0" ref={dropdownRef}>
 			{/* Chip Button */}
 			<button
 				onClick={() => setIsOpen(!isOpen)}
+				type="button"
 				className={`
-					inline-flex items-center gap-1.5 border-[2px] border-[#0D0D0D] font-black uppercase tracking-widest
-					transition-all duration-150 select-none cursor-pointer rounded-lg
-					text-[10px] px-2.5 py-1.5 md:text-xs md:px-3 md:py-1.5
+					inline-flex items-center gap-1.5 md:gap-2 border-[2px] border-[#0D0D0D] font-black uppercase tracking-wider md:tracking-widest
+					transition-all duration-150 select-none cursor-pointer rounded-lg shrink-0 whitespace-nowrap
+					text-[11px] px-2.5 py-1.5 sm:px-3 sm:py-2 md:text-xs min-h-[34px] sm:min-h-[38px]
 					${isActive
 						? 'bg-[#00A693] text-white shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-x-[1px] hover:-translate-y-[1px]'
 						: 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-x-[1px] hover:-translate-y-[1px]'
@@ -67,7 +93,7 @@ export default function AcademicPeriodChip() {
 				title={isActive ? 'Periode aktif saat ini' : 'Sedang melihat data arsip'}
 			>
 				{/* Icon kalender */}
-				<svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
 				</svg>
 
@@ -84,7 +110,7 @@ export default function AcademicPeriodChip() {
 
 				{/* Chevron */}
 				<svg
-					className={`w-3 h-3 flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
+					className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}
 					fill="none" stroke="currentColor" viewBox="0 0 24 24"
 				>
 					<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -93,7 +119,13 @@ export default function AcademicPeriodChip() {
 
 			{/* Dropdown */}
 			{isOpen && (
-				<div className="absolute right-0 top-full mt-2 w-[260px] md:w-[280px] bg-white border-[2px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] z-50 overflow-hidden rounded-lg">
+				<div
+					className={`
+						absolute top-full mt-2 w-[260px] sm:w-[280px] max-w-[calc(100vw-24px)] bg-white border-[2px] border-[#0D0D0D]
+						shadow-[4px_4px_0px_0px_#0D0D0D] z-50 overflow-hidden rounded-lg
+						${resolvedAlign === 'left' ? 'left-0' : 'right-0'}
+					`}
+				>
 					{/* Header dropdown */}
 					<div className="px-4 py-2.5 border-b-[2px] border-[#0D0D0D] bg-[#F5C518]">
 						<p className="text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest">📅 Pilih Periode Tampil</p>
@@ -121,7 +153,7 @@ export default function AcademicPeriodChip() {
 											w-full flex items-center justify-between px-4 py-3 text-xs font-bold transition-all border-b border-gray-100 last:border-b-0
 											${isSelected
 												? 'bg-[#0D0D0D] text-white'
-												: 'text-[#0D0D0D] hover:bg-[#FFF5F0]'
+												: 'text-[#0D0D0D] hover:bg-[#FFF5F0] active:bg-gray-100'
 											}
 										`}
 									>
@@ -138,7 +170,7 @@ export default function AcademicPeriodChip() {
 											)}
 											{isSelected && (
 												<svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-													<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+													<path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414 0z" clipRule="evenodd" />
 												</svg>
 											)}
 										</div>
@@ -156,7 +188,7 @@ export default function AcademicPeriodChip() {
 									setPeriode(tahunAjarAktif, Number(semesterAktif));
 									setIsOpen(false);
 								}}
-								className="w-full flex items-center justify-center gap-1.5 text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest py-1.5 px-3 border-[2px] border-[#0D0D0D] bg-white shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-x-[1px] hover:-translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all rounded-lg"
+								className="w-full flex items-center justify-center gap-1.5 text-[10px] font-black text-[#0D0D0D] uppercase tracking-widest py-2 px-3 border-[2px] border-[#0D0D0D] bg-white shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-x-[1px] hover:-translate-y-[1px] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all rounded-lg"
 							>
 								↩ Kembali ke Periode Aktif
 							</button>

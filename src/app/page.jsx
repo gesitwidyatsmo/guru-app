@@ -439,20 +439,28 @@ export default function Home() {
 							)}
 							!
 						</div>
-						<p className='text-gray-900 font-bold border-2 border-black bg-white inline-block px-3 py-1 rounded-md shadow-[2px_2px_0px_0px_#0D0D0D] text-sm sm:text-base'>
-							{new Date().toLocaleDateString('id-ID', {
-								weekday: 'long',
-								year: 'numeric',
-								month: 'long',
-								day: 'numeric',
-							})}
-						</p>
+						<div className='flex flex-wrap items-center gap-2'>
+							<p className='text-gray-900 font-bold border-2 border-black bg-white inline-block px-3 py-1.5 rounded-md shadow-[2px_2px_0px_0px_#0D0D0D] text-xs sm:text-base'>
+								{new Date().toLocaleDateString('id-ID', {
+									weekday: 'long',
+									year: 'numeric',
+									month: 'long',
+									day: 'numeric',
+								})}
+							</p>
+							{/* Periode Chip di mobile: berdampingan rapi dengan tanggal penanda waktu */}
+							<div className='md:hidden'>
+								<AcademicPeriodChip align='left' />
+							</div>
+						</div>
 					</div>
 					<div
-						className='flex items-center gap-2 w-full md:w-auto relative'
+						className='flex items-center justify-end gap-2 w-full md:w-auto relative'
 						ref={searchRef}>
-						{/* Academic Period Chip */}
-						<AcademicPeriodChip />
+						{/* Periode Chip di desktop: tetap berada di toolbar kanan */}
+						<div className='hidden md:block'>
+							<AcademicPeriodChip align='right' />
+						</div>
 						<div className={`relative flex items-center transition-all duration-300 ${isSearchOpen ? 'w-full md:w-64' : 'w-auto md:w-64'}`}>
 							<input
 								type='text'
@@ -463,7 +471,7 @@ export default function Home() {
 								onFocus={() => setIsSearchOpen(true)}
 							/>
 							<div
-								className={`cursor-pointer ${!isSearchOpen ? 'md:hidden neo-card p-3 flex items-center justify-center hover:bg-yellow-400 transition-all' : 'absolute left-3 text-gray-500'}`}
+								className={`cursor-pointer ${!isSearchOpen ? 'md:hidden neo-card p-3 flex items-center justify-center hover:bg-yellow-400 transition-all shrink-0' : 'absolute left-3 text-gray-500'}`}
 								onClick={() => setIsSearchOpen(!isSearchOpen)}>
 								<svg
 									className='w-5 h-5'
@@ -541,7 +549,9 @@ export default function Home() {
 							)}
 						</div>
 
-						<NotificationBell />
+						<div className={`flex-shrink-0 ${isSearchOpen ? 'hidden md:block' : ''}`}>
+							<NotificationBell />
+						</div>
 
 						{userRole === 'Admin' && (
 							<Link

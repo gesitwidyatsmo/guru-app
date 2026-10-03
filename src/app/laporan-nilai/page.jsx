@@ -343,6 +343,12 @@ export default function RekapNilaiPage() {
 						</svg>
 					}
 				/>
+				<div className='flex flex-wrap items-center justify-between gap-3 mb-4 -mt-4'>
+					<div className='flex items-center gap-2'>
+						<span className='text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wide'>Tahun Ajaran:</span>
+						<AcademicPeriodChip align='left' />
+					</div>
+				</div>
 				<ArchiveBanner />
 
 				{/* Section 1: Filter */}
@@ -368,9 +374,9 @@ export default function RekapNilaiPage() {
 							</select>
 						</div>
 
-						{/* Pilih Periode */}
+						{/* Pilih Bulan */}
 						<div>
-							<label className='block text-sm font-medium text-gray-700 mb-2'>Periode</label>
+							<label className='block text-sm font-medium text-gray-700 mb-2'>Bulan</label>
 							<select
 								value={selectedBulan}
 								onChange={(e) => setSelectedBulan(e.target.value)}

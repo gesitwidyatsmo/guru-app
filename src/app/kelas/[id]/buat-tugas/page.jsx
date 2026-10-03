@@ -897,25 +897,29 @@ export default function BuatTugasKelasPage() {
 			{/* Header Gradient */}
 			<div className='bg-[#F5C518] border-b-4 border-[#0D0D0D] pb-12 pt-8 px-4 sm:px-8 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)]'>
 				<div className='max-w-6xl mx-auto'>
-					<div className='flex items-center gap-4 mb-6'>
-						<button
-							onClick={() => router.back()}
-							className='neo-btn-outline bg-white flex items-center justify-center p-2 rounded-xl text-[#0D0D0D]'>
-							<svg
-								className='w-6 h-6'
-								fill='none'
-								stroke='currentColor'
-								viewBox='0 0 24 24'
-								strokeWidth={3}>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									d='M15 19l-7-7 7-7'
-								/>
-							</svg>
-						</button>
-						<h1 className='text-3xl font-black text-[#0D0D0D] uppercase tracking-tight'>Input Penilaian Kelas</h1>
-						<AcademicPeriodChip />
+					<div className='flex flex-wrap items-center justify-between gap-3 mb-6'>
+						<div className='flex items-center gap-3 sm:gap-4 min-w-0'>
+							<button
+								onClick={() => router.back()}
+								className='neo-btn-outline bg-white flex items-center justify-center p-2 rounded-xl text-[#0D0D0D] shrink-0'>
+								<svg
+									className='w-6 h-6'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'
+									strokeWidth={3}>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										d='M15 19l-7-7 7-7'
+									/>
+								</svg>
+							</button>
+							<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-tight truncate'>Input Penilaian Kelas</h1>
+						</div>
+						<div className='shrink-0 ml-auto sm:ml-0'>
+							<AcademicPeriodChip align='right' />
+						</div>
 					</div>
 
 					{/* Filter Section */}

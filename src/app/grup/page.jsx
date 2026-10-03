@@ -42,16 +42,20 @@ export default function ManajemenGrupPage() {
 			<div className='mx-auto max-w-6xl space-y-8 px-4 sm:px-6 lg:px-8'>
 				
 				{/* Header Navigasi */}
-				<div className='flex items-center justify-between'>
-					<button
-						onClick={() => window.history.back()}
-						className='p-4 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none'>
-						<ChevronLeft className='w-8 h-8 text-[#0D0D0D]' strokeWidth={3} />
-					</button>
-					<div className='bg-[#F5C518] p-3 border-[4px] border-[#0D0D0D] -rotate-1 inline-block shadow-[4px_4px_0px_0px_#0D0D0D]'>
-						<h1 className='text-2xl sm:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>MANAJEMEN GRUP</h1>
+				<div className='flex flex-wrap items-center justify-between gap-3'>
+					<div className='flex items-center gap-2 sm:gap-4'>
+						<button
+							onClick={() => window.history.back()}
+							className='p-2.5 sm:p-4 bg-white border-[3px] sm:border-[4px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] sm:shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none shrink-0'>
+							<ChevronLeft className='w-6 h-6 sm:w-8 sm:h-8 text-[#0D0D0D]' strokeWidth={3} />
+						</button>
+						<div className='bg-[#F5C518] p-2 sm:p-3 border-[3px] sm:border-[4px] border-[#0D0D0D] -rotate-1 inline-block shadow-[3px_3px_0px_0px_#0D0D0D] sm:shadow-[4px_4px_0px_0px_#0D0D0D]'>
+							<h1 className='text-lg sm:text-2xl md:text-3xl font-black text-[#0D0D0D] uppercase tracking-widest'>MANAJEMEN GRUP</h1>
+						</div>
 					</div>
-					<AcademicPeriodChip />
+					<div className='shrink-0 ml-auto sm:ml-0'>
+						<AcademicPeriodChip align='right' />
+					</div>
 				</div>
 
 				{/* Archive Banner */}
