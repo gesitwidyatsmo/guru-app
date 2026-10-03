@@ -22,24 +22,49 @@ export default function AcademicPeriodChip({ align = 'auto' }) {
 	} = useAcademic();
 
 	const [isOpen, setIsOpen] = useState(false);
-	const [resolvedAlign, setResolvedAlign] = useState(align === 'left' ? 'left' : 'right');
 	const dropdownRef = useRef(null);
 
-	// Tentukan alignment (left / right) secara otomatis agar tidak keluar batas layar
+	const [dropdownStyle, setDropdownStyle] = useState({});
+
+	// Tentukan alignment secara otomatis agar tidak keluar batas layar
 	useEffect(() => {
-		if (isOpen) {
-			if (align === 'left' || align === 'right') {
-				setResolvedAlign(align);
-			} else if (dropdownRef.current) {
-				const rect = dropdownRef.current.getBoundingClientRect();
-				// Jika elemen berada dekat tepi kiri layar (< 220px), buka ke arah kanan (left-0)
-				// Jika di kanan, buka ke arah kiri (right-0)
-				if (rect.left < 220) {
-					setResolvedAlign('left');
+		if (isOpen && dropdownRef.current) {
+			const rect = dropdownRef.current.getBoundingClientRect();
+			const windowWidth = window.innerWidth;
+			
+			// Dropdown width in CSS is w-[260px] sm:w-[280px]
+			const maxDropdownWidth = windowWidth < 640 ? 260 : 280;
+			const actualDropdownWidth = Math.min(maxDropdownWidth, windowWidth - 24);
+			const margin = 12; // Jarak aman dari pinggir layar
+			
+			let style = {};
+
+			if (windowWidth < 640) {
+				// Mobile logic: Hitung offset left agar dropdown tidak tembus layar
+				let leftPos = 0; 
+				const screenRightIfAlignLeft = rect.left + actualDropdownWidth;
+				
+				if (screenRightIfAlignLeft > windowWidth - margin) {
+					// Overflow kanan
+					const overflowAmount = screenRightIfAlignLeft - (windowWidth - margin);
+					leftPos = -overflowAmount;
+					
+					// Jika geser kiri menyebabkan overflow kiri
+					if (rect.left + leftPos < margin) {
+						leftPos = -(rect.left - margin);
+					}
+				}
+				style = { left: `${leftPos}px`, right: 'auto' };
+			} else {
+				// Desktop logic
+				if (align === 'right' || rect.left + actualDropdownWidth > windowWidth - margin) {
+					style = { right: 0, left: 'auto' };
 				} else {
-					setResolvedAlign('right');
+					style = { left: 0, right: 'auto' };
 				}
 			}
+			
+			setDropdownStyle(style);
 		}
 	}, [isOpen, align]);
 
@@ -120,11 +145,8 @@ export default function AcademicPeriodChip({ align = 'auto' }) {
 			{/* Dropdown */}
 			{isOpen && (
 				<div
-					className={`
-						absolute top-full mt-2 w-[260px] sm:w-[280px] max-w-[calc(100vw-24px)] bg-white border-[2px] border-[#0D0D0D]
-						shadow-[4px_4px_0px_0px_#0D0D0D] z-50 overflow-hidden rounded-lg
-						${resolvedAlign === 'left' ? 'left-0' : 'right-0'}
-					`}
+					className="absolute top-full mt-2 w-[260px] sm:w-[280px] max-w-[calc(100vw-24px)] bg-white border-[2px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] z-50 overflow-hidden rounded-lg"
+					style={dropdownStyle}
 				>
 					{/* Header dropdown */}
 					<div className="px-4 py-2.5 border-b-[2px] border-[#0D0D0D] bg-[#F5C518]">

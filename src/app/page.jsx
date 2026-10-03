@@ -455,7 +455,7 @@ export default function Home() {
 						</div>
 					</div>
 					<div
-						className='flex items-center justify-end gap-2 w-full md:w-auto relative'
+						className='flex flex-wrap items-center justify-between md:justify-end gap-3 w-full md:w-auto relative'
 						ref={searchRef}>
 						{/* Periode Chip di desktop: tetap berada di toolbar kanan */}
 						<div className='hidden md:block'>
