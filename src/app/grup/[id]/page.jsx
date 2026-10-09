@@ -297,6 +297,7 @@ export default function DetailGrupPage() {
 				timer: 1500,
 				showConfirmButton: false,
 			});
+			router.refresh();
 			router.push('/grup');
 		} catch (err) {
 			Swal.close();
@@ -868,3 +869,4 @@ function transformDataForBoard(savedGroups, unassignedList = []) {
 
 	return boardGroups;
 }
+

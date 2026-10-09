@@ -120,7 +120,8 @@ export default function EditTugas({ params }) {
 					}
 				} else {
 					Swal.fire('Error', 'Tugas tidak ditemukan', 'error');
-					router.push('/tugas');
+					router.refresh();
+				router.push('/tugas');
 				}
 			} catch (error) {
 				console.error(error);
@@ -194,6 +195,7 @@ export default function EditTugas({ params }) {
 					timer: 2000,
 					showConfirmButton: false,
 				});
+				router.refresh();
 				router.push('/tugas');
 			} else {
 				Swal.fire('Gagal', data.error || 'Terjadi kesalahan', 'error');
@@ -790,3 +792,4 @@ export default function EditTugas({ params }) {
 		</main>
 	);
 }
+

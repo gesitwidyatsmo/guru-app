@@ -177,6 +177,7 @@ export default function KelasDetail() {
 				if (!res.ok) throw new Error('Gagal menghapus kelas');
 
 				await swalSuccess('Terhapus', 'Kelas berhasil dihapus');
+				router.refresh();
 				router.push('/kelas');
 			} catch (error) {
 				swalError('Gagal', error.message);

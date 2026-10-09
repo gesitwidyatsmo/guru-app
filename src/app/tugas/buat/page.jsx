@@ -155,6 +155,7 @@ export default function BuatTugas() {
 						confirmButton: 'bg-[#00A693] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
 					},
 				});
+				router.refresh();
 				router.push('/tugas');
 			} else {
 				Swal.fire({ title: 'GAGAL', text: data.error || 'Terjadi kesalahan', icon: 'error', background: '#FFF5F0', color: '#0D0D0D', customClass: { popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none', title: 'font-black uppercase', confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase' }});
@@ -800,3 +801,4 @@ export default function BuatTugas() {
 	);
 
 }
+

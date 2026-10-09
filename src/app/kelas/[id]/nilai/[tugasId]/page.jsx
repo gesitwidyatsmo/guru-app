@@ -191,6 +191,7 @@ export default function DetailNilaiPage() {
 				timer: 2000,
 				timerProgressBar: true,
 			});
+			router.refresh();
 			router.push(`/kelas/${id}`);
 		} catch (error) {
 			console.error('Error deleting tugas:', error);

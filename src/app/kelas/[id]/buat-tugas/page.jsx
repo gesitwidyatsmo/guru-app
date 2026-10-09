@@ -43,6 +43,7 @@ export default function BuatTugasKelasPage() {
 	const [selectedTugasId, setSelectedTugasId] = useState('');
 	const [loadingTugas, setLoadingTugas] = useState(false);
 	const [initialSiswaIds, setInitialSiswaIds] = useState([]);
+	const [refreshTrigger, setRefreshTrigger] = useState(0);
 
 	// --- 1. Fetch Data Awal (Kelas, Mapel, Siswa) ---
 	useEffect(() => {
@@ -78,11 +79,10 @@ export default function BuatTugasKelasPage() {
 
 	const siswaKelasIni = siswaList.filter((s) => s.kelas === selectedKelas);
 
-	// --- 2. Fetch Daftar Tugas saat Filter Berubah ---
+	// --- 2a. Reset ke mode "Tugas Baru" hanya saat Filter Kelas/Mapel/Periode Berubah ---
 	useEffect(() => {
 		if (!selectedKelas || !selectedMapel) return;
 
-		// Reset ke mode "Tugas Baru" setiap kali mapel/kelas berubah
 		setSelectedTugasId('');
 		setJudul('');
 		setType('Formatif');
@@ -96,6 +96,11 @@ export default function BuatTugasKelasPage() {
 		setInitialSiswaIds([]);
 		setTanggal(new Date().toISOString().slice(0, 10));
 		setSearchSiswa('');
+	}, [selectedKelas, selectedMapel, tahunAjar, semester]);
+
+	// --- 2b. Fetch Daftar Tugas saat Filter atau Data Berubah ---
+	useEffect(() => {
+		if (!selectedKelas || !selectedMapel) return;
 
 		const fetchTugas = async () => {
 			try {
@@ -113,32 +118,31 @@ export default function BuatTugasKelasPage() {
 
 				const { data: tugasData } = await query;
 				
-				if (tugasData) {
-					const tugasIds = tugasData.map(t => t.tugas_id);
-					let counts = {};
-					if (tugasIds.length > 0) {
-						const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
-						if (siswaData) {
-							siswaData.forEach(s => {
-								if (s.nilai && parseInt(s.nilai) > 0) {
-									counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
-								}
-							});
-						}
+				const list = tugasData || [];
+				const tugasIds = list.map(t => t.tugas_id);
+				let counts = {};
+				if (tugasIds.length > 0) {
+					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
+					if (siswaData) {
+						siswaData.forEach(s => {
+							if (s.nilai && parseInt(s.nilai) > 0) {
+								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
+							}
+						});
 					}
-
-					const mappedTugas = tugasData.map(t => ({
-						tugas_id: t.tugas_id,
-						judul: t.kategori,
-						tanggal: t.tanggal,
-						kelas: t.kelas,
-						mapel: t.mapel,
-						jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
-						totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
-					}));
-
-					setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 				}
+
+				const mappedTugas = list.map(t => ({
+					tugas_id: t.tugas_id,
+					judul: t.kategori,
+					tanggal: t.tanggal,
+					kelas: t.kelas,
+					mapel: t.mapel,
+					jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
+					totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
+				}));
+
+				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
 			} catch (err) {
 				console.error('Error fetching tugas:', err);
 			} finally {
@@ -146,7 +150,7 @@ export default function BuatTugasKelasPage() {
 			}
 		};
 		fetchTugas();
-	}, [selectedKelas, selectedMapel, tahunAjar, semester]);
+	}, [selectedKelas, selectedMapel, tahunAjar, semester, refreshTrigger]);
 
 	// --- 3. Load Nilai Detail saat Tugas Dipilih ---
 	useEffect(() => {
@@ -162,6 +166,7 @@ export default function BuatTugasKelasPage() {
 			setSkalaMaks(100);
 			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
+			setTanggal(new Date().toISOString().slice(0, 10));
 			return;
 		}
 
@@ -316,7 +321,8 @@ export default function BuatTugasKelasPage() {
 		setJumlahBenar((prev) => ({ ...prev, ...newBenar }));
 		setNilai((prev) => ({ ...prev, ...newNilai }));
 
-		const Toast = Swal.mixin({
+		
+			const Toast = Swal.mixin({
 			toast: true,
 			position: 'top-end',
 			showConfirmButton: false,
@@ -336,6 +342,7 @@ export default function BuatTugasKelasPage() {
 
 	// Refresh data setelah edit
 	const refreshCurrentTugasData = async (tugasId) => {
+		setRefreshTrigger(prev => prev + 1);
 		if (!tugasId) return;
 		try {
 			const supabase = createClient();
@@ -511,6 +518,7 @@ export default function BuatTugasKelasPage() {
 
 			// Trigger refetch daftar tugas via dependency effect
 			setSelectedTugasId(tugasId);
+			setRefreshTrigger(prev => prev + 1);
 		} catch (error) {
 			console.error(error);
 			Swal.fire({
@@ -732,6 +740,7 @@ export default function BuatTugasKelasPage() {
 
 			// Reset ke mode "Tugas Baru"
 			setSelectedTugasId('');
+			setRefreshTrigger(prev => prev + 1);
 			setJudul('');
 			setType('Formatif');
 			setDeskripsi('');
@@ -1470,3 +1479,4 @@ export default function BuatTugasKelasPage() {
 		</div>
 	);
 }
+

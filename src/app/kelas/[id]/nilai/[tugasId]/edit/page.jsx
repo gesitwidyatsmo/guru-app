@@ -403,6 +403,7 @@ export default function EditNilaiPage() {
 				timerProgressBar: true,
 			});
 
+			router.refresh();
 			router.push(`/kelas/${id}/nilai/${tugasId}`);
 		} catch (error) {
 			console.error('Error updating nilai:', error);
@@ -800,3 +801,4 @@ export default function EditNilaiPage() {
 		</div>
 	);
 }
+
