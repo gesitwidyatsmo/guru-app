@@ -807,7 +807,7 @@ export default function GroupScoringView({
 								className='p-3.5 sm:p-4 border-b-[3px] sm:border-b-[4px] border-[#0D0D0D] space-y-3'>
 								<div className='flex items-center justify-between gap-2'>
 									<div className='min-w-0'>
-										<h4 className='font-black text-base sm:text-lg text-[#0D0D0D] uppercase tracking-wider truncate'>
+										<h4 className='font-black text-base sm:text-lg text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
 											{group.nama_grup || group.nama || 'TANPA NAMA'}
 										</h4>
 										<p className='text-[10px] font-black uppercase tracking-widest text-[#0D0D0D]/70'>
@@ -872,7 +872,7 @@ export default function GroupScoringView({
 														{mIdx + 1}
 													</span>
 													<div className='min-w-0'>
-														<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider truncate'>
+														<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
 															{member.nama}
 														</p>
 														<div className='flex items-center gap-2 mt-0.5'>
@@ -956,7 +956,7 @@ export default function GroupScoringView({
 									key={siswa.id || uIdx}
 									className='bg-white border-[2px] sm:border-[3px] border-[#0D0D0D] p-3 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-between gap-3'>
 									<div className='min-w-0'>
-										<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider truncate'>
+										<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
 											{siswa.nama_lengkap}
 										</p>
 										{siswa.nis && (

@@ -756,7 +756,7 @@ function DroppableGroupColumn({
 				className='p-3 sm:p-4 border-b-[3px] sm:border-b-[4px] border-[#0D0D0D] flex items-center justify-between gap-2 relative overflow-hidden'>
 				
 				<div className='min-w-0 flex items-center gap-1.5 sm:gap-2'>
-					<h3 className='font-black text-base sm:text-lg text-[#0D0D0D] uppercase tracking-wider truncate'>
+					<h3 className='font-black text-base sm:text-lg text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
 						{group.nama}
 					</h3>
 					{onRenameGroup && (
@@ -827,7 +827,7 @@ function DraggableMemberCard({ member, fromGroupId, index = 0, onQuickMove }) {
 						{index + 1}
 					</span>
 					<div className='min-w-0'>
-						<p className='font-black text-[#0D0D0D] uppercase tracking-wider text-xs sm:text-sm truncate'>
+						<p className='font-black text-[#0D0D0D] uppercase tracking-wider text-xs sm:text-sm line-clamp-2 leading-tight'>
 							{member.nama}
 						</p>
 						{member.nis && (
