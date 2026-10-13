@@ -20,6 +20,7 @@ import {
 	ChevronRight,
 	HelpCircle,
 	Users,
+	Search,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
@@ -94,6 +95,30 @@ export default function GroupScoringView({
 		() => groups.filter((g) => String(g.id) !== 'excluded'),
 		[groups]
 	);
+
+	const [searchQuery, setSearchQuery] = useState('');
+
+	// Filtered Groups based on search
+	const filteredGroups = useMemo(() => {
+		if (!searchQuery.trim()) return regularGroups;
+		const query = searchQuery.toLowerCase();
+		return regularGroups.map(g => ({
+			...g,
+			members: (g.members || []).filter(m => 
+				m.nama?.toLowerCase().includes(query) || 
+				m.nis?.toLowerCase().includes(query)
+			)
+		})).filter(g => g.members.length > 0 || (g.nama_grup || g.nama || '').toLowerCase().includes(query));
+	}, [regularGroups, searchQuery]);
+
+	const filteredUnassigned = useMemo(() => {
+		if (!searchQuery.trim()) return unassignedSiswa;
+		const query = searchQuery.toLowerCase();
+		return unassignedSiswa.filter(u => 
+			u.nama_lengkap?.toLowerCase().includes(query) || 
+			u.nis?.toLowerCase().includes(query)
+		);
+	}, [unassignedSiswa, searchQuery]);
 
 	// Fetch semua penilaian terkait sesi grup ini dari DB
 	const fetchAssessments = useCallback(async () => {
@@ -777,8 +802,8 @@ export default function GroupScoringView({
 				</div>
 			</div>
 
-			{/* Panduan Ringkas Penilaian */}
-			<div className='bg-[#FFFDF0] border-[2px] sm:border-[3px] border-[#0D0D0D] p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex items-center justify-between gap-3 text-xs text-[#0D0D0D]'>
+			{/* Panduan & Search Bar */}
+			<div className='bg-[#FFFDF0] border-[2px] sm:border-[3px] border-[#0D0D0D] p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs text-[#0D0D0D]'>
 				<div className='flex items-center gap-2.5 min-w-0'>
 					<span className='p-1.5 bg-[#F5C518] border-[2px] border-[#0D0D0D] text-[#0D0D0D] shrink-0'>
 						<Sparkles className='w-4 h-4' strokeWidth={3} />
@@ -787,12 +812,30 @@ export default function GroupScoringView({
 						<span className='font-black'>CARA MENILAI:</span> Masukkan nilai pada kotak header kelompok untuk mengisi nilai semua anggota sekaligus. Anda tetap dapat mengubah nilai masing-masing siswa jika ada yang menonjol atau tidak hadir.
 					</p>
 				</div>
+				
+				<div className='relative w-full md:w-72 shrink-0'>
+					<Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0D0D0D]/60' strokeWidth={3} />
+					<input
+						type='text'
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						placeholder='CARI NAMA ATAU NIS SISWA...'
+						className='w-full pl-9 pr-3 py-2 bg-white border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] font-black text-xs uppercase tracking-wider focus:outline-none focus:bg-[#FFF5F0] transition-colors'
+					/>
+				</div>
 			</div>
 
 			{/* Grid Kartu Penilaian Kelompok */}
 			<div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6 items-start'>
-				{regularGroups.map((group, idx) => {
-					const color = GROUP_PALETTE[idx % GROUP_PALETTE.length];
+				{filteredGroups.length === 0 ? (
+					<div className='col-span-full p-10 bg-white border-[3px] sm:border-[4px] border-[#0D0D0D] text-center shadow-[4px_4px_0px_0px_#0D0D0D]'>
+						<p className='font-black text-[#0D0D0D] uppercase tracking-wider'>
+							{searchQuery ? 'TIDAK ADA KELOMPOK ATAU SISWA YANG COCOK DENGAN PENCARIAN.' : 'BELUM ADA KELOMPOK.'}
+						</p>
+					</div>
+				) : (
+					filteredGroups.map((group, idx) => {
+						const color = GROUP_PALETTE[idx % GROUP_PALETTE.length];
 					const baseScore = groupBaseScores[group.id] || '';
 					const isSynced = syncWithGroup[group.id] !== false;
 
@@ -914,7 +957,8 @@ export default function GroupScoringView({
 							</div>
 						</div>
 					);
-				})}
+				})
+				)}
 			</div>
 
 			{/* Bagian Siswa yang Dikecualikan ("TIDAK MASUK KELOMPOK") */}
@@ -951,33 +995,39 @@ export default function GroupScoringView({
 
 					{includeUnassigned && (
 						<div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2'>
-							{unassignedSiswa.map((siswa, uIdx) => (
-								<div
-									key={siswa.id || uIdx}
-									className='bg-white border-[2px] sm:border-[3px] border-[#0D0D0D] p-3 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-between gap-3'>
-									<div className='min-w-0'>
-										<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
-											{siswa.nama_lengkap}
-										</p>
-										{siswa.nis && (
-											<p className='text-[10px] font-bold text-[#0D0D0D]/60 uppercase tracking-widest mt-0.5'>
-												NIS: {siswa.nis}
+							{filteredUnassigned.length === 0 ? (
+								<p className='text-xs font-black text-[#0D0D0D]/60 uppercase tracking-widest p-3'>
+									{searchQuery ? 'TIDAK ADA HASIL PENCARIAN.' : 'TIDAK ADA SISWA DIKECUALIKAN.'}
+								</p>
+							) : (
+								filteredUnassigned.map((siswa, uIdx) => (
+									<div
+										key={siswa.id || uIdx}
+										className='bg-white border-[2px] sm:border-[3px] border-[#0D0D0D] p-3 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-between gap-3'>
+										<div className='min-w-0'>
+											<p className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase tracking-wider line-clamp-2 leading-tight'>
+												{siswa.nama_lengkap}
 											</p>
-										)}
-									</div>
+											{siswa.nis && (
+												<p className='text-[10px] font-bold text-[#0D0D0D]/60 uppercase tracking-widest mt-0.5'>
+													NIS: {siswa.nis}
+												</p>
+											)}
+										</div>
 
-									<input
-										type='number'
-										min='0'
-										max='100'
-										value={unassignedScores[siswa.id] || ''}
-										onChange={(e) => handleUnassignedScoreChange(siswa.id, e.target.value)}
-										onWheel={(e) => e.target.blur()}
-										placeholder='0-100'
-										className='w-14 px-2 py-1 border-[2px] border-[#0D0D0D] font-black text-xs sm:text-sm text-center text-[#0D0D0D] bg-white focus:outline-none'
-									/>
-								</div>
-							))}
+										<input
+											type='number'
+											min='0'
+											max='100'
+											value={unassignedScores[siswa.id] || ''}
+											onChange={(e) => handleUnassignedScoreChange(siswa.id, e.target.value)}
+											onWheel={(e) => e.target.blur()}
+											placeholder='0-100'
+											className='w-14 px-2 py-1 border-[2px] border-[#0D0D0D] font-black text-xs sm:text-sm text-center text-[#0D0D0D] bg-white focus:outline-none'
+										/>
+									</div>
+								))
+							)}
 						</div>
 					)}
 				</div>
