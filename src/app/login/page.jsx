@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import Swal from 'sweetalert2';
 
 export default function LoginPage() {
@@ -357,18 +356,6 @@ export default function LoginPage() {
 							</button>
 						</div>
 					</form>
-				</div>
-
-				{/* Shortcut Akses Berkas Publik */}
-				<div className='mt-6 text-center'>
-					<Link
-						href='/berkas'
-						className='inline-flex items-center gap-2 px-5 py-2.5 bg-[#FFE8DC] hover:bg-[#F5C518] text-black border-2 border-black rounded-xl font-bold text-xs sm:text-sm shadow-[3px_3px_0px_0px_#0D0D0D] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all'
-					>
-						<span>📁</span>
-						<span>Akses Berkas Publik (Tanpa Login)</span>
-						<span>→</span>
-					</Link>
 				</div>
 
 				{/* Footer Copy */}

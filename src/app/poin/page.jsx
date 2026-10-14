@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
+import { konversiPoinKeSikap } from '@/lib/poinUtils';
 
 export default function PoinGlobalPage() {
 	const router = useRouter();
@@ -229,6 +230,26 @@ export default function PoinGlobalPage() {
 	const totalNegatif = poinByClass.filter((p) => p.tipe === 'negatif').reduce((sum, p) => sum + p.poin, 0);
 	const netPoin = totalPositif - totalNegatif;
 
+	// Ringkasan akumulasi poin per siswa untuk predikat sikap
+	const siswaSummaryMap = useMemo(() => {
+		const map = {};
+		poinList.forEach((p) => {
+			const sid = String(p.siswa_id);
+			if (!map[sid]) {
+				map[sid] = { positif: 0, negatif: 0, net: 0 };
+			}
+			const val = parseInt(p.poin || 0, 10);
+			if (p.tipe === 'positif') {
+				map[sid].positif += val;
+				map[sid].net += val;
+			} else {
+				map[sid].negatif += val;
+				map[sid].net -= val;
+			}
+		});
+		return map;
+	}, [poinList]);
+
 	// Group by date & sort by created_at
 	const groupedPoin = filteredPoin.reduce((acc, p) => {
 		const date = p.tanggal;
@@ -431,13 +452,24 @@ export default function PoinGlobalPage() {
 
 														{/* Konten */}
 														<div>
-															<h4 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-wider mb-2'>
-																{siswa?.nama_lengkap || 'Siswa Unknown'}
+															<h4 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-wider mb-2 flex flex-wrap items-center gap-2'>
+																<span>{siswa?.nama_lengkap || 'Siswa Unknown'}</span>
 																{siswa && siswa.status !== 'Aktif' && (
-																	<span className='ml-2 inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
+																	<span className='inline-flex items-center text-[10px] font-black uppercase tracking-wider text-white bg-red-600 px-2 py-0.5 rounded-md border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] align-middle'>
 																		{siswa.status}
 																	</span>
 																)}
+																{(() => {
+																	const summary = siswaSummaryMap[String(poin.siswa_id)];
+																	const net = summary?.net ?? 0;
+																	const sikap = konversiPoinKeSikap(net);
+																	return (
+																		<span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-xs font-black uppercase tracking-wider ${sikap.badgeClass}`}>
+																			<span>Sikap: {sikap.predikat} ({sikap.label})</span>
+																			<span className='text-[10px] font-bold opacity-80'>• {net > 0 ? `+${net}` : net} pts</span>
+																		</span>
+																	);
+																})()}
 															</h4>
 															<p className='text-[#0D0D0D] font-bold text-lg leading-snug'>{poin.aktifitas}</p>
 															
