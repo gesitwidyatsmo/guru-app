@@ -12,8 +12,8 @@ function generateUID() {
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin yang diizinkan mengelola daftar pengguna.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin atau Kepala Sekolah yang diizinkan mengakses daftar pengguna.' }, { status: 403 });
 		}
 
 		const supabase = await createClient();

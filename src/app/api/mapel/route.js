@@ -13,7 +13,7 @@ export async function GET(request) {
 
 		let allowedMapels = null;
 
-		if (showAll || role === 'Admin') {
+		if (showAll || role === 'Admin' || role === 'Kepala Sekolah') {
 			allowedMapels = null; // Semua mapel
 		} else if (role === 'Guru' && userId) {
 			const { data: kbmData } = await supabase

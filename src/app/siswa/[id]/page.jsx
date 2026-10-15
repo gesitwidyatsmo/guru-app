@@ -191,12 +191,22 @@ export default function SiswaPage() {
 	const [siswaData, setSiswaData] = useState(null);
 	const [poinSiswa, setPoinSiswa] = useState({ positif: 0, negatif: 0 });
 	const [loading, setLoading] = useState(true);
+	const [currentUserRole, setCurrentUserRole] = useState(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [kelasList, setKelasList] = useState([]);
 
 	const fetchSiswa = useCallback(async () => {
 		try {
-			const [resSiswa, resPoin] = await Promise.all([fetch(`/api/siswa`), fetch(`/api/poin?siswa_id=${id}`)]);
+			const [resSiswa, resPoin, resAuth] = await Promise.all([
+				fetch(`/api/siswa`),
+				fetch(`/api/poin?siswa_id=${id}`),
+				fetch(`/api/auth/me`),
+			]);
+
+			if (resAuth.ok) {
+				const authData = await resAuth.json();
+				if (authData?.user?.role) setCurrentUserRole(authData.user.role);
+			}
 
 			const data = await resSiswa.json();
 			const siswa = data.find((item) => String(item.id) === String(id));
@@ -552,41 +562,53 @@ export default function SiswaPage() {
 						</div>
 					</Link>
 
-					<button
-						onClick={handleUbahStatusQuick}
-						className='group flex items-center gap-5 bg-[#00A693] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
-						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-12 transition-transform text-2xl font-black'>
-							🎓
-						</div>
-						<div>
-							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>MUTASI / STATUS</h3>
-							<p className='text-sm font-bold text-white/80 uppercase'>Pindah, Lulus, dsb</p>
-						</div>
-					</button>
+					{currentUserRole !== 'Kepala Sekolah' ? (
+						<>
+							<button
+								onClick={handleUbahStatusQuick}
+								className='group flex items-center gap-5 bg-[#00A693] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-12 transition-transform text-2xl font-black'>
+									🎓
+								</div>
+								<div>
+									<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>MUTASI / STATUS</h3>
+									<p className='text-sm font-bold text-white/80 uppercase'>Pindah, Lulus, dsb</p>
+								</div>
+							</button>
 
-					<button
-						onClick={handleOpenEdit}
-						className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
-						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
-							<IconEdit className='h-8 w-8' />
-						</div>
-						<div>
-							<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>EDIT DATA</h3>
-							<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Perbarui profil siswa</p>
-						</div>
-					</button>
+							<button
+								onClick={handleOpenEdit}
+								className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
+									<IconEdit className='h-8 w-8' />
+								</div>
+								<div>
+									<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>EDIT DATA</h3>
+									<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Perbarui profil siswa</p>
+								</div>
+							</button>
 
-					<button
-						onClick={handleDeleteSiswa}
-						className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
-						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
-							<IconTrash className='h-8 w-8' />
+							<button
+								onClick={handleDeleteSiswa}
+								className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
+								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
+									<IconTrash className='h-8 w-8' />
+								</div>
+								<div>
+									<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
+									<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
+								</div>
+							</button>
+						</>
+					) : (
+						<div className='flex items-center gap-4 bg-indigo-50 p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] sm:col-span-2 lg:col-span-1'>
+							<span className='text-3xl'>🎓</span>
+							<div>
+								<h3 className='font-black text-sm text-indigo-950 uppercase tracking-widest'>Mode Pantau</h3>
+								<p className='text-xs font-bold text-indigo-900'>Data siswa berstatus read-only untuk Kepala Sekolah.</p>
+							</div>
 						</div>
-						<div>
-							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
-							<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
-						</div>
-					</button>
+					)}
 				</div>
 
 				<ModalEditSiswa

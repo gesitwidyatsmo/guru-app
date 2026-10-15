@@ -76,16 +76,65 @@ export async function proxy(request) {
 		}
 	}
 
-	// --- Route Protection Logic ---
+		// --- Route Protection Logic ---
 	let finalResponse;
 
-	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard
+	// Helper to attach user cookies
+	const attachUserCookies = (res, p) => {
+		if (p?.role) {
+			res.cookies.set('user_role', p.role, {
+				path: '/',
+				httpOnly: false,
+				sameSite: 'lax',
+				secure: process.env.NODE_ENV === 'production',
+				maxAge: 7 * 24 * 60 * 60,
+			});
+		}
+		if (p?.nama_lengkap) {
+			res.cookies.set('user_name', encodeURIComponent(p.nama_lengkap), {
+				path: '/',
+				httpOnly: false,
+				sameSite: 'lax',
+				secure: process.env.NODE_ENV === 'production',
+				maxAge: 7 * 24 * 60 * 60,
+			});
+		}
+	};
+
+	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard masing-masing
 	if (pathname === '/login' && payload) {
-		const destination = payload.role === 'Admin' ? '/admin' : '/';
+		const destination = payload.role === 'Kepala Sekolah'
+			? '/kepsek'
+			: payload.role === 'Admin'
+			? '/admin'
+			: '/';
 		finalResponse = NextResponse.redirect(new URL(destination, request.url));
+		attachUserCookies(finalResponse, payload);
 	}
-	// Area admin: hanya bisa diakses oleh role Admin
-	else if (pathname.startsWith('/admin') && payload?.role !== 'Admin') {
+	// Beranda root: arahkan ke portal masing-masing
+	else if (pathname === '/' && payload?.role === 'Kepala Sekolah') {
+		finalResponse = NextResponse.redirect(new URL('/kepsek', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
+	else if (pathname === '/' && payload?.role === 'Admin') {
+		finalResponse = NextResponse.redirect(new URL('/admin', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
+	// Dasbor admin utama: jika Kepala Sekolah membuka persis '/admin', arahkan ke '/kepsek'
+	else if (pathname === '/admin' && payload?.role === 'Kepala Sekolah') {
+		finalResponse = NextResponse.redirect(new URL('/kepsek', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
+	// Area kepsek: hanya bisa diakses oleh Kepala Sekolah & Admin
+	else if (pathname.startsWith('/kepsek') && payload?.role !== 'Kepala Sekolah' && payload?.role !== 'Admin') {
+		if (!payload) {
+			finalResponse = NextResponse.redirect(new URL('/login', request.url));
+		} else {
+			finalResponse = NextResponse.redirect(new URL('/', request.url));
+		}
+	}
+	// Area admin: hanya bisa diakses oleh role Admin dan Kepala Sekolah (monitoring master data)
+	else if (pathname.startsWith('/admin') && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {
 		if (!payload) {
 			finalResponse = NextResponse.redirect(new URL('/login', request.url));
 		} else {
@@ -113,6 +162,8 @@ export async function proxy(request) {
 				headers: requestHeaders,
 			},
 		});
+
+		attachUserCookies(finalResponse, payload);
 
 		// Auto-renew auth_session_valid
 		const hasCustomSession = request.cookies.has('auth_session_valid');

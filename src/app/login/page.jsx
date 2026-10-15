@@ -62,8 +62,16 @@ export default function LoginPage() {
 					title: `Selamat datang, ${data.user.nama_lengkap}!`,
 				});
 
-				// Redirect ke Dashboard Home atau Portal Admin berdasarkan Role
-				if (data.user.role === 'Admin') {
+				// Simpan ke localStorage agar sinkronisasi client seketika tanpa jeda
+				if (typeof window !== 'undefined') {
+					localStorage.setItem('user_role', data.user.role);
+					localStorage.setItem('user_name', data.user.nama_lengkap);
+				}
+
+				// Redirect ke Dashboard Home, Portal Admin, atau Portal Kepsek berdasarkan Role
+				if (data.user.role === 'Kepala Sekolah') {
+					router.push('/kepsek');
+				} else if (data.user.role === 'Admin') {
 					router.push('/admin');
 				} else {
 					router.push('/');

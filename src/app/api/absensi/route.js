@@ -111,6 +111,9 @@ export async function POST(req) {
 
 		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {
@@ -185,6 +188,9 @@ export async function DELETE(req) {
 
 		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {

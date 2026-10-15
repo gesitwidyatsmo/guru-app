@@ -365,6 +365,21 @@ export default function MapelPage() {
 					</div>
 				</div>
 
+				{userRole === 'Kepala Sekolah' && (
+					<div className='bg-[#6366F1] text-white p-4 border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-3'>
+							<span className='text-2xl'>🎓</span>
+							<div>
+								<div className='font-black text-sm uppercase tracking-wider'>Mode Pemantauan Eksekutif</div>
+								<div className='text-xs font-bold opacity-90'>Menampilkan seluruh katalog mata pelajaran kurikulum (Hanya Lihat).</div>
+							</div>
+						</div>
+						<span className='bg-white text-[#0D0D0D] px-3 py-1 text-xs font-black uppercase border-[2px] border-[#0D0D0D] w-fit'>
+							Read Only
+						</span>
+					</div>
+				)}
+
 				<div className='bg-white p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 rounded-none'>
 					<div className='w-full md:w-auto flex flex-col gap-2'>
 						<h1 className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest'>Manajemen</h1>
@@ -393,14 +408,14 @@ export default function MapelPage() {
 								<Plus className='w-6 h-6' strokeWidth={3} />
 								<span>Tambah Baru</span>
 							</button>
-						) : (
+						) : userRole === 'Guru' ? (
 							<button
 								onClick={() => setShowChecklistModal(true)}
 								className='h-[60px] px-6 bg-[#F5C518] text-[#0D0D0D] border-[4px] border-[#0D0D0D] rounded-none font-black text-sm hover:-translate-y-1 transition-all shadow-[4px_4px_0px_0px_#0D0D0D] hover:shadow-[6px_6px_0px_0px_#0D0D0D] flex items-center gap-2 whitespace-nowrap uppercase tracking-widest'>
 								<Filter className='w-6 h-6' strokeWidth={3} />
 								<span>CEKLIS AJAR</span>
 							</button>
-						)}
+						) : null}
 					</div>
 				</div>
 

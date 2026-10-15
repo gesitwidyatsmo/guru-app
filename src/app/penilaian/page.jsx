@@ -18,6 +18,7 @@ export default function PenilaianPage() {
 	const [siswaList, setSiswaList] = useState([]);
 
 	// State Filter & Form
+	const [userRole, setUserRole] = useState('');
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
 	const [judul, setJudul] = useState('');
@@ -48,6 +49,11 @@ export default function PenilaianPage() {
 		const fetchAll = async () => {
 			try {
 				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
+					if (profile) setUserRole(profile.role || '');
+				}
 				const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
 					fetch('/api/kelas?all=false').then(res => res.json()),
 					fetch(`/api/mapel?all=false&${buildPeriodeQuery()}`).then(res => res.json()),
@@ -969,6 +975,22 @@ export default function PenilaianPage() {
 			</div>
 
 			<ArchiveBanner />
+			{userRole === 'Kepala Sekolah' && (
+				<div className='max-w-6xl mx-auto px-4 sm:px-8 mt-6 relative z-10'>
+					<div className='bg-[#6366F1] text-white p-4 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-3'>
+							<span className='text-2xl'>🎓</span>
+							<div>
+								<div className='font-black text-sm uppercase tracking-wider'>Mode Supervisi Eksekutif: Nilai Siswa</div>
+								<div className='text-xs font-bold opacity-90'>Memantau rekapitulasi penilaian dan capaian hasil belajar seluruh siswa (Hanya Lihat).</div>
+							</div>
+						</div>
+						<span className='bg-white text-[#0D0D0D] px-3 py-1 text-xs font-black uppercase border-[2px] border-[#0D0D0D] w-fit'>
+							Read Only
+						</span>
+					</div>
+				</div>
+			)}
 
 			<div className='max-w-6xl mx-auto px-4 sm:px-8 -mt-6 relative z-10'>
 				<div className='grid grid-cols-1 lg:grid-cols-4 gap-6'>
@@ -981,6 +1003,7 @@ export default function PenilaianPage() {
 
 							<div className='space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar'>
 								{/* Item "Tugas Baru" */}
+								{userRole !== 'Kepala Sekolah' && (
 								<div
 									onClick={() => setSelectedTugasId('')}
 									className={`p-3 rounded-xl cursor-pointer transition-all border-2 border-[#0D0D0D] ${
@@ -989,6 +1012,7 @@ export default function PenilaianPage() {
 									<p className='font-bold text-sm'>📝 Tugas Baru</p>
 									<p className={`text-xs mt-1 font-bold ${!selectedTugasId ? 'text-white' : 'text-gray-500'}`}>Buat penilaian baru</p>
 								</div>
+								)}
 
 								{/* List Tugas Existing */}
 								{loadingTugas ? (
@@ -1188,7 +1212,7 @@ export default function PenilaianPage() {
 								/>
 							</div>
 
-							{selectedTugasId && (
+							{selectedTugasId && userRole !== 'Kepala Sekolah' && (
 								<div className='flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2'>
 									<div className='bg-[#2F80ED] text-white font-bold px-4 py-3 rounded-xl border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] text-sm flex items-center gap-2 flex-auto'>
 										<svg
@@ -1215,7 +1239,19 @@ export default function PenilaianPage() {
 									</button>
 								</div>
 							)}
-							{selectedTugasId && (
+							
+							{selectedTugasId && userRole === 'Kepala Sekolah' && (
+								<div className='bg-[#6366F1] text-white font-bold px-4 py-3 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] text-sm flex items-center justify-between gap-2 mt-4'>
+									<div className='flex items-center gap-2'>
+										<span className='text-lg'>🎓</span>
+										<span>Mode Supervisi: Memantau rincian nilai tugas siswa (Hanya Lihat).</span>
+									</div>
+									<span className='bg-white text-[#0D0D0D] px-2.5 py-0.5 text-xs font-black uppercase border border-black'>
+										Read Only
+									</span>
+								</div>
+							)}
+							{selectedTugasId && userRole !== 'Kepala Sekolah' && (
 								<button
 									onClick={handleHapusTugas}
 									disabled={saving}
@@ -1265,7 +1301,7 @@ export default function PenilaianPage() {
 								</div>
 
 								{/* Toolbar Cepat untuk Mode Jumlah Benar (Hanya di mode tugas baru) */}
-								{!selectedTugasId && modePenilaian === 'jumlah_benar' && (
+								{!selectedTugasId && userRole !== 'Kepala Sekolah' && modePenilaian === 'jumlah_benar' && (
 									<div className='flex flex-wrap items-center justify-between gap-2 pt-1'>
 										<div className='flex items-center gap-2'>
 											<button
@@ -1321,7 +1357,7 @@ export default function PenilaianPage() {
 											<div
 												key={siswa.id}
 												onClick={() => {
-													if (isEditMode && siswa.status === 'Aktif') handleEditNilai(siswa.id, nilaiSiswa, benarSiswa);
+													if (isEditMode && siswa.status === 'Aktif' && userRole !== 'Kepala Sekolah') handleEditNilai(siswa.id, nilaiSiswa, benarSiswa);
 												}}
 												className={`grid grid-cols-12 gap-3 p-3.5 items-center transition-all ${
 													siswa.status !== 'Aktif'
@@ -1428,7 +1464,7 @@ export default function PenilaianPage() {
 						</div>
 
 						{/* Floating Action Button / Save Button */}
-						{!selectedTugasId && (
+						{!selectedTugasId && userRole !== 'Kepala Sekolah' && (
 							<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex justify-end shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
 								<button
 									onClick={handleSimpanMassal}

@@ -3,12 +3,24 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Loader from '../components/loading';
+import { useAdminAuth } from './AdminLayoutClient';
 
 export default function AdminDashboardPage() {
+	const { role: authRole } = useAdminAuth();
 	const [loading, setLoading] = useState(true);
+	const [currentUserRole, setCurrentUserRole] = useState(authRole || null);
+
+	useEffect(() => {
+		if (authRole) setCurrentUserRole(authRole);
+		if (authRole === 'Kepala Sekolah') {
+			window.location.replace('/kepsek');
+		}
+	}, [authRole]);
+
 	const [stats, setStats] = useState({
 		totalUsers: 0,
 		guruCount: 0,
+		kepsekCount: 0,
 		adminCount: 0,
 		siswaCount: 0,
 		kelasCount: 0,
@@ -17,19 +29,29 @@ export default function AdminDashboardPage() {
 	});
 	const [activeTahunAjar, setActiveTahunAjar] = useState(null);
 	const [lastBackup, setLastBackup] = useState(null);
-	const [recentUsers, setRecentUsers] = useState([]);
-	const [kbmDistribution, setKbmDistribution] = useState([]);
 
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				const [resUsers, resSiswa, resKelas, resMapel, resTA] = await Promise.all([
+				const [resUsers, resSiswa, resKelas, resMapel, resTA, resAuth] = await Promise.all([
 					fetch('/api/users'),
 					fetch('/api/siswa'),
 					fetch('/api/kelas'),
 					fetch('/api/mapel'),
 					fetch('/api/tahun-ajar'),
+					fetch('/api/auth/me'),
 				]);
+
+				if (resAuth.ok) {
+					const authData = await resAuth.json();
+					if (authData?.user?.role) {
+						setCurrentUserRole(authData.user.role);
+						if (authData.user.role === 'Kepala Sekolah') {
+							window.location.replace('/kepsek');
+							return;
+						}
+					}
+				}
 
 				const usersData = resUsers.ok ? await resUsers.json() : [];
 				const siswaData = resSiswa.ok ? await resSiswa.json() : [];
@@ -39,21 +61,22 @@ export default function AdminDashboardPage() {
 
 				const activeSiswa = Array.isArray(siswaData) ? siswaData.filter((s) => s.status === 'Aktif') : [];
 				const guruList = Array.isArray(usersData) ? usersData.filter((u) => u.role === 'Guru') : [];
+				const kepsekList = Array.isArray(usersData) ? usersData.filter((u) => u.role === 'Kepala Sekolah') : [];
 				const adminList = Array.isArray(usersData) ? usersData.filter((u) => u.role === 'Admin') : [];
 				const activeTA = Array.isArray(taData) ? taData.find((t) => t.is_aktif) : null;
 
 				setStats({
 					totalUsers: usersData.length,
 					guruCount: guruList.length,
+					kepsekCount: kepsekList.length,
 					adminCount: adminList.length,
 					siswaCount: activeSiswa.length,
 					kelasCount: Array.isArray(kelasData) ? kelasData.length : 0,
 					mapelCount: Array.isArray(mapelData) ? mapelData.length : 0,
-					kbmCount: 0, // diupdate saat ambil detail KBM jika perlu
+					kbmCount: 0,
 				});
 
 				setActiveTahunAjar(activeTA);
-				setRecentUsers(usersData.slice(0, 5));
 
 				// Baca waktu backup terakhir
 				const savedBackupTime = localStorage.getItem('last_backup_time');
@@ -68,7 +91,7 @@ export default function AdminDashboardPage() {
 		fetchDashboardData();
 	}, []);
 
-	if (loading) {
+	if (loading || currentUserRole === 'Kepala Sekolah') {
 		return <Loader />;
 	}
 
@@ -168,8 +191,9 @@ export default function AdminDashboardPage() {
 			<div className='bg-white border-2 border-black rounded-2xl p-6 sm:p-8 shadow-[6px_6px_0px_0px_#0D0D0D] relative overflow-hidden'>
 				<div className='flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10'>
 					<div className='space-y-2'>
-						<div className='inline-flex items-center gap-2 px-3 py-1 bg-yellow-300 border-2 border-black rounded-full text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D]'>
-							<span>⚡</span> Pusat Kendali Administrator
+						<div className='inline-flex items-center gap-2 px-3 py-1 border-2 border-black rounded-full text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] bg-yellow-300'>
+							<span>⚡</span>
+							<span>Pusat Kendali Administrator</span>
 						</div>
 						<h1 className='text-3xl sm:text-4xl font-black text-black tracking-tight'>
 							Dashboard Manajemen Admin
@@ -206,8 +230,11 @@ export default function AdminDashboardPage() {
 					</div>
 					<div className='mt-4'>
 						<div className='text-3xl font-black text-black'>{stats.totalUsers}</div>
-						<div className='text-xs font-bold text-gray-600 mt-1 flex items-center gap-2'>
+						<div className='text-xs font-bold text-gray-600 mt-1 flex flex-wrap items-center gap-1.5'>
 							<span className='text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300'>{stats.guruCount} Guru</span>
+							{stats.kepsekCount > 0 && (
+								<span className='text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-300'>{stats.kepsekCount} Kepsek</span>
+							)}
 							<span className='text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300'>{stats.adminCount} Admin</span>
 						</div>
 					</div>
@@ -255,9 +282,12 @@ export default function AdminDashboardPage() {
 			<div>
 				<div className='flex items-center justify-between mb-4'>
 					<h2 className='text-xl font-black text-black uppercase tracking-tight flex items-center gap-2'>
-						<span>🎛️</span> Modul Kendali Administrasi
+						<span>🎛️</span>
+						<span>Modul Kendali Administrasi</span>
 					</h2>
-					<span className='text-xs font-bold text-gray-500'>Pilih modul untuk mengelola</span>
+					<span className='text-xs font-bold text-gray-500'>
+						Pilih modul untuk mengelola
+					</span>
 				</div>
 
 				<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5'>

@@ -15,6 +15,9 @@ export async function POST(req) {
 		}
 
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 		const supabase = await createClient();
 
@@ -163,6 +166,9 @@ export async function PUT(req) {
 		}
 
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 		const supabase = await createClient();
 
@@ -261,6 +267,9 @@ export async function DELETE(req) {
 		if (!tugasId) return NextResponse.json({ error: 'tugasId tidak ditemukan' }, { status: 400 });
 
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 		const supabase = await createClient();
 

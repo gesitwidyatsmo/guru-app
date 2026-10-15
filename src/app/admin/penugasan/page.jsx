@@ -4,13 +4,20 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
+import { useAdminAuth } from '../AdminLayoutClient';
 
 export default function PenugasanPage() {
+	const { role: authRole } = useAdminAuth();
 	const [penugasanList, setPenugasanList] = useState([]);
 	const [guruList, setGuruList] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [currentUserRole, setCurrentUserRole] = useState(authRole || null);
+
+	useEffect(() => {
+		if (authRole) setCurrentUserRole(authRole);
+	}, [authRole]);
 
 	const [searchQuery, setSearchQuery] = useState('');
 	const [filterKelas, setFilterKelas] = useState('all');
@@ -33,7 +40,8 @@ export default function PenugasanPage() {
 			if (!user) throw new Error('Sesi telah habis, silakan login ulang.');
 
 			const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
-			if (profile?.role !== 'Admin') throw new Error('Akses KBM Ditolak.');
+			if (profile?.role !== 'Admin' && profile?.role !== 'Kepala Sekolah') throw new Error('Akses KBM Ditolak.');
+			setCurrentUserRole(profile?.role);
 
 			// 1. Ambil data Penugasan KBM
 			const { data: kbmData, error: kbmError } = await supabase.from('guru_kbm').select(`
@@ -169,6 +177,19 @@ export default function PenugasanPage() {
 
 	return (
 		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
+			{/* Monitoring Banner for Kepala Sekolah */}
+			{currentUserRole === 'Kepala Sekolah' && (
+				<div className='p-4 bg-indigo-50 border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center gap-3.5'>
+					<span className='text-3xl shrink-0'>🎓</span>
+					<div>
+						<p className='text-xs sm:text-sm font-black text-indigo-950 uppercase tracking-tight'>Mode Monitoring Kepala Sekolah (Hanya Baca)</p>
+						<p className='text-xs font-medium text-indigo-900 mt-0.5'>
+							Anda memiliki hak akses penuh untuk meninjau seluruh distribusi penugasan mengajar dan beban guru per rombel/mapel. Pemetaan dan modifikasi penugasan KBM dikelola secara terpusat oleh Administrator.
+						</p>
+					</div>
+				</div>
+			)}
+
 			{/* Page Header */}
 			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 				<div>
@@ -183,14 +204,16 @@ export default function PenugasanPage() {
 					</p>
 				</div>
 
-				<button
-					onClick={openModal}
-					className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
-					<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
-						<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
-					</svg>
-					<span>Tambah Relasi Mengajar</span>
-				</button>
+				{currentUserRole !== 'Kepala Sekolah' && (
+					<button
+						onClick={openModal}
+						className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
+						<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+						</svg>
+						<span>Tambah Relasi Mengajar</span>
+					</button>
+				)}
 			</div>
 
 			{/* Stat Highlights Bar */}
@@ -333,23 +356,29 @@ export default function PenugasanPage() {
 
 											{/* Action Column */}
 											<td className='px-6 py-4 text-right'>
-												<button
-													onClick={() => handleDelete(tugas.id_kbm, tugas)}
-													className='p-2 bg-rose-100 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'
-													title='Hapus Penugasan Ini'>
-													<svg
-														className='w-4 h-4'
-														fill='none'
-														stroke='currentColor'
-														viewBox='0 0 24 24'
-														strokeWidth='2.5'>
-														<path
-															strokeLinecap='round'
-															strokeLinejoin='round'
-															d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-														/>
-													</svg>
-												</button>
+												{currentUserRole === 'Kepala Sekolah' ? (
+													<span className='inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 border border-black/30 rounded-lg text-xs font-bold text-gray-700'>
+														<span>👁️</span> Pantau
+													</span>
+												) : (
+													<button
+														onClick={() => handleDelete(tugas.id_kbm, tugas)}
+														className='p-2 bg-rose-100 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'
+														title='Hapus Penugasan Ini'>
+														<svg
+															className='w-4 h-4'
+															fill='none'
+															stroke='currentColor'
+															viewBox='0 0 24 24'
+															strokeWidth='2.5'>
+															<path
+																strokeLinecap='round'
+																strokeLinejoin='round'
+																d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+															/>
+														</svg>
+													</button>
+												)}
 											</td>
 										</tr>
 									))

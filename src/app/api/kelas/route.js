@@ -15,7 +15,7 @@ export async function GET(request) {
 
 		let allowedClasses = null;
 
-		if (showAll || role === 'Admin') {
+		if (showAll || role === 'Admin' || role === 'Kepala Sekolah') {
 			allowedClasses = null; // Ambil semua
 		} else if (role === 'Guru' && userId) {
 			const { data: kbmData } = await supabase

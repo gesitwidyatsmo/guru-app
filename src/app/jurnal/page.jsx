@@ -16,6 +16,7 @@ export default function JurnalPage() {
 	const [journals, setJournals] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [filterKelas, setFilterKelas] = useState('Semua');
+	const [filterTanggal, setFilterTanggal] = useState('');
 	const [searchQuery, setSearchQuery] = useState('');
 
 	const [userRole, setUserRole] = useState('');
@@ -329,12 +330,13 @@ export default function JurnalPage() {
 
 	const filteredJournals = journals.filter((j) => {
 		const matchKelas = filterKelas === 'Semua' || j.kelas === filterKelas;
+		const matchTanggal = !filterTanggal || j.tanggal === filterTanggal;
 		const matchSearch =
 			searchQuery === '' ||
 			[j.materi, j.kegiatan, j.mapel, j.kelas, j.hambatan, j.solusi]
 				.filter(Boolean)
 				.some((field) => field.toString().toLowerCase().includes(searchQuery.toLowerCase()));
-		return matchKelas && matchSearch;
+		return matchKelas && matchTanggal && matchSearch;
 	});
 
 	if (loading) {
@@ -367,44 +369,130 @@ export default function JurnalPage() {
 								<AcademicPeriodChip align='right' />
 							</div>
 						</div>
+                        {userRole !== 'Kepala Sekolah' && (
                         <button
                             onClick={() => handleOpenModal()}
                             className='w-full md:w-auto bg-[#00A693] text-white px-6 sm:px-8 py-3.5 sm:py-4 font-black shadow-[6px_6px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-base sm:text-lg'>
                             <svg className='w-6 h-6 sm:w-7 sm:h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
                             BUAT JURNAL BARU
                         </button>
+                        )}
 					</div>
 				</div>
 			</div>
 			<ArchiveBanner />
 
+			{userRole === 'Kepala Sekolah' && (
+				<div className='max-w-5xl mx-auto px-4 sm:px-8 mt-6 relative z-20'>
+					<div className='bg-[#6366F1] text-white p-4 border-[4px] border-[#0D0D0D] shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-3'>
+							<span className='text-2xl'>🎓</span>
+							<div>
+								<div className='font-black text-sm uppercase tracking-wider'>Supervisi Jurnal Mengajar Guru</div>
+								<div className='text-xs font-bold opacity-90'>Menampilkan seluruh histori jurnal mengajar harian guru secara lengkap (Mode Baca).</div>
+							</div>
+						</div>
+						<span className='bg-white text-[#0D0D0D] px-3 py-1 text-xs font-black uppercase border-[2px] border-[#0D0D0D] w-fit'>
+							Read Only
+						</span>
+					</div>
+				</div>
+			)}
+
 			{/* Search & Filter Bar (Overlapping) */}
             <div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>
-                <div className='flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D]'>
-                    <div className='flex flex-col md:flex-row gap-4 w-full'>
+                <div className='bg-[#F5C518] p-5 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] space-y-3'>
+                    <div className='flex flex-col md:flex-row gap-3 w-full'>
+                        {/* Search Input */}
                         <div className='relative group flex-1'>
                             <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                                <svg className='w-7 h-7 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
+                                <svg className='w-6 h-6 text-[#0D0D0D]' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth='4' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'></path></svg>
                             </div>
                             <input
                                 type='text'
                                 placeholder='CARI JURNAL...'
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className='neo-input w-full !pl-16 pr-4 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-lg'
+                                className='neo-input w-full !pl-14 pr-10 py-3.5 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none rounded-none text-base'
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    title='Hapus kata kunci'
+                                    className='absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-black font-black text-xs bg-gray-100 rounded-full cursor-pointer'>
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter Tanggal Harian */}
+                        <div className='relative w-full md:w-56'>
+                            <input
+                                type='date'
+                                value={filterTanggal}
+                                onChange={(e) => setFilterTanggal(e.target.value)}
+                                className='neo-input w-full px-3 py-3.5 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] outline-none rounded-none text-sm cursor-pointer'
                             />
                         </div>
-                        <div className='relative w-full md:w-80'>
+
+                        {/* Filter Kelas */}
+                        <div className='relative w-full md:w-60'>
                             <select
                                 value={filterKelas}
                                 onChange={(e) => setFilterKelas(e.target.value)}
-                                className='neo-input w-full pl-4 pr-12 py-4 bg-white border-[4px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none appearance-none cursor-pointer rounded-none uppercase text-lg'>
+                                className='neo-input w-full pl-3 pr-10 py-3.5 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none appearance-none cursor-pointer rounded-none uppercase text-sm'>
                                 <option value='Semua'>📂 SEMUA KELAS</option>
                                 {kelasList.map((k) => (
                                     <option key={k.id} value={k.kelas || k.nama_kelas}>🏫 {k.kelas || k.nama_kelas}</option>
                                 ))}
                             </select>
-                            <div className='absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-[#0D0D0D] font-black text-2xl'>▼</div>
+                            <div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-black text-xl'>▼</div>
+                        </div>
+                    </div>
+
+                    {/* Quick Presets & Status */}
+                    <div className='flex flex-wrap items-center justify-between gap-2 pt-2 border-t-[2px] border-[#0D0D0D]/20 text-xs font-black'>
+                        <div className='flex items-center gap-2'>
+                            <span className='uppercase text-[11px] text-[#0D0D0D]'>Filter Harian:</span>
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    const today = new Date().toISOString().slice(0, 10);
+                                    setFilterTanggal(filterTanggal === today ? '' : today);
+                                }}
+                                className={`px-3 py-1 border-[2px] border-[#0D0D0D] rounded-none uppercase transition-all shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer ${
+                                    filterTanggal === new Date().toISOString().slice(0, 10)
+                                        ? 'bg-[#0D0D0D] text-white'
+                                        : 'bg-white text-[#0D0D0D] hover:bg-yellow-100'
+                                }`}>
+                                {filterTanggal === new Date().toISOString().slice(0, 10) ? '✓ HARI INI' : 'HARI INI'}
+                            </button>
+                            {filterTanggal && (
+                                <button
+                                    type='button'
+                                    onClick={() => setFilterTanggal('')}
+                                    className='px-2 py-1 bg-white hover:bg-rose-100 text-rose-800 border-[2px] border-[#0D0D0D] rounded-none uppercase text-[10px] cursor-pointer'>
+                                    Semua Tanggal
+                                </button>
+                            )}
+                        </div>
+
+                        <div className='flex items-center gap-2'>
+                            <span className='bg-white px-3 py-1 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase text-[11px]'>
+                                {filteredJournals.length} JURNAL
+                            </span>
+                            {(searchQuery || filterKelas !== 'Semua' || filterTanggal) && (
+                                <button
+                                    type='button'
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setFilterKelas('Semua');
+                                        setFilterTanggal('');
+                                    }}
+                                    className='bg-[#E8451A] text-white px-3 py-1 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase text-[11px] hover:bg-[#d03a12] cursor-pointer'>
+                                    ↺ RESET
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -453,26 +541,32 @@ export default function JurnalPage() {
 														<svg className='w-5 h-5 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg>
 														JAM KE-{journal.jam_ke}
 													</span>
-													{userRole === 'Admin' && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
+													{(userRole === 'Admin' || userRole === 'Kepala Sekolah') && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
 												</div>
 											</div>
 										</div>
 
 										{/* Action Buttons */}
-										<div className='flex gap-3 shrink-0 self-start sm:self-auto'>
-											<button
-												onClick={() => handleOpenModal(journal)}
-												className='p-3 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
-												title='Edit'>
-												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
-											</button>
-											<button
-												onClick={() => handleDelete(journal.id)}
-												className='p-3 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
-												title='Hapus'>
-												<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
-											</button>
-										</div>
+										{userRole !== 'Kepala Sekolah' ? (
+											<div className='flex gap-3 shrink-0 self-start sm:self-auto'>
+												<button
+													onClick={() => handleOpenModal(journal)}
+													className='p-3 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+													title='Edit'>
+													<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
+												</button>
+												<button
+													onClick={() => handleDelete(journal.id)}
+													className='p-3 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'
+													title='Hapus'>
+													<svg className='w-6 h-6' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+												</button>
+											</div>
+										) : (
+											<span className='px-3 py-1.5 bg-white border-[3px] border-[#0D0D0D] text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] text-[#6366F1] flex items-center gap-1.5 shrink-0 self-start sm:self-auto'>
+												👁️ Pantau
+											</span>
+										)}
 									</div>
 
 									<div className='flex flex-wrap gap-3 mb-8'>

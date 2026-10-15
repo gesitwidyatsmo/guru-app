@@ -21,6 +21,9 @@ async function logoutHandler() {
 			sameSite: 'lax',
 		});
 
+		response.cookies.set('user_role', '', { expires: new Date(0), path: '/' });
+		response.cookies.set('user_name', '', { expires: new Date(0), path: '/' });
+
 		return response;
 	} catch (error) {
 		console.error('Logout error:', error);

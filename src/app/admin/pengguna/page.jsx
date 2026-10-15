@@ -3,10 +3,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import Loader from '../../components/loading';
 import Swal from 'sweetalert2';
+import { useAdminAuth } from '../AdminLayoutClient';
 
 export default function PenggunaPage() {
+	const { role: authRole } = useAdminAuth();
 	const [users, setUsers] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [currentUserRole, setCurrentUserRole] = useState(authRole || null);
+
+	useEffect(() => {
+		if (authRole) setCurrentUserRole(authRole);
+	}, [authRole]);
 
 	const [searchQuery, setSearchQuery] = useState('');
 	const [roleFilter, setRoleFilter] = useState('all');
@@ -24,7 +31,18 @@ export default function PenggunaPage() {
 
 	const fetchUsers = async () => {
 		try {
-			const response = await fetch('/api/users');
+			const [response, resAuth] = await Promise.all([
+				fetch('/api/users'),
+				fetch('/api/auth/me'),
+			]);
+
+			if (resAuth.ok) {
+				const authData = await resAuth.json();
+				if (authData?.user?.role) {
+					setCurrentUserRole(authData.user.role);
+				}
+			}
+
 			if (!response.ok) {
 				const errorData = await response.json();
 				throw new Error(errorData.error || 'Akses Ditolak');
@@ -56,6 +74,7 @@ export default function PenggunaPage() {
 	}, [users, roleFilter, searchQuery]);
 
 	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
+	const kepsekCount = useMemo(() => users.filter((u) => u.role === 'Kepala Sekolah').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	const openCreateModal = () => {
@@ -173,6 +192,19 @@ export default function PenggunaPage() {
 
 	return (
 		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
+			{/* Monitoring Banner for Kepala Sekolah */}
+			{currentUserRole === 'Kepala Sekolah' && (
+				<div className='p-4 bg-indigo-50 border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center gap-3.5'>
+					<span className='text-3xl shrink-0'>🎓</span>
+					<div>
+						<p className='text-xs sm:text-sm font-black text-indigo-950 uppercase tracking-tight'>Mode Monitoring Kepala Sekolah (Hanya Baca)</p>
+						<p className='text-xs font-medium text-indigo-900 mt-0.5'>
+							Anda memiliki hak akses penuh untuk meninjau seluruh data akun pengguna sekolah. Pembuatan akun baru, perombakan profil, serta reset kata sandi dikelola secara tersentralisasi oleh Administrator.
+						</p>
+					</div>
+				</div>
+			)}
+
 			{/* Page Header */}
 			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 				<div>
@@ -187,18 +219,20 @@ export default function PenggunaPage() {
 					</p>
 				</div>
 
-				<button
-					onClick={openCreateModal}
-					className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
-					<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
-						<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
-					</svg>
-					<span>Tambah Pengguna Baru</span>
-				</button>
+				{currentUserRole !== 'Kepala Sekolah' && (
+					<button
+						onClick={openCreateModal}
+						className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
+						<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+						</svg>
+						<span>Tambah Pengguna Baru</span>
+					</button>
+				)}
 			</div>
 
 			{/* User Statistics Row */}
-			<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
 				<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
 					<div>
 						<p className='text-xs font-black uppercase text-gray-500'>Total Pengguna</p>
@@ -216,6 +250,16 @@ export default function PenggunaPage() {
 					</div>
 					<span className='w-10 h-10 bg-emerald-400 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
 						👨‍🏫
+					</span>
+				</div>
+
+				<div className='bg-indigo-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-indigo-800'>Kepala Sekolah</p>
+						<p className='text-2xl font-black text-indigo-900 mt-0.5'>{kepsekCount}</p>
+					</div>
+					<span className='w-10 h-10 bg-indigo-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						🎓
 					</span>
 				</div>
 
@@ -254,6 +298,7 @@ export default function PenggunaPage() {
 					{[
 						{ id: 'all', label: 'Semua Role' },
 						{ id: 'Guru', label: 'Guru' },
+						{ id: 'Kepala Sekolah', label: 'Kepsek' },
 						{ id: 'Admin', label: 'Admin' },
 					].map((tab) => (
 						<button
@@ -295,6 +340,7 @@ export default function PenggunaPage() {
 								filteredUsers.map((u) => {
 									const initial = u.nama_lengkap ? u.nama_lengkap.charAt(0).toUpperCase() : '?';
 									const isAdmin = u.role === 'Admin';
+									const isKepsek = u.role === 'Kepala Sekolah';
 									return (
 										<tr
 											key={u.id_user}
@@ -302,7 +348,7 @@ export default function PenggunaPage() {
 											{/* Name & Avatar */}
 											<td className='px-6 py-4'>
 												<div className='flex items-center gap-3'>
-													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : 'bg-teal-300 text-black'}`}>
+													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : 'bg-teal-300 text-black'}`}>
 														{initial}
 													</div>
 													<div>
@@ -310,7 +356,7 @@ export default function PenggunaPage() {
 															{u.nama_lengkap}
 														</span>
 														<span className='text-[11px] font-bold text-gray-500'>
-															{isAdmin ? 'Akses Penuh Administrator' : 'Tenaga Pendidik / Pengajar'}
+															{isAdmin ? 'Akses Penuh Administrator' : isKepsek ? 'Monitoring & Evaluasi Institusi' : 'Tenaga Pendidik / Pengajar'}
 														</span>
 													</div>
 												</div>
@@ -322,9 +368,11 @@ export default function PenggunaPage() {
 													className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] uppercase ${
 														isAdmin
 															? 'bg-rose-400 text-white'
+															: isKepsek
+															? 'bg-indigo-300 text-black'
 															: 'bg-emerald-300 text-black'
 													}`}>
-													<span>{isAdmin ? '🛡️' : '👨‍🏫'}</span>
+													<span>{isAdmin ? '🛡️' : isKepsek ? '🎓' : '👨‍🏫'}</span>
 													<span>{u.role}</span>
 												</span>
 											</td>
@@ -343,42 +391,48 @@ export default function PenggunaPage() {
 
 											{/* Action Buttons */}
 											<td className='px-6 py-4 text-right'>
-												<div className='flex items-center justify-end gap-2'>
-													<button
-														onClick={() => openEditModal(u)}
-														title='Ubah Profil / Reset Sandi'
-														className='p-2 bg-yellow-200 hover:bg-yellow-400 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
-														<svg
-															className='w-4 h-4'
-															fill='none'
-															stroke='currentColor'
-															viewBox='0 0 24 24'
-															strokeWidth='2.5'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
-															/>
-														</svg>
-													</button>
-													<button
-														onClick={() => handleDelete(u)}
-														title='Cabut Akses Akun Pengguna'
-														className='p-2 bg-rose-200 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
-														<svg
-															className='w-4 h-4'
-															fill='none'
-															stroke='currentColor'
-															viewBox='0 0 24 24'
-															strokeWidth='2.5'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-															/>
-														</svg>
-													</button>
-												</div>
+												{currentUserRole === 'Kepala Sekolah' ? (
+													<span className='inline-flex items-center gap-1 px-3 py-1 bg-yellow-100 border border-black/30 rounded-lg text-xs font-bold text-gray-700'>
+														<span>👁️</span> Pantau
+													</span>
+												) : (
+													<div className='flex items-center justify-end gap-2'>
+														<button
+															onClick={() => openEditModal(u)}
+															title='Ubah Profil / Reset Sandi'
+															className='p-2 bg-yellow-200 hover:bg-yellow-400 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
+															<svg
+																className='w-4 h-4'
+																fill='none'
+																stroke='currentColor'
+																viewBox='0 0 24 24'
+																strokeWidth='2.5'>
+																<path
+																	strokeLinecap='round'
+																	strokeLinejoin='round'
+																	d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+																/>
+															</svg>
+														</button>
+														<button
+															onClick={() => handleDelete(u)}
+															title='Cabut Akses Akun Pengguna'
+															className='p-2 bg-rose-200 hover:bg-rose-500 hover:text-white text-rose-900 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
+															<svg
+																className='w-4 h-4'
+																fill='none'
+																stroke='currentColor'
+																viewBox='0 0 24 24'
+																strokeWidth='2.5'>
+																<path
+																	strokeLinecap='round'
+																	strokeLinejoin='round'
+																	d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+																/>
+															</svg>
+														</button>
+													</div>
+												)}
 											</td>
 										</tr>
 									);
@@ -448,6 +502,7 @@ export default function PenggunaPage() {
 											onChange={(e) => setFormData({ ...formData, role: e.target.value })}
 											className='neo-input text-sm bg-white font-bold'>
 											<option value='Guru'>👨‍🏫 Guru (Pengajar/Wali)</option>
+											<option value='Kepala Sekolah'>🎓 Kepala Sekolah (Monitoring)</option>
 											<option value='Admin'>🛡️ Admin (Super Master)</option>
 										</select>
 									</div>

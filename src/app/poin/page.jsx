@@ -49,6 +49,8 @@ export default function PoinGlobalPage() {
 	};
 	const [formData, setFormData] = useState(initialForm);
 
+	const [currentUserRole, setCurrentUserRole] = useState(null);
+
 	const fetchPoin = useCallback(async () => {
 		try {
 			const res = await fetch(`/api/poin?${buildPeriodeQuery()}`);
@@ -65,13 +67,23 @@ export default function PoinGlobalPage() {
 	useEffect(() => {
 		const initData = async () => {
 			try {
+				const [resKelas, resSiswa, resKategori, resAuth] = await Promise.all([
+					fetch('/api/kelas'),
+					fetch('/api/siswa'),
+					fetch('/api/poin/kategori'),
+					fetch('/api/auth/me'),
+				]);
+
+				if (resAuth.ok) {
+					const dataAuth = await resAuth.json();
+					if (dataAuth?.user?.role) setCurrentUserRole(dataAuth.user.role);
+				}
+
 				// 1. Ambil List Kelas
-				const resKelas = await fetch('/api/kelas');
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				setKelasList(dataKelas.sort((a, b) => (a.nama_kelas || a.kelas).localeCompare(b.nama_kelas || b.kelas)));
 
 				// 2. Ambil List Siswa (Semua)
-				const resSiswa = await fetch('/api/siswa');
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
 				const siswaAktif = dataSiswa;
 				setSiswaList(siswaAktif);
@@ -84,7 +96,6 @@ export default function PoinGlobalPage() {
 				setSiswaMap(map);
 
 				// 3. Ambil Kategori
-				const resKategori = await fetch('/api/poin/kategori');
 				if (resKategori.ok) {
 					const dataKategori = await resKategori.json();
 					setKategoriPositif(dataKategori.positif || []);
@@ -314,12 +325,14 @@ export default function PoinGlobalPage() {
 								<AcademicPeriodChip align='right' />
 							</div>
 						</div>
-						<button
-							onClick={() => handleOpenModal()}
-							className='w-full md:w-auto bg-[#0D0D0D] text-white px-6 sm:px-8 py-3.5 sm:py-4 font-black shadow-[6px_6px_0px_0px_#F5C518] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#F5C518] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-base sm:text-lg'>
-							<svg className='w-6 h-6 sm:w-7 sm:h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
-							CATAT POIN BARU
-						</button>
+						{currentUserRole !== 'Kepala Sekolah' && (
+							<button
+								onClick={() => handleOpenModal()}
+								className='w-full md:w-auto bg-[#0D0D0D] text-white px-6 sm:px-8 py-3.5 sm:py-4 font-black shadow-[6px_6px_0px_0px_#F5C518] border-[4px] border-[#0D0D0D] flex items-center justify-center gap-3 whitespace-nowrap uppercase tracking-widest hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[10px_10px_0px_0px_#F5C518] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none text-base sm:text-lg'>
+								<svg className='w-6 h-6 sm:w-7 sm:h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={4} d='M12 4v16m8-8H4'/></svg>
+								CATAT POIN BARU
+							</button>
+						)}
 					</div>
 
 					{/* Stats Cards */}
@@ -355,6 +368,21 @@ export default function PoinGlobalPage() {
 			</div>
 
 			<ArchiveBanner />
+
+			{/* Monitoring Banner for Kepala Sekolah */}
+			{currentUserRole === 'Kepala Sekolah' && (
+				<div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-4 mb-8'>
+					<div className='p-4 bg-indigo-50 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center gap-3.5'>
+						<span className='text-3xl shrink-0'>🎓</span>
+						<div>
+							<p className='text-xs sm:text-sm font-black text-indigo-950 uppercase tracking-tight'>Mode Monitoring Kepala Sekolah (Hanya Baca)</p>
+							<p className='text-xs font-medium text-indigo-900 mt-0.5'>
+								Anda memiliki akses penuh untuk meninjau seluruh catatan perilaku, riwayat poin, dan konversi predikat sikap siswa lintas rombel. Pencatatan serta penyuntingan poin dilakukan oleh Guru / Wali Kelas.
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Search & Filter Bar */}
 			<div className='max-w-5xl mx-auto px-4 sm:px-8 -mt-8 relative z-20 mb-12'>
@@ -501,20 +529,26 @@ export default function PoinGlobalPage() {
 														<div className={`text-4xl font-black drop-shadow-[2px_2px_0px_#0D0D0D] ${isPositif ? 'text-[#00A693]' : 'text-[#E8451A]'}`}>
 															{isPositif ? '+' : '-'}{poin.poin}
 														</div>
-														<div className='flex gap-2'>
-															<button
-																onClick={() => handleOpenModal(poin)}
-																className='p-2 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
-																title='Edit'>
-																<svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
-															</button>
-															<button
-																onClick={() => handleDelete(poin.id)}
-																className='p-2 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
-																title='Hapus'>
-																<svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
-															</button>
-														</div>
+														{currentUserRole !== 'Kepala Sekolah' ? (
+															<div className='flex gap-2'>
+																<button
+																	onClick={() => handleOpenModal(poin)}
+																	className='p-2 bg-[#2F80ED] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
+																	title='Edit'>
+																	<svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'/></svg>
+																</button>
+																<button
+																	onClick={() => handleDelete(poin.id)}
+																	className='p-2 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all'
+																	title='Hapus'>
+																	<svg className='w-5 h-5' fill='none' stroke='currentColor' strokeWidth={3} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+																</button>
+															</div>
+														) : (
+															<span className='px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-yellow-100 border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] text-gray-700'>
+																👁️ Pantau
+															</span>
+														)}
 													</div>
 												</div>
 											</div>

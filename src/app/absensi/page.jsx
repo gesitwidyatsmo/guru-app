@@ -18,6 +18,7 @@ export default function AbsensiMapelPage() {
 	const [mapelList, setMapelList] = useState([]);
 	const [statusList, setStatusList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
+	const [userRole, setUserRole] = useState('');
 
 	// --- Filter State ---
 	const [selectedKelas, setSelectedKelas] = useState('');
@@ -71,6 +72,13 @@ export default function AbsensiMapelPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
+				const supabase = createClient();
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
+					if (profile) setUserRole(profile.role || '');
+				}
+
 				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([
 					fetch('/api/kelas'),
 					fetch('/api/mapel'),
@@ -493,6 +501,22 @@ export default function AbsensiMapelPage() {
 
 			{/* Archive Banner */}
 			<ArchiveBanner />
+			{userRole === 'Kepala Sekolah' && (
+				<div className='max-w-5xl mx-auto px-4 mt-4'>
+					<div className='bg-[#6366F1] text-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-3'>
+							<span className='text-2xl'>🎓</span>
+							<div>
+								<div className='font-black text-sm uppercase tracking-wider'>Mode Supervisi Presensi Siswa</div>
+								<div className='text-xs font-bold opacity-90'>Menampilkan rekapitulasi kehadiran mata pelajaran seluruh kelas (Hanya Lihat).</div>
+							</div>
+						</div>
+						<span className='bg-white text-[#0D0D0D] px-3 py-1 text-xs font-black uppercase border-[2px] border-[#0D0D0D] w-fit'>
+							Read Only
+						</span>
+					</div>
+				</div>
+			)}
 
 			{/* --- MAIN CONTENT --- */}
 			<div className='max-w-5xl mx-auto px-4 py-6'>
@@ -558,24 +582,32 @@ export default function AbsensiMapelPage() {
 										</p>
 									</div>
 									<div className='flex flex-wrap gap-3'>
-										<button
-											onClick={handleHapus}
-											className='neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
-											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
-											<span className='hidden sm:inline'>Hapus</span>
-										</button>
+										{userRole !== 'Kepala Sekolah' && (
+											<button
+												onClick={handleHapus}
+												className='neo-btn-outline bg-[#E8451A] text-white hover:bg-white hover:text-[#E8451A] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+												<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'/></svg>
+												<span className='hidden sm:inline'>Hapus</span>
+											</button>
+										)}
 										<button
 											onClick={goToRiwayat}
 											className='neo-btn-outline bg-[#2F80ED] text-white hover:bg-white hover:text-[#2F80ED] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
 											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/></svg>
 											<span className='hidden sm:inline'>Riwayat</span>
 										</button>
-										<button
-											onClick={() => setMode('edit')}
-											className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
-											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'/></svg>
-											<span className='hidden sm:inline'>Edit</span>
-										</button>
+										{userRole !== 'Kepala Sekolah' ? (
+											<button
+												onClick={() => setMode('edit')}
+												className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
+												<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z'/></svg>
+												<span className='hidden sm:inline'>Edit</span>
+											</button>
+										) : (
+											<span className='bg-white text-[#6366F1] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] py-1 px-3 rounded-xl font-black text-xs uppercase'>
+												👁️ Pantau
+											</span>
+										)}
 									</div>
 								</div>
 
@@ -670,7 +702,7 @@ export default function AbsensiMapelPage() {
 														<button
 															key={st.id}
 															onClick={() => handleStatusChange(siswa.id, st.label)}
-															disabled={siswa.status !== 'Aktif'}
+															disabled={siswa.status !== 'Aktif' || userRole === 'Kepala Sekolah'}
 															className={`${getStatusClasses(st.warna, isActive)} ${siswa.status !== 'Aktif' ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
 															{st.kode || st.label.substring(0, 1)}
 														</button>
@@ -684,7 +716,7 @@ export default function AbsensiMapelPage() {
 													placeholder='Keterangan...'
 													value={absensi[siswa.id]?.keterangan || ''}
 													onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-													disabled={siswa.status !== 'Aktif'}
+													disabled={siswa.status !== 'Aktif' || userRole === 'Kepala Sekolah'}
 													className='neo-input text-sm disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed'
 												/>
 											</div>
@@ -698,7 +730,7 @@ export default function AbsensiMapelPage() {
 			</div>
 
 			{/* --- Floating Save Button (Hanya Muncul di Mode Input/Edit) --- */}
-			{siswaKelasIni.length > 0 && mode !== 'rekap' && (
+			{siswaKelasIni.length > 0 && mode !== 'rekap' && userRole !== 'Kepala Sekolah' && (
 				<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex justify-end shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
 					<button
 						onClick={handleSimpan}

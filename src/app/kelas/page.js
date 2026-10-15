@@ -64,7 +64,7 @@ export default function Page() {
 
 				// 2. Ambil Kelas yang akan Tampil di Grid (List)
 				let allowedClasses = null;
-				if (role === 'Admin') {
+				if (role === 'Admin' || role === 'Kepala Sekolah') {
 					allowedClasses = null; // Semua kelas
 				} else if (role === 'Guru' && userId) {
 					const { data: kbmData } = await supabase.from('guru_kbm').select('kelas').eq('id_user', userId);
@@ -312,6 +312,23 @@ export default function Page() {
 					) : null}
 				</div>
 			</header>
+
+			{userRole === 'Kepala Sekolah' && (
+				<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6'>
+					<div className='bg-[#6366F1] text-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-3'>
+							<span className='text-2xl'>🎓</span>
+							<div>
+								<div className='font-black text-sm uppercase tracking-wider'>Mode Pemantauan Eksekutif</div>
+								<div className='text-xs font-bold opacity-90'>Menampilkan seluruh kelas aktif dan wali kelas yang terdaftar (Hanya Lihat).</div>
+							</div>
+						</div>
+						<span className='bg-white text-[#0D0D0D] px-3 py-1 text-xs font-black uppercase border-[2px] border-[#0D0D0D] w-fit'>
+							Read Only
+						</span>
+					</div>
+				</div>
+			)}
 
 			{/* Daftar Kelas */}
 			<div className={styles.gridContainer}>

@@ -14,7 +14,7 @@ CREATE TABLE public.users (
     auth_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
     nama_lengkap TEXT NOT NULL,
-    role TEXT CHECK (role IN ('Admin', 'Guru')) NOT NULL,
+    role TEXT CHECK (role IN ('Admin', 'Guru', 'Kepala Sekolah')) NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -4,10 +4,17 @@ import { useState, useEffect } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { useAcademic } from '@/context/AcademicContext';
+import { useAdminAuth } from '../AdminLayoutClient';
 
 export default function TahunAjarAdminPage() {
+	const { role: authRole } = useAdminAuth();
 	const { daftarTahunAjar, tahunAjarAktif, semesterAktif, refreshDaftar } = useAcademic();
 	const [loading, setLoading] = useState(false);
+	const [currentUserRole, setCurrentUserRole] = useState(authRole || null);
+
+	useEffect(() => {
+		if (authRole) setCurrentUserRole(authRole);
+	}, [authRole]);
 	const [isSavingTA, setIsSavingTA] = useState(false);
 	const [isSettingAktif, setIsSettingAktif] = useState(false);
 	const [showFormTA, setShowFormTA] = useState(false);
@@ -17,6 +24,21 @@ export default function TahunAjarAdminPage() {
 		tanggal_mulai: '',
 		tanggal_selesai: '',
 	});
+
+	useEffect(() => {
+		const fetchRole = async () => {
+			try {
+				const res = await fetch('/api/auth/me');
+				if (res.ok) {
+					const data = await res.json();
+					if (data?.user?.role) setCurrentUserRole(data.user.role);
+				}
+			} catch (err) {
+				console.error('Error fetch role:', err);
+			}
+		};
+		fetchRole();
+	}, []);
 
 	const handleBuatTA = async (e) => {
 		e.preventDefault();
@@ -81,6 +103,19 @@ export default function TahunAjarAdminPage() {
 
 	return (
 		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
+			{/* Monitoring Banner for Kepala Sekolah */}
+			{currentUserRole === 'Kepala Sekolah' && (
+				<div className='p-4 bg-indigo-50 border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center gap-3.5'>
+					<span className='text-3xl shrink-0'>🎓</span>
+					<div>
+						<p className='text-xs sm:text-sm font-black text-indigo-950 uppercase tracking-tight'>Mode Monitoring Kepala Sekolah (Hanya Baca)</p>
+						<p className='text-xs font-medium text-indigo-900 mt-0.5'>
+							Anda memiliki hak akses penuh untuk meninjau seluruh riwayat kalender akademik dan status semester berjalan. Pembukaan tahun ajaran baru serta penetapan semester aktif dikelola terpusat oleh Administrator.
+						</p>
+					</div>
+				</div>
+			)}
+
 			{/* Page Header */}
 			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 				<div>
@@ -95,11 +130,13 @@ export default function TahunAjarAdminPage() {
 					</p>
 				</div>
 
-				<button
-					onClick={() => setShowFormTA(!showFormTA)}
-					className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
-					<span>{showFormTA ? '✕ Tutup Form' : '+ Buka Tahun Ajar Baru'}</span>
-				</button>
+				{currentUserRole !== 'Kepala Sekolah' && (
+					<button
+						onClick={() => setShowFormTA(!showFormTA)}
+						className='neo-btn-primary flex items-center gap-2 text-xs sm:text-sm !py-3 !px-5 whitespace-nowrap shrink-0 self-stretch sm:self-auto justify-center'>
+						<span>{showFormTA ? '✕ Tutup Form' : '+ Buka Tahun Ajar Baru'}</span>
+					</button>
+				)}
 			</div>
 
 			{/* Active Academic Period Card */}
@@ -270,12 +307,18 @@ export default function TahunAjarAdminPage() {
 
 									<div>
 										{!isAktif ? (
-											<button
-												onClick={() => handleSetAktif(ta.id, ta.nama, ta.semester)}
-												disabled={isSettingAktif}
-												className='px-4 py-2 bg-white hover:bg-emerald-300 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50'>
-												{isSettingAktif ? 'Memproses...' : 'Jadikan Aktif'}
-											</button>
+											currentUserRole === 'Kepala Sekolah' ? (
+												<span className='inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-yellow-50 px-3 py-1.5 border border-black/30 rounded-xl'>
+													Arsip Non-Aktif
+												</span>
+											) : (
+												<button
+													onClick={() => handleSetAktif(ta.id, ta.nama, ta.semester)}
+													disabled={isSettingAktif}
+													className='px-4 py-2 bg-white hover:bg-emerald-300 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all disabled:opacity-50'>
+													{isSettingAktif ? 'Memproses...' : 'Jadikan Aktif'}
+												</button>
+											)
 										) : (
 											<div className='inline-flex items-center gap-1.5 text-xs font-black text-emerald-900 bg-white px-3 py-1.5 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D]'>
 												<span>✅</span>

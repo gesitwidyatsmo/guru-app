@@ -101,6 +101,9 @@ export async function POST(req) {
 	try {
 		const userId = req.headers.get('x-user-id');
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 
 		const body = await req.json();
 		const oldTanggal = body.oldTanggal || body.tanggal;
@@ -172,6 +175,9 @@ export async function POST(req) {
 export async function DELETE(req) {
 	try {
 		const role = req.headers.get('x-user-role');
+		if (role === 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		}
 		const userId = req.headers.get('x-user-id');
 
 		const { searchParams } = new URL(req.url);

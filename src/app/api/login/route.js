@@ -75,6 +75,22 @@ export async function POST(req) {
 			maxAge: maxAge,
 		});
 
+		// Set client-accessible cookies agar role & nama tersedia instan tanpa flash
+		response.cookies.set('user_role', userProfile.role, {
+			httpOnly: false,
+			secure: secureCookie,
+			sameSite: 'lax',
+			path: '/',
+			maxAge: maxAge,
+		});
+		response.cookies.set('user_name', encodeURIComponent(userProfile.nama_lengkap), {
+			httpOnly: false,
+			secure: secureCookie,
+			sameSite: 'lax',
+			path: '/',
+			maxAge: maxAge,
+		});
+
 		return response;
 	} catch (error) {
 		console.error('Error saat Login:', error);

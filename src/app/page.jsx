@@ -78,8 +78,17 @@ export default function Home() {
 
 				if (resAuth.ok) {
 					const dataAuth = await resAuth.json();
-					setUserRole(dataAuth.user.role);
+					const role = dataAuth.user.role;
+					setUserRole(role);
 					setUserName(dataAuth.user.nama_lengkap);
+
+					if (role === 'Kepala Sekolah') {
+						router.replace('/kepsek');
+						return;
+					} else if (role === 'Admin') {
+						router.replace('/admin');
+						return;
+					}
 				}
 
 				const siswaAktif = dataSiswa.filter((siswa) => siswa.status === 'Aktif');
@@ -134,7 +143,7 @@ export default function Home() {
 		};
 
 		fetchData();
-	}, [hariIni]);
+	}, [hariIni, router]);
 
 	// Quick Actions (Menu Utama - Sering dipakai)
 	const quickActions = useMemo(
@@ -449,14 +458,24 @@ export default function Home() {
 				{/* Header */}
 				<div className='mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 					<div>
-						<div className='flex flex-wrap items-center gap-1 text-3xl sm:text-4xl font-bold text-black mb-4'>
-							Selamat Datang
+						<div className='flex flex-wrap items-center gap-2 text-3xl sm:text-4xl font-bold text-black mb-4'>
+							<span>Selamat Datang</span>
 							{userName && (
 								<>
-									, <span className='bg-yellow-300 border-2 border-black px-3 py-1 shadow-[4px_4px_0px_0px_#0D0D0D] rotate-[-2deg] inline-block ml-2'>{userName}</span>
+									<span>,</span> <span className='bg-yellow-300 border-2 border-black px-3 py-1 shadow-[4px_4px_0px_0px_#0D0D0D] rotate-[-2deg] inline-block'>{userName}</span>
 								</>
 							)}
-							!
+							<span>!</span>
+							{userRole === 'Kepala Sekolah' && (
+								<span className='text-xs font-black uppercase px-2.5 py-1 bg-indigo-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_#0D0D0D] ml-1 self-center'>
+									🎓 Kepala Sekolah
+								</span>
+							)}
+							{userRole === 'Admin' && (
+								<span className='text-xs font-black uppercase px-2.5 py-1 bg-rose-400 text-white border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_#0D0D0D] ml-1 self-center'>
+									🛡️ Admin
+								</span>
+							)}
 						</div>
 						<div className='flex flex-wrap items-center gap-2'>
 							<p className='text-gray-900 font-bold border-2 border-black bg-white inline-block px-3 py-1.5 rounded-md shadow-[2px_2px_0px_0px_#0D0D0D] text-xs sm:text-base'>
@@ -572,23 +591,27 @@ export default function Home() {
 							<NotificationBell />
 						</div>
 
-						{userRole === 'Admin' && (
+						{(userRole === 'Admin' || userRole === 'Kepala Sekolah') && (
 							<Link
 								href='/admin'
-								title='Portal Admin'
-								className={`flex-shrink-0 p-3 neo-card flex items-center justify-center bg-yellow-300 hover:bg-yellow-400 transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
-								<svg
-									className='w-6 h-6 group-hover:scale-110 transition-transform'
-									fill='none'
-									stroke='currentColor'
-									viewBox='0 0 24 24'
-									strokeWidth='2'>
-									<path
-										strokeLinecap='round'
-										strokeLinejoin='round'
-										d='M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4'
-									/>
-								</svg>
+								title={userRole === 'Kepala Sekolah' ? 'Portal Monitoring Kepala Sekolah' : 'Portal Admin'}
+								className={`flex-shrink-0 p-3 neo-card flex items-center justify-center ${userRole === 'Kepala Sekolah' ? 'bg-indigo-300 hover:bg-indigo-400' : 'bg-yellow-300 hover:bg-yellow-400'} transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
+								{userRole === 'Kepala Sekolah' ? (
+									<span className='text-xl group-hover:scale-110 transition-transform'>🎓</span>
+								) : (
+									<svg
+										className='w-6 h-6 group-hover:scale-110 transition-transform'
+										fill='none'
+										stroke='currentColor'
+										viewBox='0 0 24 24'
+										strokeWidth='2'>
+										<path
+											strokeLinecap='round'
+											strokeLinejoin='round'
+											d='M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4'
+										/>
+									</svg>
+								)}
 							</Link>
 						)}
 

@@ -11,8 +11,8 @@ function generateKBMId() {
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses Ditolak: Khusus Entitas Admin.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kepala Sekolah') {
+			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin dan Kepala Sekolah.' }, { status: 403 });
 		}
 
 		const supabase = await createClient();

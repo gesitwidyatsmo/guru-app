@@ -189,7 +189,7 @@ export default function KelasDetail() {
 		return <Loader />;
 	}
 
-	const isWaliKelas = kelasDetail?.wali_kelas === userName || userRole === 'Admin';
+	const isWaliKelas = userRole !== 'Kepala Sekolah' && (kelasDetail?.wali_kelas === userName || userRole === 'Admin');
 
 	return (
 		<div className='min-h-screen pb-20 font-sans'>
@@ -427,7 +427,7 @@ export default function KelasDetail() {
 								</div>
 								<div className='border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] bg-white overflow-hidden'>
 									<ul className='divide-y-2 divide-black'>
-										{isWaliKelas && (
+										{(isWaliKelas || userRole === 'Kepala Sekolah') && (
 											<li>
 												<Link
 													href={`/kelas/${id}/riwayat-absensi`}
@@ -512,7 +512,7 @@ export default function KelasDetail() {
 								</div>
 								<div className='border-2 border-black rounded-2xl shadow-[4px_4px_0px_0px_#0D0D0D] bg-white overflow-hidden'>
 									<ul className='divide-y-2 divide-black'>
-										{isWaliKelas && (
+										{(isWaliKelas || userRole === 'Kepala Sekolah') && (
 											<li>
 												<Link
 													href={`/kelas/${id}/laporan-absensi`}
@@ -636,6 +636,25 @@ export default function KelasDetail() {
 											</svg>
 											Hapus Kelas
 										</button>
+									</div>
+								</section>
+							</div>
+						)}
+
+						{userRole === 'Kepala Sekolah' && (
+							<div className='flex flex-col gap-6'>
+								<section>
+									<h2 className='text-sm font-black uppercase tracking-wider text-black mb-4'>Status Pengawasan</h2>
+									<div className='neo-card bg-[#6366F1] text-white space-y-3'>
+										<div className='flex items-center gap-2 font-black uppercase text-sm'>
+											<span className='text-xl'>🎓</span> Kepala Sekolah
+										</div>
+										<p className='text-xs font-bold leading-relaxed opacity-95'>
+											Anda berada dalam mode supervisi eksekutif. Anda dapat memantau seluruh riwayat kehadiran, rekapitulasi nilai, serta profil siswa di kelas ini.
+										</p>
+										<span className='inline-block bg-white text-[#0D0D0D] px-2.5 py-1 text-[11px] font-black uppercase border-2 border-black'>
+											Read-Only Access
+										</span>
 									</div>
 								</section>
 							</div>
