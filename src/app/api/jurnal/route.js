@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { haversine } from '@/lib/haversine';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -52,9 +53,36 @@ export async function POST(req) {
 
 		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas, tahun_ajar, semester } = body;
+		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas, tahun_ajar, semester, user_lat, user_lng } = body;
 
 		const supabase = await createClient();
+
+		// Verifikasi Geofence jika diaktifkan oleh Admin
+		try {
+			const { data: geofenceSetting } = await supabase
+				.from('app_settings')
+				.select('value')
+				.eq('key', 'geofence')
+				.maybeSingle();
+
+			const geofence = geofenceSetting?.value;
+			if (geofence?.enabled) {
+				if (user_lat === undefined || user_lng === undefined || user_lat === null || user_lng === null) {
+					return NextResponse.json({
+						error: `Akses Lokasi Wajib: Sistem pembatasan area aktif untuk ${geofence.nama_lokasi || 'Area Sekolah'}. Harap aktifkan GPS dan izinkan akses lokasi di browser Anda.`
+					}, { status: 403 });
+				}
+
+				const distance = haversine(user_lat, user_lng, geofence.lat, geofence.lng);
+				if (distance > geofence.radius) {
+					return NextResponse.json({
+						error: `Di Luar Radius: Anda terdeteksi berada ${Math.round(distance)} meter dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${geofence.radius}m). Jurnal hanya dapat diisi dari lingkungan sekolah.`
+					}, { status: 403 });
+				}
+			}
+		} catch (geoErr) {
+			console.warn('Geofence verification skipped or table missing:', geoErr.message);
+		}
 		const id = generateId();
 
 		const { error } = await supabase.from('jurnal').insert({

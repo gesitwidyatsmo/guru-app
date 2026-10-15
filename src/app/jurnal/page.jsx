@@ -7,6 +7,8 @@ import Loader from '../components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -21,6 +23,11 @@ export default function JurnalPage() {
 
 	const [userRole, setUserRole] = useState('');
 	const [userId, setUserId] = useState('');
+
+	// Geolocation & Geofencing State
+	const { getPosition, loading: gpsLoading } = useGeolocation();
+	const [geofenceSettings, setGeofenceSettings] = useState(null);
+	const [userLocationStatus, setUserLocationStatus] = useState(null);
 
 	// State Form Modal
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,6 +86,19 @@ export default function JurnalPage() {
 				setMapelList(mapelData || []);
 
 				const fetchedJournals = await refreshJurnal(currentUserId, currentUserRole);
+
+				// Ambil pengaturan geofence sekolah
+				try {
+					const geoRes = await fetch('/api/settings?key=geofence');
+					if (geoRes.ok) {
+						const geoData = await geoRes.json();
+						if (geoData?.value) {
+							setGeofenceSettings(geoData.value);
+						}
+					}
+				} catch (geoErr) {
+					console.warn('Gagal memuat pengaturan geofence:', geoErr);
+				}
 
 				// Auto-open modal from query params
 				const searchParams = new URLSearchParams(window.location.search);
@@ -208,6 +228,7 @@ export default function JurnalPage() {
 
 	// --- HANDLERS ---
 	const handleOpenModal = (journal = null) => {
+		setUserLocationStatus(null);
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
@@ -267,6 +288,51 @@ export default function JurnalPage() {
 				confirmButtonColor: '#E8451A',
 			});
 			return;
+		}
+
+		// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin dan user bukan Admin)
+		if (geofenceSettings?.enabled && userRole !== 'Admin') {
+			try {
+				const coords = await getPosition();
+				const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
+				setUserLocationStatus({ ...check, checked: true, userLat: coords.lat, userLng: coords.lng });
+
+				if (!check.isInside) {
+					await Swal.fire({
+						icon: 'error',
+						title: 'Di Luar Area Sekolah',
+						html: `
+							<div class="text-left text-sm space-y-2">
+								<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
+								<div class="bg-red-50 p-3 rounded border border-red-200">
+									<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
+									<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+								</div>
+								<p class="text-xs text-gray-600 font-medium">Jurnal mengajar hanya dapat disimpan saat Anda berada di lingkungan sekolah.</p>
+							</div>
+						`,
+						confirmButtonColor: '#E8451A',
+						confirmButtonText: 'Tutup',
+					});
+					return;
+				}
+			} catch (gpsErr) {
+				setUserLocationStatus({ isInside: false, error: gpsErr.message, checked: true });
+				await Swal.fire({
+					icon: 'warning',
+					title: 'Akses Lokasi Wajib',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Sekolah mewajibkan verifikasi lokasi untuk mengisi jurnal harian.</p>
+							<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
+							<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di pengaturan browser perangkat Anda.</p>
+						</div>
+					`,
+					confirmButtonColor: '#E8451A',
+					confirmButtonText: 'Mengerti',
+				});
+				return;
+			}
 		}
 
 		setSaving(true);
@@ -771,6 +837,61 @@ export default function JurnalPage() {
 										<span className='ml-4 text-sm font-black text-[#0D0D0D] uppercase tracking-widest w-16'>{formData.tuntas ? 'TUNTAS' : 'BELUM'}</span>
 									</label>
 								</div>
+
+								{/* Geofence Status Badge */}
+								{geofenceSettings?.enabled && (
+									<div className={`p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+										!userLocationStatus?.checked
+											? 'bg-yellow-100 text-[#0D0D0D]'
+											: userLocationStatus?.isInside
+											? 'bg-emerald-100 text-emerald-950'
+											: 'bg-rose-100 text-rose-950'
+									}`}>
+										<div className='flex items-center gap-3'>
+											<span className='text-2xl'>
+												{!userLocationStatus?.checked ? '📍' : userLocationStatus?.isInside ? '✅' : '🚫'}
+											</span>
+											<div>
+												<p className='text-xs font-black uppercase tracking-wider'>
+													{!userLocationStatus?.checked
+														? `Validasi Lokasi: ${geofenceSettings.nama_lokasi || 'Area Sekolah'}`
+														: userLocationStatus?.isInside
+														? `Lokasi Terverifikasi (${formatDistance(userLocationStatus.distance)})`
+														: `Di Luar Area Sekolah (${formatDistance(userLocationStatus.distance || 0)})`}
+												</p>
+												<p className='text-[11px] font-medium opacity-85'>
+													{!userLocationStatus?.checked
+														? `Wajib berada dalam radius ${geofenceSettings.radius}m dari sekolah. Lokasi diverifikasi saat menyimpan.`
+														: userLocationStatus?.isInside
+														? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m).`
+														: `Posisi Anda melebihi batas radius izin (${geofenceSettings.radius}m).`}
+												</p>
+											</div>
+										</div>
+										{!userLocationStatus?.isInside && (
+											<button
+												type='button'
+												onClick={async () => {
+													try {
+														const c = await getPosition();
+														const chk = isWithinGeofence(c.lat, c.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
+														setUserLocationStatus({ ...chk, checked: true, userLat: c.lat, userLng: c.lng });
+													} catch (e) {
+														Swal.fire({
+															icon: 'warning',
+															title: 'GPS Gagal',
+															text: e.message || 'Gagal membaca GPS perangkat Anda.',
+															confirmButtonColor: '#E8451A',
+														});
+													}
+												}}
+												disabled={gpsLoading}
+												className='px-3 py-1.5 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-yellow-300 transition-colors shrink-0'>
+												{gpsLoading ? 'Mengecek...' : 'Cek Posisi GPS'}
+											</button>
+										)}
+									</div>
+								)}
 							</div>
 
 							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-4 sm:py-5 border-t-[4px] border-[#0D0D0D] flex flex-col sm:flex-row justify-end gap-3 sm:gap-4'>
