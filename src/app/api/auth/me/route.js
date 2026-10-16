@@ -15,7 +15,7 @@ export async function GET() {
 		// Ambil data profil dari public.users
 		const { data: userProfile, error: profileError } = await supabase
 			.from('users')
-			.select('id_user, username, nama_lengkap, role')
+			.select('*')
 			.eq('auth_id', user.id)
 			.single();
 
@@ -31,7 +31,8 @@ export async function GET() {
 					id: userProfile.id_user,
 					username: userProfile.username,
 					nama_lengkap: userProfile.nama_lengkap,
-					role: userProfile.role, // 'Admin' | 'Guru'
+					role: userProfile.role,
+					nip: userProfile.nip || '',
 				},
 			},
 			{ status: 200 },

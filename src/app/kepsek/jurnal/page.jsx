@@ -4,12 +4,21 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
+import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
 
 export default function KepsekJurnalPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [journals, setJournals] = useState([]);
 	const [guruList, setGuruList] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
 	const [filterKelas, setFilterKelas] = useState('Semua');
@@ -31,18 +40,26 @@ export default function KepsekJurnalPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resJurnal, resGuru, resKelas] = await Promise.all([
+				const [resJurnal, resGuru, resKelas, resProfil] = await Promise.all([
 					supabase
 						.from('jurnal')
 						.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
 						.order('tanggal', { ascending: false }),
 					supabase.from('users').select('id_user, nama_lengkap, username').eq('role', 'Guru'),
 					supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true }),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				setJournals(resJurnal.data || []);
 				setGuruList(resGuru.data || []);
 				setKelasList(resKelas.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal memuat supervisi jurnal:', err);
 			} finally {
@@ -67,7 +84,7 @@ export default function KepsekJurnalPage() {
 			const matchStatus =
 				filterStatus === 'Semua' ||
 				(filterStatus === 'Tuntas' && j.tuntas) ||
-				(filterStatus === 'Remedial' && !j.tuntas);
+				(filterStatus === 'Belum Tuntas' && !j.tuntas);
 
 			const q = searchQuery.toLowerCase().trim();
 			const guruName = j.users?.nama_lengkap?.toLowerCase() || '';
@@ -86,11 +103,11 @@ export default function KepsekJurnalPage() {
 	const stats = useMemo(() => {
 		const total = journals.length;
 		const tuntas = journals.filter((j) => j.tuntas).length;
-		const remedial = total - tuntas;
+		const belumTuntas = total - tuntas;
 		const guruAktif = new Set(journals.map((j) => j.guru_id).filter(Boolean)).size;
 		const persentaseTuntas = total > 0 ? Math.round((tuntas / total) * 100) : 0;
-		const persentaseRemedial = total > 0 ? Math.round((remedial / total) * 100) : 0;
-		return { total, tuntas, remedial, guruAktif, persentaseTuntas, persentaseRemedial };
+		const persentaseBelumTuntas = total > 0 ? Math.round((belumTuntas / total) * 100) : 0;
+		return { total, tuntas, belumTuntas, guruAktif, persentaseTuntas, persentaseBelumTuntas };
 	}, [journals]);
 
 	// Pagination calculations
@@ -114,6 +131,28 @@ export default function KepsekJurnalPage() {
 		setFilterKelas('Semua');
 		setFilterGuru('Semua');
 		setFilterStatus('Semua');
+	};
+
+	// Export to PDF with Kop Surat Resmi & Statistik Lengkap (Total Jurnal, Total Jam, Jumlah Guru, Mapel, Kelas, Distribusi Hari, Statistik Per Guru)
+	const handleExportPDF = () => {
+		if (filteredJournals.length === 0) {
+			Swal.fire('Info', 'Tidak ada data jurnal untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const subInfo = `Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Filter Kelas: ${filterKelas}  •  Filter Guru: ${filterGuru}`;
+			exportJurnalPDFReport({
+				journals: filteredJournals,
+				schoolProfile,
+				title: 'LAPORAN SUPERVISI JURNAL PEMBELAJARAN GURU (KBM)',
+				subInfo,
+				filename: `Supervisi_Jurnal_KBM_${new Date().toISOString().split('T')[0]}.pdf`,
+			});
+		} catch (err) {
+			console.error('Gagal export PDF jurnal:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
 	};
 
 	// Export to CSV helper
@@ -142,7 +181,7 @@ export default function KepsekJurnalPage() {
 			`"${(j.mapel || '').replace(/"/g, '""')}"`,
 			j.pertemuan_ke || '',
 			`"${(j.materi || '').replace(/"/g, '""')}"`,
-			j.tuntas ? 'Tuntas' : 'Perlu Remedial',
+			j.tuntas ? 'Tuntas' : 'Belum Tuntas',
 			`"${(j.kegiatan || '').replace(/"/g, '""')}"`,
 			`"${(j.hambatan || '').replace(/"/g, '""')}"`,
 			`"${(j.solusi || '').replace(/"/g, '""')}"`,
@@ -184,7 +223,16 @@ export default function KepsekJurnalPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredJournals.length === 0}
+						title='Unduh rekapitulasi jurnal dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredJournals.length === 0}
@@ -246,24 +294,24 @@ export default function KepsekJurnalPage() {
 					</span>
 				</button>
 
-				{/* Perlu Remedial */}
+				{/* Belum Tuntas */}
 				<button
-					onClick={() => setFilterStatus(filterStatus === 'Remedial' ? 'Semua' : 'Remedial')}
+					onClick={() => setFilterStatus(filterStatus === 'Belum Tuntas' ? 'Semua' : 'Belum Tuntas')}
 					className={`border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between text-left transition-all cursor-pointer hover:-translate-y-0.5 ${
-						filterStatus === 'Remedial'
+						filterStatus === 'Belum Tuntas'
 							? 'bg-orange-100 ring-2 ring-orange-600'
 							: 'bg-orange-50 hover:bg-orange-100/60'
 					}`}>
 					<div>
 						<div className='flex items-center gap-1.5'>
-							<p className='text-[11px] font-black uppercase text-orange-800'>Perlu Remedial</p>
+							<p className='text-[11px] font-black uppercase text-orange-800'>Belum Tuntas</p>
 							<span className='text-[10px] font-black bg-orange-200 text-orange-900 px-1.5 py-0.2 rounded border border-orange-400'>
-								{stats.persentaseRemedial}%
+								{stats.persentaseBelumTuntas}%
 							</span>
 						</div>
-						<p className='text-2xl font-black text-orange-950 mt-0.5'>{stats.remedial}</p>
+						<p className='text-2xl font-black text-orange-950 mt-0.5'>{stats.belumTuntas}</p>
 						<span className='text-[10px] font-bold text-orange-700'>
-							{filterStatus === 'Remedial' ? '✓ Filter aktif' : 'Klik filter remedial'}
+							{filterStatus === 'Belum Tuntas' ? '✓ Filter aktif' : 'Klik filter belum tuntas'}
 						</span>
 					</div>
 					<span className='w-11 h-11 bg-orange-300 border-2 border-black rounded-xl flex items-center justify-center font-black text-lg shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
@@ -420,7 +468,7 @@ export default function KepsekJurnalPage() {
 							className='neo-input !py-2 text-xs font-bold bg-white cursor-pointer hover:bg-gray-50 !w-full'>
 							<option value='Semua'>Semua Status KBM</option>
 							<option value='Tuntas'>✅ Target KBM Tuntas</option>
-							<option value='Remedial'>⚠️ Perlu Remedial</option>
+							<option value='Belum Tuntas'>⚠️ Belum Tuntas</option>
 						</select>
 					</div>
 				</div>
@@ -541,7 +589,7 @@ export default function KepsekJurnalPage() {
 												</span>
 											) : (
 												<span className='inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-black uppercase rounded-lg bg-orange-300 text-orange-950 border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
-													<span>⚠️</span> Remedial
+													<span>⚠️</span> Belum Tuntas
 												</span>
 											)}
 										</td>
@@ -659,7 +707,7 @@ export default function KepsekJurnalPage() {
 								<div className='bg-white border-2 border-black rounded-xl p-3 shadow-[2px_2px_0px_0px_#0D0D0D]'>
 									<span className='text-[10px] font-black uppercase text-gray-500 block'>Status Ketuntasan</span>
 									<span className={`font-black text-xs sm:text-sm ${selectedJournal.tuntas ? 'text-emerald-700' : 'text-orange-700'}`}>
-										{selectedJournal.tuntas ? '✅ TUNTAS' : '⚠️ REMEDIAL'}
+										{selectedJournal.tuntas ? '✅ TUNTAS' : '⚠️ BELUM TUNTAS'}
 									</span>
 								</div>
 							</div>

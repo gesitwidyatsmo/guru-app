@@ -85,6 +85,9 @@ export default function Home() {
 					if (role === 'Kepala Sekolah') {
 						router.replace('/kepsek');
 						return;
+					} else if (role === 'Bendahara') {
+						router.replace('/bendahara');
+						return;
 					} else if (role === 'Admin') {
 						router.replace('/admin');
 						return;
@@ -591,13 +594,15 @@ export default function Home() {
 							<NotificationBell />
 						</div>
 
-						{(userRole === 'Admin' || userRole === 'Kepala Sekolah') && (
+						{(userRole === 'Admin' || userRole === 'Kepala Sekolah' || userRole === 'Bendahara') && (
 							<Link
-								href='/admin'
-								title={userRole === 'Kepala Sekolah' ? 'Portal Monitoring Kepala Sekolah' : 'Portal Admin'}
-								className={`flex-shrink-0 p-3 neo-card flex items-center justify-center ${userRole === 'Kepala Sekolah' ? 'bg-indigo-300 hover:bg-indigo-400' : 'bg-yellow-300 hover:bg-yellow-400'} transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
+								href={userRole === 'Kepala Sekolah' ? '/kepsek' : userRole === 'Bendahara' ? '/bendahara' : '/admin'}
+								title={userRole === 'Kepala Sekolah' ? 'Portal Monitoring Kepala Sekolah' : userRole === 'Bendahara' ? 'Portal Keuangan & Bisaroh' : 'Portal Admin'}
+								className={`flex-shrink-0 p-3 neo-card flex items-center justify-center ${userRole === 'Kepala Sekolah' ? 'bg-indigo-300 hover:bg-indigo-400' : userRole === 'Bendahara' ? 'bg-emerald-300 hover:bg-emerald-400' : 'bg-yellow-300 hover:bg-yellow-400'} transition-all duration-200 group text-black ${isSearchOpen && 'hidden md:block'}`}>
 								{userRole === 'Kepala Sekolah' ? (
 									<span className='text-xl group-hover:scale-110 transition-transform'>🎓</span>
+								) : userRole === 'Bendahara' ? (
+									<span className='text-xl group-hover:scale-110 transition-transform'>💼</span>
 								) : (
 									<svg
 										className='w-6 h-6 group-hover:scale-110 transition-transform'

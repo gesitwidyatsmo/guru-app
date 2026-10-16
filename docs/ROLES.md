@@ -17,113 +17,92 @@
 
 ---
 
-## 1. Role yang Sudah Ada
+## 1. Role yang Sudah Ada & Aktif
 
 ### 🔴 Admin
-Akses penuh ke seluruh sistem. Satu-satunya role yang bisa mengelola pengguna lain dan konfigurasi sistem.
+Akses penuh ke seluruh sistem. Mengelola pengguna, penugasan KBM, master data institusi, kalender akademik, dan konfigurasi sistem.
 
-| Halaman | Akses |
-|---|---|
-| `/admin` | ✅ Full |
-| `/admin/pengguna` | ✅ CRUD pengguna |
-| `/admin/penugasan` | ✅ Kelola penugasan KBM |
-| `/admin/tahun-ajar` | ✅ Kelola tahun ajaran |
-| `/admin/promosi-kelas` | ✅ Promosi siswa |
-| `/admin/pengumuman` | ✅ CRUD pengumuman |
-| `/admin/backup` | ✅ Backup & restore data |
-| Semua halaman lain | ✅ Full |
+| Halaman | Akses | Keterangan |
+|---|---|---|
+| `/admin` | ✅ Full | Dashboard sentral administrator |
+| `/admin/pengguna` | ✅ CRUD pengguna | Kelola akun Admin, Guru, Kepsek, & Bendahara |
+| `/admin/penugasan` | ✅ Kelola penugasan KBM | Distribusi rombel & mapel dewan guru |
+| `/admin/tahun-ajar` | ✅ Kelola tahun ajaran | Semester aktif & kalender akademik |
+| `/admin/kelas`, `/admin/mapel` | ✅ Master Data | Kelola rombel belajar & kurikulum |
+| `/admin/promosi-kelas` | ✅ Promosi siswa | Kenaikan kelas & mutasi massal |
+| `/admin/sekolah` | ✅ Profil Sekolah | Data kelembagaan, NPSN, & Kepala Sekolah |
+| `/admin/pengumuman` | ✅ CRUD pengumuman | Siaran informasi sekolah |
+| `/admin/backup` | ✅ Backup & restore | Pemeliharaan data sistem |
 
 ---
 
 ### 🔵 Guru
-Akses ke fitur mengajar sesuai penugasan KBM yang diberikan oleh Admin.
+Akses ke fitur kegiatan belajar mengajar (KBM) operasional sesuai penugasan kelas & mata pelajaran yang diampu.
 
-| Halaman | Akses |
-|---|---|
-| `/absensi` | ✅ Catat absensi kelas yang diajar |
-| `/penilaian` | ✅ Input nilai siswa |
-| `/jurnal` | ✅ Catat jurnal mengajar |
-| `/tugas` | ✅ Buat & kelola tugas |
-| `/soal` | ✅ Buat bank soal |
-| `/jadwal` | ✅ Lihat jadwal mengajar |
-| `/laporan` | ✅ Rekap nilai, absensi, & jurnal kelas yang diajar |
-| `/siswa` | 👁️ Lihat data siswa |
-| `/poin` | ✅ Beri poin ke siswa |
-| `/catatan` | ✅ Catatan pribadi guru |
-| `/admin` | ❌ Tidak ada akses |
-
----
-
-## 2. Role Baru — Tahap 1 (Prioritas Utama)
-
-### 🏫 Wali Kelas
-
-> Guru yang ditugaskan sebagai penanggung jawab satu rombongan belajar (kelas) tertentu. Memiliki semua akses Guru, ditambah kemampuan memantau kelas yang ia pegang secara menyeluruh.
-
-**Perbedaan dari Guru biasa:**
-- Bisa melihat absensi & nilai **semua mapel** di kelasnya (bukan hanya mapel yang ia ajar)
-- Bisa melihat rekap poin perilaku seluruh siswa di kelasnya
-- Bisa mencetak/export laporan kelas
-
-| Halaman | Akses |
-|---|---|
-| `/absensi` | ✅ Lihat & catat absensi (semua mapel di kelasnya) |
-| `/siswa` | ✅ Lihat data siswa kelasnya; ❌ tidak bisa hapus/pindah kelas |
-| `/poin` | ✅ Lihat & tambah poin siswa kelasnya |
-| `/laporan` | ✅ Lihat laporan absensi, nilai, & jurnal kelasnya |
-| `/jadwal` | ✅ Lihat jadwal kelasnya |
-| `/jurnal` | 👁️ Lihat jurnal mengajar semua guru di kelasnya |
-| `/penilaian` | ❌ Tidak bisa input nilai (milik guru mapel) |
-| `/admin` | ❌ Tidak ada akses |
-| `/soal`, `/tugas` | ❌ Tidak ada akses (milik guru mapel) |
-
-**Relasi database:**
-```sql
--- Tabel baru: wali_kelas
-CREATE TABLE wali_kelas (
-  id           SERIAL PRIMARY KEY,
-  user_id      TEXT NOT NULL REFERENCES users(id_user) ON DELETE CASCADE,
-  id_kelas     TEXT NOT NULL REFERENCES kelas(id_kelas) ON DELETE CASCADE,
-  tahun_ajar_id TEXT NOT NULL,
-  created_at   TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, tahun_ajar_id) -- satu guru hanya boleh jadi wali kelas satu kelas per tahun ajar
-);
-```
+| Halaman | Akses | Keterangan |
+|---|---|---|
+| `/` | ✅ Beranda Guru | Jadwal hari ini, ringkasan KBM, statistik tugas |
+| `/absensi` | ✅ Catat absensi | Kehadiran siswa di kelas/sesi yang diajar |
+| `/penilaian` | ✅ Input nilai | Tugas, ulangan harian, formatif/sumatif |
+| `/jurnal` | ✅ Jurnal Mengajar | Bukti fisik jam mengajar (JTM), materi, kendala |
+| `/tugas` & `/tugas-online` | ✅ Kelola tugas | Tugas terstruktur & pengumpulan online |
+| `/soal` | ✅ Bank soal | Manajemen butir soal ujian/kuis |
+| `/jadwal` | ✅ Jadwal mengajar | Kalender jadwal KBM mingguan |
+| `/laporan` | ✅ Rekap KBM | Cetak absensi, rekap nilai & jurnal yang diampu |
+| `/siswa` | 👁️ Lihat data siswa | Profil siswa di kelas yang diajar |
+| `/poin` | ✅ Pembinaan karakter | Poin prestasi & pelanggaran siswa |
+| `/catatan` | ✅ Catatan guru | Catatan harian & agenda pribadi |
+| `/admin`, `/kepsek`, `/bendahara` | ❌ Ditolak | Khusus role manajemen |
 
 ---
 
-### 🎓 Kepala Sekolah
+### 🎓 Kepala Sekolah (Status: ✅ Selesai Diimplementasikan)
+Portal mandiri monitoring eksekutif (**Executive Read-Only**) dengan layout terpisah yang modern dan responsif. Memiliki hak supervisi penuh tanpa mengubah (*mutate*) data operasional guru.
 
-> Pemimpin lembaga. Akses **baca (read-only) penuh** ke seluruh data sekolah untuk keperluan monitoring dan pengambilan keputusan.
+* **Arsitektur:** Halaman dan layout independen di `/kepsek/*` dengan *zero-flicker server cookie loading*. Begitu login, otomatis dialihkan ke `/kepsek`.
+* **Keamanan:** Proteksi ketat read-only di level API (`x-user-role` 403 saat POST/PUT/DELETE pada modul akademik).
 
-**Prinsip: Bisa lihat segalanya, tidak bisa mengubah apapun.**
+| Halaman | Akses | Keterangan |
+|---|---|---|
+| `/kepsek` | 👁️ Dashboard Eksekutif | Statistik KBM, rasio jurnal, rekap guru & siswa |
+| `/kepsek/jurnal` | 👁️ Supervisi Jurnal Guru | Filter harian, pantau materi & catatan kendala |
+| `/kepsek/penilaian` | 👁️ Rekap Capaian Nilai | Distribusi nilai siswa, KKM, & status remedial |
+| `/kepsek/absensi` | 👁️ Presensi Mapel | Rekapitulasi kehadiran siswa per rombel |
+| `/kepsek/poin` | 👁️ Poin Karakter | Monitoring prestasi & pelanggaran siswa |
+| `/kepsek/kelas` | 👁️ Daftar Rombel | Profil kelas, kapasitas siswa, & wali kelas |
+| `/kepsek/laporan` | 👁️ Laporan Akademik | Unduh & cetak rekapitulasi KBM komprehensif |
+| `/kepsek/pengguna` | 👁️ Daftar Pengguna | Pantau dewan guru & staf (tanpa edit/tambah) |
+| `/kepsek/penugasan` | 👁️ Penugasan KBM | Pantau persebaran jam mengajar guru |
+| `/kepsek/tahun-ajar` | 👁️ Kalender Akademik | Status semester aktif |
+| Export Data (CSV/Print) | ✅ Unduh Laporan | Ekspor seluruh tabel supervisi |
 
-| Halaman | Akses |
-|---|---|
-| `/admin/pengguna` | 👁️ Lihat daftar pengguna; ❌ tidak bisa tambah/edit/hapus |
-| `/admin/penugasan` | 👁️ Lihat peta penugasan KBM |
-| `/admin/tahun-ajar` | 👁️ Lihat tahun ajar aktif |
-| `/siswa` | 👁️ Lihat semua data siswa semua kelas |
-| `/kelas`, `/mapel` | 👁️ Lihat daftar kelas & mata pelajaran |
-| `/absensi` | 👁️ Lihat rekap absensi semua kelas |
-| `/poin` | 👁️ Lihat rekap poin semua siswa |
-| `/laporan` | 👁️ Akses penuh baca semua laporan (Absensi, Nilai, Jurnal) |
-| `/jadwal` | 👁️ Lihat semua jadwal |
-| `/jurnal` | 👁️ Lihat semua jurnal mengajar semua guru |
-| Export PDF/Excel | ✅ Bisa export semua laporan |
-| `/catatan`, `/soal`, `/tugas` | ❌ Tidak perlu akses (operasional guru) |
+---
 
-**Catatan implementasi:**
-Di setiap API route, tambahkan `'Kepala Sekolah'` ke dalam daftar role yang boleh mengakses GET, tetapi **jangan** sertakan untuk POST/PUT/DELETE.
+### 💼 Bendahara / Keuangan (Status: ✅ Selesai / Live)
+Portal khusus pengelolaan keuangan, presensi mengajar guru berbasis jam riil (*proof of teaching*), kalkulasi bisaroh/honorarium guru berjenjang, tunjangan & potongan kustom dinamis, serta penerbitan slip gaji digital.
 
-```js
-// Contoh di API route:
-const readRoles  = ['Admin', 'Kepala Sekolah', 'Guru'];
-const writeRoles = ['Admin'];
+* **Latar Belakang:** Bisaroh guru dihitung berbasis akumulasi **Jam Tatap Muka (JTM)** riil dari tabel `jurnal` (misal jam ke `"1-2"` = 2 JP).
+* **Arsitektur:** Memiliki portal mandiri di `/bendahara/*` dengan navigasi khusus urusan finansial.
+* **Fitur Unggulan Konfigurasi Tarif & Tunjangan:**
+  - **Tingkatan Guru & Tarif JP Dinamis:** Kategori berjenjang (e.g. Guru Senior, Madya, Junior, GTY, GTT) dengan tarif JP fleksibel + assignment per guru.
+  - **Tunjangan Pokok Sistem (Full CRUD):** Tunjangan dasar institusi (Wali Kelas, Uang Kehadiran Harian, Gaji Pokok Yayasan, Tunjangan Pengabdian) kini dapat ditambah, diedit nominal/kriterianya, dinonaktifkan, atau dihapus secara fleksibel.
+  - **Tunjangan Tambahan Fleksibel (Full CRUD):** Penambahan tunjangan variabel (e.g. Uang Transport Bulanan, Tunjangan Fungsional, Ekstrakurikuler) dengan tipe hitung: per bulan, per hari hadir, atau per JP, serta cakupan penerima (semua guru atau guru tertentu).
+  - **Potongan Tetap Dinamis:** Pengelolaan iuran/potongan (e.g. Infaq bulanan, Koperasi, Dana Sosial).
+  - **Kalkulasi & Slip Gaji Terperinci:** Rincian transparan breakdown honor JP, tunjangan pokok, tunjangan tambahan, bonus, dan potongan di modal slip gaji yang siap cetak.
 
-if (req.method === 'GET' && !readRoles.includes(role))  return 403;
-if (req.method !== 'GET' && !writeRoles.includes(role)) return 403;
-```
+| Halaman | Akses | Keterangan |
+|---|---|---|
+| `/bendahara` | ✅ Dashboard Keuangan | Ringkasan estimasi bisaroh, total JTM guru, distribusi tingkatan, & cut-off |
+| `/bendahara/jtm` | ✅ Rekap JTM & Kehadiran | Agregasi jam mengajar riil guru dari jurnal per cut-off bulanan + badge tingkatan |
+| `/bendahara/bisaroh` | ✅ Kalkulasi Bisaroh | Hitung otomatis honor JP berjenjang + tunjangan pokok + tunjangan tambahan - potongan |
+| `/bendahara/tarif` | ✅ Konfigurasi Tarif & Tunjangan | 4 Tab: Tingkatan Guru & Assignment, Tunjangan Dinamis, Potongan Dinamis, Cut-Off |
+| `/bendahara/guru` | ✅ Data Dewan Guru | Daftar resmi guru, username, tingkatan guru, tarif JP, dan status wali kelas |
+| `/bendahara/jurnal` | 👁️ Audit Jurnal KBM | Pemeriksaan bukti fisik KBM & kendala sebelum pencairan bisaroh |
+| Slip Gaji & SPJ | ✅ Cetak & Ekspor | Cetak slip digital per guru (rinci per komponen) & unduh rekapitulasi penggajian |
+
+---
+
+## 2. Role Baru — Tahap 1 (Pengembangan Lanjutan)
 
 ---
 
@@ -270,56 +249,57 @@ CREATE TABLE siswa_auth (
 ## 4. Hierarki Akses Lengkap
 
 ```
-Kepala Sekolah ──── View all (no edit)
+Kepala Sekolah ──── Supervisi Eksekutif Seluruh KBM & Institusi (/kepsek)
       │
+      ├─── Bendahara ──────── Keuangan, Bisaroh Guru, Tarif JP, & Rekap JTM (/bendahara)
       ├─── Wakasek Kurikulum ── Jadwal, mapel, nilai
       └─── Wakasek Kesiswaan ── Siswa, poin, absensi
 
-Admin ──────────────── Full access + kelola sistem & pengguna
+Admin ──────────────── Full access + kelola sistem & pengguna (/admin)
       │
       └─── Tata Usaha ──── Data siswa, berkas
 
-Guru ────────────────── Fitur mengajar (kelas yang diajar)
+Guru ────────────────── Operasional mengajar KBM (/)
       ├─── Wali Kelas ── + monitoring menyeluruh kelas yang dipegang
       └─── Guru BK ───── + monitoring perilaku semua siswa
 
-Keamanan ───────────── Absensi gerbang saja
+Keamanan ───────────── Absensi gerbang saja (/keamanan)
 
-Wali Murid ─────────── Data anak sendiri saja
-Siswa ──────────────── Data diri sendiri saja
+Wali Murid ─────────── Data anak sendiri saja (/wali-murid)
+Siswa ──────────────── Data diri sendiri saja (/siswa-portal)
 ```
 
 ---
 
 ## 5. Perubahan Database
 
-### 5.1. Nilai Enum Role Baru di `public.users`
+### 5.1. Nilai Enum / Check Constraint Role di `public.users`
 
-Kolom `role` di tabel `users` perlu menerima nilai-nilai baru berikut:
+Kolom `role` di tabel `users` divalidasi dengan constraint PostgreSQL:
 
 ```sql
--- Role yang sudah ada:
-'Admin' | 'Guru'
+-- Status Aktif Saat Ini (Admin, Guru, Kepala Sekolah, Bendahara):
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE public.users ADD CONSTRAINT users_role_check 
+CHECK (role IN ('Admin', 'Guru', 'Kepala Sekolah', 'Bendahara'));
 
--- Role baru Tahap 1:
-'Wali Kelas' | 'Kepala Sekolah' | 'Wali Murid' | 'Keamanan'
-
--- Role baru Tahap 2:
-'Guru BK' | 'Tata Usaha' | 'Siswa' | 'Wakasek'
+-- Role Baru Tahap Berikutnya:
+-- 'Wali Kelas' | 'Keamanan' | 'Guru BK' | 'Tata Usaha' | 'Siswa' | 'Wali Murid' | 'Wakasek'
 ```
 
-> Jika kolom `role` menggunakan tipe ENUM di Supabase, tambahkan nilai baru via:
-> ```sql
-> ALTER TYPE user_role ADD VALUE 'Wali Kelas';
-> ALTER TYPE user_role ADD VALUE 'Kepala Sekolah';
-> -- dst.
-> ```
-> Jika menggunakan `TEXT`, tidak perlu perubahan tipe — langsung bisa digunakan.
-
-### 5.2. Tabel Baru
+### 5.2. Tabel & Konfigurasi Baru
 
 ```sql
--- Relasi Wali Kelas ke Kelas
+-- 1. Pengaturan Bisaroh di app_settings (JSONB Key-Value)
+-- Key: 'bisaroh_settings'
+-- Value: {
+--   "tarif_per_jp": 35000,
+--   "tunjangan_wali_kelas": 150000,
+--   "tunjangan_kehadiran_per_hari": 15000,
+--   "cut_off_tanggal": 25
+-- }
+
+-- 2. Relasi Wali Kelas ke Kelas
 CREATE TABLE IF NOT EXISTS wali_kelas (
   id            SERIAL PRIMARY KEY,
   user_id       TEXT NOT NULL REFERENCES users(id_user) ON DELETE CASCADE,
@@ -329,7 +309,7 @@ CREATE TABLE IF NOT EXISTS wali_kelas (
   UNIQUE(user_id, tahun_ajar_id)
 );
 
--- Relasi Wali Murid ke Siswa
+-- 3. Relasi Wali Murid ke Siswa
 CREATE TABLE IF NOT EXISTS wali_murid (
   id         SERIAL PRIMARY KEY,
   user_id    TEXT NOT NULL REFERENCES users(id_user) ON DELETE CASCADE,
@@ -338,7 +318,7 @@ CREATE TABLE IF NOT EXISTS wali_murid (
   UNIQUE(user_id, id_siswa)
 );
 
--- Relasi Siswa (akun) ke Data Siswa
+-- 4. Relasi Siswa (akun) ke Data Siswa
 CREATE TABLE IF NOT EXISTS siswa_auth (
   id         SERIAL PRIMARY KEY,
   user_id    TEXT NOT NULL REFERENCES users(id_user) ON DELETE CASCADE,
@@ -347,10 +327,10 @@ CREATE TABLE IF NOT EXISTS siswa_auth (
   UNIQUE(id_siswa)
 );
 
--- Catatan konseling Guru BK (opsional)
+-- 5. Catatan konseling Guru BK (opsional)
 CREATE TABLE IF NOT EXISTS catatan_bk (
   id         SERIAL PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id_user), -- guru BK yang mencatat
+  user_id    TEXT NOT NULL REFERENCES users(id_user),
   id_siswa   TEXT NOT NULL REFERENCES siswa(id_siswa),
   isi        TEXT NOT NULL,
   tanggal    DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -362,18 +342,15 @@ CREATE TABLE IF NOT EXISTS catatan_bk (
 
 ## 6. Perubahan Middleware & API
 
-### 6.1. Konstanta Role (buat file baru)
-
-Buat file `src/lib/roles.js` untuk sentralisasi konstanta role:
+### 6.1. Konstanta Role (`src/lib/roles.js` & `proxy.js`)
 
 ```js
-// src/lib/roles.js
-
 export const ROLES = {
   ADMIN:          'Admin',
   GURU:           'Guru',
-  WALI_KELAS:     'Wali Kelas',
   KEPALA_SEKOLAH: 'Kepala Sekolah',
+  BENDAHARA:      'Bendahara',
+  WALI_KELAS:     'Wali Kelas',
   WALI_MURID:     'Wali Murid',
   KEAMANAN:       'Keamanan',
   GURU_BK:        'Guru BK',
@@ -382,64 +359,54 @@ export const ROLES = {
   WAKASEK:        'Wakasek',
 };
 
-// Pengelompokan untuk kemudahan cek akses
-export const STAFF_ROLES    = [ROLES.ADMIN, ROLES.GURU, ROLES.WALI_KELAS, ROLES.KEPALA_SEKOLAH, ROLES.GURU_BK, ROLES.TATA_USAHA, ROLES.WAKASEK, ROLES.KEAMANAN];
-export const READ_ALL_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.WAKASEK];
-export const GURU_ROLES     = [ROLES.ADMIN, ROLES.GURU, ROLES.WALI_KELAS, ROLES.GURU_BK];
+// Pengelompokan hak akses
+export const MANAGEMENT_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.BENDAHARA];
+export const READ_ALL_ROLES   = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH];
+export const GURU_ROLES       = [ROLES.ADMIN, ROLES.GURU, ROLES.WALI_KELAS];
 ```
 
-### 6.2. Middleware Routing
+### 6.2. Middleware Routing (`src/proxy.js`)
 
-Update `middleware.js` untuk mengarahkan setiap role ke halaman yang sesuai setelah login:
+Peta tujuan utama saat login / root redirect:
 
 ```js
-// Peta redirect setelah login berdasarkan role
 const ROLE_HOME = {
   'Admin':          '/admin',
+  'Kepala Sekolah': '/kepsek',
+  'Bendahara':      '/bendahara',
   'Guru':           '/',
   'Wali Kelas':     '/',
-  'Kepala Sekolah': '/laporan',
   'Wali Murid':     '/wali-murid',
   'Keamanan':       '/keamanan',
   'Guru BK':        '/poin',
   'Tata Usaha':     '/siswa',
   'Siswa':          '/siswa-portal',
-  'Wakasek':        '/laporan',
 };
 
-// Route yang diblokir per role
-const BLOCKED_ROUTES = {
-  'Kepala Sekolah': ['/admin/pengguna', '/penilaian', '/soal', '/tugas'],
-  'Wali Murid':     ['/admin', '/siswa', '/penilaian', '/jurnal'],
-  'Keamanan':       ['/admin', '/penilaian', '/nilai', '/jurnal', '/soal'],
-  'Guru BK':        ['/admin', '/penilaian', '/soal'],
-  'Tata Usaha':     ['/admin/pengguna', '/penilaian', '/soal', '/jurnal'],
-  'Siswa':          ['/admin', '/penilaian', '/jurnal', '/soal', '/tugas'],
-};
+// Route Protection di proxy.js:
+// - /admin/*      -> Admin, Kepala Sekolah (monitoring)
+// - /kepsek/*     -> Kepala Sekolah, Admin
+// - /bendahara/*  -> Bendahara, Admin
+// - /             -> Guru KBM & peran pengajar
 ```
 
 ### 6.3. Pola Pengecekan di API Route
 
 ```js
-// Pola standar untuk API yang punya akses read-only untuk beberapa role:
+// Contoh proteksi endpoint Bisaroh & Keuangan:
 export async function GET(req) {
   const role = req.headers.get('x-user-role');
-  const allowedRoles = ['Admin', 'Kepala Sekolah', 'Guru', 'Wali Kelas'];
-  
-  if (!allowedRoles.includes(role)) {
-    return NextResponse.json({ error: 'Akses Ditolak.' }, { status: 403 });
+  const allowed = ['Admin', 'Bendahara', 'Kepala Sekolah'];
+  if (!allowed.includes(role)) {
+    return NextResponse.json({ error: 'Akses Ditolak: Hanya bagian keuangan dan pimpinan.' }, { status: 403 });
   }
-  // ... logika GET
 }
 
-export async function POST(req) {
+export async function PUT(req) {
   const role = req.headers.get('x-user-role');
-  const writeRoles = ['Admin', 'Guru']; // hanya Admin & Guru yang boleh write
-  
-  if (!writeRoles.includes(role)) {
-    return NextResponse.json({ error: 'Akses Ditolak.' }, { status: 403 });
+  if (role !== 'Admin' && role !== 'Bendahara') {
+    return NextResponse.json({ error: 'Akses Ditolak: Perubahan tarif hanya untuk Bendahara/Admin.' }, { status: 403 });
   }
-  // ... logika POST
 }
 ```
 
@@ -450,45 +417,43 @@ export async function POST(req) {
 ### 7.1. Dropdown Role di `/admin/pengguna`
 
 ```jsx
-// Tambahkan opsi role baru di form tambah/edit pengguna
 const ROLE_OPTIONS = [
-  { value: 'Admin',          label: 'Admin' },
   { value: 'Guru',           label: 'Guru' },
-  { value: 'Wali Kelas',     label: 'Wali Kelas' },
   { value: 'Kepala Sekolah', label: 'Kepala Sekolah' },
-  { value: 'Wali Murid',     label: 'Wali Murid' },
-  { value: 'Keamanan',       label: 'Keamanan' },
-  // Tahap 2:
-  // { value: 'Guru BK',     label: 'Guru BK' },
-  // { value: 'Tata Usaha',  label: 'Tata Usaha' },
-  // { value: 'Siswa',       label: 'Siswa' },
-  // { value: 'Wakasek',     label: 'Wakasek' },
+  { value: 'Bendahara',      label: 'Bendahara / Keuangan' },
+  { value: 'Admin',          label: 'Admin' },
+  // Tahap berikutnya:
+  // { value: 'Wali Kelas',  label: 'Wali Kelas' },
+  // { value: 'Wali Murid',  label: 'Wali Murid' },
+  // { value: 'Keamanan',    label: 'Keamanan' },
 ];
 ```
 
-### 7.2. Halaman Baru yang Perlu Dibuat
+### 7.2. Halaman Portal Khusus Per Role
 
 | Route | Untuk Role | Deskripsi |
 |---|---|---|
+| `/admin/*` | Admin | Pusat pengelolaan akun, KBM, dan kalender |
+| `/kepsek/*` | Kepala Sekolah | Portal monitoring eksekutif supervisi KBM |
+| `/bendahara/*` | Bendahara | Portal keuangan, rekap JTM, tarif & bisaroh |
 | `/wali-murid` | Wali Murid | Portal orang tua — ringkasan anak |
-| `/wali-murid/[id_siswa]` | Wali Murid | Detail data satu anak |
 | `/keamanan` | Keamanan | Dashboard absensi gerbang |
 | `/siswa-portal` | Siswa | Portal siswa — data akademik diri sendiri |
 
-### 7.3. Warna Badge Role (UI Konsistensi)
+### 7.3. Warna Badge Role (Neobrutalism Consistency)
 
 ```jsx
 const ROLE_COLORS = {
-  'Admin':          'bg-red-200 text-red-800',
-  'Guru':           'bg-blue-200 text-blue-800',
-  'Wali Kelas':     'bg-teal-200 text-teal-800',
-  'Kepala Sekolah': 'bg-purple-200 text-purple-800',
-  'Wali Murid':     'bg-orange-200 text-orange-800',
-  'Keamanan':       'bg-gray-200 text-gray-800',
-  'Guru BK':        'bg-green-200 text-green-800',
-  'Tata Usaha':     'bg-yellow-200 text-yellow-800',
-  'Siswa':          'bg-pink-200 text-pink-800',
-  'Wakasek':        'bg-indigo-200 text-indigo-800',
+  'Admin':          'bg-rose-200 text-rose-950 border-rose-400',
+  'Kepala Sekolah': 'bg-indigo-200 text-indigo-950 border-indigo-400',
+  'Bendahara':      'bg-emerald-200 text-emerald-950 border-emerald-400',
+  'Guru':           'bg-amber-200 text-amber-950 border-amber-400',
+  'Wali Kelas':     'bg-teal-200 text-teal-950 border-teal-400',
+  'Wali Murid':     'bg-orange-200 text-orange-950 border-orange-400',
+  'Keamanan':       'bg-slate-200 text-slate-950 border-slate-400',
+  'Guru BK':        'bg-cyan-200 text-cyan-950 border-cyan-400',
+  'Tata Usaha':     'bg-purple-200 text-purple-950 border-purple-400',
+  'Siswa':          'bg-pink-200 text-pink-950 border-pink-400',
 };
 ```
 
@@ -496,18 +461,20 @@ const ROLE_COLORS = {
 
 ## 8. Prioritas Implementasi
 
-| Urutan | Role | Kompleksitas | Alasan |
-|---|---|---|---|
-| 1 | **Kepala Sekolah** | 🟢 Rendah | Hanya view-only, tidak butuh tabel baru, tinggal tambah ke allowedRoles di API |
-| 2 | **Wali Kelas** | 🟡 Sedang | Butuh tabel `wali_kelas`, filter data berdasarkan kelas yang dipegang |
-| 3 | **Keamanan** | 🟡 Sedang | Butuh halaman `/keamanan` baru, logika absensi gerbang |
-| 4 | **Guru BK** | 🟡 Sedang | Akses data poin & absensi semua siswa, opsional tabel `catatan_bk` |
-| 5 | **Tata Usaha** | 🟡 Sedang | Akses CRUD siswa & berkas, mirip Admin tapi terbatas |
-| 6 | **Wali Murid** | 🔴 Tinggi | Butuh tabel `wali_murid`, halaman portal `/wali-murid`, filter ketat per anak |
-| 7 | **Siswa** | 🔴 Tinggi | Butuh tabel `siswa_auth`, halaman portal `/siswa-portal` |
-| 8 | **Wakasek** | 🟡 Sedang | Definisi akses perlu dikonfirmasi dengan kebutuhan sekolah |
+| Urutan | Role | Status | Kompleksitas | Keterangan & Pencapaian |
+|---|---|---|---|---|
+| 1 | **Kepala Sekolah** | ✅ **Selesai (Live)** | 🟢 Rendah-Sedang | Portal `/kepsek/*` mandiri (10 modul supervisi, zero-flicker, Neobrutalism UI, read-only API). |
+| 2 | **Bendahara** | ✅ **Selesai (Live)** | 🟡 Sedang | Portal `/bendahara/*`, rekap JTM real-time dari jurnal, tingkatan guru dinamis (Senior/Junior), tunjangan/potongan kustom, kalkulasi bisaroh, & slip gaji digital. |
+| 3 | **Wali Kelas** | ⏳ Tahap Berikutnya | 🟡 Sedang | Butuh tabel `wali_kelas`, filter data berdasarkan kelas yang dipegang. |
+| 4 | **Keamanan** | 📋 Terencana | 🟡 Sedang | Butuh halaman `/keamanan` baru, logika absensi gerbang. |
+| 5 | **Guru BK** | 📋 Terencana | 🟡 Sedang | Akses data poin & absensi semua siswa, catatan konseling. |
+| 6 | **Tata Usaha** | 📋 Terencana | 🟡 Sedang | Akses CRUD siswa & berkas, koordinasi surat menyurat. |
+| 7 | **Wali Murid** | 📋 Terencana | 🔴 Tinggi | Butuh tabel `wali_murid`, halaman portal `/wali-murid`, filter ketat per anak. |
+| 8 | **Siswa** | 📋 Terencana | 🔴 Tinggi | Butuh tabel `siswa_auth`, halaman portal `/siswa-portal`. |
+| 9 | **Wakasek** | 📋 Terencana | 🟡 Sedang | Definisi akses integrasi kurikulum & kesiswaan. |
 
 ---
 
 *Dokumen ini diperbarui terakhir: Oktober 2026*  
-*Untuk pertanyaan implementasi, lihat file `src/lib/auth.js` dan `src/app/api/users/route.js`*
+*Referensi implementasi: `src/proxy.js`, `src/app/kepsek/*`, dan `src/app/bendahara/*`*
+

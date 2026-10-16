@@ -11,6 +11,28 @@ const DEFAULT_GEOFENCE = {
 	berlaku_untuk: ['jurnal'],
 };
 
+async function getActiveKepsekInfo() {
+	try {
+		const { data: kepsekUser } = await supabaseAdmin
+			.from('users')
+			.select('*')
+			.eq('role', 'Kepala Sekolah')
+			.order('created_at', { ascending: false })
+			.limit(1)
+			.maybeSingle();
+
+		if (kepsekUser) {
+			return {
+				nama_kepsek: kepsekUser.nama_lengkap || '',
+				nip_kepsek: kepsekUser.nip || '',
+			};
+		}
+	} catch (err) {
+		console.warn('⚠️ Gagal memuat user Kepala Sekolah:', err);
+	}
+	return { nama_kepsek: '', nip_kepsek: '' };
+}
+
 // GET — Ambil pengaturan aplikasi berdasarkan key atau semua
 export async function GET(req) {
 	try {
@@ -33,6 +55,10 @@ export async function GET(req) {
 					if (key === 'geofence') {
 						return NextResponse.json({ key: 'geofence', value: DEFAULT_GEOFENCE, _fallback: true });
 					}
+					if (key === 'profil_sekolah') {
+						const kepsekInfo = await getActiveKepsekInfo();
+						return NextResponse.json({ key: 'profil_sekolah', value: kepsekInfo, _fallback: true });
+					}
 					return NextResponse.json({ key, value: null, _fallback: true });
 				}
 				throw error;
@@ -40,6 +66,19 @@ export async function GET(req) {
 
 			if (!data && key === 'geofence') {
 				return NextResponse.json({ key: 'geofence', value: DEFAULT_GEOFENCE, _seeded: false });
+			}
+
+			if (key === 'profil_sekolah') {
+				let profileVal = data?.value || {};
+				const kepsekInfo = await getActiveKepsekInfo();
+				if (kepsekInfo.nama_kepsek) {
+					profileVal = {
+						...profileVal,
+						nama_kepsek: kepsekInfo.nama_kepsek,
+						nip_kepsek: kepsekInfo.nip_kepsek,
+					};
+				}
+				return NextResponse.json({ ...(data || { key: 'profil_sekolah' }), value: profileVal });
 			}
 
 			return NextResponse.json(data || { key, value: null });
@@ -54,7 +93,23 @@ export async function GET(req) {
 			throw error;
 		}
 
-		return NextResponse.json(data || []);
+		if (Array.isArray(data)) {
+			const kepsekInfo = await getActiveKepsekInfo();
+			const enriched = data.map((item) => {
+				if (item.key === 'profil_sekolah' && typeof item.value === 'object' && item.value) {
+					return {
+						...item,
+						value: {
+							...item.value,
+							nama_kepsek: kepsekInfo.nama_kepsek || item.value.nama_kepsek || '',
+							nip_kepsek: kepsekInfo.nip_kepsek || item.value.nip_kepsek || '',
+						},
+					};
+				}
+				return item;
+			});
+			return NextResponse.json(enriched);
+		}
 	} catch (error) {
 		console.error('❌ GET settings error:', error);
 		return NextResponse.json({ error: 'Gagal memuat pengaturan aplikasi' }, { status: 500 });
@@ -64,9 +119,19 @@ export async function GET(req) {
 // PUT — Perbarui pengaturan aplikasi (Khusus Admin)
 export async function PUT(req) {
 	try {
-		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses ditolak: Hanya Administrator yang dapat mengubah pengaturan.' }, { status: 403 });
+		const supabase = await createClient();
+		let role = req.headers.get('x-user-role');
+
+		if (!role) {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (user) {
+				const { data: userProfile } = await supabase
+					.from('users')
+					.select('role')
+					.eq('auth_id', user.id)
+					.maybeSingle();
+				role = userProfile?.role;
+			}
 		}
 
 		const body = await req.json();
@@ -74,6 +139,17 @@ export async function PUT(req) {
 
 		if (!key || value === undefined) {
 			return NextResponse.json({ error: 'Parameter "key" dan "value" wajib diisi.' }, { status: 400 });
+		}
+
+		// Izin khusus pengaturan bisaroh dan pengajuan:
+		// - Bendahara boleh mengubah 'bisaroh_settings' dan 'bisaroh_submissions'
+		// - Kepala Sekolah boleh mengubah 'bisaroh_submissions' (approval / revisi)
+		// - Admin boleh mengubah semua
+		const isBendaharaAllowed = role === 'Bendahara' && (key === 'bisaroh_settings' || key === 'bisaroh_submissions');
+		const isKepsekAllowed = role === 'Kepala Sekolah' && key === 'bisaroh_submissions';
+
+		if (role !== 'Admin' && !isBendaharaAllowed && !isKepsekAllowed) {
+			return NextResponse.json({ error: 'Akses ditolak: Anda tidak memiliki izin mengubah pengaturan ini.' }, { status: 403 });
 		}
 
 		// Gunakan supabaseAdmin untuk memastikan bypass RLS jika diperlukan saat upsert setting

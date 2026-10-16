@@ -12,12 +12,12 @@ function generateUID() {
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin' && role !== 'Kepala Sekolah') {
-			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin atau Kepala Sekolah yang diizinkan mengakses daftar pengguna.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kepala Sekolah' && role !== 'Bendahara') {
+			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin, Kepala Sekolah, atau Bendahara yang diizinkan mengakses daftar pengguna.' }, { status: 403 });
 		}
 
 		const supabase = await createClient();
-		let query = supabase.from('users').select('id_user, username, nama_lengkap, role').order('created_at', { ascending: false });
+		let query = supabase.from('users').select('*').order('created_at', { ascending: false });
 
 		const { searchParams } = new URL(req.url);
 		const filterRole = searchParams.get('role');
@@ -47,7 +47,7 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin.' }, { status: 403 });
 		}
 
-		const { username, password, nama_lengkap, role } = await req.json();
+		const { username, password, nama_lengkap, role, nip } = await req.json();
 
 		if (!username || !password || !nama_lengkap || !role) {
 			return NextResponse.json({ error: 'Seluruh form data wajib dilengkapi.' }, { status: 400 });
@@ -71,13 +71,18 @@ export async function POST(req) {
 
 		// 2. Buat record profil di public.users
 		const newUserId = generateUID();
-		const { error: profileError } = await supabaseAdmin.from('users').insert({
+		const insertPayload = {
 			id_user: newUserId,
 			auth_id: authData.user.id,
 			username,
 			nama_lengkap,
 			role,
-		});
+		};
+		if (nip !== undefined && nip !== null) {
+			insertPayload.nip = String(nip).trim();
+		}
+
+		const { error: profileError } = await supabaseAdmin.from('users').insert(insertPayload);
 
 		if (profileError) {
 			// Rollback auth user
@@ -104,7 +109,7 @@ export async function PUT(req) {
 		}
 
 		const body = await req.json();
-		const { id_user, username, nama_lengkap, role, password_baru } = body;
+		const { id_user, username, nama_lengkap, role, password_baru, nip } = body;
 
 		if (!id_user) {
 			return NextResponse.json({ error: 'Parameter id_user diperlukan.' }, { status: 400 });
@@ -145,6 +150,7 @@ export async function PUT(req) {
 		if (username !== userProfile.username) profileUpdates.username = username;
 		if (nama_lengkap) profileUpdates.nama_lengkap = nama_lengkap;
 		if (role) profileUpdates.role = role;
+		if (nip !== undefined) profileUpdates.nip = nip ? String(nip).trim() : null;
 
 		if (Object.keys(profileUpdates).length > 0) {
 			const { error: profileError } = await supabaseAdmin.from('users').update(profileUpdates).eq('id_user', id_user);

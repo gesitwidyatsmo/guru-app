@@ -68,9 +68,11 @@ export default function LoginPage() {
 					localStorage.setItem('user_name', data.user.nama_lengkap);
 				}
 
-				// Redirect ke Dashboard Home, Portal Admin, atau Portal Kepsek berdasarkan Role
+				// Redirect ke Dashboard Home, Portal Admin, Kepsek, atau Bendahara berdasarkan Role
 				if (data.user.role === 'Kepala Sekolah') {
 					router.push('/kepsek');
+				} else if (data.user.role === 'Bendahara') {
+					router.push('/bendahara');
 				} else if (data.user.role === 'Admin') {
 					router.push('/admin');
 				} else {

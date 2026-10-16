@@ -19,7 +19,10 @@ export async function GET(req) {
 		const semester = searchParams.get('semester');
 
 		const supabase = await createClient();
-		let query = supabase.from('jurnal').select('*').order('tanggal', { ascending: false });
+		let query = supabase
+			.from('jurnal')
+			.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
+			.order('tanggal', { ascending: false });
 
 		// 1. Filter Isolasi Hak Akses (Guru hanya melihat miliknya)
 		if (role === 'Guru' && userId) {
@@ -47,8 +50,8 @@ export async function GET(req) {
 export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role === 'Kepala Sekolah') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
 		}
 
 		const userId = req.headers.get('x-user-id');
@@ -115,8 +118,8 @@ export async function POST(req) {
 export async function PUT(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role === 'Kepala Sekolah') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
 		}
 
 		const userId = req.headers.get('x-user-id');
@@ -156,8 +159,8 @@ export async function PUT(req) {
 export async function DELETE(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role === 'Kepala Sekolah') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
+			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
 		}
 
 		const userId = req.headers.get('x-user-id');

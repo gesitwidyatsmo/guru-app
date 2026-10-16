@@ -5,12 +5,20 @@ import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { hitungTotalPoinBersih, konversiPoinKeSikap } from '@/lib/poinUtils';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekPoinPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [poinList, setPoinList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
 	const [filterKelas, setFilterKelas] = useState('Semua');
@@ -27,18 +35,26 @@ export default function KepsekPoinPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resPoin, resSiswa, resKelas] = await Promise.all([
+				const [resPoin, resSiswa, resKelas, resProfil] = await Promise.all([
 					supabase
 						.from('poin')
 						.select('*, users!poin_guru_id_fkey(nama_lengkap, username), siswa(nama_lengkap, kelas, nis)')
 						.order('tanggal', { ascending: false }),
 					supabase.from('siswa').select('id, nama_lengkap, kelas, nis').eq('status', 'Aktif'),
 					supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true }),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				setPoinList(resPoin.data || []);
 				setSiswaList(resSiswa.data || []);
 				setKelasList(resKelas.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal memuat rekap poin:', err);
 			} finally {
@@ -143,6 +159,105 @@ export default function KepsekPoinPage() {
 		setFilterTipe('Semua');
 	};
 
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredPoin.length === 0) {
+			Swal.fire('Info', 'Tidak ada data poin untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'landscape' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('LAPORAN SUPERVISI POIN KARAKTER & KEDISIPLINAN SISWA', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Filter Kelas: ${filterKelas}  •  Filter Tipe: ${filterTipe}`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Tanggal', 'Nama Siswa', 'Kelas', 'NIS', 'Aktivitas / Catatan', 'Kategori', 'Tipe', 'Poin', 'Guru Pelapor'],
+			];
+
+			const tableBody = filteredPoin.map((p, idx) => {
+				const isPos = p.tipe === 'Positif' || p.poin > 0;
+				return [
+					idx + 1,
+					p.tanggal || '-',
+					p.siswa?.nama_lengkap || '-',
+					p.siswa?.kelas || '-',
+					p.siswa?.nis || '-',
+					p.aktifitas || '-',
+					p.kategori || 'Umum',
+					isPos ? 'Prestasi' : 'Pelanggaran',
+					isPos ? `+${Math.abs(p.poin)}` : `-${Math.abs(p.poin)}`,
+					p.users?.nama_lengkap || '-',
+				];
+			});
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [202, 138, 4], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+				bodyStyles: { fontSize: 7, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { halign: 'center', cellWidth: 20 },
+					2: { fontStyle: 'bold', cellWidth: 32 },
+					3: { halign: 'center', cellWidth: 16 },
+					4: { halign: 'center', cellWidth: 16 },
+					6: { halign: 'center', cellWidth: 18 },
+					7: { halign: 'center', cellWidth: 18 },
+					8: { halign: 'center', cellWidth: 14, fontStyle: 'bold' },
+				},
+				didParseCell: (data) => {
+					if (data.column.index === 7) {
+						if (data.cell.raw === 'Prestasi') {
+							data.cell.styles.textColor = [5, 150, 105];
+							data.cell.styles.fontStyle = 'bold';
+						} else if (data.cell.raw === 'Pelanggaran') {
+							data.cell.styles.textColor = [225, 29, 72];
+							data.cell.styles.fontStyle = 'bold';
+						}
+					}
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Menyetujui,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Supervisi_Poin_Karakter_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF poin:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
+	};
+
 	// Export to CSV helper
 	const handleExportCSV = () => {
 		if (filteredPoin.length === 0) return;
@@ -210,7 +325,16 @@ export default function KepsekPoinPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredPoin.length === 0}
+						title='Unduh rekapitulasi poin siswa dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 disabled:hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredPoin.length === 0}

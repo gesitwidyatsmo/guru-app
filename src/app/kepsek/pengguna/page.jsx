@@ -2,9 +2,17 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekPenggunaPage() {
 	const [users, setUsers] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [roleFilter, setRoleFilter] = useState('all');
@@ -17,10 +25,21 @@ export default function KepsekPenggunaPage() {
 		const fetchUsers = async () => {
 			try {
 				setLoading(true);
-				const res = await fetch('/api/users');
-				if (res.ok) {
-					const data = await res.json();
+				const [resUsers, resProfil] = await Promise.all([
+					fetch('/api/users'),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
+				]);
+
+				if (resUsers.ok) {
+					const data = await resUsers.json();
 					setUsers(Array.isArray(data) ? data : []);
+				}
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
 				}
 			} catch (err) {
 				console.error('Gagal mengambil daftar pengguna:', err);
@@ -52,6 +71,7 @@ export default function KepsekPenggunaPage() {
 	// Role counts
 	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
 	const kepsekCount = useMemo(() => users.filter((u) => u.role === 'Kepala Sekolah').length, [users]);
+	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	// Pagination calculations
@@ -66,6 +86,83 @@ export default function KepsekPenggunaPage() {
 	const handleResetFilters = () => {
 		setSearchQuery('');
 		setRoleFilter('all');
+	};
+
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredUsers.length === 0) {
+			Swal.fire('Info', 'Tidak ada data pengguna untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'portrait' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('DIREKTORI DATA PENDIDIK & TENAGA KEPENDIDIKAN (PTK)', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Filter Peran: ${roleFilter === 'all' ? 'Semua Peran' : roleFilter}  •  Total Pengguna: ${filteredUsers.length} Akun`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Nama Lengkap Pendidik / Staf', 'Username', 'Peran / Hak Akses', 'ID Pengguna'],
+			];
+
+			const tableBody = filteredUsers.map((u, idx) => [
+				idx + 1,
+				u.nama_lengkap || '-',
+				`@${u.username || '-'}`,
+				u.role || '-',
+				u.id_user || '-',
+			]);
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 8 },
+				bodyStyles: { fontSize: 7.5, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { fontStyle: 'bold' },
+					2: { halign: 'center', cellWidth: 30 },
+					3: { halign: 'center', cellWidth: 35, fontStyle: 'bold' },
+					4: { halign: 'center', cellWidth: 28 },
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Mengesahkan,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Direktori_PTK_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF pengguna:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
 	};
 
 	// Export to CSV helper
@@ -116,7 +213,16 @@ export default function KepsekPenggunaPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredUsers.length === 0}
+						title='Unduh direktori pengguna dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredUsers.length === 0}
@@ -134,7 +240,7 @@ export default function KepsekPenggunaPage() {
 			</div>
 
 			{/* User Statistics Row (Interactive as quick filters) */}
-			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4'>
+			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4'>
 				<button
 					onClick={() => setRoleFilter('all')}
 					className={`bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between text-left transition-all cursor-pointer hover:-translate-y-0.5 ${
@@ -181,6 +287,23 @@ export default function KepsekPenggunaPage() {
 					</div>
 					<span className='w-11 h-11 bg-indigo-300 border-2 border-black rounded-xl flex items-center justify-center font-black text-lg shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
 						🎓
+					</span>
+				</button>
+
+				<button
+					onClick={() => setRoleFilter(roleFilter === 'Bendahara' ? 'all' : 'Bendahara')}
+					className={`border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between text-left transition-all cursor-pointer hover:-translate-y-0.5 ${
+						roleFilter === 'Bendahara' ? 'bg-teal-100 ring-2 ring-teal-600' : 'bg-teal-50 hover:bg-teal-100/60'
+					}`}>
+					<div>
+						<p className='text-[11px] font-black uppercase text-teal-800'>Bendahara</p>
+						<p className='text-2xl sm:text-3xl font-black text-teal-950 mt-0.5'>{bendaharaCount}</p>
+						<span className='text-[10px] font-bold text-teal-700'>
+							{roleFilter === 'Bendahara' ? '✓ Filter aktif' : 'Klik filter bendahara'}
+						</span>
+					</div>
+					<span className='w-11 h-11 bg-teal-300 border-2 border-black rounded-xl flex items-center justify-center font-black text-lg shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
+						💼
 					</span>
 				</button>
 
@@ -236,6 +359,7 @@ export default function KepsekPenggunaPage() {
 							{ id: 'all', label: 'Semua Role' },
 							{ id: 'Guru', label: 'Guru' },
 							{ id: 'Kepala Sekolah', label: 'Kepsek' },
+							{ id: 'Bendahara', label: 'Bendahara' },
 							{ id: 'Admin', label: 'Admin' },
 						].map((tab) => (
 							<button
@@ -300,6 +424,7 @@ export default function KepsekPenggunaPage() {
 									let roleBadge = 'bg-yellow-200 text-yellow-950 border-yellow-400';
 									if (u.role === 'Guru') roleBadge = 'bg-emerald-200 text-emerald-950 border-emerald-400';
 									else if (u.role === 'Kepala Sekolah') roleBadge = 'bg-indigo-200 text-indigo-950 border-indigo-400';
+									else if (u.role === 'Bendahara') roleBadge = 'bg-teal-200 text-teal-950 border-teal-400';
 									else if (u.role === 'Admin') roleBadge = 'bg-rose-200 text-rose-950 border-rose-400';
 
 									return (

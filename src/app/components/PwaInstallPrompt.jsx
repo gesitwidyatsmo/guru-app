@@ -42,6 +42,16 @@ export default function PwaInstallPrompt() {
   const pathname = usePathname();
 
   useEffect(() => {
+    // Di mode development, bersihkan service worker lama dari build production agar tidak meng-intercept fetch
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          reg.unregister();
+        }
+      });
+      return;
+    }
+
     // --- Cek kondisi awal ---
 
     // 1. Jika sudah diinstall sebagai standalone app, tidak perlu prompt

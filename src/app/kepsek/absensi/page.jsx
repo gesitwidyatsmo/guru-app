@@ -4,12 +4,20 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekAbsensiPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [sessions, setSessions] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
 	const [filterKelas, setFilterKelas] = useState('Semua');
@@ -28,18 +36,26 @@ export default function KepsekAbsensiPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resSesi, resKelas, resMapel] = await Promise.all([
+				const [resSesi, resKelas, resMapel, resProfil] = await Promise.all([
 					supabase
 						.from('absensi_mapel')
 						.select('*, users!absensi_mapel_guru_id_fkey(nama_lengkap, username), absensi_mapel_siswa(id, status, keterangan, siswa_id, siswa(nama_lengkap, nis))')
 						.order('tanggal', { ascending: false }),
 					supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true }),
 					supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true }),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				setSessions(resSesi.data || []);
 				setKelasList(resKelas.data || []);
 				setMapelList(resMapel.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal memuat data presensi:', err);
 			} finally {
@@ -126,6 +142,108 @@ export default function KepsekAbsensiPage() {
 		setFilterTanggal('');
 	};
 
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredSessions.length === 0) {
+			Swal.fire('Info', 'Tidak ada data presensi untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'landscape' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('LAPORAN REKAPITULASI PRESENSI SISWA PER MAPEL', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Filter Kelas: ${filterKelas}  •  Filter Mapel: ${filterMapel}`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Tanggal', 'Jam', 'Guru Pengampu', 'Kelas', 'Mata Pelajaran', 'Hadir', 'Sakit', 'Izin', 'Alpa', '% Kehadiran'],
+			];
+
+			const tableBody = filteredSessions.map((s, idx) => {
+				const list = s.absensi_mapel_siswa || [];
+				let h = 0, sk = 0, iz = 0, al = 0;
+				list.forEach((item) => {
+					const st = (item.status || '').toLowerCase();
+					if (st === 'hadir' || st === 'h') h++;
+					else if (st === 'sakit' || st === 's') sk++;
+					else if (st === 'izin' || st === 'i') iz++;
+					else if (st === 'alfa' || st === 'alpa' || st === 'a') al++;
+				});
+				const totalSiswa = list.length;
+				const sessionRate = totalSiswa > 0 ? Math.round((h / totalSiswa) * 100) : 0;
+
+				return [
+					idx + 1,
+					s.tanggal || '-',
+					s.jam_ke || '-',
+					s.users?.nama_lengkap || '-',
+					s.kelas || '-',
+					s.mapel || '-',
+					h,
+					sk,
+					iz,
+					al,
+					`${sessionRate}%`,
+				];
+			});
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [5, 150, 105], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+				bodyStyles: { fontSize: 7, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { halign: 'center', cellWidth: 20 },
+					2: { halign: 'center', cellWidth: 14 },
+					3: { fontStyle: 'bold' },
+					4: { halign: 'center', cellWidth: 16 },
+					6: { halign: 'center', cellWidth: 14 },
+					7: { halign: 'center', cellWidth: 14 },
+					8: { halign: 'center', cellWidth: 14 },
+					9: { halign: 'center', cellWidth: 14 },
+					10: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Menyetujui,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Rekap_Presensi_Siswa_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF absensi:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
+	};
+
 	// Export to CSV helper
 	const handleExportCSV = () => {
 		if (filteredSessions.length === 0) return;
@@ -206,7 +324,16 @@ export default function KepsekAbsensiPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredSessions.length === 0}
+						title='Unduh rekapitulasi presensi dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredSessions.length === 0}

@@ -15,9 +15,10 @@ const withPWA = withPWAInit({
   workboxOptions: {
     runtimeCaching: [
       {
-        // Navigasi halaman: NetworkFirst agar selalu fresh, fallback ke cache
+        // Navigasi halaman (GET): NetworkFirst agar selalu fresh, fallback ke cache
         urlPattern: /^\/(?!api\/).*/i,
         handler: 'NetworkFirst',
+        method: 'GET',
         options: {
           cacheName: 'pages-cache',
           networkTimeoutSeconds: 10,
@@ -25,18 +26,21 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // Supabase API: StaleWhileRevalidate untuk data yang bisa sedikit basi
-        urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+        // Supabase REST & Storage (GET saja): StaleWhileRevalidate untuk data offline.
+        // PENTING: Mengecualikan auth/v1/ agar refresh token & login tidak di-cache/di-intercept SW.
+        urlPattern: /^https:\/\/.*\.supabase\.co\/(?:rest|storage)\/v1\/.*/i,
         handler: 'StaleWhileRevalidate',
+        method: 'GET',
         options: {
           cacheName: 'supabase-api',
           expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 7 Hari
         },
       },
       {
-        // Internal API: NetworkFirst agar data selalu terkini
+        // Internal API (GET saja): NetworkFirst agar data selalu terkini
         urlPattern: /\/api\/.*/i,
         handler: 'NetworkFirst',
+        method: 'GET',
         options: {
           cacheName: 'internal-api-cache',
           networkTimeoutSeconds: 5,
@@ -44,9 +48,10 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // Aset statis: CacheFirst karena tidak berubah antar deploy
+        // Aset statis (GET saja): CacheFirst karena tidak berubah antar deploy
         urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2?)$/i,
         handler: 'CacheFirst',
+        method: 'GET',
         options: {
           cacheName: 'static-assets',
           expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 }, // 30 Hari

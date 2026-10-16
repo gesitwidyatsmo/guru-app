@@ -4,12 +4,20 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekPenugasanPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [penugasanList, setPenugasanList] = useState([]);
 	const [guruList, setGuruList] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
 	const [searchQuery, setSearchQuery] = useState('');
@@ -21,12 +29,13 @@ export default function KepsekPenugasanPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resKbm, resGuru, resKelas] = await Promise.all([
+				const [resKbm, resGuru, resKelas, resProfil] = await Promise.all([
 					supabase.from('guru_kbm').select(`
 						id_kbm, id_user, kelas, mapel, users!guru_kbm_id_user_fkey(username, nama_lengkap)
 					`),
 					supabase.from('users').select('*').eq('role', 'Guru').order('nama_lengkap', { ascending: true }),
 					supabase.from('kelas').select('*').order('nama_kelas', { ascending: true }),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				const formattedKBM = (resKbm.data || [])
@@ -43,6 +52,13 @@ export default function KepsekPenugasanPage() {
 				setPenugasanList(formattedKBM);
 				setGuruList(resGuru.data || []);
 				setKelasList(resKelas.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal mengambil data penugasan:', err);
 			} finally {
@@ -86,6 +102,84 @@ export default function KepsekPenugasanPage() {
 	const handleResetFilters = () => {
 		setSearchQuery('');
 		setFilterKelas('all');
+	};
+
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredList.length === 0) {
+			Swal.fire('Info', 'Tidak ada data penugasan untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'portrait' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('REKAPITULASI PENUGASAN MENGAJAR & KBM GURU', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Filter Kelas: ${filterKelas === 'all' ? 'Semua Kelas' : filterKelas}`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Nama Guru Pengajar', 'Username', 'Rombel / Kelas', 'Mata Pelajaran Diampu', 'Status Wewenang'],
+			];
+
+			const tableBody = filteredList.map((item, idx) => [
+				idx + 1,
+				item.nama_guru || '-',
+				`@${item.username || '-'}`,
+				item.kelas || '-',
+				item.mapel || '-',
+				'Aktif Mengajar',
+			]);
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [13, 148, 136], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+				bodyStyles: { fontSize: 7, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { fontStyle: 'bold' },
+					2: { halign: 'center', cellWidth: 26 },
+					3: { halign: 'center', cellWidth: 24 },
+					5: { halign: 'center', cellWidth: 24 },
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Menetapkan,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Distribusi_Penugasan_KBM_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF penugasan:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
 	};
 
 	// Export to CSV helper
@@ -139,7 +233,16 @@ export default function KepsekPenugasanPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredList.length === 0}
+						title='Unduh rekapitulasi penugasan dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredList.length === 0}

@@ -4,12 +4,20 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekPenilaianPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [tasks, setTasks] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
 	const [filterKelas, setFilterKelas] = useState('Semua');
@@ -28,18 +36,26 @@ export default function KepsekPenilaianPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resTasks, resKelas, resMapel] = await Promise.all([
+				const [resTasks, resKelas, resMapel, resProfil] = await Promise.all([
 					supabase
 						.from('nilai_tugas')
 						.select('*, users!nilai_tugas_guru_id_fkey(nama_lengkap, username), nilai_siswa(id, nilai, siswa_id, nama_siswa)')
 						.order('tanggal', { ascending: false }),
 					supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true }),
 					supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true }),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				setTasks(resTasks.data || []);
 				setKelasList(resKelas.data || []);
 				setMapelList(resMapel.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal memuat rekap nilai:', err);
 			} finally {
@@ -128,6 +144,97 @@ export default function KepsekPenilaianPage() {
 		setFilterKategori('Semua');
 	};
 
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredTasks.length === 0) {
+			Swal.fire('Info', 'Tidak ada data penilaian untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'landscape' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('LAPORAN REKAPITULASI PENILAIAN AKADEMIK SISWA', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Filter Kelas: ${filterKelas}  •  Filter Mapel: ${filterMapel}  •  Kategori: ${filterKategori}`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Tanggal', 'Deskripsi Penilaian', 'Guru Pengampu', 'Kelas', 'Mata Pelajaran', 'Kategori', 'Jml Siswa', 'Rata-rata', '% KKM (>=75)'],
+			];
+
+			const tableBody = filteredTasks.map((t, idx) => {
+				const scores = (t.nilai_siswa || []).map((s) => parseFloat(s.nilai)).filter((v) => !isNaN(v));
+				const taskAvg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';
+				const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= 75).length / scores.length) * 100) : 0;
+
+				return [
+					idx + 1,
+					t.tanggal || '-',
+					t.deskripsi || '-',
+					t.users?.nama_lengkap || '-',
+					t.kelas || '-',
+					t.mapel || '-',
+					t.kategori || '-',
+					scores.length,
+					taskAvg,
+					`${passRate}%`,
+				];
+			});
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [13, 148, 136], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+				bodyStyles: { fontSize: 7, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { halign: 'center', cellWidth: 20 },
+					2: { fontStyle: 'bold' },
+					4: { halign: 'center', cellWidth: 16 },
+					6: { halign: 'center', cellWidth: 18 },
+					7: { halign: 'center', cellWidth: 16 },
+					8: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+					9: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Menyetujui,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Rekap_Nilai_Akademik_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF penilaian:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
+	};
+
 	// Export to CSV helper
 	const handleExportCSV = () => {
 		if (filteredTasks.length === 0) return;
@@ -198,7 +305,16 @@ export default function KepsekPenilaianPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredTasks.length === 0}
+						title='Unduh rekapitulasi penilaian dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:hover:bg-teal-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredTasks.length === 0}

@@ -10,6 +10,8 @@ import Loader from '../components/loading';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { hitungTotalPoinBersih, konversiPoinKeSikap } from '@/lib/poinUtils';
+import { drawKopSuratPDF, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
+import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
 
 export default function LaporanPage() {
 	const router = useRouter();
@@ -18,6 +20,7 @@ export default function LaporanPage() {
 	const [activeTab, setActiveTab] = useState('absensi'); // absensi, nilai, jurnal
 	const [loading, setLoading] = useState(true);
 	const [loadingRekap, setLoadingRekap] = useState(false);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 
 	// Filter states
 	const [kelasList, setKelasList] = useState([]);
@@ -40,11 +43,23 @@ export default function LaporanPage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [resKelas, resMapel, resSiswa] = await Promise.all([fetch('/api/kelas'), fetch('/api/mapel'), fetch('/api/siswa')]);
+				const [resKelas, resMapel, resSiswa, resProfile] = await Promise.all([
+					fetch('/api/kelas'),
+					fetch('/api/mapel'),
+					fetch('/api/siswa'),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
+				]);
 
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+
+				if (resProfile && resProfile.ok) {
+					const pData = await resProfile.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 
 				setKelasList(dataKelas);
 				setMapelList(dataMapel);
@@ -556,8 +571,18 @@ export default function LaporanPage() {
 	const handleExportPDF = () => {
 		if (activeTab === 'absensi' && pivotedAbsensi) {
 			const doc = new jsPDF({ orientation: 'landscape' });
-			doc.text(`Rekap Absensi - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
-			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
+			const startY = drawKopSuratPDF(doc, schoolProfile);
+
+			const pWidth = doc.internal.pageSize.getWidth();
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text(`REKAPITULASI PRESENSI / ABSENSI KELAS ${selectedKelas}`, pWidth / 2, startY + 3.5, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(`Mata Pelajaran: ${selectedMapel}  •  Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`, pWidth / 2, startY + 8, { align: 'center' });
 
 			const head = [['No', 'Nama Siswa', ...pivotedAbsensi.kolomTanggal.map(p => p.label), 'H', 'I', 'S', 'A', '%']];
 			const body = pivotedAbsensi.barisSiswa.map((row, idx) => [
@@ -572,19 +597,30 @@ export default function LaporanPage() {
 			]);
 
 			autoTable(doc, {
-				startY: 30,
+				startY: startY + 12,
 				head: head,
 				body: body,
 				theme: 'grid',
 				headStyles: { fillColor: [79, 70, 229] },
+				styles: { fontSize: 7.5 },
 			});
 
 			doc.save(`Rekap_Absensi_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
 		} else if (activeTab === 'nilai' && dataRekap?.data) {
 			const { kolomTugas, barisSiswa } = pivotedNilai;
 			const doc = new jsPDF({ orientation: 'landscape' });
-			doc.text(`Rekap Nilai - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
-			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
+			const startY = drawKopSuratPDF(doc, schoolProfile);
+
+			const pWidth = doc.internal.pageSize.getWidth();
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text(`REKAPITULASI NILAI AKADEMIK KELAS ${selectedKelas}`, pWidth / 2, startY + 3.5, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(`Mata Pelajaran: ${selectedMapel}  •  Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`, pWidth / 2, startY + 8, { align: 'center' });
 
 			const head = [['No', 'NIS', 'Nama Siswa', ...kolomTugas.map(t => t.judul), 'Rata2', 'Poin', 'Sikap']];
 			const body = barisSiswa.map((row, idx) => {
@@ -601,18 +637,29 @@ export default function LaporanPage() {
 			});
 
 			autoTable(doc, {
-				startY: 30,
+				startY: startY + 12,
 				head: head,
 				body: body,
 				theme: 'grid',
 				headStyles: { fillColor: [79, 70, 229] },
+				styles: { fontSize: 7.5 },
 			});
 
 			doc.save(`Rekap_Nilai_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
 		} else if (activeTab === 'perilaku') {
 			const doc = new jsPDF({ orientation: 'landscape' });
-			doc.text(`Rekap Perilaku & Poin Siswa - Kelas ${selectedKelas}`, 14, 15);
-			doc.text(`Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`, 14, 22);
+			const startY = drawKopSuratPDF(doc, schoolProfile);
+
+			const pWidth = doc.internal.pageSize.getWidth();
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text(`REKAPITULASI KARAKTER & POIN SISWA KELAS ${selectedKelas}`, pWidth / 2, startY + 3.5, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(`Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`, pWidth / 2, startY + 8, { align: 'center' });
 
 			if (perilakuViewMode === 'ringkasan') {
 				const head = [['No', 'NIS', 'Nama Siswa', 'Predikat', 'Poin Bersih', 'Positif', 'Negatif', 'Ringkasan Sumber Poin']];
@@ -631,11 +678,12 @@ export default function LaporanPage() {
 				});
 
 				autoTable(doc, {
-					startY: 30,
+					startY: startY + 12,
 					head: head,
 					body: body,
 					theme: 'grid',
 					headStyles: { fillColor: [0, 166, 147] },
+					styles: { fontSize: 7.5 },
 				});
 			} else {
 				const head = [['No', 'Tanggal', 'Nama Siswa', 'Tipe', 'Kategori', 'Aktivitas', 'Poin']];
@@ -653,39 +701,25 @@ export default function LaporanPage() {
 				});
 
 				autoTable(doc, {
-					startY: 30,
+					startY: startY + 12,
 					head: head,
 					body: body,
 					theme: 'grid',
 					headStyles: { fillColor: [0, 166, 147] },
+					styles: { fontSize: 8 },
 				});
 			}
 
 			doc.save(`Laporan_Perilaku_${selectedKelas}_${bulan}_${tahun}.pdf`);
 		} else if (activeTab === 'jurnal' && dataRekap?.data) {
-			const doc = new jsPDF();
-			doc.text(`Rekap Jurnal Mengajar - Kelas ${selectedKelas} - ${selectedMapel}`, 14, 15);
-			doc.text(`Periode: ${bulan}/${tahun}`, 14, 22);
-
-			const head = [['Tanggal', 'Jam', 'Pert', 'Materi', 'Kegiatan', 'Status']];
-			const body = dataRekap.data.map((j) => [
-				new Date(j.tanggal).toLocaleDateString('id-ID'),
-				j.jam_ke || '-',
-				j.pertemuan_ke || '-',
-				j.materi || '-',
-				j.kegiatan || '-',
-				j.tuntas ? 'Tuntas' : 'Belum Tuntas'
-			]);
-
-			autoTable(doc, {
-				startY: 30,
-				head: head,
-				body: body,
-				theme: 'grid',
-				headStyles: { fillColor: [79, 70, 229] },
+			const subInfo = `Kelas: ${selectedKelas}  •  Mapel: ${selectedMapel}  •  Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`;
+			exportJurnalPDFReport({
+				journals: dataRekap.data,
+				schoolProfile,
+				title: 'REKAPITULASI JURNAL PEMBELAJARAN (KBM)',
+				subInfo,
+				filename: `Rekap_Jurnal_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`,
 			});
-
-			doc.save(`Rekap_Jurnal_${selectedKelas}_${selectedMapel}_${bulan}_${tahun}.pdf`);
 		}
 	};
 

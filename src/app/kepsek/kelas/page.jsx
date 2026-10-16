@@ -4,11 +4,19 @@ import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
+import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+} from '@/lib/pdfKopSurat';
 
 export default function KepsekKelasPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [kelasList, setKelasList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedKelas, setSelectedKelas] = useState(null);
@@ -19,13 +27,21 @@ export default function KepsekKelasPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resKelas, resSiswa] = await Promise.all([
+				const [resKelas, resSiswa, resProfil] = await Promise.all([
 					supabase.from('kelas').select('*, users!kelas_id_wali_kelas_fkey(nama_lengkap, username)').order('nama_kelas', { ascending: true }),
 					supabase.from('siswa').select('id, nama_lengkap, kelas, nis, jenis_kelamin, status').eq('status', 'Aktif'),
+					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
 				]);
 
 				setKelasList(resKelas.data || []);
 				setSiswaList(resSiswa.data || []);
+
+				if (resProfil && resProfil.ok) {
+					const pData = await resProfil.json();
+					if (pData?.value && typeof pData.value === 'object') {
+						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
+					}
+				}
 			} catch (err) {
 				console.error('Gagal mengambil data kelas:', err);
 			} finally {
@@ -61,6 +77,100 @@ export default function KepsekKelasPage() {
 			return nama.includes(q) || wali.includes(q);
 		});
 	}, [kelasWithStats, searchQuery]);
+
+	// Export to PDF with Kop Surat Resmi
+	const handleExportPDF = () => {
+		if (filteredKelas.length === 0) {
+			Swal.fire('Info', 'Tidak ada data rombel kelas untuk diekspor.', 'info');
+			return;
+		}
+
+		try {
+			const doc = new jsPDF({ orientation: 'portrait' });
+			const endKop = drawKopSuratPDF(doc, schoolProfile);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42);
+			doc.text('DAFTAR ROMBONGAN BELAJAR & WALI KELAS', doc.internal.pageSize.getWidth() / 2, endKop + 2, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Tahun Ajaran: ${tahunAjarAktif || '-'}  •  Semester: ${semesterAktif || '-'}  •  Total: ${filteredKelas.length} Rombel`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 6.5,
+				{ align: 'center' }
+			);
+
+			const tableHead = [
+				['No', 'Nama Rombel / Kelas', 'Tingkat', 'Wali Kelas Terdaftar', 'L', 'P', 'Total Siswa'],
+			];
+
+			const tableBody = filteredKelas.map((k, idx) => [
+				idx + 1,
+				k.nama_kelas || '-',
+				k.tingkat ? `Tingkat ${k.tingkat}` : '-',
+				k.users?.nama_lengkap || k.wali_kelas || 'Belum Ditugaskan',
+				k.lakiLaki,
+				k.perempuan,
+				k.totalSiswa,
+			]);
+
+			// Tambah baris total siswa sekolah
+			const grandTotal = filteredKelas.reduce((sum, k) => sum + (k.totalSiswa || 0), 0);
+			const grandL = filteredKelas.reduce((sum, k) => sum + (k.lakiLaki || 0), 0);
+			const grandP = filteredKelas.reduce((sum, k) => sum + (k.perempuan || 0), 0);
+
+			tableBody.push(['', 'TOTAL KESELURUHAN', '', `${filteredKelas.length} Rombel`, grandL, grandP, grandTotal]);
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center', fontSize: 8 },
+				bodyStyles: { fontSize: 7.5, textColor: [15, 23, 42] },
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { fontStyle: 'bold', cellWidth: 35 },
+					2: { halign: 'center', cellWidth: 24 },
+					3: { fontStyle: 'bold' },
+					4: { halign: 'center', cellWidth: 16 },
+					5: { halign: 'center', cellWidth: 16 },
+					6: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
+				},
+				didParseCell: (data) => {
+					if (data.row.index === tableBody.length - 1) {
+						data.cell.styles.fontStyle = 'bold';
+						data.cell.styles.fillColor = [224, 231, 255];
+					}
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			if (finalY + 28 <= pageHeight) {
+				doc.setFontSize(8);
+				doc.setFont('helvetica', 'normal');
+				const kepsekName = schoolProfile.nama_kepsek || 'Kepala Sekolah';
+				const kepsekNip = schoolProfile.nip_kepsek ? `\nNIP. ${schoolProfile.nip_kepsek}` : '';
+				doc.text(
+					`Mengetahui & Mengesahkan,\nKepala Sekolah\n\n\n\n${kepsekName}${kepsekNip}`,
+					pageWidth - 70,
+					finalY
+				);
+			}
+
+			doc.save(`Daftar_Rombel_Kelas_${new Date().toISOString().split('T')[0]}.pdf`);
+		} catch (err) {
+			console.error('Gagal export PDF rombel:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message, 'error');
+		}
+	};
 
 	// Export to CSV helper
 	const handleExportCSV = () => {
@@ -113,7 +223,16 @@ export default function KepsekKelasPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto'>
+				<div className='flex items-center gap-2.5 shrink-0 self-stretch sm:self-auto flex-wrap'>
+					<button
+						onClick={handleExportPDF}
+						disabled={filteredKelas.length === 0}
+						title='Unduh rekapitulasi rombel kelas dalam format PDF dengan Kop Surat Resmi'
+						className='px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed'>
+						<span>📄</span>
+						<span>Ekspor PDF</span>
+					</button>
+
 					<button
 						onClick={handleExportCSV}
 						disabled={filteredKelas.length === 0}

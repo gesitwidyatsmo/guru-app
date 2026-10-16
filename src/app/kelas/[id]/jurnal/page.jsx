@@ -402,7 +402,7 @@ export default function JurnalKelasPage() {
 										{journal.tuntas ? (
 											<span className='px-4 py-2 bg-[#00A693] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>TUNTAS</span>
 										) : (
-											<span className='px-4 py-2 bg-[#E8451A] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>PERLU REMEDIAL</span>
+											<span className='px-4 py-2 bg-[#E8451A] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>BELUM TUNTAS</span>
 										)}
 									</div>
 
@@ -572,7 +572,7 @@ export default function JurnalKelasPage() {
 											className='sr-only peer'
 										/>
 										<div className="w-16 h-8 bg-white border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] peer-focus:outline-none rounded-none peer peer-checked:after:translate-x-[26px] peer-checked:after:border-[#0D0D0D] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-[#0D0D0D] after:border-[#0D0D0D] after:border after:rounded-none after:h-6 after:w-6 after:transition-all peer-checked:bg-[#00A693] peer-checked:after:bg-white"></div>
-										<span className='ml-4 text-sm font-black text-[#0D0D0D] uppercase tracking-widest w-16'>{formData.tuntas ? 'TUNTAS' : 'BELUM'}</span>
+										<span className='ml-4 text-sm font-black text-[#0D0D0D] uppercase tracking-widest min-w-[120px]'>{formData.tuntas ? 'TUNTAS' : 'BELUM TUNTAS'}</span>
 									</label>
 								</div>
 							</div>
