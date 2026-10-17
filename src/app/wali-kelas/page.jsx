@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Loader from '../components/loading';
@@ -25,7 +25,7 @@ import {
 	AlertCircle,
 } from 'lucide-react';
 
-export default function WaliKelasHubPage() {
+function WaliKelasHubContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const initialTab = searchParams.get('tab') || 'ringkasan';
@@ -1027,3 +1027,12 @@ export default function WaliKelasHubPage() {
 		</div>
 	);
 }
+
+export default function WaliKelasHubPage() {
+	return (
+		<Suspense fallback={<Loader />}>
+			<WaliKelasHubContent />
+		</Suspense>
+	);
+}
+
