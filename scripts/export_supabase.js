@@ -29,12 +29,12 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 
 // Urutan tabel berdasarkan relasi foreign key (dependency order)
 const TABLES = [
+  'users',
   'app_settings',
   'tahun_ajar',
-  'users',
+  'mapel',
   'kelas',
   'wali_kelas',
-  'mapel',
   'siswa',
   'guru_kbm',
   'jadwal',
@@ -150,41 +150,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- FASE 1: FOUNDATION & DATA MASTER
 -- ===========================================================================
 
--- 1. TABEL APP_SETTINGS (Pengaturan Aplikasi, Geofence, & Bisaroh)
-CREATE TABLE IF NOT EXISTS public.app_settings (
-    key TEXT PRIMARY KEY,
-    value JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow read for authenticated" ON public.app_settings;
-CREATE POLICY "Allow read for authenticated" ON public.app_settings FOR SELECT TO authenticated USING (true);
-DROP POLICY IF EXISTS "Allow write for admin" ON public.app_settings;
-CREATE POLICY "Allow write for admin" ON public.app_settings FOR ALL TO authenticated 
-USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' )
-WITH CHECK ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
-
--- 2. TABEL TAHUN_AJAR (Master Periode Akademik Multi-Tahun)
-CREATE TABLE IF NOT EXISTS public.tahun_ajar (
-    id TEXT PRIMARY KEY,
-    nama TEXT NOT NULL,
-    semester INTEGER NOT NULL,
-    is_aktif BOOLEAN DEFAULT FALSE,
-    tanggal_mulai DATE,
-    tanggal_selesai DATE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(nama, semester)
-);
-
-ALTER TABLE public.tahun_ajar ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Tahun ajar bisa dilihat semua user login" ON public.tahun_ajar;
-CREATE POLICY "Tahun ajar bisa dilihat semua user login" ON public.tahun_ajar FOR SELECT TO authenticated USING (true);
-DROP POLICY IF EXISTS "Hanya Admin yang bisa kelola tahun ajar" ON public.tahun_ajar;
-CREATE POLICY "Hanya Admin yang bisa kelola tahun ajar" ON public.tahun_ajar FOR ALL TO authenticated 
-USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
-
--- 3. TABEL USERS (Profil Pengguna GuruApp)
+-- 1. TABEL USERS (Profil Pengguna GuruApp)
 CREATE TABLE IF NOT EXISTS public.users (
     id_user TEXT PRIMARY KEY,
     auth_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -206,6 +172,40 @@ CREATE POLICY "Admin can update users" ON public.users FOR UPDATE TO authenticat
 USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
 DROP POLICY IF EXISTS "Admin can delete users" ON public.users;
 CREATE POLICY "Admin can delete users" ON public.users FOR DELETE TO authenticated 
+USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
+
+-- 2. TABEL APP_SETTINGS (Pengaturan Aplikasi, Geofence, & Bisaroh)
+CREATE TABLE IF NOT EXISTS public.app_settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow read for authenticated" ON public.app_settings;
+CREATE POLICY "Allow read for authenticated" ON public.app_settings FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Allow write for admin" ON public.app_settings;
+CREATE POLICY "Allow write for admin" ON public.app_settings FOR ALL TO authenticated 
+USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' )
+WITH CHECK ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
+
+-- 3. TABEL TAHUN_AJAR (Master Periode Akademik Multi-Tahun)
+CREATE TABLE IF NOT EXISTS public.tahun_ajar (
+    id TEXT PRIMARY KEY,
+    nama TEXT NOT NULL,
+    semester INTEGER NOT NULL,
+    is_aktif BOOLEAN DEFAULT FALSE,
+    tanggal_mulai DATE,
+    tanggal_selesai DATE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(nama, semester)
+);
+
+ALTER TABLE public.tahun_ajar ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tahun ajar bisa dilihat semua user login" ON public.tahun_ajar;
+CREATE POLICY "Tahun ajar bisa dilihat semua user login" ON public.tahun_ajar FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Hanya Admin yang bisa kelola tahun ajar" ON public.tahun_ajar;
+CREATE POLICY "Hanya Admin yang bisa kelola tahun ajar" ON public.tahun_ajar FOR ALL TO authenticated 
 USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
 
 -- 4. TABEL KELAS
@@ -300,7 +300,8 @@ CREATE TABLE IF NOT EXISTS public.siswa (
 ALTER TABLE public.siswa ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Siswa can be viewed by authenticated users" ON public.siswa;
 CREATE POLICY "Siswa can be viewed by authenticated users" ON public.siswa FOR SELECT TO authenticated USING (true);
-DROP POLICY IF EXISTS "Admin can manage siswa" ON public.siswa FOR ALL TO authenticated 
+DROP POLICY IF EXISTS "Admin can manage siswa" ON public.siswa;
+CREATE POLICY "Admin can manage siswa" ON public.siswa FOR ALL TO authenticated 
 USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) = 'Admin' );
 
 -- 8. TABEL GURU_KBM (Penugasan Mengajar Guru)
@@ -554,7 +555,8 @@ CREATE TABLE IF NOT EXISTS public.grup (
 ALTER TABLE public.grup ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Grup can be viewed by authenticated users" ON public.grup;
 CREATE POLICY "Grup can be viewed by authenticated users" ON public.grup FOR SELECT TO authenticated USING (true);
-DROP POLICY IF EXISTS "Guru can manage their own grup" ON public.grup FOR ALL TO authenticated 
+DROP POLICY IF EXISTS "Guru can manage their own grup" ON public.grup;
+CREATE POLICY "Guru can manage their own grup" ON public.grup FOR ALL TO authenticated 
 USING ( guru_id = (SELECT id_user FROM public.users WHERE auth_id = auth.uid()) );
 
 CREATE INDEX IF NOT EXISTS idx_grup_periode ON public.grup(tahun_ajar, semester);
@@ -834,6 +836,46 @@ async function main() {
 ${authUsers.map(u => `--    - ${u.email} (Auth UID: ${u.id})`).join('\n')}
 
 BEGIN;
+
+-- 1. Daftarkan akun auth bawaan ke auth.users agar foreign key auth_id terpenuhi
+-- Password default sementara: guruapp123
+DO $$
+DECLARE
+  default_pass TEXT := crypt('guruapp123', gen_salt('bf'));
+  user_rec RECORD;
+BEGIN
+  FOR user_rec IN 
+    SELECT * FROM (VALUES
+      ('78ff3035-fa5d-4b0d-8637-845db2b70fb4'::uuid, 'admin@guruapp.com', 'admin'),
+      ('3f020e98-e747-4c3b-a38e-44e0e3142d54'::uuid, 'bendahara@guruapp.com', 'bendahara'),
+      ('434c4fed-02a0-4745-b9ac-5204cec2edfb'::uuid, 'kepsek@guruapp.com', 'kepsek'),
+      ('63c31206-b156-4957-9ec6-025f47a2ee62'::uuid, 'gesit@guruapp.com', 'gesit')
+    ) AS t(uid, email, username)
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = user_rec.uid) THEN
+      INSERT INTO auth.users (
+        id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+      ) VALUES (
+        user_rec.uid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        user_rec.email, default_pass, NOW(),
+        '{"provider":"email","providers":["email"]}',
+        jsonb_build_object('username', user_rec.username),
+        NOW(), NOW()
+      );
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = user_rec.uid) THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        user_rec.uid, user_rec.uid,
+        jsonb_build_object('sub', user_rec.uid::text, 'email', user_rec.email),
+        'email', user_rec.email, NOW(), NOW(), NOW()
+      );
+    END IF;
+  END LOOP;
+END $$;
 
 -- Nonaktifkan trigger & FK sementara selama proses import
 SET session_replication_role = 'replica';

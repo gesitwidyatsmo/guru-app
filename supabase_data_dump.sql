@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- DATABASE DATA DUMP: GURU-APP (SUPABASE POSTGRESQL)
 -- Sumber Supabase URL: https://mfxhtrnzrovdjpvktrun.supabase.co
--- Tanggal Ekspor: 2026-10-17T14:19:29.807Z
+-- Tanggal Ekspor: 2026-10-17T14:35:27.957Z
 -- Total Baris: 1871
 -- ===========================================================================
 
@@ -17,8 +17,59 @@
 
 BEGIN;
 
+-- 1. Daftarkan akun auth bawaan ke auth.users agar foreign key auth_id terpenuhi
+-- Password default sementara: guruapp123
+DO $$
+DECLARE
+  default_pass TEXT := crypt('guruapp123', gen_salt('bf'));
+  user_rec RECORD;
+BEGIN
+  FOR user_rec IN 
+    SELECT * FROM (VALUES
+      ('78ff3035-fa5d-4b0d-8637-845db2b70fb4'::uuid, 'admin@guruapp.com', 'admin'),
+      ('3f020e98-e747-4c3b-a38e-44e0e3142d54'::uuid, 'bendahara@guruapp.com', 'bendahara'),
+      ('434c4fed-02a0-4745-b9ac-5204cec2edfb'::uuid, 'kepsek@guruapp.com', 'kepsek'),
+      ('63c31206-b156-4957-9ec6-025f47a2ee62'::uuid, 'gesit@guruapp.com', 'gesit')
+    ) AS t(uid, email, username)
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = user_rec.uid) THEN
+      INSERT INTO auth.users (
+        id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+      ) VALUES (
+        user_rec.uid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+        user_rec.email, default_pass, NOW(),
+        '{"provider":"email","providers":["email"]}',
+        jsonb_build_object('username', user_rec.username),
+        NOW(), NOW()
+      );
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM auth.identities WHERE user_id = user_rec.uid) THEN
+      INSERT INTO auth.identities (
+        id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        user_rec.uid, user_rec.uid,
+        jsonb_build_object('sub', user_rec.uid::text, 'email', user_rec.email),
+        'email', user_rec.email, NOW(), NOW(), NOW()
+      );
+    END IF;
+  END LOOP;
+END $$;
+
 -- Nonaktifkan trigger & FK sementara selama proses import
 SET session_replication_role = 'replica';
+
+-- =====================================================
+-- DATA: public.users (4 baris)
+-- =====================================================
+INSERT INTO public.users ("id_user", "auth_id", "username", "nama_lengkap", "role", "created_at", "nip")
+VALUES
+  ('UID-0661ADMIN', '78ff3035-fa5d-4b0d-8637-845db2b70fb4', 'admin', 'Administrator Utama', 'Admin', '2026-05-26T15:59:15.270054+00:00', NULL),
+  ('UID-1792087726378VEYM', '3f020e98-e747-4c3b-a38e-44e0e3142d54', 'bendahara', 'bendahara', 'Bendahara', '2026-10-15T18:08:46.40847+00:00', NULL),
+  ('UID-1791987663789WMWR', '434c4fed-02a0-4745-b9ac-5204cec2edfb', 'kepsek', 'Mujib Kodar, S.Pd,I', 'Kepala Sekolah', '2026-10-14T14:21:07.46704+00:00', NULL),
+  ('UID-1779817062842YOUA', '63c31206-b156-4957-9ec6-025f47a2ee62', 'gesit', 'Gesit Widi Atmoko, S.Kom', 'Guru', '2026-05-26T17:37:43.369013+00:00', NULL)
+ON CONFLICT DO NOTHING;
 
 -- =====================================================
 -- DATA: public.app_settings (4 baris)
@@ -41,14 +92,11 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- =====================================================
--- DATA: public.users (4 baris)
+-- DATA: public.mapel (1 baris)
 -- =====================================================
-INSERT INTO public.users ("id_user", "auth_id", "username", "nama_lengkap", "role", "created_at", "nip")
+INSERT INTO public.mapel ("id", "mapel", "created_at")
 VALUES
-  ('UID-0661ADMIN', '78ff3035-fa5d-4b0d-8637-845db2b70fb4', 'admin', 'Administrator Utama', 'Admin', '2026-05-26T15:59:15.270054+00:00', NULL),
-  ('UID-1792087726378VEYM', '3f020e98-e747-4c3b-a38e-44e0e3142d54', 'bendahara', 'bendahara', 'Bendahara', '2026-10-15T18:08:46.40847+00:00', NULL),
-  ('UID-1791987663789WMWR', '434c4fed-02a0-4745-b9ac-5204cec2edfb', 'kepsek', 'Mujib Kodar, S.Pd,I', 'Kepala Sekolah', '2026-10-14T14:21:07.46704+00:00', NULL),
-  ('UID-1779817062842YOUA', '63c31206-b156-4957-9ec6-025f47a2ee62', 'gesit', 'Gesit Widi Atmoko, S.Kom', 'Guru', '2026-05-26T17:37:43.369013+00:00', NULL)
+  ('8jv4ubj8f', 'Informatika', '2026-05-26T08:17:11.094584+00:00')
 ON CONFLICT DO NOTHING;
 
 -- =====================================================
@@ -70,14 +118,6 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- Tabel public.wali_kelas: (0 baris / Kosong)
--- =====================================================
--- DATA: public.mapel (1 baris)
--- =====================================================
-INSERT INTO public.mapel ("id", "mapel", "created_at")
-VALUES
-  ('8jv4ubj8f', 'Informatika', '2026-05-26T08:17:11.094584+00:00')
-ON CONFLICT DO NOTHING;
-
 -- =====================================================
 -- DATA: public.siswa (312 baris)
 -- =====================================================
