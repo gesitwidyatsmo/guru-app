@@ -16,15 +16,14 @@ export async function GET(req) {
 		let allowedClasses = null;
 
 		if (role === 'Guru' && userId) {
-			const { data: kbmData } = await supabase
-				.from('guru_kbm')
-				.select('kelas')
-				.eq('id_user', userId);
-			if (kbmData) {
-				allowedClasses = [...new Set(kbmData.map(r => r.kelas))];
-			} else {
-				allowedClasses = [];
-			}
+			const [resKbm, resWali] = await Promise.all([
+				supabase.from('guru_kbm').select('kelas').eq('id_user', userId),
+				supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId),
+			]);
+			
+			const kbmClasses = resKbm.data ? resKbm.data.map((r) => r.kelas) : [];
+			const waliClasses = resWali.data ? resWali.data.map((r) => r.nama_kelas) : [];
+			allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
 		}
 
 		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS

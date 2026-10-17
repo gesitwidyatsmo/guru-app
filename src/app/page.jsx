@@ -25,6 +25,7 @@ export default function Home() {
 
 	const [userRole, setUserRole] = useState(null);
 	const [userName, setUserName] = useState('');
+	const [waliKelasData, setWaliKelasData] = useState(null);
 
 	const [jadwalHariIni, setJadwalHariIni] = useState([]);
 	const [leaderboard, setLeaderboard] = useState({
@@ -59,7 +60,7 @@ export default function Home() {
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
-				const [resSiswa, resMapel, resKelas, resJadwal, resJurnal, resPoin, resAuth] = await Promise.all([
+				const [resSiswa, resMapel, resKelas, resJadwal, resJurnal, resPoin, resAuth, resWali] = await Promise.all([
 					fetch('/api/siswa'),
 					fetch('/api/mapel'),
 					fetch('/api/kelas'),
@@ -67,6 +68,7 @@ export default function Home() {
 					fetch('/api/jurnal'),
 					fetch('/api/poin'),
 					fetch('/api/auth/me'),
+					fetch('/api/wali-kelas/my-class'),
 				]);
 
 				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
@@ -75,6 +77,13 @@ export default function Home() {
 				const dataJadwal = resJadwal.ok ? await resJadwal.json() : [];
 				const dataJurnal = resJurnal.ok ? await resJurnal.json() : [];
 				const dataPoin = resPoin.ok ? await resPoin.json() : [];
+
+				if (resWali?.ok) {
+					const dataWali = await resWali.json();
+					if (dataWali?.isWaliKelas) {
+						setWaliKelasData(dataWali);
+					}
+				}
 
 				if (resAuth.ok) {
 					const dataAuth = await resAuth.json();
@@ -431,7 +440,7 @@ export default function Home() {
 	];
 
 	// Filter menu reguler (Sembunyikan Master Data konfidensial dari Guru)
-	const filteredMenuItems = menuItems.filter((item) => {
+	const baseFiltered = menuItems.filter((item) => {
 		if (userRole === 'Guru' && [''].includes(item.label)) {
 			return false;
 		}
@@ -440,6 +449,34 @@ export default function Home() {
 		}
 		return true;
 	});
+
+	const filteredMenuItems = useMemo(() => {
+		if (waliKelasData?.isWaliKelas) {
+			return [
+				{
+					label: `Wali Kelas (${waliKelasData.kelas.nama_kelas})`,
+					icon: (
+						<svg
+							className='w-7 h-7'
+							fill='none'
+							stroke='currentColor'
+							viewBox='0 0 24 24'>
+							<path
+								strokeLinecap='round'
+								strokeLinejoin='round'
+								strokeWidth={2}
+								d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
+							/>
+						</svg>
+					),
+					route: '/wali-kelas',
+					color: 'neo-card-yellow',
+				},
+				...baseFiltered,
+			];
+		}
+		return baseFiltered;
+	}, [waliKelasData, baseFiltered]);
 
 	const searchResults = useMemo(() => {
 		if (!searchQuery.trim()) return { menus: [], siswa: [] };
@@ -662,6 +699,50 @@ export default function Home() {
 						</Link>
 					</div>
 				</div>
+
+				{/* Banner Khusus: Wali Kelas Rombel Binaan */}
+				{waliKelasData?.isWaliKelas && (
+					<div className='mb-8 bg-gradient-to-r from-amber-200 via-yellow-300 to-orange-200 border-[3.5px] border-black p-5 sm:p-6 rounded-2xl shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col md:flex-row md:items-center justify-between gap-5 transition-transform hover:-translate-y-0.5'>
+						<div className='flex items-start sm:items-center gap-4'>
+							<div className='w-14 h-14 bg-white border-2 border-black rounded-2xl flex items-center justify-center text-3xl shadow-[3px_3px_0px_0px_#0D0D0D] shrink-0'>
+								🌟
+							</div>
+							<div>
+								<div className='flex flex-wrap items-center gap-2 mb-1'>
+									<span className='px-2.5 py-0.5 bg-black text-yellow-300 text-[11px] font-black uppercase rounded border border-black'>
+										Wali Kelas Aktif
+									</span>
+									<span className='px-2 py-0.5 bg-white text-black text-[11px] font-bold uppercase rounded border border-black'>
+										Rombel {waliKelasData.kelas.nama_kelas}
+									</span>
+								</div>
+								<h2 className='text-lg sm:text-xl font-black uppercase text-black'>
+									Kelas Binaan: {waliKelasData.kelas.nama_kelas}
+								</h2>
+								<p className='text-xs sm:text-sm font-bold text-gray-800 mt-0.5'>
+									{waliKelasData.stats?.totalSiswa || 0} Siswa Terdaftar &bull;{' '}
+									{waliKelasData.stats?.absensiHariIni?.recorded
+										? `Presensi Hari Ini: ${waliKelasData.stats.absensiHariIni.persentaseHadir}% Hadir`
+										: '⚠️ Presensi hari ini belum dicatat'}
+								</p>
+							</div>
+						</div>
+
+						<div className='flex flex-wrap items-center gap-2.5 self-start md:self-auto'>
+							<Link
+								href='/wali-kelas'
+								className='neo-btn-primary !py-2.5 !px-4 bg-black text-white hover:bg-gray-800 text-xs sm:text-sm font-black uppercase tracking-wide flex items-center gap-2'>
+								<span>Buka Hub Wali Kelas</span>
+								<span>➜</span>
+							</Link>
+							<Link
+								href='/wali-kelas?tab=presensi'
+								className='neo-btn-outline !py-2.5 !px-3 bg-white text-black hover:bg-yellow-100 text-xs sm:text-sm font-black flex items-center gap-1.5'>
+								<span>Presensi</span>
+							</Link>
+						</div>
+					</div>
+				)}
 
 				{/* Statistik Cards */}
 				<StatistikCards stat={stat} />

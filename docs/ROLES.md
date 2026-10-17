@@ -11,7 +11,7 @@
 3. [Role Baru — Tahap 2](#3-role-baru--tahap-2-direncanakan)
 4. [Hierarki Akses](#4-hierarki-akses-lengkap)
 5. [Perubahan Database](#5-perubahan-database)
-6. [Perubahan Middleware & API](#6-perubahan-middleware--api)
+6. [Perubahan Middleware &amp; API](#6-perubahan-middleware--api)
 7. [Perubahan UI](#7-perubahan-ui)
 8. [Prioritas Implementasi](#8-prioritas-implementasi)
 
@@ -20,65 +20,69 @@
 ## 1. Role yang Sudah Ada & Aktif
 
 ### 🔴 Admin
+
 Akses penuh ke seluruh sistem. Mengelola pengguna, penugasan KBM, master data institusi, kalender akademik, dan konfigurasi sistem.
 
-| Halaman | Akses | Keterangan |
-|---|---|---|
-| `/admin` | ✅ Full | Dashboard sentral administrator |
-| `/admin/pengguna` | ✅ CRUD pengguna | Kelola akun Admin, Guru, Kepsek, & Bendahara |
-| `/admin/penugasan` | ✅ Kelola penugasan KBM | Distribusi rombel & mapel dewan guru |
-| `/admin/tahun-ajar` | ✅ Kelola tahun ajaran | Semester aktif & kalender akademik |
-| `/admin/kelas`, `/admin/mapel` | ✅ Master Data | Kelola rombel belajar & kurikulum |
-| `/admin/promosi-kelas` | ✅ Promosi siswa | Kenaikan kelas & mutasi massal |
-| `/admin/sekolah` | ✅ Profil Sekolah | Data kelembagaan, NPSN, & Kepala Sekolah |
-| `/admin/pengumuman` | ✅ CRUD pengumuman | Siaran informasi sekolah |
-| `/admin/backup` | ✅ Backup & restore | Pemeliharaan data sistem |
+| Halaman                            | Akses                   | Keterangan                                   |
+| ---------------------------------- | ----------------------- | -------------------------------------------- |
+| `/admin`                         | ✅ Full                 | Dashboard sentral administrator              |
+| `/admin/pengguna`                | ✅ CRUD pengguna        | Kelola akun Admin, Guru, Kepsek, & Bendahara |
+| `/admin/penugasan`               | ✅ Kelola penugasan KBM | Distribusi rombel & mapel dewan guru         |
+| `/admin/tahun-ajar`              | ✅ Kelola tahun ajaran  | Semester aktif & kalender akademik           |
+| `/admin/kelas`, `/admin/mapel` | ✅ Master Data          | Kelola rombel belajar & kurikulum            |
+| `/admin/promosi-kelas`           | ✅ Promosi siswa        | Kenaikan kelas & mutasi massal               |
+| `/admin/sekolah`                 | ✅ Profil Sekolah       | Data kelembagaan, NPSN, & Kepala Sekolah     |
+| `/admin/pengumuman`              | ✅ CRUD pengumuman      | Siaran informasi sekolah                     |
+| `/admin/backup`                  | ✅ Backup & restore     | Pemeliharaan data sistem                     |
 
 ---
 
 ### 🔵 Guru
+
 Akses ke fitur kegiatan belajar mengajar (KBM) operasional sesuai penugasan kelas & mata pelajaran yang diampu.
 
-| Halaman | Akses | Keterangan |
-|---|---|---|
-| `/` | ✅ Beranda Guru | Jadwal hari ini, ringkasan KBM, statistik tugas |
-| `/absensi` | ✅ Catat absensi | Kehadiran siswa di kelas/sesi yang diajar |
-| `/penilaian` | ✅ Input nilai | Tugas, ulangan harian, formatif/sumatif |
-| `/jurnal` | ✅ Jurnal Mengajar | Bukti fisik jam mengajar (JTM), materi, kendala |
-| `/tugas` & `/tugas-online` | ✅ Kelola tugas | Tugas terstruktur & pengumpulan online |
-| `/soal` | ✅ Bank soal | Manajemen butir soal ujian/kuis |
-| `/jadwal` | ✅ Jadwal mengajar | Kalender jadwal KBM mingguan |
-| `/laporan` | ✅ Rekap KBM | Cetak absensi, rekap nilai & jurnal yang diampu |
-| `/siswa` | 👁️ Lihat data siswa | Profil siswa di kelas yang diajar |
-| `/poin` | ✅ Pembinaan karakter | Poin prestasi & pelanggaran siswa |
-| `/catatan` | ✅ Catatan guru | Catatan harian & agenda pribadi |
-| `/admin`, `/kepsek`, `/bendahara` | ❌ Ditolak | Khusus role manajemen |
+| Halaman                                 | Akses                 | Keterangan                                      |
+| --------------------------------------- | --------------------- | ----------------------------------------------- |
+| `/`                                   | ✅ Beranda Guru       | Jadwal hari ini, ringkasan KBM, statistik tugas |
+| `/absensi`                            | ✅ Catat absensi      | Kehadiran siswa di kelas/sesi yang diajar       |
+| `/penilaian`                          | ✅ Input nilai        | Tugas, ulangan harian, formatif/sumatif         |
+| `/jurnal`                             | ✅ Jurnal Mengajar    | Bukti fisik jam mengajar (JTM), materi, kendala |
+| `/tugas` & `/tugas-online`          | ✅ Kelola tugas       | Tugas terstruktur & pengumpulan online          |
+| `/soal`                               | ✅ Bank soal          | Manajemen butir soal ujian/kuis                 |
+| `/jadwal`                             | ✅ Jadwal mengajar    | Kalender jadwal KBM mingguan                    |
+| `/laporan`                            | ✅ Rekap KBM          | Cetak absensi, rekap nilai & jurnal yang diampu |
+| `/siswa`                              | 👁️ Lihat data siswa | Profil siswa di kelas yang diajar               |
+| `/poin`                               | ✅ Pembinaan karakter | Poin prestasi & pelanggaran siswa               |
+| `/catatan`                            | ✅ Catatan guru       | Catatan harian & agenda pribadi                 |
+| `/admin`, `/kepsek`, `/bendahara` | ❌ Ditolak            | Khusus role manajemen                           |
 
 ---
 
 ### 🎓 Kepala Sekolah (Status: ✅ Selesai Diimplementasikan)
+
 Portal mandiri monitoring eksekutif (**Executive Read-Only**) dengan layout terpisah yang modern dan responsif. Memiliki hak supervisi penuh tanpa mengubah (*mutate*) data operasional guru.
 
 * **Arsitektur:** Halaman dan layout independen di `/kepsek/*` dengan *zero-flicker server cookie loading*. Begitu login, otomatis dialihkan ke `/kepsek`.
 * **Keamanan:** Proteksi ketat read-only di level API (`x-user-role` 403 saat POST/PUT/DELETE pada modul akademik).
 
-| Halaman | Akses | Keterangan |
-|---|---|---|
-| `/kepsek` | 👁️ Dashboard Eksekutif | Statistik KBM, rasio jurnal, rekap guru & siswa |
-| `/kepsek/jurnal` | 👁️ Supervisi Jurnal Guru | Filter harian, pantau materi & catatan kendala |
-| `/kepsek/penilaian` | 👁️ Rekap Capaian Nilai | Distribusi nilai siswa, KKM, & status remedial |
-| `/kepsek/absensi` | 👁️ Presensi Mapel | Rekapitulasi kehadiran siswa per rombel |
-| `/kepsek/poin` | 👁️ Poin Karakter | Monitoring prestasi & pelanggaran siswa |
-| `/kepsek/kelas` | 👁️ Daftar Rombel | Profil kelas, kapasitas siswa, & wali kelas |
-| `/kepsek/laporan` | 👁️ Laporan Akademik | Unduh & cetak rekapitulasi KBM komprehensif |
-| `/kepsek/pengguna` | 👁️ Daftar Pengguna | Pantau dewan guru & staf (tanpa edit/tambah) |
-| `/kepsek/penugasan` | 👁️ Penugasan KBM | Pantau persebaran jam mengajar guru |
-| `/kepsek/tahun-ajar` | 👁️ Kalender Akademik | Status semester aktif |
-| Export Data (CSV/Print) | ✅ Unduh Laporan | Ekspor seluruh tabel supervisi |
+| Halaman                 | Akses                      | Keterangan                                      |
+| ----------------------- | -------------------------- | ----------------------------------------------- |
+| `/kepsek`             | 👁️ Dashboard Eksekutif   | Statistik KBM, rasio jurnal, rekap guru & siswa |
+| `/kepsek/jurnal`      | 👁️ Supervisi Jurnal Guru | Filter harian, pantau materi & catatan kendala  |
+| `/kepsek/penilaian`   | 👁️ Rekap Capaian Nilai   | Distribusi nilai siswa, KKM, & status remedial  |
+| `/kepsek/absensi`     | 👁️ Presensi Mapel        | Rekapitulasi kehadiran siswa per rombel         |
+| `/kepsek/poin`        | 👁️ Poin Karakter         | Monitoring prestasi & pelanggaran siswa         |
+| `/kepsek/kelas`       | 👁️ Daftar Rombel         | Profil kelas, kapasitas siswa, & wali kelas     |
+| `/kepsek/laporan`     | 👁️ Laporan Akademik      | Unduh & cetak rekapitulasi KBM komprehensif     |
+| `/kepsek/pengguna`    | 👁️ Daftar Pengguna       | Pantau dewan guru & staf (tanpa edit/tambah)    |
+| `/kepsek/penugasan`   | 👁️ Penugasan KBM         | Pantau persebaran jam mengajar guru             |
+| `/kepsek/tahun-ajar`  | 👁️ Kalender Akademik     | Status semester aktif                           |
+| Export Data (CSV/Print) | ✅ Unduh Laporan           | Ekspor seluruh tabel supervisi                  |
 
 ---
 
 ### 💼 Bendahara / Keuangan (Status: ✅ Selesai / Live)
+
 Portal khusus pengelolaan keuangan, presensi mengajar guru berbasis jam riil (*proof of teaching*), kalkulasi bisaroh/honorarium guru berjenjang, tunjangan & potongan kustom dinamis, serta penerbitan slip gaji digital.
 
 * **Latar Belakang:** Bisaroh guru dihitung berbasis akumulasi **Jam Tatap Muka (JTM)** riil dari tabel `jurnal` (misal jam ke `"1-2"` = 2 JP).
@@ -90,15 +94,15 @@ Portal khusus pengelolaan keuangan, presensi mengajar guru berbasis jam riil (*p
   - **Potongan Tetap Dinamis:** Pengelolaan iuran/potongan (e.g. Infaq bulanan, Koperasi, Dana Sosial).
   - **Kalkulasi & Slip Gaji Terperinci:** Rincian transparan breakdown honor JP, tunjangan pokok, tunjangan tambahan, bonus, dan potongan di modal slip gaji yang siap cetak.
 
-| Halaman | Akses | Keterangan |
-|---|---|---|
-| `/bendahara` | ✅ Dashboard Keuangan | Ringkasan estimasi bisaroh, total JTM guru, distribusi tingkatan, & cut-off |
-| `/bendahara/jtm` | ✅ Rekap JTM & Kehadiran | Agregasi jam mengajar riil guru dari jurnal per cut-off bulanan + badge tingkatan |
-| `/bendahara/bisaroh` | ✅ Kalkulasi Bisaroh | Hitung otomatis honor JP berjenjang + tunjangan pokok + tunjangan tambahan - potongan |
-| `/bendahara/tarif` | ✅ Konfigurasi Tarif & Tunjangan | 4 Tab: Tingkatan Guru & Assignment, Tunjangan Dinamis, Potongan Dinamis, Cut-Off |
-| `/bendahara/guru` | ✅ Data Dewan Guru | Daftar resmi guru, username, tingkatan guru, tarif JP, dan status wali kelas |
-| `/bendahara/jurnal` | 👁️ Audit Jurnal KBM | Pemeriksaan bukti fisik KBM & kendala sebelum pencairan bisaroh |
-| Slip Gaji & SPJ | ✅ Cetak & Ekspor | Cetak slip digital per guru (rinci per komponen) & unduh rekapitulasi penggajian |
+| Halaman                | Akses                            | Keterangan                                                                            |
+| ---------------------- | -------------------------------- | ------------------------------------------------------------------------------------- |
+| `/bendahara`         | ✅ Dashboard Keuangan            | Ringkasan estimasi bisaroh, total JTM guru, distribusi tingkatan, & cut-off           |
+| `/bendahara/jtm`     | ✅ Rekap JTM & Kehadiran         | Agregasi jam mengajar riil guru dari jurnal per cut-off bulanan + badge tingkatan     |
+| `/bendahara/bisaroh` | ✅ Kalkulasi Bisaroh             | Hitung otomatis honor JP berjenjang + tunjangan pokok + tunjangan tambahan - potongan |
+| `/bendahara/tarif`   | ✅ Konfigurasi Tarif & Tunjangan | 4 Tab: Tingkatan Guru & Assignment, Tunjangan Dinamis, Potongan Dinamis, Cut-Off      |
+| `/bendahara/guru`    | ✅ Data Dewan Guru               | Daftar resmi guru, username, tingkatan guru, tarif JP, dan status wali kelas          |
+| `/bendahara/jurnal`  | 👁️ Audit Jurnal KBM            | Pemeriksaan bukti fisik KBM & kendala sebelum pencairan bisaroh                       |
+| Slip Gaji & SPJ        | ✅ Cetak & Ekspor                | Cetak slip digital per guru (rinci per komponen) & unduh rekapitulasi penggajian      |
 
 ---
 
@@ -112,19 +116,20 @@ Portal khusus pengelolaan keuangan, presensi mengajar guru berbasis jam riil (*p
 
 **Prinsip: Satu wali murid = hanya data anaknya.**
 
-| Halaman | Akses |
-|---|---|
-| `/wali-murid` (dashboard) | ✅ Dashboard ringkasan anak |
-| Absensi anak | 👁️ Rekap kehadiran anaknya saja |
-| Nilai anak | 👁️ Laporan nilai anaknya |
-| Poin/perilaku anak | 👁️ Histori poin anaknya |
-| Jadwal kelas anak | 👁️ Jadwal kelas |
-| Tugas anak | 👁️ Daftar tugas yang diberikan ke anak |
-| Pengumuman | 👁️ Pengumuman umum sekolah |
-| Edit data apapun | ❌ Tidak ada akses edit |
-| Fitur guru | ❌ Tidak ada akses |
+| Halaman                     | Akses                                    |
+| --------------------------- | ---------------------------------------- |
+| `/wali-murid` (dashboard) | ✅ Dashboard ringkasan anak              |
+| Absensi anak                | 👁️ Rekap kehadiran anaknya saja        |
+| Nilai anak                  | 👁️ Laporan nilai anaknya               |
+| Poin/perilaku anak          | 👁️ Histori poin anaknya                |
+| Jadwal kelas anak           | 👁️ Jadwal kelas                        |
+| Tugas anak                  | 👁️ Daftar tugas yang diberikan ke anak |
+| Pengumuman                  | 👁️ Pengumuman umum sekolah             |
+| Edit data apapun            | ❌ Tidak ada akses edit                  |
+| Fitur guru                  | ❌ Tidak ada akses                       |
 
 **Relasi database:**
+
 ```sql
 -- Tabel baru: wali_murid
 CREATE TABLE wali_murid (
@@ -138,6 +143,7 @@ CREATE TABLE wali_murid (
 ```
 
 **Catatan teknis:**
+
 - Butuh route baru: `/wali-murid` dan `/wali-murid/[id_siswa]`
 - Saat login, sistem perlu fetch daftar anak dari `wali_murid` lalu arahkan ke dashboard anak
 - Pertimbangkan **notifikasi push** (PWA sudah terpasang) untuk alert absensi alfa / nilai rendah
@@ -148,19 +154,20 @@ CREATE TABLE wali_murid (
 
 > Petugas satpam/keamanan sekolah. Fokus pada monitoring kedatangan dan kepulangan siswa di gerbang sekolah.
 
-| Halaman | Akses |
-|---|---|
-| `/keamanan` (dashboard) | ✅ Dashboard absensi gerbang |
-| Catat absensi masuk/pulang | ✅ Input kehadiran siswa di gerbang |
-| Lihat daftar siswa hari ini | ✅ Siapa sudah/belum hadir |
-| Tandai siswa terlambat | ✅ Flag keterlambatan |
-| Rekap absensi harian | ✅ Statistik kehadiran hari ini |
-| Info dasar siswa (nama, kelas, foto) | 👁️ Untuk identifikasi |
-| Fitur akademik (nilai, mapel, dll) | ❌ Tidak ada akses |
-| `/admin` | ❌ Tidak ada akses |
-| Edit data siswa | ❌ Tidak ada akses |
+| Halaman                              | Akses                               |
+| ------------------------------------ | ----------------------------------- |
+| `/keamanan` (dashboard)            | ✅ Dashboard absensi gerbang        |
+| Catat absensi masuk/pulang           | ✅ Input kehadiran siswa di gerbang |
+| Lihat daftar siswa hari ini          | ✅ Siapa sudah/belum hadir          |
+| Tandai siswa terlambat               | ✅ Flag keterlambatan               |
+| Rekap absensi harian                 | ✅ Statistik kehadiran hari ini     |
+| Info dasar siswa (nama, kelas, foto) | 👁️ Untuk identifikasi             |
+| Fitur akademik (nilai, mapel, dll)   | ❌ Tidak ada akses                  |
+| `/admin`                           | ❌ Tidak ada akses                  |
+| Edit data siswa                      | ❌ Tidak ada akses                  |
 
 **Catatan teknis:**
+
 - Butuh route baru: `/keamanan`
 - UI dioptimalkan untuk **layar sentuh** (tablet di pos satpam)
 - Simpan ke tabel `absensi` dengan kolom tambahan `jenis: 'gerbang'` atau tabel terpisah `absensi_gerbang`
@@ -174,15 +181,15 @@ CREATE TABLE wali_murid (
 
 > Konselor sekolah. Fokus memantau perilaku, kesejahteraan, dan kehadiran **seluruh siswa** (bukan hanya satu kelas).
 
-| Halaman | Akses |
-|---|---|
-| `/poin` | ✅ Lihat & beri poin perilaku **semua siswa** |
-| `/absensi` | 👁️ Lihat rekap absensi semua siswa |
-| `/siswa` | 👁️ Lihat profil & histori semua siswa |
-| Catatan konseling | ✅ Buat & kelola catatan konseling per siswa |
-| `/laporan` | 👁️ Laporan perilaku & kehadiran |
-| `/penilaian`, `/soal`, `/jurnal` | ❌ Tidak ada akses (bukan guru mapel) |
-| `/admin` | ❌ Tidak ada akses |
+| Halaman                                | Akses                                               |
+| -------------------------------------- | --------------------------------------------------- |
+| `/poin`                              | ✅ Lihat & beri poin perilaku **semua siswa** |
+| `/absensi`                           | 👁️ Lihat rekap absensi semua siswa                |
+| `/siswa`                             | 👁️ Lihat profil & histori semua siswa             |
+| Catatan konseling                      | ✅ Buat & kelola catatan konseling per siswa        |
+| `/laporan`                           | 👁️ Laporan perilaku & kehadiran                   |
+| `/penilaian`, `/soal`, `/jurnal` | ❌ Tidak ada akses (bukan guru mapel)               |
+| `/admin`                             | ❌ Tidak ada akses                                  |
 
 **Catatan:** Bisa dipertimbangkan penambahan tabel `catatan_bk` untuk mencatat sesi konseling.
 
@@ -192,15 +199,15 @@ CREATE TABLE wali_murid (
 
 > Staf administrasi sekolah. Mengelola data & dokumen, bukan akademik.
 
-| Halaman | Akses |
-|---|---|
-| `/siswa` | ✅ CRUD data siswa (tambah, edit, arsip, mutasi) |
-| `/berkas` | ✅ Kelola dokumen & berkas sekolah |
-| `/absensi` | 👁️ Lihat rekap (untuk keperluan surat keterangan) |
-| `/admin/promosi-kelas` | ✅ Promosi & mutasi siswa |
-| `/laporan` | 👁️ Laporan administratif |
-| `/admin/pengguna` | ❌ Tidak bisa kelola akun pengguna |
-| `/penilaian`, `/soal`, `/jurnal` | ❌ Tidak ada akses |
+| Halaman                                | Akses                                               |
+| -------------------------------------- | --------------------------------------------------- |
+| `/siswa`                             | ✅ CRUD data siswa (tambah, edit, arsip, mutasi)    |
+| `/berkas`                            | ✅ Kelola dokumen & berkas sekolah                  |
+| `/absensi`                           | 👁️ Lihat rekap (untuk keperluan surat keterangan) |
+| `/admin/promosi-kelas`               | ✅ Promosi & mutasi siswa                           |
+| `/laporan`                           | 👁️ Laporan administratif                          |
+| `/admin/pengguna`                    | ❌ Tidak bisa kelola akun pengguna                  |
+| `/penilaian`, `/soal`, `/jurnal` | ❌ Tidak ada akses                                  |
 
 ---
 
@@ -208,17 +215,18 @@ CREATE TABLE wali_murid (
 
 > Siswa dapat login untuk melihat data akademik dirinya sendiri.
 
-| Halaman | Akses |
-|---|---|
-| `/siswa-portal` (dashboard) | ✅ Dashboard ringkasan diri |
-| Lihat nilai diri sendiri | 👁️ Nilai per mapel |
-| Lihat absensi diri sendiri | 👁️ Rekap kehadiran |
-| Lihat tugas | 👁️ Tugas yang diberikan |
-| Lihat jadwal | 👁️ Jadwal kelas |
-| Lihat poin perilaku | 👁️ Histori poin diri sendiri |
-| Edit data apapun | ❌ Tidak ada akses |
+| Halaman                       | Akses                          |
+| ----------------------------- | ------------------------------ |
+| `/siswa-portal` (dashboard) | ✅ Dashboard ringkasan diri    |
+| Lihat nilai diri sendiri      | 👁️ Nilai per mapel           |
+| Lihat absensi diri sendiri    | 👁️ Rekap kehadiran           |
+| Lihat tugas                   | 👁️ Tugas yang diberikan      |
+| Lihat jadwal                  | 👁️ Jadwal kelas              |
+| Lihat poin perilaku           | 👁️ Histori poin diri sendiri |
+| Edit data apapun              | ❌ Tidak ada akses             |
 
 **Relasi database:**
+
 ```sql
 -- Tabel baru: siswa_auth
 CREATE TABLE siswa_auth (
@@ -235,12 +243,12 @@ CREATE TABLE siswa_auth (
 
 > Level akses **di antara** Guru dan Kepala Sekolah, tergantung bidangnya.
 
-| Wakasek | Akses Utama |
-|---|---|
-| **Kurikulum** | Jadwal, mapel, penugasan KBM, laporan nilai |
-| **Kesiswaan** | Siswa, poin/perilaku, absensi, rekap kesiswaan |
-| **Sarana & Prasarana** | Berkas, data inventaris |
-| **Humas** | Pengumuman, laporan untuk pihak eksternal |
+| Wakasek                      | Akses Utama                                    |
+| ---------------------------- | ---------------------------------------------- |
+| **Kurikulum**          | Jadwal, mapel, penugasan KBM, laporan nilai    |
+| **Kesiswaan**          | Siswa, poin/perilaku, absensi, rekap kesiswaan |
+| **Sarana & Prasarana** | Berkas, data inventaris                        |
+| **Humas**              | Pengumuman, laporan untuk pihak eksternal      |
 
 > **Rekomendasi:** Implementasikan sebagai **satu role "Wakasek"** dengan akses gabungan, bukan 4 role terpisah — kecuali ada kebutuhan spesifik pemisahan.
 
@@ -431,14 +439,14 @@ const ROLE_OPTIONS = [
 
 ### 7.2. Halaman Portal Khusus Per Role
 
-| Route | Untuk Role | Deskripsi |
-|---|---|---|
-| `/admin/*` | Admin | Pusat pengelolaan akun, KBM, dan kalender |
-| `/kepsek/*` | Kepala Sekolah | Portal monitoring eksekutif supervisi KBM |
-| `/bendahara/*` | Bendahara | Portal keuangan, rekap JTM, tarif & bisaroh |
-| `/wali-murid` | Wali Murid | Portal orang tua — ringkasan anak |
-| `/keamanan` | Keamanan | Dashboard absensi gerbang |
-| `/siswa-portal` | Siswa | Portal siswa — data akademik diri sendiri |
+| Route             | Untuk Role     | Deskripsi                                   |
+| ----------------- | -------------- | ------------------------------------------- |
+| `/admin/*`      | Admin          | Pusat pengelolaan akun, KBM, dan kalender   |
+| `/kepsek/*`     | Kepala Sekolah | Portal monitoring eksekutif supervisi KBM   |
+| `/bendahara/*`  | Bendahara      | Portal keuangan, rekap JTM, tarif & bisaroh |
+| `/wali-murid`   | Wali Murid     | Portal orang tua — ringkasan anak          |
+| `/keamanan`     | Keamanan       | Dashboard absensi gerbang                   |
+| `/siswa-portal` | Siswa          | Portal siswa — data akademik diri sendiri  |
 
 ### 7.3. Warna Badge Role (Neobrutalism Consistency)
 
@@ -461,20 +469,19 @@ const ROLE_COLORS = {
 
 ## 8. Prioritas Implementasi
 
-| Urutan | Role | Status | Kompleksitas | Keterangan & Pencapaian |
-|---|---|---|---|---|
-| 1 | **Kepala Sekolah** | ✅ **Selesai (Live)** | 🟢 Rendah-Sedang | Portal `/kepsek/*` mandiri (10 modul supervisi, zero-flicker, Neobrutalism UI, read-only API). |
-| 2 | **Bendahara** | ✅ **Selesai (Live)** | 🟡 Sedang | Portal `/bendahara/*`, rekap JTM real-time dari jurnal, tingkatan guru dinamis (Senior/Junior), tunjangan/potongan kustom, kalkulasi bisaroh, & slip gaji digital. |
-| 3 | **Wali Kelas** | ⏳ Tahap Berikutnya | 🟡 Sedang | Butuh tabel `wali_kelas`, filter data berdasarkan kelas yang dipegang. |
-| 4 | **Keamanan** | 📋 Terencana | 🟡 Sedang | Butuh halaman `/keamanan` baru, logika absensi gerbang. |
-| 5 | **Guru BK** | 📋 Terencana | 🟡 Sedang | Akses data poin & absensi semua siswa, catatan konseling. |
-| 6 | **Tata Usaha** | 📋 Terencana | 🟡 Sedang | Akses CRUD siswa & berkas, koordinasi surat menyurat. |
-| 7 | **Wali Murid** | 📋 Terencana | 🔴 Tinggi | Butuh tabel `wali_murid`, halaman portal `/wali-murid`, filter ketat per anak. |
-| 8 | **Siswa** | 📋 Terencana | 🔴 Tinggi | Butuh tabel `siswa_auth`, halaman portal `/siswa-portal`. |
-| 9 | **Wakasek** | 📋 Terencana | 🟡 Sedang | Definisi akses integrasi kurikulum & kesiswaan. |
+| Urutan | Role                     | Status                      | Kompleksitas     | Keterangan & Pencapaian                                                                                                                                              |
+| ------ | ------------------------ | --------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1      | **Kepala Sekolah** | ✅ **Selesai (Live)** | 🟢 Rendah-Sedang | Portal `/kepsek/*` mandiri (10 modul supervisi, zero-flicker, Neobrutalism UI, read-only API).                                                                     |
+| 2      | **Bendahara**      | ✅ **Selesai (Live)** | 🟡 Sedang        | Portal `/bendahara/*`, rekap JTM real-time dari jurnal, tingkatan guru dinamis (Senior/Junior), tunjangan/potongan kustom, kalkulasi bisaroh, & slip gaji digital. |
+| 3      | **Wali Kelas**     | ⏳ Tahap Berikutnya         | 🟡 Sedang        | Butuh tabel `wali_kelas`, filter data berdasarkan kelas yang dipegang.                                                                                             |
+| 4      | **Keamanan**       | 📋 Terencana                | 🟡 Sedang        | Butuh halaman `/keamanan` baru, logika absensi gerbang.                                                                                                            |
+| 5      | **Guru BK**        | 📋 Terencana                | 🟡 Sedang        | Akses data poin & absensi semua siswa, catatan konseling.                                                                                                            |
+| 6      | **Tata Usaha**     | 📋 Terencana                | 🟡 Sedang        | Akses CRUD siswa & berkas, koordinasi surat menyurat.                                                                                                                |
+| 7      | **Wali Murid**     | 📋 Terencana                | 🔴 Tinggi        | Butuh tabel `wali_murid`, halaman portal `/wali-murid`, filter ketat per anak.                                                                                   |
+| 8      | **Siswa**          | 📋 Terencana                | 🔴 Tinggi        | Butuh tabel `siswa_auth`, halaman portal `/siswa-portal`.                                                                                                        |
+| 9      | **Wakasek**        | 📋 Terencana                | 🟡 Sedang        | Definisi akses integrasi kurikulum & kesiswaan.                                                                                                                      |
 
 ---
 
-*Dokumen ini diperbarui terakhir: Oktober 2026*  
+*Dokumen ini diperbarui terakhir: Oktober 2026*
 *Referensi implementasi: `src/proxy.js`, `src/app/kepsek/*`, dan `src/app/bendahara/*`*
-
