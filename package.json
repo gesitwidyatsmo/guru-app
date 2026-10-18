@@ -15,7 +15,9 @@
     "test:e2e:headed": "playwright test --headed",
     "test:all": "npm run test && npm run test:e2e",
     "playwright:install": "playwright install",
-    "db:backup": "node scripts/export_supabase.js"
+    "db:backup": "node data_siswa/export_supabase.js",
+    "db:reset-data": "node scripts/reset_data_except_users.js",
+    "db:create-admin": "node scripts/create_admin.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

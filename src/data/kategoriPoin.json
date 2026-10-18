@@ -1,0 +1,422 @@
+{
+  "positif": [
+    {
+      "id": "1",
+      "kategori_kode": "quiz",
+      "kategori": "quiz",
+      "aktivitas": "Jawaban Quiz Benar",
+      "bobot_default": "10",
+      "deskripsi": "Siswa jawab quiz dengan benar",
+      "icon": "📝"
+    },
+    {
+      "id": "2",
+      "kategori_kode": "quiz",
+      "kategori": "quiz",
+      "aktivitas": "Essay/Jawaban Panjang Benar",
+      "bobot_default": "15",
+      "deskripsi": "Jawaban esai/penjelasan mendalam benar",
+      "icon": "✍️"
+    },
+    {
+      "id": "3",
+      "kategori_kode": "misi",
+      "kategori": "misi",
+      "aktivitas": "Misi Harian Selesai",
+      "bobot_default": "15",
+      "deskripsi": "Menyelesaikan 5 soal misi harian",
+      "icon": "🎯"
+    },
+    {
+      "id": "4",
+      "kategori_kode": "tanya",
+      "kategori": "tanya",
+      "aktivitas": "Berani Bertanya",
+      "bobot_default": "5",
+      "deskripsi": "Mengajukan pertanyaan di kelas",
+      "icon": "🙋"
+    },
+    {
+      "id": "5",
+      "kategori_kode": "tanya",
+      "kategori": "tanya",
+      "aktivitas": "Pertanyaan Bagus",
+      "bobot_default": "8",
+      "deskripsi": "Pertanyaan berkualitas dan relevan",
+      "icon": "💡"
+    },
+    {
+      "id": "6",
+      "kategori_kode": "jawab",
+      "kategori": "jawab",
+      "aktivitas": "Menjawab Pertanyaan Teman",
+      "bobot_default": "8",
+      "deskripsi": "Membantu teman menjawab soal",
+      "icon": "🤝"
+    },
+    {
+      "id": "7",
+      "kategori_kode": "diskusi",
+      "kategori": "diskusi",
+      "aktivitas": "Aktif Diskusi Kelompok",
+      "bobot_default": "10",
+      "deskripsi": "Partisipasi aktif dalam diskusi",
+      "icon": "💬"
+    },
+    {
+      "id": "8",
+      "kategori_kode": "presentasi",
+      "kategori": "presentasi",
+      "aktivitas": "Presentasi Bagus",
+      "bobot_default": "20",
+      "deskripsi": "Presentasi hasil kerja dengan baik",
+      "icon": "🎤"
+    },
+    {
+      "id": "9",
+      "kategori_kode": "proyek",
+      "kategori": "proyek",
+      "aktivitas": "Selesai Proyek Tepat Waktu",
+      "bobot_default": "25",
+      "deskripsi": "Menyelesaikan proyek sesuai deadline",
+      "icon": "✅"
+    },
+    {
+      "id": "10",
+      "kategori_kode": "kreativitas",
+      "kategori": "kreativitas",
+      "aktivitas": "Ide Kreatif/Inovasi",
+      "bobot_default": "15",
+      "deskripsi": "Menghasilkan ide orisinil di kelas",
+      "icon": "🎨"
+    },
+    {
+      "id": "11",
+      "kategori_kode": "kerjasama",
+      "kategori": "kerjasama",
+      "aktivitas": "Kerjasama Tim Baik",
+      "bobot_default": "12",
+      "deskripsi": "Bekerjasama harmonis dalam kelompok",
+      "icon": "👥"
+    },
+    {
+      "id": "12",
+      "kategori_kode": "kehadiran",
+      "kategori": "kehadiran",
+      "aktivitas": "Kehadiran Sempurna Minggu",
+      "bobot_default": "5",
+      "deskripsi": "Hadir setiap hari 1 minggu tanpa bolos",
+      "icon": "⏰"
+    },
+    {
+      "id": "13",
+      "kategori_kode": "tugas",
+      "kategori": "tugas",
+      "aktivitas": "Kumpul Tugas Tepat Waktu",
+      "bobot_default": "5",
+      "deskripsi": "Mengumpulkan tugas sesuai deadline",
+      "icon": "📦"
+    },
+    {
+      "id": "14",
+      "kategori_kode": "ulangan",
+      "kategori": "ulangan",
+      "aktivitas": "Nilai Ulangan Bagus",
+      "bobot_default": "20",
+      "deskripsi": "Nilai ≥85 di ulangan harian",
+      "icon": "🏆"
+    },
+    {
+      "id": "15",
+      "kategori_kode": "lomba",
+      "kategori": "lomba",
+      "aktivitas": "Juara/Finalis Lomba",
+      "bobot_default": "50",
+      "deskripsi": "Memenangkan atau finalist lomba akademik",
+      "icon": "🥇"
+    },
+    {
+      "id": "16",
+      "kategori_kode": "leadership",
+      "kategori": "leadership",
+      "aktivitas": "Kepemimpinan Kelompok",
+      "bobot_default": "20",
+      "deskripsi": "Memimpin kelompok dengan efektif",
+      "icon": "👑"
+    }
+  ],
+  "negatif": [
+    {
+      "id": "1",
+      "kategori_kode": "terlambat",
+      "kategori": "terlambat",
+      "aktivitas": "Terlambat <15 menit",
+      "bobot_default": "3",
+      "tingkat": "Ringan",
+      "deskripsi": "Datang 114 menit setelah jam belajar",
+      "icon": "⏱️"
+    },
+    {
+      "id": "2",
+      "kategori_kode": "terlambat",
+      "kategori": "terlambat",
+      "aktivitas": "Terlambat 1530 menit",
+      "bobot_default": "5",
+      "tingkat": "Sedang",
+      "deskripsi": "Datang 1530 menit setelah jam belajar",
+      "icon": "⏱️"
+    },
+    {
+      "id": "3",
+      "kategori_kode": "terlambat",
+      "kategori": "terlambat",
+      "aktivitas": "Terlambat >30 menit",
+      "bobot_default": "10",
+      "tingkat": "Berat",
+      "deskripsi": "Datang >30 menit setelah jam belajar",
+      "icon": "⏱️"
+    },
+    {
+      "id": "4",
+      "kategori_kode": "berisik",
+      "kategori": "berisik",
+      "aktivitas": "Berisik/Gaduh di Kelas",
+      "bobot_default": "2",
+      "tingkat": "Ringan",
+      "deskripsi": "Mengganggu ketenangan belajar",
+      "icon": "🔊"
+    },
+    {
+      "id": "5",
+      "kategori_kode": "hp",
+      "kategori": "hp",
+      "aktivitas": "Main HP di Kelas",
+      "bobot_default": "10",
+      "tingkat": "Berat",
+      "deskripsi": "Menggunakan HP saat pelajaran",
+      "icon": "📱"
+    },
+    {
+      "id": "6",
+      "kategori_kode": "tidur",
+      "kategori": "tidur",
+      "aktivitas": "Tidur di Kelas",
+      "bobot_default": "5",
+      "tingkat": "Sedang",
+      "deskripsi": "Tertidur saat pelajaran berlangsung",
+      "icon": "😴"
+    },
+    {
+      "id": "7",
+      "kategori_kode": "lupa_pr",
+      "kategori": "lupa_pr",
+      "aktivitas": "Lupa/Tidak Buat PR",
+      "bobot_default": "5",
+      "tingkat": "Sedang",
+      "deskripsi": "Tidak mengerjakan PR",
+      "icon": "📋"
+    },
+    {
+      "id": "8",
+      "kategori_kode": "lupa_alat",
+      "kategori": "lupa_alat",
+      "aktivitas": "Lupa Membawa Alat Tulis",
+      "bobot_default": "2",
+      "tingkat": "Ringan",
+      "deskripsi": "Lupa membawa alat tulis lengkap",
+      "icon": "✏️"
+    },
+    {
+      "id": "9",
+      "kategori_kode": "tidak_rapi",
+      "kategori": "tidak_rapi",
+      "aktivitas": "Penampilan Tidak Rapi",
+      "bobot_default": "3",
+      "tingkat": "Ringan",
+      "deskripsi": "Seragam/rambut tidak rapi",
+      "icon": "👕"
+    },
+    {
+      "id": "10",
+      "kategori_kode": "keluar_kelas",
+      "kategori": "keluar_kelas",
+      "aktivitas": "Keluar Tanpa Izin",
+      "bobot_default": "5",
+      "tingkat": "Sedang",
+      "deskripsi": "Meninggalkan kelas tanpa perizinan",
+      "icon": "🚪"
+    },
+    {
+      "id": "11",
+      "kategori_kode": "bolos",
+      "kategori": "bolos",
+      "aktivitas": "Bolos/Absen Tanpa Izin",
+      "bobot_default": "25",
+      "tingkat": "Berat",
+      "deskripsi": "Tidak hadir tanpa keterangan resmi",
+      "icon": "❌"
+    },
+    {
+      "id": "12",
+      "kategori_kode": "catatan",
+      "kategori": "catatan",
+      "aktivitas": "Tidak Mencatat Pelajaran",
+      "bobot_default": "3",
+      "tingkat": "Ringan",
+      "deskripsi": "Tidak menulis/mencatat di buku",
+      "icon": "📖"
+    },
+    {
+      "id": "13",
+      "kategori_kode": "pr_jelek",
+      "kategori": "pr_jelek",
+      "aktivitas": "PR Asalasalan",
+      "bobot_default": "4",
+      "tingkat": "Sedang",
+      "deskripsi": "Mengerjakan PR tapi tidak serius",
+      "icon": "⚠️"
+    },
+    {
+      "id": "14",
+      "kategori_kode": "nyontek",
+      "kategori": "nyontek",
+      "aktivitas": "Nyontek Saat Ulangan",
+      "bobot_default": "30",
+      "tingkat": "Berat",
+      "deskripsi": "Mencontek atau plagiat saat tes",
+      "icon": "🚫"
+    },
+    {
+      "id": "15",
+      "kategori_kode": "jm_teman",
+      "kategori": "jm_teman",
+      "aktivitas": "Mengganggu Teman Belajar",
+      "bobot_default": "4",
+      "tingkat": "Sedang",
+      "deskripsi": "Mengganggu konsentrasi teman",
+      "icon": "😤"
+    },
+    {
+      "id": "16",
+      "kategori_kode": "banting_alat",
+      "kategori": "banting_alat",
+      "aktivitas": "Merusak Alat/Fasilitas",
+      "bobot_default": "20",
+      "tingkat": "Berat",
+      "deskripsi": "Merusak sarana sekolah",
+      "icon": "💔"
+    },
+    {
+      "id": "17",
+      "kategori_kode": "kasar",
+      "kategori": "kasar",
+      "aktivitas": "Perkataan Kasar",
+      "bobot_default": "10",
+      "tingkat": "Berat",
+      "deskripsi": "Berbicara tidak sopan ke guru/teman",
+      "icon": "💢"
+    },
+    {
+      "id": "18",
+      "kategori_kode": "berkelahi",
+      "kategori": "berkelahi",
+      "aktivitas": "Perkelahian",
+      "bobot_default": "50",
+      "tingkat": "Sangat Berat",
+      "deskripsi": "Berkelahi/kekerasan fisik",
+      "icon": "🤜"
+    }
+  ],
+  "badges": [
+    {
+      "id": "1",
+      "badge_kode": "rajin_jawab",
+      "badge_nama": "Rajin Menjawab",
+      "badge_emoji": "🚀",
+      "kategori": "prestasi",
+      "deskripsi": "Paling rajin menjawab di kelas",
+      "syarat": "Jawab ≥50x/semester"
+    },
+    {
+      "id": "2",
+      "badge_kode": "jawaban_terbaik",
+      "badge_nama": "Jawaban Terbaik",
+      "badge_emoji": "⭐",
+      "kategori": "prestasi",
+      "deskripsi": "Jawaban dipilih guru sebagai terbaik",
+      "syarat": "Diputuskan guru"
+    },
+    {
+      "id": "3",
+      "badge_kode": "konsisten",
+      "badge_nama": "Paling Konsisten",
+      "badge_emoji": "📈",
+      "kategori": "prestasi",
+      "deskripsi": "Aktif setiap hari 7 hari berturut",
+      "syarat": "Aktif 7 hari tanpa break"
+    },
+    {
+      "id": "4",
+      "badge_kode": "leader",
+      "badge_nama": "Leader Kelompok",
+      "badge_emoji": "👑",
+      "kategori": "kepemimpinan",
+      "deskripsi": "Memimpin kelompok dengan baik",
+      "syarat": "Diputuskan guru"
+    },
+    {
+      "id": "5",
+      "badge_kode": "kreatif",
+      "badge_nama": "Kreatif Banget",
+      "badge_emoji": "🎨",
+      "kategori": "kreativitas",
+      "deskripsi": "Ide orisinil untuk proyek/poster",
+      "syarat": "Diputuskan guru"
+    },
+    {
+      "id": "6",
+      "badge_kode": "helper",
+      "badge_nama": "Helper/Penolong",
+      "badge_emoji": "🤝",
+      "kategori": "sosial",
+      "deskripsi": "Sering membantu teman belajar",
+      "syarat": "Diamati guru"
+    },
+    {
+      "id": "7",
+      "badge_kode": "positif",
+      "badge_nama": "Always Positive",
+      "badge_emoji": "😊",
+      "kategori": "karakter",
+      "deskripsi": "Selalu bersemangat & positif",
+      "syarat": "Diamati guru"
+    },
+    {
+      "id": "8",
+      "badge_kode": "disiplin",
+      "badge_nama": "Disiplin Tinggi",
+      "badge_emoji": "✅",
+      "kategori": "perilaku",
+      "deskripsi": "Tepat waktu, rapi, tertib",
+      "syarat": "Konsisten 2 minggu"
+    },
+    {
+      "id": "9",
+      "badge_kode": "lomba",
+      "badge_nama": "Juara Akademik",
+      "badge_emoji": "🥇",
+      "kategori": "prestasi",
+      "deskripsi": "Juara 13 lomba akademik",
+      "syarat": "Hasil lomba resmi"
+    },
+    {
+      "id": "10",
+      "badge_kode": "ulangan",
+      "badge_nama": "Perfect Score",
+      "badge_emoji": "💯",
+      "kategori": "prestasi",
+      "deskripsi": "Dapat nilai 100 di ulangan",
+      "syarat": "Nilai sempurna"
+    }
+  ]
+}

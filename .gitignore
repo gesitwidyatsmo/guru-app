@@ -52,3 +52,10 @@ page copy.jsx
 /public/workbox-*.js
 /public/fallback-*.js
 /public/swe-worker-*.js
+
+# Data siswa, jadwal & script export/seed (rahasia/pribadi)
+/data_siswa/
+
+# SQL database dumps, backups & seeds
+/sql/
+/*.sql
