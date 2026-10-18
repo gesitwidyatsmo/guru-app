@@ -7,6 +7,7 @@ import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function BuatTugasKelasPage() {
 	const params = useParams();
@@ -25,7 +26,7 @@ export default function BuatTugasKelasPage() {
 	const [judul, setJudul] = useState('');
 	const [type, setType] = useState('Formatif');
 	const [deskripsi, setDeskripsi] = useState('');
-	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [nilai, setNilai] = useState({}); // Object {siswa_id: nilai}
 	const [jumlahBenar, setJumlahBenar] = useState({}); // Object {siswa_id: jumlah_benar}
 	const [modePenilaian, setModePenilaian] = useState('langsung'); // 'langsung' | 'jumlah_benar'
@@ -94,7 +95,7 @@ export default function BuatTugasKelasPage() {
 		setSkalaMaks(100);
 		setPembulatan('decimal_1');
 		setInitialSiswaIds([]);
-		setTanggal(new Date().toISOString().slice(0, 10));
+		setTanggal(getTodayDateString());
 		setSearchSiswa('');
 	}, [selectedKelas, selectedMapel, tahunAjar, semester]);
 
@@ -166,7 +167,7 @@ export default function BuatTugasKelasPage() {
 			setSkalaMaks(100);
 			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
-			setTanggal(new Date().toISOString().slice(0, 10));
+			setTanggal(getTodayDateString());
 			return;
 		}
 
@@ -751,7 +752,7 @@ export default function BuatTugasKelasPage() {
 			setSkalaMaks(100);
 			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
-			setTanggal(new Date().toISOString().slice(0, 10));
+			setTanggal(getTodayDateString());
 
 			// Refresh daftar tugas
 			let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);

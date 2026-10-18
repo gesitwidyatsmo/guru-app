@@ -8,6 +8,7 @@ import Loader from '../components/loading';
 import ButtonBack from '../components/button/ButtonBack';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function AbsensiMapelPage() {
 	const router = useRouter();
@@ -23,7 +24,7 @@ export default function AbsensiMapelPage() {
 	// --- Filter State ---
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
-	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [jamKe, setJamKe] = useState('');
 	const [searchQuery, setSearchQuery] = useState('');
 

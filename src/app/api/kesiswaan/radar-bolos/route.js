@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 // Normalisasi status presensi agar konsisten (Alpa, Alfa, Alpha, A)
 const normStatus = (val) => {
@@ -15,7 +16,7 @@ const normStatus = (val) => {
 export async function GET(req) {
 	try {
 		const { searchParams } = new URL(req.url);
-		const tanggal = searchParams.get('tanggal') || new Date().toISOString().slice(0, 10);
+		const tanggal = searchParams.get('tanggal') || getTodayDateString();
 		const filterKelas = searchParams.get('kelas');
 
 		const supabase = await createClient();
@@ -326,7 +327,7 @@ export async function GET(req) {
 		// Menggabungkan data dari absensi_mapel_siswa dan absensi_harian_siswa
 		const twoWeeksAgo = new Date();
 		twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-		const twoWeeksAgoStr = twoWeeksAgo.toISOString().slice(0, 10);
+		const twoWeeksAgoStr = getTodayDateString(twoWeeksAgo);
 
 		// Ambil dari sesi mapel (sumber utama KBM)
 		const { data: kronisMapelRows } = await supabaseAdmin

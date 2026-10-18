@@ -23,6 +23,7 @@ import {
 	Search,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { getTodayDateString } from '@/lib/dateUtils';
 import { createClient } from '@/utils/supabase/client';
 import { useAcademic } from '@/context/AcademicContext';
 
@@ -80,7 +81,7 @@ export default function GroupScoringView({
 	const [judul, setJudul] = useState('');
 	const [type, setType] = useState('Tugas Kelompok');
 	const [mapel, setMapel] = useState('');
-	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [deskripsi, setDeskripsi] = useState('');
 
 	// Nilai
@@ -188,7 +189,7 @@ export default function GroupScoringView({
 			setJudul(target.kategori || sessionData?.judul_kegiatan || 'TUGAS KELOMPOK');
 			setType(target.type || 'Tugas Kelompok');
 			setMapel(target.mapel || defaultMapel);
-			setTanggal(target.tanggal || new Date().toISOString().slice(0, 10));
+			setTanggal(target.tanggal || getTodayDateString());
 			setDeskripsi(target.deskripsi || '');
 
 			// Map skor siswa
@@ -239,7 +240,7 @@ export default function GroupScoringView({
 			);
 			setType('Tugas Kelompok');
 			setMapel(defaultMapel);
-			setTanggal(new Date().toISOString().slice(0, 10));
+			setTanggal(getTodayDateString());
 			setDeskripsi('');
 
 			// Reset skor kosong

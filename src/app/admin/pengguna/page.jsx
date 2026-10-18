@@ -1,9 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Loader from '../../components/loading';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+	DEFAULT_PROFIL_SEKOLAH,
+	drawKopSuratPDF,
+	drawKepsekSignaturePDF,
+	fetchSchoolProfile,
+} from '@/lib/pdfKopSurat';
 import { useAdminAuth } from '../AdminLayoutClient';
 
 export default function PenggunaPage() {
@@ -11,6 +19,9 @@ export default function PenggunaPage() {
 	const [users, setUsers] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [currentUserRole, setCurrentUserRole] = useState(authRole || null);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
+	const [isExportingPDF, setIsExportingPDF] = useState(false);
+	const [kelasList, setKelasList] = useState([]);
 
 	useEffect(() => {
 		if (authRole) setCurrentUserRole(authRole);
@@ -42,10 +53,23 @@ export default function PenggunaPage() {
 
 	const fetchUsers = async () => {
 		try {
-			const [response, resAuth] = await Promise.all([
+			const [response, resAuth, profile, resKelas] = await Promise.all([
 				fetch('/api/users'),
 				fetch('/api/auth/me'),
+				fetchSchoolProfile(),
+				fetch('/api/kelas?all=true').catch(() => ({ ok: false })),
 			]);
+
+			if (profile) {
+				setSchoolProfile(profile);
+			}
+
+			if (resKelas && resKelas.ok) {
+				const kData = await resKelas.json();
+				if (Array.isArray(kData)) {
+					setKelasList(kData);
+				}
+			}
 
 			if (resAuth.ok) {
 				const authData = await resAuth.json();
@@ -71,21 +95,62 @@ export default function PenggunaPage() {
 		fetchUsers();
 	}, []);
 
+	// Peta deteksi Wali Kelas: id_user & nama_lengkap -> list rombel kelas
+	const waliMap = useMemo(() => {
+		const map = {};
+		kelasList.forEach((k) => {
+			if (!k.kelas) return;
+			if (k.id_wali_kelas) {
+				const idKey = String(k.id_wali_kelas).trim();
+				if (!map[idKey]) map[idKey] = [];
+				if (!map[idKey].includes(k.kelas)) map[idKey].push(k.kelas);
+			}
+			if (k.wali_kelas) {
+				const nameKey = String(k.wali_kelas).trim().toLowerCase();
+				if (!map[nameKey]) map[nameKey] = [];
+				if (!map[nameKey].includes(k.kelas)) map[nameKey].push(k.kelas);
+			}
+		});
+		return map;
+	}, [kelasList]);
+
+	const getWaliKelas = useCallback((u) => {
+		if (!u) return [];
+		if (u.id_user && waliMap[String(u.id_user).trim()]) {
+			return waliMap[String(u.id_user).trim()];
+		}
+		if (u.nama_lengkap && waliMap[String(u.nama_lengkap).trim().toLowerCase()]) {
+			return waliMap[String(u.nama_lengkap).trim().toLowerCase()];
+		}
+		return [];
+	}, [waliMap]);
+
 	const filteredUsers = useMemo(() => {
 		return users.filter((u) => {
-			const matchRole = roleFilter === 'all' || u.role === roleFilter;
+			const waliArr = getWaliKelas(u);
+			const isWali = waliArr.length > 0;
+			const matchRole =
+				roleFilter === 'all'
+					? true
+					: roleFilter === 'Wali Kelas'
+					? isWali
+					: u.role === roleFilter;
+
 			const q = searchQuery.toLowerCase().trim();
+			const waliText = waliArr.join(' ').toLowerCase();
 			const matchSearch =
 				!q ||
 				u.nama_lengkap.toLowerCase().includes(q) ||
 				u.username.toLowerCase().includes(q) ||
 				(u.nip && u.nip.toLowerCase().includes(q)) ||
-				(u.id_user && u.id_user.toLowerCase().includes(q));
+				(u.id_user && u.id_user.toLowerCase().includes(q)) ||
+				(isWali && (waliText.includes(q) || 'wali kelas'.includes(q)));
 			return matchRole && matchSearch;
 		});
-	}, [users, roleFilter, searchQuery]);
+	}, [users, roleFilter, searchQuery, getWaliKelas]);
 
 	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
+	const waliCount = useMemo(() => users.filter((u) => getWaliKelas(u).length > 0).length, [users, getWaliKelas]);
 	const kepsekCount = useMemo(() => users.filter((u) => u.role === 'Kepala Sekolah').length, [users]);
 	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
 	const kesiswaanCount = useMemo(() => users.filter((u) => u.role === 'Kesiswaan').length, [users]);
@@ -120,7 +185,7 @@ export default function PenggunaPage() {
 	const handleDelete = async (user) => {
 		const result = await Swal.fire({
 			title: 'Cabut Akses Pengguna?',
-			text: `Pengguna "${user.nama_lengkap}" (@${user.username}) akan segera dicabut akses loginnya dari sistem.`,
+			text: `Pengguna "${user.nama_lengkap}" (${user.username}) akan segera dicabut akses loginnya dari sistem.`,
 			icon: 'warning',
 			showCancelButton: true,
 			confirmButtonColor: '#E8451A',
@@ -201,6 +266,187 @@ export default function PenggunaPage() {
 			fetchUsers();
 		} catch (err) {
 			Swal.fire('Peringatan', err.message, 'error');
+		}
+	};
+
+	// ---------------------------------------------------------------------------
+	// FITUR EKSPOR PDF MASTER PENGGUNA (DENGAN KOP SURAT RESMI)
+	// ---------------------------------------------------------------------------
+	const handleExportPDF = async () => {
+		if (filteredUsers.length === 0) {
+			Swal.fire('Data Kosong', 'Tidak ada data pengguna yang sesuai untuk diekspor ke PDF.', 'info');
+			return;
+		}
+
+		setIsExportingPDF(true);
+		try {
+			let prof = schoolProfile;
+			try {
+				prof = await fetchSchoolProfile();
+				if (prof) setSchoolProfile(prof);
+			} catch (err) {
+				console.warn('Gagal memuat profil sekolah terbaru saat ekspor PDF:', err);
+			}
+
+			const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+			const margin = 14;
+
+			// 1. Gambar Kop Surat Resmi
+			const endKop = drawKopSuratPDF(doc, prof, { startY: 8, margin });
+
+			// 2. Judul Laporan & Metadata
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(11);
+			doc.setTextColor(15, 23, 42); // slate-900
+			doc.text('DIREKTORI DATA PENGGUNA & HAK AKSES SISTEM', pageWidth / 2, endKop + 2.5, { align: 'center' });
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8);
+			doc.setTextColor(71, 85, 105); // slate-600
+			const roleLabel = roleFilter === 'all' ? 'Semua Peran' : roleFilter;
+			const searchLabel = searchQuery.trim() ? `  •  Pencarian: "${searchQuery.trim()}"` : '';
+			const dateStr = new Date().toLocaleDateString('id-ID', {
+				weekday: 'long',
+				day: 'numeric',
+				month: 'long',
+				year: 'numeric',
+			});
+			doc.text(
+				`Kategori Role: ${roleLabel}${searchLabel}  •  Total: ${filteredUsers.length} Pengguna  •  Dicetak: ${dateStr}`,
+				pageWidth / 2,
+				endKop + 6.8,
+				{ align: 'center' }
+			);
+
+			// 3. Tabel Master Pengguna
+			const tableHead = [
+				['No', 'Nama Pengguna & Identitas', 'Username', 'Peran / Hak Akses', 'ID Pengguna'],
+			];
+
+			const tableBody = filteredUsers.map((u, idx) => {
+				const namaWithNip = u.nip
+					? `${u.nama_lengkap || '-'}\nNIP. ${u.nip}`
+					: (u.nama_lengkap || '-');
+				const waliArr = getWaliKelas(u);
+				const roleDisplay =
+					waliArr.length > 0
+						? `${u.role} & Wali Kelas ${waliArr.join(', ')}`
+						: (u.role || '-');
+
+				return [
+					idx + 1,
+					namaWithNip,
+					u.username || '-',
+					roleDisplay,
+					u.id_user || '-',
+				];
+			});
+
+			autoTable(doc, {
+				startY: endKop + 10,
+				margin: { left: margin, right: margin },
+				head: tableHead,
+				body: tableBody,
+				theme: 'grid',
+				headStyles: {
+					fillColor: [30, 41, 59], // Slate 800
+					textColor: [255, 255, 255],
+					fontSize: 8,
+					fontStyle: 'bold',
+					halign: 'center',
+					cellPadding: 2,
+				},
+				bodyStyles: {
+					fontSize: 7.5,
+					textColor: [15, 23, 42],
+					cellPadding: 2,
+				},
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 8 },
+					1: { fontStyle: 'bold', cellWidth: 58 },
+					2: { halign: 'center', cellWidth: 34 },
+					3: { halign: 'center', fontStyle: 'bold', cellWidth: 46 },
+					4: { halign: 'center', cellWidth: 36, textColor: [71, 85, 105], fontSize: 7 },
+				},
+				alternateRowStyles: {
+					fillColor: [248, 250, 252], // slate-50
+				},
+				didParseCell: (data) => {
+					if (data.section === 'body' && data.column.index === 3) {
+						const r = String(data.cell.raw || '').toLowerCase();
+						if (r.includes('admin')) {
+							data.cell.styles.textColor = [190, 18, 60]; // Rose 700
+						} else if (r.includes('kepala')) {
+							data.cell.styles.textColor = [67, 56, 202]; // Indigo 700
+						} else if (r.includes('wali')) {
+							data.cell.styles.textColor = [5, 150, 105]; // Emerald 600
+						} else if (r.includes('guru')) {
+							data.cell.styles.textColor = [4, 120, 87]; // Emerald 700
+						} else if (r.includes('kesiswaan')) {
+							data.cell.styles.textColor = [109, 40, 217]; // Violet 700
+						} else if (r.includes('bendahara')) {
+							data.cell.styles.textColor = [15, 118, 110]; // Teal 700
+						}
+					}
+				},
+			});
+
+			// 4. Blok Tanda Tangan Kepala Sekolah
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 10;
+			if (finalY + 35 > pageHeight) {
+				doc.addPage();
+				drawKepsekSignaturePDF(doc, prof, {
+					startY: 20,
+					title: 'Mengetahui & Mengesahkan,\nKepala Sekolah',
+					x: pageWidth - 70,
+				});
+			} else {
+				drawKepsekSignaturePDF(doc, prof, {
+					startY: finalY,
+					title: 'Mengetahui & Mengesahkan,\nKepala Sekolah',
+					x: pageWidth - 70,
+				});
+			}
+
+			// 5. Penomoran Halaman & Footer Resmi
+			const pageCount = doc.internal.getNumberOfPages();
+			for (let i = 1; i <= pageCount; i++) {
+				doc.setPage(i);
+				doc.setFont('helvetica', 'normal');
+				doc.setFontSize(7.5);
+				doc.setTextColor(148, 163, 184); // slate-400
+				doc.text(
+					`Halaman ${i} dari ${pageCount}`,
+					pageWidth / 2,
+					pageHeight - 8,
+					{ align: 'center' }
+				);
+				doc.text(
+					`Master Pengguna - ${prof?.nama_sekolah || 'SMP IT TEBUIRENG 4 AL-ISHLAH'}`,
+					margin,
+					pageHeight - 8
+				);
+			}
+
+			// 6. Simpan File PDF
+			const cleanRole = roleFilter !== 'all' ? `_${roleFilter.replace(/\s+/g, '_')}` : '';
+			const fileName = `Master_Pengguna${cleanRole}_${new Date().toISOString().split('T')[0]}.pdf`;
+			doc.save(fileName);
+
+			Swal.fire({
+				icon: 'success',
+				title: 'Berhasil Diekspor',
+				text: `Dokumen PDF (${filteredUsers.length} pengguna) berhasil diunduh.`,
+				timer: 2000,
+				showConfirmButton: false,
+			});
+		} catch (err) {
+			console.error('Gagal mengekspor PDF pengguna:', err);
+			Swal.fire('Gagal Ekspor PDF', err.message || 'Terjadi kesalahan sistem saat membuat dokumen PDF.', 'error');
+		} finally {
+			setIsExportingPDF(false);
 		}
 	};
 
@@ -456,29 +702,49 @@ export default function PenggunaPage() {
 					</p>
 				</div>
 
-				{currentUserRole !== 'Kepala Sekolah' && (
-					<div className='flex flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0'>
-						<button
-							onClick={() => {
-								handleResetImport();
-								setIsImportModalOpen(true);
-							}}
-							className='neo-btn-outline flex items-center justify-center gap-2 text-xs sm:text-sm !py-3 !px-4 bg-white flex-1 sm:flex-none whitespace-nowrap shadow-[3px_3px_0px_0px_#0D0D0D] hover:bg-emerald-50'>
-							<svg className='w-4 h-4 text-emerald-600' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
-								<path strokeLinecap='round' strokeLinejoin='round' d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' />
+				<div className='flex flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0'>
+					<button
+						onClick={handleExportPDF}
+						disabled={isExportingPDF || filteredUsers.length === 0}
+						title='Unduh data master pengguna dalam format PDF resmi dengan Kop Surat'
+						className='neo-btn-outline flex items-center justify-center gap-2 text-xs sm:text-sm !py-3 !px-4 bg-white hover:bg-rose-50 text-rose-700 font-black flex-1 sm:flex-none whitespace-nowrap shadow-[3px_3px_0px_0px_#0D0D0D] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'>
+						{isExportingPDF ? (
+							<svg className='w-4 h-4 animate-spin text-rose-600' viewBox='0 0 24 24' fill='none'>
+								<circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4' />
+								<path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z' />
 							</svg>
-							<span>Import Excel</span>
-						</button>
-						<button
-							onClick={openCreateModal}
-							className='neo-btn-primary flex items-center justify-center gap-2 text-xs sm:text-sm !py-3 !px-5 flex-1 sm:flex-none whitespace-nowrap'>
-							<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
-								<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+						) : (
+							<svg className='w-4 h-4 text-rose-600 shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z' />
 							</svg>
-							<span>Tambah Pengguna Baru</span>
-						</button>
-					</div>
-				)}
+						)}
+						<span>{isExportingPDF ? 'Mengekspor PDF...' : 'Export PDF'}</span>
+					</button>
+
+					{currentUserRole !== 'Kepala Sekolah' && (
+						<>
+							<button
+								onClick={() => {
+									handleResetImport();
+									setIsImportModalOpen(true);
+								}}
+								className='neo-btn-outline flex items-center justify-center gap-2 text-xs sm:text-sm !py-3 !px-4 bg-white flex-1 sm:flex-none whitespace-nowrap shadow-[3px_3px_0px_0px_#0D0D0D] hover:bg-emerald-50'>
+								<svg className='w-4 h-4 text-emerald-600' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+									<path strokeLinecap='round' strokeLinejoin='round' d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' />
+								</svg>
+								<span>Import Excel</span>
+							</button>
+							<button
+								onClick={openCreateModal}
+								className='neo-btn-primary flex items-center justify-center gap-2 text-xs sm:text-sm !py-3 !px-5 flex-1 sm:flex-none whitespace-nowrap'>
+								<svg className='w-5 h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+									<path strokeLinecap='round' strokeLinejoin='round' d='M12 4v16m8-8H4' />
+								</svg>
+								<span>Tambah Pengguna Baru</span>
+							</button>
+						</>
+					)}
+				</div>
 			</div>
 
 			{/* User Statistics Row */}
@@ -497,6 +763,11 @@ export default function PenggunaPage() {
 					<div>
 						<p className='text-xs font-black uppercase text-emerald-800'>Dewan Guru</p>
 						<p className='text-2xl font-black text-emerald-900 mt-0.5'>{guruCount}</p>
+						{waliCount > 0 && (
+							<span className='inline-block text-[10px] font-black text-emerald-900 bg-emerald-200/90 px-1.5 py-0.5 rounded border border-emerald-400 mt-1'>
+								{waliCount} Wali Kelas
+							</span>
+						)}
 					</div>
 					<span className='w-10 h-10 bg-emerald-400 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
 						👨‍🏫
@@ -559,7 +830,7 @@ export default function PenggunaPage() {
 						type='text'
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
-						placeholder='Cari nama, username, atau ID...'
+						placeholder='Cari nama, username, ID, atau wali kelas...'
 						className='neo-input neo-input-with-icon !py-2 text-xs sm:text-sm'
 					/>
 				</div>
@@ -568,6 +839,7 @@ export default function PenggunaPage() {
 					{[
 						{ id: 'all', label: 'Semua Role' },
 						{ id: 'Guru', label: 'Guru' },
+						{ id: 'Wali Kelas', label: `Wali Kelas${waliCount > 0 ? ` (${waliCount})` : ''}` },
 						{ id: 'Kesiswaan', label: 'Kesiswaan' },
 						{ id: 'Kepala Sekolah', label: 'Kepsek' },
 						{ id: 'Bendahara', label: 'Bendahara' },
@@ -615,6 +887,8 @@ export default function PenggunaPage() {
 									const isKepsek = u.role === 'Kepala Sekolah';
 									const isBendahara = u.role === 'Bendahara';
 									const isKesiswaan = u.role === 'Kesiswaan';
+									const waliClasses = getWaliKelas(u);
+									const isWali = waliClasses.length > 0;
 									return (
 										<tr
 											key={u.id_user}
@@ -635,8 +909,23 @@ export default function PenggunaPage() {
 																	NIP. {u.nip}
 																</span>
 															)}
+															{isWali && (
+																<span className='inline-block text-[10px] font-black text-emerald-950 bg-emerald-200 px-1.5 py-0.5 rounded border border-emerald-500'>
+																	🏫 Wali Kelas {waliClasses.join(', ')}
+																</span>
+															)}
 															<span className='text-[11px] font-bold text-gray-500'>
-																{isAdmin ? 'Akses Penuh Administrator' : isKepsek ? 'Monitoring & Evaluasi Institusi' : isBendahara ? 'Pengelola Keuangan & Bisaroh Guru' : isKesiswaan ? 'Ketertiban, Poin, & Prestasi Siswa' : 'Tenaga Pendidik / Pengajar'}
+																{isAdmin
+																	? 'Akses Penuh Administrator'
+																	: isKepsek
+																	? 'Monitoring & Evaluasi Institusi'
+																	: isBendahara
+																	? 'Pengelola Keuangan & Bisaroh Guru'
+																	: isKesiswaan
+																	? 'Ketertiban, Poin, & Prestasi Siswa'
+																	: isWali
+																	? `Wali Kelas ${waliClasses.join(', ')} • Tenaga Pendidik`
+																	: 'Tenaga Pendidik / Pengajar'}
 															</span>
 														</div>
 													</div>
@@ -655,10 +944,12 @@ export default function PenggunaPage() {
 															? 'bg-teal-300 text-black'
 															: isKesiswaan
 															? 'bg-violet-300 text-black'
-															: 'bg-emerald-300 text-black'
+															: isWali
+															? 'bg-emerald-300 text-black'
+															: 'bg-emerald-200 text-black'
 													}`}>
-													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : '👨‍🏫'}</span>
-													<span>{u.role}</span>
+													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : isWali ? '🏫' : '👨‍🏫'}</span>
+													<span>{isWali ? `Guru & Wali Kelas ${waliClasses.join(', ')}` : u.role}</span>
 												</span>
 											</td>
 
@@ -666,7 +957,7 @@ export default function PenggunaPage() {
 											<td className='px-6 py-4'>
 												<div className='flex flex-col items-start gap-0.5'>
 													<span className='font-mono font-black text-xs sm:text-sm text-black bg-yellow-100 px-2 py-0.5 rounded border border-black/30'>
-														@{u.username}
+														{u.username}
 													</span>
 													<span className='text-[10px] font-mono text-gray-500 font-bold'>
 														ID: {u.id_user}
@@ -993,7 +1284,7 @@ export default function PenggunaPage() {
 														<tr key={r.no} className='hover:bg-yellow-50'>
 															<td className='p-2.5 text-center font-bold'>{r.no}</td>
 															<td className='p-2.5 font-black text-black'>{r.nama}</td>
-															<td className='p-2.5 font-mono text-gray-700 font-bold'>@{r.username}</td>
+															<td className='p-2.5 font-mono text-gray-700 font-bold'>{r.username}</td>
 															<td className='p-2.5'>
 																<span className='px-2 py-0.5 bg-gray-100 border border-black rounded text-[10px] font-black uppercase'>
 																	{r.role}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { uploadFileToSupabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export async function POST(request) {
 	try {
@@ -266,7 +267,7 @@ export async function POST(request) {
 					deskripsi: taskJudul,
 					kelas: kelasKey,
 					mapel: taskMapel,
-					tanggal: new Date().toISOString().split('T')[0],
+					tanggal: getTodayDateString(),
 					tahun_ajar: targetTA,
 					semester: targetSem
 				}, {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export async function GET(req) {
 	try {
@@ -159,7 +160,7 @@ export async function POST(req) {
 			wali_kelas_nama: wali_kelas_nama || 'Wali Kelas',
 			jenis_pelanggaran: jenis_pelanggaran || 'Bolos Jam Pelajaran',
 			jumlah_alpa: Number(jumlah_alpa) || 1,
-			tanggal_bimbingan: tanggal_bimbingan || new Date().toISOString().slice(0, 10),
+			tanggal_bimbingan: tanggal_bimbingan || getTodayDateString(),
 			bentuk_penanganan,
 			hasil_catatan,
 			status: status || 'Sudah Dibina',

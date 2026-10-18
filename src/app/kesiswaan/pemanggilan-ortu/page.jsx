@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 function PemanggilanOrtuContent() {
 	const searchParams = useSearchParams();
@@ -35,7 +36,7 @@ function PemanggilanOrtuContent() {
 		siswa_id: paramSiswaId || '',
 		penanganan_id: paramPenangananId || '',
 		nomor_surat: '',
-		tanggal_pemanggilan: new Date().toISOString().slice(0, 10),
+		tanggal_pemanggilan: getTodayDateString(),
 		waktu_pemanggilan: '09:00 WIB',
 		tempat: 'Ruang Kesiswaan / BK',
 		alasan_pemanggilan: 'Pembinaan kedisiplinan dan koordinasi kehadiran santri terkait catatan bolos jam pelajaran.',
@@ -288,7 +289,7 @@ Atas perhatian dan kerjasamanya, kami haturkan terima kasih.
 							siswa_id: '',
 							penanganan_id: '',
 							nomor_surat: '',
-							tanggal_pemanggilan: new Date().toISOString().slice(0, 10),
+							tanggal_pemanggilan: getTodayDateString(),
 							waktu_pemanggilan: '09:00 WIB',
 							tempat: 'Ruang Kesiswaan / BK',
 							alasan_pemanggilan: 'Pembinaan kedisiplinan dan koordinasi kehadiran santri terkait catatan bolos jam pelajaran.',

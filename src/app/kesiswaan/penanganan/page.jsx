@@ -5,6 +5,7 @@ import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import Link from 'next/link';
 import { fetchSchoolProfile, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 // Komponen Searchable Dropdown Santri (Combobox / Autocomplete Dropdown)
 function SearchableDropdownSiswa({
@@ -531,7 +532,7 @@ export default function BukuPenangananSantriPage() {
 
 	// Form Fields Lainnya
 	const [formJumlahAlpa, setFormJumlahAlpa] = useState(1);
-	const [formTanggalBimbingan, setFormTanggalBimbingan] = useState(new Date().toISOString().slice(0, 10));
+	const [formTanggalBimbingan, setFormTanggalBimbingan] = useState(() => getTodayDateString());
 	const [formBentukPenanganan, setFormBentukPenanganan] = useState('');
 	const [formHasilCatatan, setFormHasilCatatan] = useState('');
 	const [formStatus, setFormStatus] = useState('Sudah Dibina');
@@ -647,7 +648,7 @@ export default function BukuPenangananSantriPage() {
 		setCustomPelanggaranText('');
 
 		setFormJumlahAlpa(1);
-		setFormTanggalBimbingan(new Date().toISOString().slice(0, 10));
+		setFormTanggalBimbingan(getTodayDateString());
 		setFormBentukPenanganan('Bimbingan pribadi tatap muka & surat komitmen disiplin KBM.');
 		setFormHasilCatatan('Santri mengakui kesalahan, memahami konsekuensi, dan berjanji disiplin masuk kelas.');
 		setFormStatus('Sudah Dibina');
@@ -688,7 +689,7 @@ export default function BukuPenangananSantriPage() {
 		}
 
 		setFormJumlahAlpa(item.jumlah_alpa || 1);
-		setFormTanggalBimbingan(item.tanggal_bimbingan || new Date().toISOString().slice(0, 10));
+		setFormTanggalBimbingan(item.tanggal_bimbingan || getTodayDateString());
 		setFormBentukPenanganan(item.bentuk_penanganan || '');
 		setFormHasilCatatan(item.hasil_catatan || '');
 		setFormStatus(item.status || 'Sudah Dibina');

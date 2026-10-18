@@ -7,6 +7,7 @@ import Loader from '@/app/components/loading';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { konversiPoinKeSikap } from '@/lib/poinUtils';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function PoinGlobalPage() {
 	const router = useRouter();
@@ -37,7 +38,7 @@ export default function PoinGlobalPage() {
 
 	const initialForm = {
 		id: '',
-		tanggal: new Date().toISOString().slice(0, 10),
+		tanggal: getTodayDateString(),
 		siswa_id: '',
 		siswa_ids: [],
 		tipe: 'positif',

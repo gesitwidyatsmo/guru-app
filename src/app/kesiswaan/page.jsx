@@ -5,10 +5,11 @@ import Link from 'next/link';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { useKesiswaanAuth } from './KesiswaanLayoutClient';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function RadarAbsensiBolosPage() {
 	const { role, nama } = useKesiswaanAuth();
-	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+	const [selectedDate, setSelectedDate] = useState(() => getTodayDateString());
 	const [selectedKelas, setSelectedKelas] = useState('Semua');
 	const [kelasList, setKelasList] = useState([]);
 	const [radarData, setRadarData] = useState(null);

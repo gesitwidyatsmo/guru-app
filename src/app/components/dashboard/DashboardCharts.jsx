@@ -16,6 +16,7 @@ import {
 	Pie,
 	Cell
 } from 'recharts';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function DashboardCharts() {
 	const [poinData, setPoinData] = useState([]);
@@ -69,7 +70,7 @@ export default function DashboardCharts() {
 					for (let i = 6; i >= 0; i--) {
 						const d = new Date();
 						d.setDate(d.getDate() - i);
-						const dateStr = d.toISOString().split('T')[0];
+						const dateStr = getTodayDateString(d);
 						last7Days.push({ 
 							dateStr, 
 							name: d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),

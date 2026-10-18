@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 import ButtonBack from '@/app/components/button/ButtonBack';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function KelasAbsensiMapelPage() {
 	const params = useParams();
@@ -21,7 +22,7 @@ export default function KelasAbsensiMapelPage() {
 	// --- Filter State ---
 	const [selectedKelas, setSelectedKelas] = useState('');
 	const [selectedMapel, setSelectedMapel] = useState('');
-	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [jamKe, setJamKe] = useState('');
 	const [searchQuery, setSearchQuery] = useState('');
 

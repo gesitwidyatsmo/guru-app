@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function PoinKelasPage() {
 	const params = useParams();
@@ -33,7 +34,7 @@ export default function PoinKelasPage() {
 
 	const initialForm = {
 		id: '',
-		tanggal: new Date().toISOString().slice(0, 10),
+		tanggal: getTodayDateString(),
 		siswa_id: '',
 		tipe: 'positif',
 		kategori: '',

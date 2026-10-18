@@ -5,6 +5,7 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
 import { useAcademic } from '@/context/AcademicContext';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function PengaturanPage() {
 	const [userRole, setUserRole] = useState(null);
@@ -367,7 +368,7 @@ export default function PengaturanPage() {
 				XLSX.utils.book_append_sheet(workbook, worksheet, sheetTitle.replace('MASTER_', ''));
 			});
 
-			const dateStr = new Date().toISOString().slice(0, 10);
+			const dateStr = getTodayDateString();
 			XLSX.writeFile(workbook, `Backup_GuruApp_${dateStr}.xlsx`);
 
 			Swal.fire('Berhasil', 'Database berhasil dibackup ke mode Excel', 'success');

@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawKopSuratPDF, drawKepsekSignaturePDF } from '@/lib/pdfKopSurat';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 /**
  * Menghitung Jam Pelajaran (JP) dari string jam_ke
@@ -43,7 +44,7 @@ export function exportJurnalPDFReport({
 	schoolProfile = {},
 	title = 'LAPORAN REKAPITULASI JURNAL PEMBELAJARAN GURU (KBM)',
 	subInfo = '',
-	filename = `Laporan_Jurnal_Guru_${new Date().toISOString().split('T')[0]}.pdf`,
+	filename = `Laporan_Jurnal_Guru_${getTodayDateString()}.pdf`,
 }) {
 	if (!Array.isArray(journals) || journals.length === 0) {
 		throw new Error('Tidak ada data jurnal yang tersedia untuk diekspor.');

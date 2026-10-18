@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 // Helper nomor surat otomatis
 function generateNoSurat(jenis = 'SP1') {
@@ -111,7 +112,7 @@ export async function POST(req) {
 			jenis_sanksi,
 			alasan,
 			akumulasi_poin_saat_terbit: parseInt(akumulasi_poin_saat_terbit || 0, 10),
-			tanggal_terbit: tanggal_terbit || new Date().toISOString().slice(0, 10),
+			tanggal_terbit: tanggal_terbit || getTodayDateString(),
 			tanggal_panggilan: tanggal_panggilan || null,
 			batas_waktu_skorsing: batas_waktu_skorsing || null,
 			status_penyelesaian: 'Menunggu',

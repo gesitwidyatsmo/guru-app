@@ -8,6 +8,7 @@ import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { konversiPoinKeSikap } from '@/lib/poinUtils';
 import { fetchSchoolProfile, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 // Kategori Default Pelanggaran & Prestasi (Cadangan Lengkap untuk Bagian Kesiswaan)
 const DEFAULT_PRESET_PELANGGARAN = [
@@ -63,7 +64,7 @@ export default function KesiswaanPoinPage() {
 	// Form State
 	const initialForm = {
 		id: '',
-		tanggal: new Date().toISOString().slice(0, 10),
+		tanggal: getTodayDateString(),
 		kelas: '',
 		siswa_ids: [],
 		tipe: 'negatif', // 'negatif' (pelanggaran) | 'positif' (prestasi)
@@ -262,7 +263,7 @@ export default function KesiswaanPoinPage() {
 		setFormData({
 			...initialForm,
 			kelas: firstKelas,
-			tanggal: new Date().toISOString().slice(0, 10),
+			tanggal: getTodayDateString(),
 		});
 		setIsModalOpen(true);
 	};

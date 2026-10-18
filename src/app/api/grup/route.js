@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 function generateId() {
 	return 'GRP-' + Date.now().toString(36).toUpperCase();
@@ -98,7 +99,7 @@ export async function POST(req) {
 			judul_kegiatan: body.judul_kegiatan,
 			kelas_id: body.kelas_id,
 			mapel_id: body.mapel_id || '-',
-			tanggal: new Date().toISOString().split('T')[0],
+			tanggal: getTodayDateString(),
 			data_json: body.data_grup,
 			tahun_ajar: body.tahun_ajar || '2026/2027',
 			semester: body.semester ? parseInt(body.semester) : 1,

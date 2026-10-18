@@ -12,6 +12,7 @@ import {
 	drawKopSuratPDF,
 } from '@/lib/pdfKopSurat';
 import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function KepsekJurnalPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
@@ -32,7 +33,7 @@ export default function KepsekJurnalPage() {
 	const [currentPage, setCurrentPage] = useState(1);
 	const itemsPerPage = 10;
 
-	const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+	const todayStr = useMemo(() => getTodayDateString(), []);
 
 	useEffect(() => {
 		const fetchSupervisiJurnal = async () => {

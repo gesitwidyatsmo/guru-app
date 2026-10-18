@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export async function GET(req) {
 	try {
@@ -115,7 +116,7 @@ export async function GET(req) {
 		const siswaIds = siswaList.map((s) => s.id);
 
 		// 4. AMBIL STATUS ABSENSI HARI INI (HARIAN & MAPEL)
-		const todayStr = new Date().toISOString().slice(0, 10);
+		const todayStr = getTodayDateString();
 
 		// 4A. Ambil sesi resmi absensi_harian jika sudah pernah disimpan
 		const { data: sesiHarianResmi } = await supabaseAdmin

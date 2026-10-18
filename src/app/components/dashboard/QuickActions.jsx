@@ -5,9 +5,9 @@ export default function QuickActions({ quickActions }) {
 		<div className='mb-8'>
 			<h2 className='text-xl sm:text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
 				<span className='text-2xl'>⚡</span>
-				Aksi Cepat
+				Akses Cepat
 			</h2>
-			<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
 				{quickActions.map((action, idx) => (
 					<Link
 						key={idx}

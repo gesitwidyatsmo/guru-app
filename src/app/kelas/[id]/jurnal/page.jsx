@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
 import { createClient } from '@/utils/supabase/client';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function JurnalKelasPage() {
 	const router = useRouter();
@@ -31,7 +32,7 @@ export default function JurnalKelasPage() {
 	// Form Data
 	const initialForm = {
 		id: '',
-		tanggal: new Date().toISOString().slice(0, 10),
+		tanggal: getTodayDateString(),
 		jam_ke: '',
 		pertemuan_ke: '',
 		mapel: '',

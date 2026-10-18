@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import Loader from '../components/loading';
@@ -9,6 +9,7 @@ import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -37,11 +38,12 @@ export default function JurnalPage() {
 	// Data Master
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
+	const [guruAssignments, setGuruAssignments] = useState([]);
 
 	// Form Data
 	const initialForm = {
 		id: '',
-		tanggal: new Date().toISOString().slice(0, 10),
+		tanggal: getTodayDateString(),
 		jam_ke: '',
 		pertemuan_ke: '', // Field Baru
 		kelas: '',
@@ -84,6 +86,36 @@ export default function JurnalPage() {
 				
 				const { data: mapelData } = await supabase.from('mapel').select('*').order('mapel', { ascending: true });
 				setMapelList(mapelData || []);
+
+				// Ambil data penugasan kelas dan mata pelajaran guru (dari KBM & Jadwal)
+				if (currentUserRole === 'Guru' && currentUserId) {
+					const [kbmRes, jadwalRes] = await Promise.all([
+						supabase.from('guru_kbm').select('kelas, mapel, tahun_ajar, semester').eq('id_user', currentUserId),
+						supabase.from('jadwal').select('kelas, mapel, tahun_ajar, semester').eq('id_user', currentUserId),
+					]);
+
+					const rawAssignments = [
+						...(kbmRes.data || []),
+						...(jadwalRes.data || []),
+					];
+
+					const seen = new Set();
+					const userAssignments = rawAssignments
+						.filter((item) => item.kelas && item.mapel)
+						.map((item) => ({
+							...item,
+							kelas: item.kelas.trim(),
+							mapel: item.mapel.trim(),
+						}))
+						.filter((item) => {
+							const key = `${item.kelas}-${item.mapel}-${item.tahun_ajar || ''}-${item.semester || ''}`;
+							if (seen.has(key)) return false;
+							seen.add(key);
+							return true;
+						});
+
+					setGuruAssignments(userAssignments);
+				}
 
 				const fetchedJournals = await refreshJurnal(currentUserId, currentUserRole);
 
@@ -226,6 +258,113 @@ export default function JurnalPage() {
 		}));
 	};
 
+	// --- FILTER PENUGASAN GURU (KBM & JADWAL) ---
+	const teacherAssignments = useMemo(() => {
+		if (userRole !== 'Guru' || guruAssignments.length === 0) return [];
+
+		// Filter berdasarkan tahun ajar & semester aktif terlebih dahulu
+		const periodeFiltered = guruAssignments.filter(
+			(a) => (!a.tahun_ajar || a.tahun_ajar === tahunAjar) &&
+			       (!a.semester || Number(a.semester) === Number(semester))
+		);
+
+		return periodeFiltered.length > 0 ? periodeFiltered : guruAssignments;
+	}, [userRole, guruAssignments, tahunAjar, semester]);
+
+	// Daftar kelas untuk form modal (khusus kelas yang diajar guru bersangkutan)
+	const formKelasList = useMemo(() => {
+		if (userRole === 'Guru' && teacherAssignments.length > 0) {
+			let relevant = teacherAssignments;
+			if (formData.mapel) {
+				const byMapel = teacherAssignments.filter((a) => a.mapel === formData.mapel);
+				if (byMapel.length > 0) relevant = byMapel;
+			}
+			const classNames = [...new Set(relevant.map((a) => a.kelas).filter(Boolean))].sort((a, b) =>
+				a.localeCompare(b, undefined, { numeric: true })
+			);
+
+			// Pastikan nilai kelas yang tersimpan (misal saat edit) tetap ada di opsi
+			if (formData.kelas && !classNames.includes(formData.kelas)) {
+				classNames.push(formData.kelas);
+			}
+
+			return classNames.map((nama) => {
+				const found = kelasList.find((k) => (k.kelas || k.nama_kelas) === nama);
+				return found || { id: nama, nama_kelas: nama, kelas: nama };
+			});
+		}
+		return kelasList;
+	}, [userRole, teacherAssignments, formData.mapel, formData.kelas, kelasList]);
+
+	// Daftar mata pelajaran untuk form modal (khusus mapel yang diajar guru bersangkutan)
+	const formMapelList = useMemo(() => {
+		if (userRole === 'Guru' && teacherAssignments.length > 0) {
+			let relevant = teacherAssignments;
+			if (formData.kelas) {
+				const byKelas = teacherAssignments.filter((a) => a.kelas === formData.kelas);
+				if (byKelas.length > 0) relevant = byKelas;
+			}
+			const mapelNames = [...new Set(relevant.map((a) => a.mapel).filter(Boolean))].sort((a, b) =>
+				a.localeCompare(b)
+			);
+
+			// Pastikan nilai mapel yang tersimpan (misal saat edit) tetap ada di opsi
+			if (formData.mapel && !mapelNames.includes(formData.mapel)) {
+				mapelNames.push(formData.mapel);
+			}
+
+			return mapelNames.map((nama) => {
+				const found = mapelList.find((m) => (m.mapel || m.nama_mapel) === nama);
+				return found || { id: nama, mapel: nama, nama_mapel: nama };
+			});
+		}
+		return mapelList;
+	}, [userRole, teacherAssignments, formData.kelas, formData.mapel, mapelList]);
+
+	// Daftar kelas untuk filter halaman utama
+	const pageFilterKelasList = useMemo(() => {
+		if (userRole === 'Guru' && teacherAssignments.length > 0) {
+			const classNames = [...new Set(teacherAssignments.map((a) => a.kelas).filter(Boolean))].sort((a, b) =>
+				a.localeCompare(b, undefined, { numeric: true })
+			);
+			return classNames.map((nama) => {
+				const found = kelasList.find((k) => (k.kelas || k.nama_kelas) === nama);
+				return found || { id: nama, nama_kelas: nama, kelas: nama };
+			});
+		}
+		return kelasList;
+	}, [userRole, teacherAssignments, kelasList]);
+
+	// Handler perubahan kelas dengan auto-select mapel jika kelas tersebut hanya memiliki 1 mapel ajar
+	const handleKelasChange = (val) => {
+		let nextMapel = formData.mapel;
+		if (userRole === 'Guru' && teacherAssignments.length > 0 && val) {
+			const mapelsForClass = [...new Set(teacherAssignments.filter((a) => a.kelas === val).map((a) => a.mapel).filter(Boolean))];
+			if (mapelsForClass.length === 1) {
+				nextMapel = mapelsForClass[0];
+			} else if (nextMapel && !mapelsForClass.includes(nextMapel)) {
+				nextMapel = '';
+			}
+		}
+		setFormData((prev) => ({ ...prev, kelas: val, mapel: nextMapel }));
+		calculateMeeting(val, nextMapel);
+	};
+
+	// Handler perubahan mapel dengan auto-select kelas jika mapel tersebut hanya diajar di 1 kelas
+	const handleMapelChange = (val) => {
+		let nextKelas = formData.kelas;
+		if (userRole === 'Guru' && teacherAssignments.length > 0 && val) {
+			const classesForMapel = [...new Set(teacherAssignments.filter((a) => a.mapel === val).map((a) => a.kelas).filter(Boolean))];
+			if (classesForMapel.length === 1) {
+				nextKelas = classesForMapel[0];
+			} else if (nextKelas && !classesForMapel.includes(nextKelas)) {
+				nextKelas = '';
+			}
+		}
+		setFormData((prev) => ({ ...prev, mapel: val, kelas: nextKelas }));
+		calculateMeeting(nextKelas, val);
+	};
+
 	// --- HANDLERS ---
 	const handleOpenModal = (journal = null) => {
 		setUserLocationStatus(null);
@@ -239,9 +378,29 @@ export default function JurnalPage() {
 			// Cek apakah ada draft lokal
 			const savedDraft = localStorage.getItem('draft_jurnal_baru');
 			if (savedDraft) {
-				setFormData(JSON.parse(savedDraft));
+				try {
+					setFormData(JSON.parse(savedDraft));
+				} catch {
+					setFormData(initialForm);
+				}
 			} else {
-				setFormData(initialForm);
+				let defaultMapel = '';
+				let defaultKelas = '';
+				if (userRole === 'Guru' && teacherAssignments.length > 0) {
+					const uniqueMapels = [...new Set(teacherAssignments.map((a) => a.mapel).filter(Boolean))];
+					const uniqueClasses = [...new Set(teacherAssignments.map((a) => a.kelas).filter(Boolean))];
+					if (uniqueMapels.length === 1) defaultMapel = uniqueMapels[0];
+					if (uniqueClasses.length === 1) defaultKelas = uniqueClasses[0];
+				}
+				const newForm = {
+					...initialForm,
+					kelas: defaultKelas,
+					mapel: defaultMapel,
+				};
+				setFormData(newForm);
+				if (defaultKelas && defaultMapel) {
+					calculateMeeting(defaultKelas, defaultMapel);
+				}
 			}
 		}
 		setIsModalOpen(true);
@@ -508,8 +667,8 @@ export default function JurnalPage() {
                                 onChange={(e) => setFilterKelas(e.target.value)}
                                 className='neo-input w-full pl-3 pr-10 py-3.5 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] outline-none appearance-none cursor-pointer rounded-none uppercase text-sm'>
                                 <option value='Semua'>📂 SEMUA KELAS</option>
-                                {kelasList.map((k) => (
-                                    <option key={k.id} value={k.kelas || k.nama_kelas}>🏫 {k.kelas || k.nama_kelas}</option>
+                                {pageFilterKelasList.map((k) => (
+                                    <option key={k.id || (k.kelas || k.nama_kelas)} value={k.kelas || k.nama_kelas}>🏫 {k.kelas || k.nama_kelas}</option>
                                 ))}
                             </select>
                             <div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-black text-xl'>▼</div>
@@ -523,15 +682,15 @@ export default function JurnalPage() {
                             <button
                                 type='button'
                                 onClick={() => {
-                                    const today = new Date().toISOString().slice(0, 10);
+                                    const today = getTodayDateString();
                                     setFilterTanggal(filterTanggal === today ? '' : today);
                                 }}
                                 className={`px-3 py-1 border-[2px] border-[#0D0D0D] rounded-none uppercase transition-all shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer ${
-                                    filterTanggal === new Date().toISOString().slice(0, 10)
+                                    filterTanggal === getTodayDateString()
                                         ? 'bg-[#0D0D0D] text-white'
                                         : 'bg-white text-[#0D0D0D] hover:bg-yellow-100'
                                 }`}>
-                                {filterTanggal === new Date().toISOString().slice(0, 10) ? '✓ HARI INI' : 'HARI INI'}
+                                {filterTanggal === getTodayDateString() ? '✓ HARI INI' : 'HARI INI'}
                             </button>
                             {filterTanggal && (
                                 <button
@@ -696,40 +855,42 @@ export default function JurnalPage() {
 								{/* Baris 1: Kelas & Mapel (Pemicu Hitung Pertemuan) */}
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 									<div>
-										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kelas</label>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>
+											Kelas
+											{userRole === 'Guru' && teacherAssignments.length > 0 && (
+												<span className='text-[10px] text-[#00A693] font-bold ml-1.5 lowercase tracking-normal'>(sesuai jadwal ajar)</span>
+											)}
+										</label>
 										<div className='relative'>
 											<select
 												required
 												value={formData.kelas}
-												onChange={(e) => {
-													const val = e.target.value;
-													setFormData({ ...formData, kelas: val });
-													calculateMeeting(val, formData.mapel);
-												}}
+												onChange={(e) => handleKelasChange(e.target.value)}
 												className='neo-input appearance-none w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none uppercase cursor-pointer'>
 												<option value=''>PILIH KELAS</option>
-												{kelasList.map((k) => (
-													<option key={k.id} value={k.kelas || k.nama_kelas}>{k.kelas || k.nama_kelas}</option>
+												{formKelasList.map((k) => (
+													<option key={k.id || (k.kelas || k.nama_kelas)} value={k.kelas || k.nama_kelas}>{k.kelas || k.nama_kelas}</option>
 												))}
 											</select>
 											<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-bold'>▼</div>
 										</div>
 									</div>
 									<div>
-										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Mata Pelajaran</label>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>
+											Mata Pelajaran
+											{userRole === 'Guru' && teacherAssignments.length > 0 && (
+												<span className='text-[10px] text-[#00A693] font-bold ml-1.5 lowercase tracking-normal'>(sesuai jadwal ajar)</span>
+											)}
+										</label>
 										<div className='relative'>
 											<select
 												required
 												value={formData.mapel}
-												onChange={(e) => {
-													const val = e.target.value;
-													setFormData({ ...formData, mapel: val });
-													calculateMeeting(formData.kelas, val);
-												}}
+												onChange={(e) => handleMapelChange(e.target.value)}
 												className='neo-input appearance-none w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none uppercase cursor-pointer'>
 												<option value=''>PILIH MAPEL</option>
-												{mapelList.map((m) => (
-													<option key={m.id} value={m.mapel || m.nama_mapel}>{m.mapel || m.nama_mapel}</option>
+												{formMapelList.map((m) => (
+													<option key={m.id || (m.mapel || m.nama_mapel)} value={m.mapel || m.nama_mapel}>{m.mapel || m.nama_mapel}</option>
 												))}
 											</select>
 											<div className='absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0D0D0D] font-bold'>▼</div>

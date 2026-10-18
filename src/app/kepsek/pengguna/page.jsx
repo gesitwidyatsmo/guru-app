@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { jsPDF } from 'jspdf';
@@ -16,6 +16,7 @@ export default function KepsekPenggunaPage() {
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [roleFilter, setRoleFilter] = useState('all');
+	const [kelasList, setKelasList] = useState([]);
 
 	// Pagination state
 	const [currentPage, setCurrentPage] = useState(1);
@@ -25,14 +26,22 @@ export default function KepsekPenggunaPage() {
 		const fetchUsers = async () => {
 			try {
 				setLoading(true);
-				const [resUsers, resProfil] = await Promise.all([
+				const [resUsers, resProfil, resKelas] = await Promise.all([
 					fetch('/api/users'),
 					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
+					fetch('/api/kelas?all=true').catch(() => ({ ok: false })),
 				]);
 
 				if (resUsers.ok) {
 					const data = await resUsers.json();
 					setUsers(Array.isArray(data) ? data : []);
+				}
+
+				if (resKelas && resKelas.ok) {
+					const kData = await resKelas.json();
+					if (Array.isArray(kData)) {
+						setKelasList(kData);
+					}
 				}
 
 				if (resProfil && resProfil.ok) {
@@ -55,21 +64,62 @@ export default function KepsekPenggunaPage() {
 		setCurrentPage(1);
 	}, [roleFilter, searchQuery]);
 
+	// Peta deteksi Wali Kelas
+	const waliMap = useMemo(() => {
+		const map = {};
+		kelasList.forEach((k) => {
+			if (!k.kelas) return;
+			if (k.id_wali_kelas) {
+				const idKey = String(k.id_wali_kelas).trim();
+				if (!map[idKey]) map[idKey] = [];
+				if (!map[idKey].includes(k.kelas)) map[idKey].push(k.kelas);
+			}
+			if (k.wali_kelas) {
+				const nameKey = String(k.wali_kelas).trim().toLowerCase();
+				if (!map[nameKey]) map[nameKey] = [];
+				if (!map[nameKey].includes(k.kelas)) map[nameKey].push(k.kelas);
+			}
+		});
+		return map;
+	}, [kelasList]);
+
+	const getWaliKelas = useCallback((u) => {
+		if (!u) return [];
+		if (u.id_user && waliMap[String(u.id_user).trim()]) {
+			return waliMap[String(u.id_user).trim()];
+		}
+		if (u.nama_lengkap && waliMap[String(u.nama_lengkap).trim().toLowerCase()]) {
+			return waliMap[String(u.nama_lengkap).trim().toLowerCase()];
+		}
+		return [];
+	}, [waliMap]);
+
 	const filteredUsers = useMemo(() => {
 		return users.filter((u) => {
-			const matchRole = roleFilter === 'all' || u.role === roleFilter;
+			const waliArr = getWaliKelas(u);
+			const isWali = waliArr.length > 0;
+			const matchRole =
+				roleFilter === 'all'
+					? true
+					: roleFilter === 'Wali Kelas'
+					? isWali
+					: u.role === roleFilter;
+
 			const q = searchQuery.toLowerCase().trim();
+			const waliText = waliArr.join(' ').toLowerCase();
 			const matchSearch =
 				!q ||
 				u.nama_lengkap.toLowerCase().includes(q) ||
 				u.username.toLowerCase().includes(q) ||
-				(u.id_user && u.id_user.toLowerCase().includes(q));
+				(u.id_user && u.id_user.toLowerCase().includes(q)) ||
+				(isWali && (waliText.includes(q) || 'wali kelas'.includes(q)));
 			return matchRole && matchSearch;
 		});
-	}, [users, roleFilter, searchQuery]);
+	}, [users, roleFilter, searchQuery, getWaliKelas]);
 
 	// Role counts
 	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
+	const waliCount = useMemo(() => users.filter((u) => getWaliKelas(u).length > 0).length, [users, getWaliKelas]);
 	const kepsekCount = useMemo(() => users.filter((u) => u.role === 'Kepala Sekolah').length, [users]);
 	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
@@ -114,17 +164,20 @@ export default function KepsekPenggunaPage() {
 				{ align: 'center' }
 			);
 
-			const tableHead = [
-				['No', 'Nama Lengkap Pendidik / Staf', 'Username', 'Peran / Hak Akses', 'ID Pengguna'],
-			];
-
-			const tableBody = filteredUsers.map((u, idx) => [
-				idx + 1,
-				u.nama_lengkap || '-',
-				`@${u.username || '-'}`,
-				u.role || '-',
-				u.id_user || '-',
-			]);
+			const tableBody = filteredUsers.map((u, idx) => {
+				const waliArr = getWaliKelas(u);
+				const roleDisplay =
+					waliArr.length > 0
+						? `${u.role} & Wali Kelas ${waliArr.join(', ')}`
+						: (u.role || '-');
+				return [
+					idx + 1,
+					u.nama_lengkap || '-',
+					u.username || '-',
+					roleDisplay,
+					u.id_user || '-',
+				];
+			});
 
 			autoTable(doc, {
 				startY: endKop + 10,
@@ -427,6 +480,9 @@ export default function KepsekPenggunaPage() {
 									else if (u.role === 'Bendahara') roleBadge = 'bg-teal-200 text-teal-950 border-teal-400';
 									else if (u.role === 'Admin') roleBadge = 'bg-rose-200 text-rose-950 border-rose-400';
 
+									const waliClasses = getWaliKelas(u);
+									const isWali = waliClasses.length > 0;
+
 									return (
 										<tr
 											key={u.id_user || u.username}
@@ -440,22 +496,29 @@ export default function KepsekPenggunaPage() {
 														<span className='font-black text-xs sm:text-sm text-black block'>
 															{u.nama_lengkap || 'Tanpa Nama'}
 														</span>
-														<span className='text-[10px] text-gray-500'>
-															Terdaftar resmi di database
-														</span>
+														<div className='flex items-center gap-1.5 mt-0.5'>
+															{isWali && (
+																<span className='inline-block text-[9.5px] font-black text-emerald-950 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-400'>
+																	🏫 Wali Kelas {waliClasses.join(', ')}
+																</span>
+															)}
+															<span className='text-[10px] text-gray-500'>
+																{isWali ? 'Wali Kelas & Tenaga Pendidik' : 'Terdaftar resmi di database'}
+															</span>
+														</div>
 													</div>
 												</div>
 											</td>
 
 											<td className='px-5 py-4 whitespace-nowrap'>
 												<span className={`inline-block px-3 py-1 rounded-lg text-xs font-black uppercase border-2 border-black shadow-[1px_1px_0px_0px_#0D0D0D] ${roleBadge}`}>
-													{u.role}
+													{isWali ? `Guru & Wali Kelas ${waliClasses.join(', ')}` : u.role}
 												</span>
 											</td>
 
 											<td className='px-5 py-4 whitespace-nowrap'>
 												<span className='font-mono text-xs font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-black/20 block w-fit'>
-													@{u.username}
+													{u.username}
 												</span>
 												<span className='text-[10px] font-mono text-gray-500 block mt-1'>
 													ID: {u.id_user || '-'}

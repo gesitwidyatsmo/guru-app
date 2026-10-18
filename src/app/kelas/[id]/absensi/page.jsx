@@ -7,6 +7,7 @@ import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function AbsensiKelasPage() {
 	const params = useParams();
@@ -16,7 +17,7 @@ export default function AbsensiKelasPage() {
 	const [kelasDetail, setKelasDetail] = useState(null);
 	const [statusList, setStatusList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
-	const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 
 	const [absensi, setAbsensi] = useState({});
 	const [loading, setLoading] = useState(true);
