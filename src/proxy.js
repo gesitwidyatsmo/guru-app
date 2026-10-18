@@ -107,6 +107,8 @@ export async function proxy(request) {
 			? '/kepsek'
 			: payload.role === 'Bendahara'
 			? '/bendahara'
+			: payload.role === 'Kesiswaan'
+			? '/kesiswaan'
 			: payload.role === 'Admin'
 			? '/admin'
 			: '/';
@@ -122,11 +124,15 @@ export async function proxy(request) {
 		finalResponse = NextResponse.redirect(new URL('/bendahara', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
+	else if (pathname === '/' && payload?.role === 'Kesiswaan') {
+		finalResponse = NextResponse.redirect(new URL('/kesiswaan', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
 	else if (pathname === '/' && payload?.role === 'Admin') {
 		finalResponse = NextResponse.redirect(new URL('/admin', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
-	// Dasbor admin utama: jika Kepala Sekolah atau Bendahara membuka persis '/admin', arahkan ke portalnya
+	// Dasbor admin utama: jika Kepala Sekolah, Bendahara, atau Kesiswaan membuka persis '/admin', arahkan ke portalnya
 	else if (pathname === '/admin' && payload?.role === 'Kepala Sekolah') {
 		finalResponse = NextResponse.redirect(new URL('/kepsek', request.url));
 		attachUserCookies(finalResponse, payload);
@@ -134,6 +140,18 @@ export async function proxy(request) {
 	else if (pathname === '/admin' && payload?.role === 'Bendahara') {
 		finalResponse = NextResponse.redirect(new URL('/bendahara', request.url));
 		attachUserCookies(finalResponse, payload);
+	}
+	else if (pathname === '/admin' && payload?.role === 'Kesiswaan') {
+		finalResponse = NextResponse.redirect(new URL('/kesiswaan', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
+	// Area kesiswaan: bisa diakses oleh Kesiswaan, Admin, dan Kepala Sekolah (monitoring)
+	else if (pathname.startsWith('/kesiswaan') && payload?.role !== 'Kesiswaan' && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {
+		if (!payload) {
+			finalResponse = NextResponse.redirect(new URL('/login', request.url));
+		} else {
+			finalResponse = NextResponse.redirect(new URL('/', request.url));
+		}
 	}
 	// Area bendahara: bisa diakses oleh Bendahara, Admin, dan Kepala Sekolah (monitoring)
 	else if (pathname.startsWith('/bendahara') && payload?.role !== 'Bendahara' && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {

@@ -26,8 +26,9 @@ export async function GET(req) {
 			allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
 		}
 
-		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS
-		const supabaseClient = role ? await createClient() : supabaseAdmin;
+		// Gunakan supabaseAdmin untuk Kesiswaan, Admin, Kepala Sekolah, atau akses internal
+		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan';
+		const supabaseClient = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
 		let query = supabaseClient.from('siswa').select('*').order('nama_lengkap', { ascending: true });
 
@@ -52,8 +53,8 @@ export async function GET(req) {
 // --- METHOD POST (Tambah Data Baru - Manual & Bulk) ---
 export async function POST(request) {
 	const role = request.headers.get('x-user-role');
-	if (role !== 'Admin' && role !== 'Guru') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
+	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kesiswaan') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, & Kesiswaan)' }, { status: 403 });
 	}
 	try {
 		const contentType = request.headers.get('content-type') || '';

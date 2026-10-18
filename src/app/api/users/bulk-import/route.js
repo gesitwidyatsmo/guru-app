@@ -25,6 +25,7 @@ function normalizeRole(rawRole) {
 	if (r.includes('admin')) return 'Admin';
 	if (r.includes('kepala') || r.includes('kepsek')) return 'Kepala Sekolah';
 	if (r.includes('benda') || r.includes('keuangan') || r.includes('finance')) return 'Bendahara';
+	if (r.includes('kesiswaan') || r.includes('tatib') || r.includes('osis')) return 'Kesiswaan';
 	return 'Guru';
 }
 

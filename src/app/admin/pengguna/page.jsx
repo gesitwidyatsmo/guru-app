@@ -88,6 +88,7 @@ export default function PenggunaPage() {
 	const guruCount = useMemo(() => users.filter((u) => u.role === 'Guru').length, [users]);
 	const kepsekCount = useMemo(() => users.filter((u) => u.role === 'Kepala Sekolah').length, [users]);
 	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
+	const kesiswaanCount = useMemo(() => users.filter((u) => u.role === 'Kesiswaan').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	const openCreateModal = () => {
@@ -481,7 +482,7 @@ export default function PenggunaPage() {
 			</div>
 
 			{/* User Statistics Row */}
-			<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4'>
+			<div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4'>
 				<div className='bg-white border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
 					<div>
 						<p className='text-xs font-black uppercase text-gray-500'>Total Pengguna</p>
@@ -499,6 +500,16 @@ export default function PenggunaPage() {
 					</div>
 					<span className='w-10 h-10 bg-emerald-400 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
 						👨‍🏫
+					</span>
+				</div>
+
+				<div className='bg-violet-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-violet-800'>Kesiswaan</p>
+						<p className='text-2xl font-black text-violet-900 mt-0.5'>{kesiswaanCount}</p>
+					</div>
+					<span className='w-10 h-10 bg-violet-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						🛡️
 					</span>
 				</div>
 
@@ -528,7 +539,7 @@ export default function PenggunaPage() {
 						<p className='text-2xl font-black text-rose-900 mt-0.5'>{adminCount}</p>
 					</div>
 					<span className='w-10 h-10 bg-rose-400 border-2 border-black rounded-xl flex items-center justify-center font-black text-white shadow-[2px_2px_0px_0px_#0D0D0D]'>
-						🛡️
+						👑
 					</span>
 				</div>
 			</div>
@@ -557,6 +568,7 @@ export default function PenggunaPage() {
 					{[
 						{ id: 'all', label: 'Semua Role' },
 						{ id: 'Guru', label: 'Guru' },
+						{ id: 'Kesiswaan', label: 'Kesiswaan' },
 						{ id: 'Kepala Sekolah', label: 'Kepsek' },
 						{ id: 'Bendahara', label: 'Bendahara' },
 						{ id: 'Admin', label: 'Admin' },
@@ -602,6 +614,7 @@ export default function PenggunaPage() {
 									const isAdmin = u.role === 'Admin';
 									const isKepsek = u.role === 'Kepala Sekolah';
 									const isBendahara = u.role === 'Bendahara';
+									const isKesiswaan = u.role === 'Kesiswaan';
 									return (
 										<tr
 											key={u.id_user}
@@ -609,7 +622,7 @@ export default function PenggunaPage() {
 											{/* Name & Avatar */}
 											<td className='px-6 py-4'>
 												<div className='flex items-center gap-3'>
-													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : isBendahara ? 'bg-teal-300 text-black' : 'bg-emerald-300 text-black'}`}>
+													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : isBendahara ? 'bg-teal-300 text-black' : isKesiswaan ? 'bg-violet-300 text-black' : 'bg-emerald-300 text-black'}`}>
 														{initial}
 													</div>
 													<div>
@@ -623,7 +636,7 @@ export default function PenggunaPage() {
 																</span>
 															)}
 															<span className='text-[11px] font-bold text-gray-500'>
-																{isAdmin ? 'Akses Penuh Administrator' : isKepsek ? 'Monitoring & Evaluasi Institusi' : isBendahara ? 'Pengelola Keuangan & Bisaroh Guru' : 'Tenaga Pendidik / Pengajar'}
+																{isAdmin ? 'Akses Penuh Administrator' : isKepsek ? 'Monitoring & Evaluasi Institusi' : isBendahara ? 'Pengelola Keuangan & Bisaroh Guru' : isKesiswaan ? 'Ketertiban, Poin, & Prestasi Siswa' : 'Tenaga Pendidik / Pengajar'}
 															</span>
 														</div>
 													</div>
@@ -640,9 +653,11 @@ export default function PenggunaPage() {
 															? 'bg-indigo-300 text-black'
 															: isBendahara
 															? 'bg-teal-300 text-black'
+															: isKesiswaan
+															? 'bg-violet-300 text-black'
 															: 'bg-emerald-300 text-black'
 													}`}>
-													<span>{isAdmin ? '🛡️' : isKepsek ? '🎓' : isBendahara ? '💼' : '👨‍🏫'}</span>
+													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : '👨‍🏫'}</span>
 													<span>{u.role}</span>
 												</span>
 											</td>
@@ -789,9 +804,10 @@ export default function PenggunaPage() {
 											onChange={(e) => setFormData({ ...formData, role: e.target.value })}
 											className='neo-input text-sm bg-white font-bold'>
 											<option value='Guru'>👨‍🏫 Guru (Pengajar/Wali)</option>
+											<option value='Kesiswaan'>🛡️ Kesiswaan (Ketertiban & Prestasi)</option>
 											<option value='Kepala Sekolah'>🎓 Kepala Sekolah (Monitoring)</option>
 											<option value='Bendahara'>💼 Bendahara (Keuangan & Bisaroh)</option>
-											<option value='Admin'>🛡️ Admin (Super Master)</option>
+											<option value='Admin'>👑 Admin (Super Master)</option>
 										</select>
 									</div>
 								</div>

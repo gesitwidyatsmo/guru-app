@@ -15,7 +15,7 @@ export async function GET(request) {
 
 		let allowedClasses = null;
 
-		if (showAll || role === 'Admin' || role === 'Kepala Sekolah') {
+		if (showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan') {
 			allowedClasses = null; // Ambil semua
 		} else if (role === 'Guru' && userId) {
 			const { data: kbmData } = await supabase
@@ -32,8 +32,9 @@ export async function GET(request) {
 			allowedClasses = []; // Guest / unauthorized
 		}
 
-		// Jika akses publik (tanpa role), gunakan supabaseAdmin untuk bypass RLS
-		const db = role ? await createClient() : supabaseAdmin;
+		// Jika Admin, Kepsek, Kesiswaan, atau internal, gunakan supabaseAdmin
+		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan';
+		const db = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
 		let query = db.from('kelas').select(`
 			id,
