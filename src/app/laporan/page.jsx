@@ -12,6 +12,7 @@ import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeri
 import { hitungTotalPoinBersih, konversiPoinKeSikap } from '@/lib/poinUtils';
 import { drawKopSuratPDF, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
 import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
+import { normStatus, parseJamPelajaran, calculateHariAlfa } from '@/lib/absensiUtils';
 
 export default function LaporanPage() {
 	const router = useRouter();
@@ -137,7 +138,7 @@ export default function LaporanPage() {
 				nis: siswa.nis,
 				nama: siswa.nama_lengkap,
 				kehadiran: {},
-				stats: { H: 0, S: 0, I: 0, A: 0 },
+				stats: { H: 0, S: 0, I: 0, A: 0, A_JP: 0 },
 			};
 
 			pertemuanList.forEach((p) => {
@@ -145,17 +146,29 @@ export default function LaporanPage() {
 				const statusRaw = p.absensiData[siswa.id] || '-';
 
 				let kode = '-';
-				// Sesuaikan string ini dengan apa yang disimpan di DB (Hadir/Sakit/dst)
-				if (statusRaw === 'Hadir') kode = 'H';
-				else if (statusRaw === 'Sakit') kode = 'S';
-				else if (statusRaw === 'Izin') kode = 'I';
-				else if (statusRaw === 'Alpha' || statusRaw === 'Alpa') kode = 'A';
+				const s = normStatus(statusRaw);
+				if (s === 'hadir') kode = 'H';
+				else if (s === 'sakit') kode = 'S';
+				else if (s === 'izin') kode = 'I';
+				else if (s === 'alfa') kode = 'A';
 
 				row.kehadiran[p.id] = kode;
 
 				// Hitung Stats
 				if (kode !== '-') row.stats[kode] = (row.stats[kode] || 0) + 1;
+				if (kode === 'A') {
+					const jpList = parseJamPelajaran(p.jam_ke);
+					const jp = jpList.length > 0 ? jpList.length : 1;
+					row.stats.A_JP = (row.stats.A_JP || 0) + jp;
+				}
 			});
+
+			// Konversi akumulasi JP Alfa ke Hari Alfa (7 JP = 1 Hari, sisa >= 5 JP = +1 Hari)
+			const alfaCalc = calculateHariAlfa(row.stats.A_JP || 0);
+			if (row.stats.A_JP > 0) {
+				row.stats.A = alfaCalc.totalHari;
+			}
+			row.stats.A_Detail = alfaCalc;
 
 			const totalPertemuan = pertemuanList.length;
 			row.persentase = totalPertemuan > 0 ? Math.round((row.stats.H / totalPertemuan) * 100) : 0;
@@ -1034,7 +1047,14 @@ export default function LaporanPage() {
 														<td className='px-2 py-3 text-center font-black text-[#00A693] border-r-[3px] border-black bg-[#C4F0EB]/30'>{row.stats.H}</td>
 														<td className='px-2 py-3 text-center font-black text-[#2F80ED] border-r-[3px] border-black bg-[#E2D4F0]/30'>{row.stats.I}</td>
 														<td className='px-2 py-3 text-center font-black text-[#F5C518] border-r-[3px] border-black bg-[#FFE8DC]/30'>{row.stats.S}</td>
-														<td className='px-2 py-3 text-center font-black text-[#E8451A] border-r-[3px] border-black bg-[#FFD6D6]/30'>{row.stats.A}</td>
+														<td 
+															title={row.stats.A_JP > 0 ? `${row.stats.A} Hari (${row.stats.A_JP} JP Alfa)` : `${row.stats.A} Hari`}
+															className='px-2 py-3 text-center font-black text-[#E8451A] border-r-[3px] border-black bg-[#FFD6D6]/30'>
+															<div>{row.stats.A}</div>
+															{row.stats.A_JP > 0 && (
+																<div className='text-[9px] font-normal text-gray-700 leading-none'>{row.stats.A_JP} JP</div>
+															)}
+														</td>
 														<td className='px-2 py-3 text-center font-black text-black bg-[#F5C518]/20'>{row.persentase}%</td>
 													</tr>
 												))}

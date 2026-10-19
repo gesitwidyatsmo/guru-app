@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus } from '@/lib/absensiUtils';
+import { normStatus, evaluateDailyAttendance, calculateHariAlfa } from '@/lib/absensiUtils';
 
 export async function GET(req) {
 	try {
@@ -167,7 +167,7 @@ export async function GET(req) {
 			siswaDetails: s.absensi_mapel_siswa || [],
 		}));
 
-		// 4C. ALGORITMA CERDAS: HITUNG ATURAN 50% & DETEKSI BOLOS / ANOMALI JAM KOSONG
+		// 4C. ALGORITMA CERDAS: MINIMAL HADIR 1 JP TETAP HADIR HARI ITU & DETEKSI BOLOS PARSIAL
 		const siswaMapelBreakdown = [];
 		const siswaBolosList = [];
 
@@ -178,10 +178,6 @@ export async function GET(req) {
 
 		siswaList.forEach((siswa) => {
 			const sessions = [];
-			let hCount = 0;
-			let sCount = 0;
-			let iCount = 0;
-			let aCount = 0;
 
 			sesiMapelToday.forEach((sesi) => {
 				const rec = sesi.siswaDetails.find((d) => String(d.siswa_id) === String(siswa.id));
@@ -193,63 +189,22 @@ export async function GET(req) {
 						status: rec.status,
 						keterangan: rec.keterangan || '',
 					});
-
-					const st = normStatus(rec.status);
-					if (st === 'hadir') hCount++;
-					else if (st === 'sakit') sCount++;
-					else if (st === 'izin') iCount++;
-					else if (st === 'alfa') aCount++;
 				}
 			});
 
-			const totalRecorded = hCount + sCount + iCount + aCount;
-			let recommendedStatus = 'Hadir';
-			let recommendedKeterangan = '';
-			let isBolosParsial = false;
-			let isAnomaliKurang50 = false;
-			let kehadiranPct = 0;
-
-			if (totalRecorded > 0) {
-				kehadiranPct = Math.round((hCount / totalRecorded) * 100);
-
-				// ATURAN 50%:
-				if (kehadiranPct >= 50) {
-					recommendedStatus = 'Hadir';
-					// Jika ada alfa padahal hadir di sesi lain -> BOLOS PARSIAL
-					if (aCount > 0) {
-						isBolosParsial = true;
-						const jamBolos = sessions
-							.filter((ss) => normStatus(ss.status) === 'alfa')
-							.map((ss) => `Jam ${ss.jam_ke} (${ss.mapel})`)
-							.join(', ');
-						recommendedKeterangan = `Bolos di: ${jamBolos}`;
-					}
-				} else {
-					// Kehadiran < 50%
-					if (sCount >= iCount && sCount >= aCount) {
-						recommendedStatus = 'Sakit';
-						recommendedKeterangan =
-							sessions.find((ss) => (ss.status || '').toLowerCase() === 'sakit')?.keterangan ||
-							'Surat Keterangan Sakit';
-					} else if (iCount > sCount && iCount >= aCount) {
-						recommendedStatus = 'Izin';
-						recommendedKeterangan =
-							sessions.find((ss) => (ss.status || '').toLowerCase() === 'izin')?.keterangan ||
-							'Izin Keperluan Keluarga';
-					} else {
-						recommendedStatus = 'Alfa';
-						if (hCount > 0) {
-							isAnomaliKurang50 = true;
-							recommendedKeterangan = `Hanya hadir ${hCount} dari ${totalRecorded} jam (${kehadiranPct}%) - Di bawah syarat 50%`;
-						} else {
-							recommendedKeterangan = 'Tidak hadir di seluruh sesi KBM';
-						}
-					}
-				}
-			} else {
-				// Belum ada guru mapel yang absen untuk siswa ini
-				recommendedStatus = 'Belum Ada Data';
-			}
+			const evalResult = evaluateDailyAttendance(sessions);
+			const {
+				recommendedStatus,
+				recommendedKeterangan,
+				isBolosParsial,
+				hCount,
+				sCount,
+				iCount,
+				aCount,
+				totalJpHadir,
+				totalJpAlfa,
+				totalJpRecorded,
+			} = evalResult;
 
 			// Agregat hitungan
 			if (recommendedStatus === 'Hadir') autoHadir++;
@@ -263,26 +218,13 @@ export async function GET(req) {
 					siswa_id: siswa.id,
 					nama_lengkap: siswa.nama_lengkap,
 					nis: siswa.nis,
-					totalRecorded,
+					totalRecorded: totalJpRecorded,
 					hCount,
 					aCount,
-					kehadiranPct,
+					totalJpHadir,
+					totalJpAlfa,
 					tipeKasus: 'bolos_parsial',
-					judulKasus: 'Membolos Jam Tertentu',
-					keterangan: recommendedKeterangan,
-					sessions,
-				});
-			} else if (isAnomaliKurang50) {
-				siswaBolosList.push({
-					siswa_id: siswa.id,
-					nama_lengkap: siswa.nama_lengkap,
-					nis: siswa.nis,
-					totalRecorded,
-					hCount,
-					aCount,
-					kehadiranPct,
-					tipeKasus: 'anomali_kurang_50',
-					judulKasus: 'Kehadiran Tidak Memenuhi Syarat Minimal 50%',
+					judulKasus: 'Membolos Jam Tertentu (Bolos Parsial)',
 					keterangan: recommendedKeterangan,
 					sessions,
 				});
@@ -294,16 +236,16 @@ export async function GET(req) {
 				nama_lengkap: siswa.nama_lengkap,
 				nis: siswa.nis,
 				jenis_kelamin: siswa.jenis_kelamin,
-				totalRecorded,
+				totalRecorded: totalJpRecorded,
 				hCount,
 				sCount,
 				iCount,
 				aCount,
-				kehadiranPct,
+				totalJpHadir,
+				totalJpAlfa,
 				recommendedStatus,
 				recommendedKeterangan,
 				isBolosParsial,
-				isAnomaliKurang50,
 				sessions,
 			});
 		});

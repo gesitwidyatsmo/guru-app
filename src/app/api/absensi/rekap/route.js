@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { normStatus, parseJamPelajaran, calculateHariAlfa } from '@/lib/absensiUtils';
 
 export async function GET(request) {
 	try {
@@ -41,13 +42,15 @@ export async function GET(request) {
 		// 2. Ambil data absensi harian (sesi)
 		let querySesi = supabase.from('absensi_harian').select('sesi_id, tanggal').eq('kelas', kelas);
 
+		let startDate;
+		let endDate;
 		if (bulan !== 'all') {
-			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
-			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			startDate = new Date(tahun, bulan - 1, 1).toISOString();
+			endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
 			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 		} else {
-			const startDate = new Date(tahun, 0, 1).toISOString();
-			const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+			startDate = new Date(tahun, 0, 1).toISOString();
+			endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
 			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 
@@ -65,7 +68,7 @@ export async function GET(request) {
 			const rekapSiswa = siswaDiKelas.map((siswa) => ({
 				...siswa,
 				absensi: {},
-				ringkasan: { H: 0, I: 0, S: 0, A: 0 },
+				ringkasan: { H: 0, I: 0, S: 0, A: 0, A_JP: 0, A_Detail: calculateHariAlfa(0) },
 			}));
 
 			return NextResponse.json({
@@ -94,10 +97,42 @@ export async function GET(request) {
 			sesiTanggalMap[s.sesi_id] = String(s.tanggal).slice(0, 10);
 		});
 
+		// 3B. Ambil data sesi mapel untuk perhitungan JP Alfa kumulatif
+		const startDateStr = startDate.slice(0, 10);
+		const endDateStr = endDate.slice(0, 10);
+
+		const { data: mapelSesiData } = await supabase
+			.from('absensi_mapel')
+			.select('sesi_id, tanggal, jam_ke')
+			.eq('kelas', kelas)
+			.gte('tanggal', startDateStr)
+			.lte('tanggal', endDateStr);
+
+		let mapelDetails = [];
+		const mapelSesiMap = {};
+		if (mapelSesiData && mapelSesiData.length > 0) {
+			mapelSesiData.forEach((s) => {
+				const jpList = parseJamPelajaran(s.jam_ke);
+				mapelSesiMap[s.sesi_id] = {
+					tanggal: s.tanggal ? String(s.tanggal).slice(0, 10) : '',
+					jam_ke: s.jam_ke,
+					jp: jpList.length > 0 ? jpList.length : 1,
+				};
+			});
+
+			const mapelSesiIds = mapelSesiData.map((s) => s.sesi_id);
+			const { data: mDetails } = await supabase
+				.from('absensi_mapel_siswa')
+				.select('sesi_id, siswa_id, status')
+				.in('sesi_id', mapelSesiIds);
+
+			mapelDetails = mDetails || [];
+		}
+
 		// 4. Proses rekap per siswa
 		const rekapSiswa = siswaDiKelas.map((siswa) => {
 			const absensiSiswa = {};
-			const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 };
+			const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0, A_JP: 0, A_Detail: null };
 
 			const studentAbsensi = absensiDetails.filter(d => String(d.siswa_id) === String(siswa.id));
 
@@ -111,15 +146,47 @@ export async function GET(request) {
 				// Handle multiple sessions in same day if exists by overriding or just accepting the last one
 				absensiSiswa[tanggal] = { status, keterangan };
 
-				// Hitung ringkasan (sesuai status yang digunakan)
-				const s = status.toLowerCase();
-				if (s === 'hadir' || s === 'h') ringkasan.H++;
-				else if (s === 'izin' || s === 'i') ringkasan.I++;
-				else if (s === 'sakit' || s === 's') ringkasan.S++;
-				else if (s === 'alpa' || s === 'a' || s === 'alpha') ringkasan.A++;
-				else if (s === 'terlambat' || s === 't') ringkasan.T++;
-				else if (s === 'cabut' || s === 'c') ringkasan.C++;
+				// Hitung ringkasan (sesuai status harian)
+				const s = normStatus(status);
+				if (s === 'hadir') ringkasan.H++;
+				else if (s === 'izin') ringkasan.I++;
+				else if (s === 'sakit') ringkasan.S++;
+				else if (s === 'alfa') ringkasan.A++;
+				else if (s === 'terlambat') ringkasan.T++;
+				else if (s === 'cabut') ringkasan.C++;
 			});
+
+			// Akumulasi JP Alfa dari seluruh sesi mapel
+			let totalJpAlfa = 0;
+			const studentMapelAbsen = mapelDetails.filter(d => String(d.siswa_id) === String(siswa.id));
+			const datesWithMapel = new Set();
+
+			studentMapelAbsen.forEach(d => {
+				const sesi = mapelSesiMap[d.sesi_id];
+				if (!sesi) return;
+				if (sesi.tanggal) datesWithMapel.add(sesi.tanggal);
+				const st = normStatus(d.status);
+				if (st === 'alfa') {
+					totalJpAlfa += sesi.jp;
+				}
+			});
+
+			// Periksa apakah ada tanggal absensi harian yang berstatus alfa tanpa ada catatan mapel (misal input manual)
+			studentAbsensi.forEach(detail => {
+				const tgl = sesiTanggalMap[detail.sesi_id];
+				const st = normStatus(detail.status);
+				if (st === 'alfa' && !datesWithMapel.has(tgl)) {
+					totalJpAlfa += 7; // Standar 1 hari penuh = 7 JP
+				}
+			});
+
+			// Hitung hari alfa berdasarkan aturan user: 7 JP = 1 hari, sisa >= 5 JP = +1 hari
+			const alfaCalc = calculateHariAlfa(totalJpAlfa);
+			ringkasan.A_JP = totalJpAlfa;
+			if (totalJpAlfa > 0) {
+				ringkasan.A = alfaCalc.totalHari;
+			}
+			ringkasan.A_Detail = alfaCalc;
 
 			return {
 				...siswa,

@@ -121,7 +121,7 @@ export async function GET(request) {
 				if (s === 'hadir' || s === 'h') ringkasan.H++;
 				else if (s === 'izin' || s === 'i') ringkasan.I++;
 				else if (s === 'sakit' || s === 's') ringkasan.S++;
-				else if (s === 'alpa' || s === 'a' || s === 'alpha') ringkasan.A++;
+				else if (s === 'alfa' || s === 'alpa' || s === 'alpha' || s === 'a') ringkasan.A++;
 				else if (s === 'terlambat' || s === 't') ringkasan.T++;
 				else if (s === 'cabut' || s === 'c') ringkasan.C++;
 			});

@@ -163,7 +163,7 @@ function WaliKelasHubContent() {
 
 		const confirm = await Swal.fire({
 			title: 'Sahkan Presensi Harian?',
-			text: 'Data hasil agregasi sesi mapel hari ini (berdasarkan aturan kehadiran 50%) akan disimpan resmi ke Buku Absensi Harian kelas ini.',
+			text: 'Data hasil agregasi sesi mapel hari ini (siswa hadir jika minimal mengikuti 1 JP) akan disimpan resmi ke Buku Absensi Harian kelas ini.',
 			icon: 'question',
 			showCancelButton: true,
 			confirmButtonText: '⚡ Ya, Sahkan Sekarang!',
@@ -731,7 +731,7 @@ function WaliKelasHubContent() {
 							<div className='space-y-3'>
 								<div className='flex items-center justify-between'>
 									<h3 className='text-sm font-black uppercase tracking-wider text-black'>
-										Detail Kehadiran per Siswa & Logika 50% Rule
+										Detail Kehadiran per Siswa (Min. 1 JP Hadir = Hadir Hari Ini)
 									</h3>
 									<span className='text-xs font-bold text-gray-500'>
 										{siswaMapelBreakdown.length} Siswa
@@ -745,7 +745,7 @@ function WaliKelasHubContent() {
 												<th className='p-3 border-r-2 border-black w-10 text-center'>No</th>
 												<th className='p-3 border-r-2 border-black'>Nama Siswa</th>
 												<th className='p-3 border-r-2 border-black'>Sesi Mapel Hari Ini</th>
-												<th className='p-3 border-r-2 border-black text-center w-28'>Rasio Jam</th>
+												<th className='p-3 border-r-2 border-black text-center w-32'>Jam Hadir</th>
 												<th className='p-3 border-r-2 border-black text-center w-36'>Status Harian</th>
 												<th className='p-3 text-center w-32'>Koreksi</th>
 											</tr>
@@ -810,11 +810,11 @@ function WaliKelasHubContent() {
 															<td className='p-3 border-r-2 border-black/10 text-center'>
 																<span
 																	className={`px-2 py-0.5 rounded text-xs font-black border border-black ${
-																		item.kehadiranPct >= 50
+																		(item.totalJpHadir || 0) >= 1
 																			? 'bg-emerald-100 text-emerald-950'
 																			: 'bg-rose-100 text-rose-950'
 																	}`}>
-																	{item.hCount}/{item.totalRecorded} ({item.kehadiranPct}%)
+																	{item.totalJpHadir || 0} / {item.totalRecorded || 0} JP
 																</span>
 															</td>
 															{/* Rekomendasi Status Harian */}
@@ -833,12 +833,7 @@ function WaliKelasHubContent() {
 																</span>
 																{item.isBolosParsial && (
 																	<div className='text-[10px] text-rose-600 font-bold mt-1'>
-																		⚠️ Bolos jam tertentu
-																	</div>
-																)}
-																{item.isAnomaliKurang50 && (
-																	<div className='text-[10px] text-amber-700 font-bold mt-1'>
-																		⚠️ Hadir &lt; 50% jam
+																		⚠️ Bolos {item.totalJpAlfa || 0} JP
 																	</div>
 																)}
 															</td>
