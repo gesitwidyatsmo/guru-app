@@ -1,4 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# 🏫 Guru App — Platform Manajemen KBM, Finansial, & Kesiswaan
+
+> Aplikasi web terpadu manajemen operasional sekolah, kegiatan belajar mengajar (KBM), penghitungan bisaroh guru berbasis jam riil (JTM), tata tertib & kedisiplinan kesiswaan, serta supervisi eksekutif kepala sekolah.
+
+## 📖 Dokumentasi & Buku Panduan
+
+- **[Buku Panduan Lengkap Penggunaan Semua Role (Manual Pengguna)](docs/PANDUAN_PENGGUNAAN_APLIKASI.md)**: Panduan langkah demi langkah operasional untuk Admin, Guru, Wali Kelas, Kesiswaan, Kepala Sekolah, Bendahara, dan Siswa.
+- **[Desain Sistem Role & RBAC Matrix](docs/ROLES.md)**: Arsitektur otorisasi, hak akses route, dan skema database.
+- **[Desain Hub Wali Kelas](docs/WALI_KELAS_DESIGN.md)**: Spesifikasi alur kerja presensi 1-klik, early warning, dan leger nilai rombel binaan.
+- **[Desain Modul Kesiswaan](docs/KESISWAAN_DESIGN.md)**: Spesifikasi radar bolos, buku kasus bimbingan santri, dan surat pemanggilan orang tua.
+- **[Sistem Poin Karakter Siswa](docs/SISTEM-POIN.md)**: Ketentuan poin pelanggaran, prestasi, dan konversi predikat sikap.
+- **[Dokumentasi Pengujian (Testing)](docs/TESTING.md)**: Unit test, integrasi, dan E2E test.
+
+---
 
 ## Getting Started
 
