@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 
 export default function BroadcastPengumuman() {
@@ -8,6 +8,22 @@ export default function BroadcastPengumuman() {
 	const [pesan, setPesan] = useState('');
 	const [targetUser, setTargetUser] = useState('all'); // all = Semua Guru
 	const [isLoading, setIsLoading] = useState(false);
+	const [guruList, setGuruList] = useState([]);
+
+	useEffect(() => {
+		async function fetchGuru() {
+			try {
+				const res = await fetch('/api/users?role=Guru');
+				if (res.ok) {
+					const data = await res.json();
+					setGuruList(data || []);
+				}
+			} catch (err) {
+				console.error('Failed to load guru list:', err);
+			}
+		}
+		fetchGuru();
+	}, []);
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
@@ -20,11 +36,16 @@ export default function BroadcastPengumuman() {
 			return;
 		}
 
+		const selectedGuru = guruList.find((g) => g.id_user === targetUser);
+		const targetLabel = targetUser === 'all'
+			? 'seluruh dewan guru'
+			: `guru <b>"${selectedGuru?.nama_lengkap || targetUser}"</b>`;
+
 		const confirm = await Swal.fire({
-			title: 'Kirim Pengumuman Massal?',
+			title: targetUser === 'all' ? 'Kirim Pengumuman Massal?' : 'Kirim Pesan ke Guru?',
 			html: `
 				<div class="text-left text-sm space-y-1">
-					<p>Pengumuman <b>"${judul}"</b> akan segera dikirimkan ke seluruh dewan guru dan muncul pada ikon lonceng notifikasi mereka.</p>
+					<p>Pengumuman <b>"${judul}"</b> akan segera dikirimkan ke ${targetLabel} dan muncul pada ikon lonceng notifikasi mereka.</p>
 				</div>
 			`,
 			icon: 'question',
@@ -101,7 +122,18 @@ export default function BroadcastPengumuman() {
 								value={targetUser}
 								onChange={(e) => setTargetUser(e.target.value)}
 								className='neo-input text-sm bg-white font-bold'>
-								<option value='all'>📢 Seluruh Guru Aktif (Broadcast Publik)</option>
+								<option value='all'>
+									📢 Seluruh Guru Aktif {guruList.length > 0 ? `(${guruList.length} Guru - Broadcast Publik)` : '(Broadcast Publik)'}
+								</option>
+								{guruList.length > 0 && (
+									<optgroup label='Kirim ke Guru Tertentu'>
+										{guruList.map((g) => (
+											<option key={g.id_user} value={g.id_user}>
+												👤 {g.nama_lengkap} ({g.username})
+											</option>
+										))}
+									</optgroup>
+								)}
 							</select>
 						</div>
 

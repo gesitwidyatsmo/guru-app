@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/utils/supabase/admin';
 
 export async function GET(req) {
 	try {
@@ -20,11 +21,24 @@ export async function GET(req) {
 			const todayString = new Intl.DateTimeFormat('en-CA', {
 				timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
 			}).format(dateObj);
-			// hariIni: nama hari dalam WIB — FIX: sebelumnya pakai getDay() yang UTC-based
-			// (antara jam 00:00–07:00 WIB, server UTC mengembalikan hari sebelumnya)
+
 			const hariIni = new Intl.DateTimeFormat('id-ID', {
 				timeZone: 'Asia/Jakarta', weekday: 'long',
 			}).format(dateObj); // "Senin", "Selasa", dst — sesuai kolom 'hari' di tabel jadwal
+
+			// Konversi batas 00:00:00 s.d. 23:59:59.999 WIB ke ISO string UTC untuk query PostgreSQL yang akurat
+			const startOfDayUTC = new Date(`${todayString}T00:00:00+07:00`).toISOString();
+			const endOfDayUTC = new Date(`${todayString}T23:59:59.999+07:00`).toISOString();
+
+			// Otomatis tandai reminder_jurnal lama (hari-hari sebelumnya) yang belum dibaca sebagai is_read: true
+			// agar tidak menumpuk memenuhi badge di hari berikutnya
+			await supabase
+				.from('notifikasi')
+				.update({ is_read: true })
+				.eq('user_id', userId)
+				.eq('tipe', 'reminder_jurnal')
+				.eq('is_read', false)
+				.lt('created_at', startOfDayUTC);
 
 			// 2. Ambil Jadwal hari ini
 			const { data: jadwalHariIni } = await supabase
@@ -47,39 +61,64 @@ export async function GET(req) {
 					.select('*')
 					.eq('user_id', userId)
 					.eq('tipe', 'reminder_jurnal')
-					.gte('created_at', `${todayString}T00:00:00Z`)
-					.lte('created_at', `${todayString}T23:59:59Z`);
+					.gte('created_at', startOfDayUTC)
+					.lte('created_at', endOfDayUTC);
 
 				const existingNotif = notifHariIni || [];
 				const newNotificationsToInsert = [];
+				const notifIdsToMarkRead = [];
 
-				// 5. Cek mana yang bolong
-				for (const jadwal of jadwalHariIni) {
-					// Asumsi: Jurnal terhubung dengan mapel dan kelas yang sama dengan jadwal
+				// 5. Kelompokkan jadwal menjadi mapel & kelas unik (mencegah duplikasi jam mengajar ganda)
+				const uniqueJadwalMap = new Map();
+				for (const j of jadwalHariIni) {
+					const key = `${(j.mapel || '').trim().toUpperCase()}__${(j.kelas || '').trim().toUpperCase()}`;
+					if (!uniqueJadwalMap.has(key)) {
+						uniqueJadwalMap.set(key, j);
+					}
+				}
+
+				// 6. Evaluasi setiap kelas & mapel
+				for (const [, jadwal] of uniqueJadwalMap) {
 					const sudahDiisi = jurnalHariIni?.some(
-						(jurnal) => jurnal.mapel === jadwal.mapel && jurnal.kelas === jadwal.kelas
+						(jurnal) =>
+							(jurnal.mapel || '').trim().toUpperCase() === (jadwal.mapel || '').trim().toUpperCase() &&
+							(jurnal.kelas || '').trim().toUpperCase() === (jadwal.kelas || '').trim().toUpperCase()
 					);
 
-					if (!sudahDiisi) {
-						const pesanReminder = `Jurnal untuk pelajaran ${jadwal.mapel} di kelas ${jadwal.kelas} hari ini belum diisi.`;
-						
-						// Cek apakah notifikasi untuk pesan ini sudah ada hari ini
-						const sudahAdaNotif = existingNotif.some(n => n.pesan === pesanReminder);
-						
-						if (!sudahAdaNotif) {
+					const pesanReminder = `Jurnal untuk pelajaran ${jadwal.mapel} di kelas ${jadwal.kelas} hari ini belum diisi.`;
+					const notifTerkait = existingNotif.filter((n) => n.pesan === pesanReminder);
+
+					if (sudahDiisi) {
+						// Jika sudah diisi hari ini, otomatis tandai notifikasi pengingatnya menjadi is_read
+						for (const n of notifTerkait) {
+							if (!n.is_read) {
+								notifIdsToMarkRead.push(n.id);
+							}
+						}
+					} else {
+						// Jika belum diisi dan belum pernah ada notifikasi pengingat untuk hari ini
+						if (notifTerkait.length === 0) {
 							newNotificationsToInsert.push({
 								user_id: userId,
 								tipe: 'reminder_jurnal',
 								judul: 'Peringatan Jurnal Belum Diisi',
 								pesan: pesanReminder,
 								action_url: '/jurnal',
-								is_read: false
+								is_read: false,
 							});
 						}
 					}
 				}
 
-				// 6. Insert notifikasi baru jika ada
+				// Update yang sudah diisi menjadi read
+				if (notifIdsToMarkRead.length > 0) {
+					await supabase
+						.from('notifikasi')
+						.update({ is_read: true })
+						.in('id', notifIdsToMarkRead);
+				}
+
+				// Insert notifikasi baru jika belum ada
 				if (newNotificationsToInsert.length > 0) {
 					await supabase.from('notifikasi').insert(newNotificationsToInsert);
 				}
@@ -104,6 +143,31 @@ export async function GET(req) {
 	}
 }
 
+export async function PATCH(req) {
+	try {
+		const userId = req.headers.get('x-user-id');
+		if (!userId) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		const supabase = await createClient();
+
+		// Tandai semua notifikasi pengguna ini sebagai sudah dibaca
+		const { error } = await supabase
+			.from('notifikasi')
+			.update({ is_read: true })
+			.eq('user_id', userId)
+			.eq('is_read', false);
+
+		if (error) throw error;
+
+		return NextResponse.json({ success: true, message: 'Semua notifikasi ditandai dibaca' });
+	} catch (error) {
+		console.error('PATCH All Notifikasi Error:', error);
+		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+	}
+}
+
 export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
@@ -118,40 +182,43 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Judul dan pesan wajib diisi.' }, { status: 400 });
 		}
 
-		const supabase = await createClient();
-
 		let userIdsToInsert = [];
 
 		if (target_user_id === 'all') {
-			// Ambil semua user_id (Guru & Murid/Admin tergantung kebutuhan, biasanya semua Guru)
-			// Disini kita broadcast ke role Guru
-			const { data: allUsers } = await supabase.from('users').select('id').eq('role', 'Guru');
-			if (allUsers) {
-				userIdsToInsert = allUsers.map(u => u.id);
+			// Ambil semua id_user dari dewan Guru menggunakan supabaseAdmin (bypass RLS)
+			const { data: allUsers, error: usersErr } = await supabaseAdmin
+				.from('users')
+				.select('id_user')
+				.eq('role', 'Guru');
+
+			if (usersErr) throw usersErr;
+
+			if (allUsers && allUsers.length > 0) {
+				userIdsToInsert = allUsers.map((u) => u.id_user).filter(Boolean);
 			}
 		} else {
-			userIdsToInsert = [target_user_id];
+			userIdsToInsert = [target_user_id].filter(Boolean);
 		}
 
 		if (userIdsToInsert.length === 0) {
 			return NextResponse.json({ error: 'Tidak ada target user yang valid.' }, { status: 400 });
 		}
 
-		const payload = userIdsToInsert.map(id => ({
+		const payload = userIdsToInsert.map((id) => ({
 			user_id: id,
 			tipe: 'pengumuman',
 			judul: judul,
 			pesan: pesan,
 			action_url: null,
-			is_read: false
+			is_read: false,
 		}));
 
-		const { error } = await supabase.from('notifikasi').insert(payload);
-		if (error) throw error;
+		const { error: insertError } = await supabaseAdmin.from('notifikasi').insert(payload);
+		if (insertError) throw insertError;
 
-		return NextResponse.json({ success: true, message: `Berhasil mengirim ke ${payload.length} pengguna.` });
+		return NextResponse.json({ success: true, message: `Berhasil mengirim pengumuman ke ${payload.length} pengguna.` });
 	} catch (error) {
 		console.error('POST Notifikasi Error:', error);
-		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+		return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
 	}
 }
