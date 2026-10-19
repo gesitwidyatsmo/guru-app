@@ -19,7 +19,7 @@ export default function LokasiSekolahPage() {
 		lng: 106.816666,
 		radius: 200,
 		nama_lokasi: 'Area Sekolah',
-		berlaku_untuk: ['jurnal'],
+		berlaku_untuk: ['jurnal', 'absensi'],
 	});
 
 	// State hasil pengujian lokasi saat ini
@@ -61,7 +61,7 @@ export default function LokasiSekolahPage() {
 							lng: typeof data.value.lng === 'number' ? data.value.lng : parseFloat(data.value.lng) || 106.816666,
 							radius: parseInt(data.value.radius) || 200,
 							nama_lokasi: data.value.nama_lokasi || 'Area Sekolah',
-							berlaku_untuk: Array.isArray(data.value.berlaku_untuk) ? data.value.berlaku_untuk : ['jurnal'],
+							berlaku_untuk: Array.isArray(data.value.berlaku_untuk) ? data.value.berlaku_untuk : ['jurnal', 'absensi'],
 						});
 					}
 					if (data?._fallback) {
@@ -77,6 +77,16 @@ export default function LokasiSekolahPage() {
 
 		fetchSettings();
 	}, []);
+
+	// Toggle modul yang terkena aturan geofencing
+	const handleToggleModule = (moduleKey) => {
+		setSettings((prev) => {
+			const current = Array.isArray(prev.berlaku_untuk) ? prev.berlaku_untuk : ['jurnal', 'absensi'];
+			const exists = current.includes(moduleKey);
+			const updated = exists ? current.filter((m) => m !== moduleKey) : [...current, moduleKey];
+			return { ...prev, berlaku_untuk: updated };
+		});
+	};
 
 	// Ambil lokasi admin saat ini dan masukkan ke input
 	const handleUseCurrentLocation = async () => {
@@ -479,6 +489,40 @@ export default function LokasiSekolahPage() {
 							<p className='text-[11px] text-gray-500 font-medium mt-2'>
 								Saran: Gunakan radius 150m - 300m untuk mencakup seluruh lingkungan gedung sekolah, lapangan, dan ruang guru dengan toleransi fluktuasi sinyal GPS di dalam ruangan.
 							</p>
+						</div>
+
+						{/* Pilihan Modul yang Dibatasi Geofence */}
+						<div className='border-t-2 border-black/10 pt-4'>
+							<label className='block text-xs font-black text-black uppercase tracking-widest mb-2'>
+								Modul yang Dibatasi Geofence
+							</label>
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+								<label className='flex items-center gap-3 p-3 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer hover:bg-yellow-50 transition-all'>
+									<input
+										type='checkbox'
+										checked={settings.berlaku_untuk?.includes('jurnal')}
+										onChange={() => handleToggleModule('jurnal')}
+										className='w-5 h-5 accent-emerald-600 rounded border-2 border-black'
+									/>
+									<div>
+										<div className='text-xs font-black text-black uppercase'>📔 Jurnal Mengajar Guru</div>
+										<div className='text-[10px] text-gray-600'>Wajib GPS saat simpan jurnal KBM</div>
+									</div>
+								</label>
+
+								<label className='flex items-center gap-3 p-3 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer hover:bg-yellow-50 transition-all'>
+									<input
+										type='checkbox'
+										checked={settings.berlaku_untuk?.includes('absensi')}
+										onChange={() => handleToggleModule('absensi')}
+										className='w-5 h-5 accent-emerald-600 rounded border-2 border-black'
+									/>
+									<div>
+										<div className='text-xs font-black text-black uppercase'>📋 Presensi / Absensi Siswa</div>
+										<div className='text-[10px] text-gray-600'>Wajib GPS saat simpan absensi mapel & harian</div>
+									</div>
+								</label>
+							</div>
 						</div>
 					</div>
 

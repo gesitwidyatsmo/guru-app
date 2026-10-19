@@ -8,6 +8,9 @@ import Link from 'next/link';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { getTodayDateString } from '@/lib/dateUtils';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { isWithinGeofence, formatDistance } from '@/lib/haversine';
+import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
 
 export default function AbsensiKelasPage() {
 	const params = useParams();
@@ -18,6 +21,12 @@ export default function AbsensiKelasPage() {
 	const [statusList, setStatusList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [tanggal, setTanggal] = useState(() => getTodayDateString());
+	const [userRole, setUserRole] = useState('');
+
+	// Geolocation & Geofencing State
+	const { getPosition, loading: gpsLoading } = useGeolocation();
+	const [geofenceSettings, setGeofenceSettings] = useState(null);
+	const [locationStatus, setLocationStatus] = useState(null);
 
 	const [absensi, setAbsensi] = useState({});
 	const [loading, setLoading] = useState(true);
@@ -91,6 +100,22 @@ export default function AbsensiKelasPage() {
 				setKelasDetail(kelas);
 				setStatusList(dataStatus || []);
 				setSiswaList(siswaDataUpdated);
+
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
+					if (profile) setUserRole(profile.role || '');
+				}
+
+				try {
+					const geoRes = await fetch('/api/settings?key=geofence');
+					if (geoRes.ok) {
+						const geoData = await geoRes.json();
+						if (geoData?.value) setGeofenceSettings(geoData.value);
+					}
+				} catch (geoErr) {
+					console.warn('Gagal memuat pengaturan geofence:', geoErr);
+				}
 			} catch (err) {
 				console.error(err);
 			} finally {
@@ -237,11 +262,14 @@ export default function AbsensiKelasPage() {
 	const handleTandaiSemua = (labelStatus) => {
 		setAbsensi((prev) => {
 			const updated = { ...prev };
-			siswaKelasIni.forEach((s) => {
-				updated[s.id] = {
-					status: labelStatus,
-					keterangan: prev[s.id]?.keterangan || '',
-				};
+			const targetSiswa = searchQuery.trim() ? filteredSiswaInput : siswaKelasIni;
+			targetSiswa.forEach((s) => {
+				if (s.status === 'Aktif') {
+					updated[s.id] = {
+						status: labelStatus,
+						keterangan: prev[s.id]?.keterangan || '',
+					};
+				}
 			});
 			return updated;
 		});
@@ -251,6 +279,55 @@ export default function AbsensiKelasPage() {
 
 	const handleSimpan = async () => {
 		if (!kelasDetail) return;
+
+		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
+		let userCoords = null;
+		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin') {
+			try {
+				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
+					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng };
+				} else {
+					userCoords = await getPosition();
+					const check = isWithinGeofence(userCoords.lat, userCoords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
+					setLocationStatus({ ...check, checked: true, userLat: userCoords.lat, userLng: userCoords.lng });
+
+					if (!check.isInside) {
+						await Swal.fire({
+							icon: 'error',
+							title: 'Di Luar Area Sekolah',
+							html: `
+								<div class="text-left text-sm space-y-2">
+									<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
+									<div class="bg-red-50 p-3 rounded border border-red-200">
+										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
+										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+									</div>
+									<p class="text-xs text-gray-600 font-medium">Pengisian absensi harian hanya dapat dilakukan dari lingkungan sekolah.</p>
+								</div>
+							`,
+							confirmButtonColor: '#E8451A',
+							confirmButtonText: 'Tutup',
+						});
+						return;
+					}
+				}
+			} catch (gpsErr) {
+				await Swal.fire({
+					icon: 'warning',
+					title: 'Akses Lokasi Wajib',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Sekolah mewajibkan verifikasi lokasi GPS untuk mengisi absensi harian siswa.</p>
+							<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
+							<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di browser perangkat Anda.</p>
+						</div>
+					`,
+					confirmButtonColor: '#E8451A',
+					confirmButtonText: 'Mengerti',
+				});
+				return;
+			}
+		}
 
 		const konfirmasi = await Swal.fire({
 			title: 'Simpan absensi?',
@@ -265,38 +342,29 @@ export default function AbsensiKelasPage() {
 
 		const data_absensi = siswaKelasIni.map((s) => ({
 			siswa_id: s.id,
-			status: absensi[s.id]?.status || '',
+			status: absensi[s.id]?.status || (s.status === 'Aktif' ? 'Hadir' : '-'),
 			keterangan: absensi[s.id]?.keterangan || '',
 		}));
 
 		try {
 			setSaving(true);
-			const supabase = createClient();
-
-			const { data: existingSesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggal).single();
-			
-			let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-H-${Math.random().toString(36).slice(2, 11)}`;
-
-			if (existingSesi) {
-				await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
-			} else {
-				const { error: insertError } = await supabase.from('absensi_harian').insert({
-					sesi_id: sesiId,
+			const res = await fetch('/api/absensi', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
 					kelas: namaKelas,
-					tanggal: tanggal
-				});
-				if (insertError) throw insertError;
-			}
+					tanggal,
+					oldTanggal: tanggal,
+					newTanggal: tanggal,
+					data: data_absensi,
+					user_lat: userCoords?.lat,
+					user_lng: userCoords?.lng,
+				}),
+			});
 
-			if (data_absensi.length > 0) {
-				const rowsToInsert = data_absensi.map(item => ({
-					sesi_id: sesiId,
-					siswa_id: item.siswa_id,
-					status: item.status,
-					keterangan: item.keterangan || ''
-				}));
-				const { error: detailError } = await supabase.from('absensi_harian_siswa').insert(rowsToInsert);
-				if (detailError) throw detailError;
+			if (!res.ok) {
+				const errJson = await res.json().catch(() => ({}));
+				throw new Error(errJson.error || 'Gagal menyimpan absensi');
 			}
 
 			await Swal.fire({
@@ -312,8 +380,8 @@ export default function AbsensiKelasPage() {
 			console.error('Error simpan absensi:', e);
 			await Swal.fire({
 				icon: 'error',
-				title: 'Error',
-				text: 'Terjadi kesalahan jaringan saat menyimpan',
+				title: 'Gagal Menyimpan',
+				text: e.message || 'Terjadi kesalahan saat menyimpan',
 			});
 		} finally {
 			setSaving(false);
@@ -515,7 +583,16 @@ export default function AbsensiKelasPage() {
 			/>
 
 			{/* SECTION ATAS: Info kelas & tanggal */}
-			<div className='px-4 mt-4'>
+			<div className='px-4 mt-4 space-y-4'>
+				{/* Geofence Status Card Banner */}
+				<GeofenceStatusCard
+					geofenceSettings={geofenceSettings}
+					moduleName="absensi"
+					userRole={userRole}
+					locationStatus={locationStatus}
+					setLocationStatus={setLocationStatus}
+				/>
+
 				<div className='bg-white rounded-2xl shadow-sm border border-gray-100 p-4 gap-3'>
 					<div className='flex items-center justify-between gap-3 h-full mx-3'>
 						<div className='flex items-center gap-3'>
@@ -565,6 +642,15 @@ export default function AbsensiKelasPage() {
 							onChange={(e) => setTanggal(e.target.value)}
 						/>
 					</div>
+
+					{geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && (
+						<div className='flex items-center justify-between gap-3 mx-3 mt-3 pt-3 border-t border-gray-100 text-xs'>
+							<div className='flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200'>
+								<span>📍</span>
+								<span>Geofence Aktif: {geofenceSettings.nama_lokasi || 'Area Sekolah'} (Radius: {geofenceSettings.radius}m)</span>
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 

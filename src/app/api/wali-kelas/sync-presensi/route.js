@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { verifyGeofence } from '@/lib/geofenceServer';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 
@@ -68,6 +69,19 @@ export async function POST(req) {
 				{ error: 'Akses Ditolak: Hanya Wali Kelas bersangkutan atau Admin yang berhak mengesahkan presensi harian rombel ini.' },
 				{ status: 403 }
 			);
+		}
+
+		// Verifikasi Geofence jika diaktifkan oleh Admin
+		const geoCheck = await verifyGeofence({
+			supabase: supabaseAdmin,
+			userLat: body.user_lat,
+			userLng: body.user_lng,
+			moduleName: 'absensi',
+			role: userRole,
+		});
+
+		if (!geoCheck.allowed) {
+			return NextResponse.json({ error: geoCheck.error }, { status: geoCheck.status || 403 });
 		}
 
 		const namaKelas = kelasData.nama_kelas;

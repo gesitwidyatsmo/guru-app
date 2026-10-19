@@ -24,6 +24,10 @@ import {
 	RefreshCw,
 	AlertCircle,
 } from 'lucide-react';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { isWithinGeofence, formatDistance } from '@/lib/haversine';
+import { normStatus } from '@/lib/absensiUtils';
+import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
 
 function WaliKelasHubContent() {
 	const router = useRouter();
@@ -37,6 +41,11 @@ function WaliKelasHubContent() {
 	const [syncing, setSyncing] = useState(false);
 	const [editedStatuses, setEditedStatuses] = useState({});
 
+	// Geolocation & Geofencing State
+	const { getPosition, loading: gpsLoading } = useGeolocation();
+	const [geofenceSettings, setGeofenceSettings] = useState(null);
+	const [locationStatus, setLocationStatus] = useState(null);
+
 	const fetchHubData = useCallback(async () => {
 		try {
 			const res = await fetch('/api/wali-kelas/my-class');
@@ -49,6 +58,17 @@ function WaliKelasHubContent() {
 			}
 			const data = await res.json();
 			setDataHub(data);
+
+			// Ambil pengaturan geofence sekolah
+			try {
+				const geoRes = await fetch('/api/settings?key=geofence');
+				if (geoRes.ok) {
+					const geoData = await geoRes.json();
+					if (geoData?.value) setGeofenceSettings(geoData.value);
+				}
+			} catch (geoErr) {
+				console.warn('Gagal memuat pengaturan geofence:', geoErr);
+			}
 		} catch (err) {
 			console.error('Error Hub Wali Kelas:', err);
 			Swal.fire({
@@ -92,6 +112,55 @@ function WaliKelasHubContent() {
 	const handleSyncPresensi = async () => {
 		if (!kelas || !stats?.absensiHariIni) return;
 
+		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
+		let userCoords = null;
+		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && dataHub?.userRole !== 'Admin') {
+			try {
+				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
+					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng };
+				} else {
+					userCoords = await getPosition();
+					const check = isWithinGeofence(userCoords.lat, userCoords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
+					setLocationStatus({ ...check, checked: true, userLat: userCoords.lat, userLng: userCoords.lng });
+
+					if (!check.isInside) {
+						await Swal.fire({
+							icon: 'error',
+							title: 'Di Luar Area Sekolah',
+							html: `
+								<div class="text-left text-sm space-y-2">
+									<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
+									<div class="bg-red-50 p-3 rounded border border-red-200">
+										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
+										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+									</div>
+									<p class="text-xs text-gray-600 font-medium">Pengesahan presensi harian hanya dapat dilakukan dari lingkungan sekolah.</p>
+								</div>
+							`,
+							confirmButtonColor: '#E8451A',
+							confirmButtonText: 'Tutup',
+						});
+						return;
+					}
+				}
+			} catch (gpsErr) {
+				await Swal.fire({
+					icon: 'warning',
+					title: 'Akses Lokasi Wajib',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Sekolah mewajibkan verifikasi lokasi GPS untuk mengesahkan presensi harian siswa.</p>
+							<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
+							<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di browser perangkat Anda.</p>
+						</div>
+					`,
+					confirmButtonColor: '#E8451A',
+					confirmButtonText: 'Mengerti',
+				});
+				return;
+			}
+		}
+
 		const confirm = await Swal.fire({
 			title: 'Sahkan Presensi Harian?',
 			text: 'Data hasil agregasi sesi mapel hari ini (berdasarkan aturan kehadiran 50%) akan disimpan resmi ke Buku Absensi Harian kelas ini.',
@@ -128,6 +197,8 @@ function WaliKelasHubContent() {
 					data_absensi: payloadData,
 					tahun_ajar: tahunAjar?.nama,
 					semester: tahunAjar?.semester,
+					user_lat: userCoords?.lat,
+					user_lng: userCoords?.lng,
 				}),
 			});
 
@@ -594,6 +665,16 @@ function WaliKelasHubContent() {
 								</div>
 							</div>
 
+							{/* Geofence Status Card Banner */}
+							<GeofenceStatusCard
+								geofenceSettings={geofenceSettings}
+								moduleName="absensi"
+								userRole={dataHub?.userRole}
+								locationStatus={locationStatus}
+								setLocationStatus={setLocationStatus}
+								className="mb-6"
+							/>
+
 							{/* Sesi KBM yang Masuk Hari Ini */}
 							{absensiToday.sesiMapelToday && absensiToday.sesiMapelToday.length > 0 ? (
 								<div className='mb-6 p-4 bg-yellow-50 border-2 border-black rounded-xl'>
@@ -700,9 +781,9 @@ function WaliKelasHubContent() {
 																{item.sessions && item.sessions.length > 0 ? (
 																	<div className='flex flex-wrap gap-1.5'>
 																		{item.sessions.map((sesi, sIdx) => {
-																			const st = (sesi.status || '').toLowerCase();
-																			const isAlfa = st === 'alfa' || st === 'a';
-																			const isHadir = st === 'hadir' || st === 'h';
+																			const st = normStatus(sesi.status);
+																			const isAlfa = st === 'alfa';
+																			const isHadir = st === 'hadir';
 																			return (
 																				<span
 																					key={sIdx}

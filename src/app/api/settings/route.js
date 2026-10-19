@@ -8,7 +8,7 @@ const DEFAULT_GEOFENCE = {
 	lng: 106.816666,
 	radius: 200,
 	nama_lokasi: 'Area Sekolah',
-	berlaku_untuk: ['jurnal'],
+	berlaku_untuk: ['jurnal', 'absensi'],
 };
 
 async function getActiveKepsekInfo() {

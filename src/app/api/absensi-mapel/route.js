@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { calculateAttendanceSummary, findConflictingSession } from '@/lib/absensiUtils';
+import { verifyGeofence } from '@/lib/geofenceServer';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const normDate = (v) => String(v ?? '').slice(0, 10);
@@ -42,7 +44,7 @@ export async function GET(req) {
 
 		if (tanggal && jam_ke) {
 			query = query.eq('tanggal', tanggal).eq('jam_ke', jam_ke);
-			const { data: sesiData, error: sesiError } = await query.single();
+			const { data: sesiData, error: sesiError } = await query.maybeSingle();
 
 			if (sesiError || !sesiData) return NextResponse.json([]);
 
@@ -56,6 +58,11 @@ export async function GET(req) {
 			// Map id_row to support frontend's old format
 			const mappedData = (detailData || []).map(d => ({ ...d, id_row: sesiData.sesi_id }));
 			return NextResponse.json(mappedData);
+		}
+
+		// Filter tanggal jika ada (List mode per tanggal spesifik)
+		if (tanggal && !jam_ke) {
+			query = query.eq('tanggal', tanggal);
 		}
 
 		// List mode
@@ -85,6 +92,7 @@ export async function GET(req) {
 				kelas: r.kelas,
 				mapel: r.mapel,
 				data_absensi: detailsForSession,
+				summary: calculateAttendanceSummary(detailsForSession),
 			};
 		});
 
@@ -118,6 +126,21 @@ export async function POST(req) {
 		}
 
 		const supabase = await createClient();
+
+		// Verifikasi Geofence jika diaktifkan oleh Admin
+		const geoCheck = await verifyGeofence({
+			supabase,
+			userLat: body.user_lat,
+			userLng: body.user_lng,
+			moduleName: 'absensi',
+			role,
+		});
+
+		if (!geoCheck.allowed) {
+			return NextResponse.json({ error: geoCheck.error }, { status: geoCheck.status || 403 });
+		}
+
+		// 1. Cek apakah sesi dengan jam & tanggal lama sudah ada
 		let query = supabase.from('absensi_mapel')
 			.select('sesi_id')
 			.eq('kelas', kelas)
@@ -129,8 +152,29 @@ export async function POST(req) {
 			query = query.eq('guru_id', userId);
 		}
 
-		const { data: existingSesi } = await query.single();
+		const { data: existingSesiList, error: queryErr } = await query.order('created_at', { ascending: false });
+		const existingSesi = existingSesiList && existingSesiList.length > 0 ? existingSesiList[0] : null;
 		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-M-${generateId()}`;
+
+		// 2. Cek tumpang tindih (overlap) jam pelajaran dengan sesi lain pada tanggal yang sama
+		const { data: allSessionsToday } = await supabase
+			.from('absensi_mapel')
+			.select('sesi_id, jam_ke')
+			.eq('kelas', kelas)
+			.eq('mapel', mapel)
+			.eq('tanggal', newTanggal);
+
+		const conflict = findConflictingSession(allSessionsToday || [], newJamKe, existingSesi?.sesi_id);
+		if (conflict && conflict.overlapType === 'overlap') {
+			return NextResponse.json({
+				error: `Konflik Jam: Jam ke-${newJamKe} bertabrakan dengan sesi Jam ${conflict.session.jam_ke} yang sudah ada (Jam ke-${conflict.conflicts.join(', ')}). Tidak diperbolehkan membuat sesi tumpang tindih.`,
+				conflict: {
+					existingJamKe: conflict.session.jam_ke,
+					conflicts: conflict.conflicts,
+					existingSesiId: conflict.session.sesi_id,
+				}
+			}, { status: 409 });
+		}
 
 		if (existingSesi) {
 			const updates = {};
@@ -141,6 +185,13 @@ export async function POST(req) {
 				await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
 			}
 			await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+
+			// Bersihkan sisa sesi duplikat jika pernah ada sebelumnya
+			if (existingSesiList.length > 1) {
+				const duplicateIds = existingSesiList.slice(1).map(s => s.sesi_id);
+				await supabase.from('absensi_mapel_siswa').delete().in('sesi_id', duplicateIds);
+				await supabase.from('absensi_mapel').delete().in('sesi_id', duplicateIds);
+			}
 		} else {
 			await supabase.from('absensi_mapel').insert({
 				sesi_id: sesiId,

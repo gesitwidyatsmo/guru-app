@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { getTodayDateString } from '@/lib/dateUtils';
+import { normStatus } from '@/lib/absensiUtils';
 
 export async function GET(req) {
 	try {
@@ -193,11 +194,11 @@ export async function GET(req) {
 						keterangan: rec.keterangan || '',
 					});
 
-					const st = (rec.status || '').toLowerCase();
-					if (st === 'hadir' || st === 'h') hCount++;
-					else if (st === 'sakit' || st === 's') sCount++;
-					else if (st === 'izin' || st === 'i') iCount++;
-					else if (st === 'alfa' || st === 'a') aCount++;
+					const st = normStatus(rec.status);
+					if (st === 'hadir') hCount++;
+					else if (st === 'sakit') sCount++;
+					else if (st === 'izin') iCount++;
+					else if (st === 'alfa') aCount++;
 				}
 			});
 
@@ -218,7 +219,7 @@ export async function GET(req) {
 					if (aCount > 0) {
 						isBolosParsial = true;
 						const jamBolos = sessions
-							.filter((ss) => (ss.status || '').toLowerCase() === 'alfa')
+							.filter((ss) => normStatus(ss.status) === 'alfa')
 							.map((ss) => `Jam ${ss.jam_ke} (${ss.mapel})`)
 							.join(', ');
 						recommendedKeterangan = `Bolos di: ${jamBolos}`;
@@ -318,47 +319,17 @@ export async function GET(req) {
 
 		if (hasOfficial) {
 			officialDetails.forEach((r) => {
-				const st = (r.status || '').toLowerCase();
-				if (st === 'hadir' || st === 'h') finalHadir++;
-				else if (st === 'sakit' || st === 's') finalSakit++;
-				else if (st === 'izin' || st === 'i') finalIzin++;
-				else if (st === 'alfa' || st === 'a') finalAlfa++;
+				const st = normStatus(r.status);
+				if (st === 'hadir') finalHadir++;
+				else if (st === 'sakit') finalSakit++;
+				else if (st === 'izin') finalIzin++;
+				else if (st === 'alfa') finalAlfa++;
 			});
 		} else if (hasMapelData) {
 			finalHadir = autoHadir;
 			finalSakit = autoSakit;
 			finalIzin = autoIzin;
 			finalAlfa = autoAlfa;
-
-			// Auto-persist ke absensi_harian agar langsung sah di database tanpa perlu klik tombol
-			if (!sesiHarianResmi && siswaMapelBreakdown.length > 0) {
-				try {
-					const autoSesiId = `SESI-H-${Math.random().toString(36).slice(2, 11)}`;
-					const { data: createdSesi } = await supabaseAdmin
-						.from('absensi_harian')
-						.insert({
-							sesi_id: autoSesiId,
-							kelas: namaKelas,
-							tanggal: todayStr,
-							tahun_ajar: activeTA?.nama || '2026/2027',
-							semester: activeTA?.semester ? parseInt(activeTA.semester, 10) : 1,
-						})
-						.select('sesi_id')
-						.single();
-
-					if (createdSesi) {
-						const autoRows = siswaMapelBreakdown.map((s) => ({
-							sesi_id: createdSesi.sesi_id,
-							siswa_id: s.siswa_id,
-							status: s.recommendedStatus === 'Belum Ada Data' ? 'Hadir' : s.recommendedStatus,
-							keterangan: s.recommendedKeterangan || '',
-						}));
-						await supabaseAdmin.from('absensi_harian_siswa').insert(autoRows);
-					}
-				} catch (autoErr) {
-					console.error('Silent auto-persist error:', autoErr);
-				}
-			}
 		}
 
 		const finalBelum = Math.max(0, totalSiswa - (finalHadir + finalSakit + finalIzin + finalAlfa));
@@ -366,7 +337,7 @@ export async function GET(req) {
 
 		const absensiHariIniStats = {
 			recorded: hasOfficial || hasMapelData,
-			isSah: true,
+			isSah: hasOfficial,
 			source: hasOfficial ? 'official' : hasMapelData ? 'auto_mapel' : 'none',
 			tanggal: todayStr,
 			hadir: finalHadir,
@@ -451,6 +422,7 @@ export async function GET(req) {
 
 		return NextResponse.json({
 			isWaliKelas: true,
+			userRole,
 			kelas: {
 				id: targetKelas.id,
 				nama_kelas: targetKelas.nama_kelas,

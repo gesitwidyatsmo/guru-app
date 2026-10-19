@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { verifyGeofence } from '@/lib/geofenceServer';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const normDate = (v) => String(v ?? '').slice(0, 10);
@@ -114,6 +115,20 @@ export async function POST(req) {
 		if (role === 'Kepala Sekolah') {
 			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
 		}
+
+		// Verifikasi Geofence jika diaktifkan oleh Admin
+		const geoCheck = await verifyGeofence({
+			supabase,
+			userLat: body.user_lat,
+			userLng: body.user_lng,
+			moduleName: 'absensi',
+			role,
+		});
+
+		if (!geoCheck.allowed) {
+			return NextResponse.json({ error: geoCheck.error }, { status: geoCheck.status || 403 });
+		}
+
 		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {
