@@ -12,11 +12,60 @@ import {
 	drawKopSuratPDF,
 } from '@/lib/pdfKopSurat';
 
+// Ekstraksi tingkat jenjang kelas (VII, VIII, IX) dari nama rombel
+export const getTingkatKelas = (kelasStr) => {
+	const s = String(kelasStr || '').trim().toUpperCase();
+	if (s.startsWith('VII.') || s.startsWith('VII ') || s === 'VII' || s.startsWith('7')) return 'VII';
+	if (s.startsWith('VIII.') || s.startsWith('VIII ') || s === 'VIII' || s.startsWith('8')) return 'VIII';
+	if (s.startsWith('IX.') || s.startsWith('IX ') || s === 'IX' || s.startsWith('9')) return 'IX';
+	if (s.includes('VII')) return 'VII';
+	if (s.includes('VIII')) return 'VIII';
+	if (s.includes('IX')) return 'IX';
+	return 'VII';
+};
+
+// Default baseline KKTP/KKM jika mapel tertentu belum memiliki entri spesifik
+const DEFAULT_KKTP_BY_TINGKAT = {
+	VII: 70,
+	VIII: 72,
+	IX: 75,
+};
+
+// Dapatkan nilai KKM/KKTP yang akurat untuk tugas berdasarkan Mapel dan Jenjang Kelas
+export const getTaskKKM = (task, kktpMap = {}) => {
+	const tingkat = getTingkatKelas(task?.kelas);
+	const mapelName = String(task?.mapel || '').toLowerCase().trim();
+	const key = `${mapelName}_${tingkat}`;
+	const val = kktpMap[key];
+	if (val !== undefined && val !== null && !isNaN(Number(val))) {
+		return Number(val);
+	}
+	return DEFAULT_KKTP_BY_TINGKAT[tingkat] || 70;
+};
+
+export const getKategoriBadgeStyle = (kat) => {
+	const k = String(kat || '').toLowerCase();
+	if (k.includes('sumatif') || k.includes('sts') || k.includes('sas') || k.includes('pas') || k.includes('pts')) {
+		return 'bg-purple-100 text-purple-900 border-purple-800';
+	}
+	if (k.includes('formatif')) {
+		return 'bg-teal-100 text-teal-900 border-teal-800';
+	}
+	if (k.includes('ulangan') || k.includes('uh') || k.includes('harian')) {
+		return 'bg-amber-100 text-amber-900 border-amber-800';
+	}
+	if (k.includes('tugas') || k.includes('pr') || k.includes('proyek')) {
+		return 'bg-yellow-100 text-yellow-900 border-yellow-800';
+	}
+	return 'bg-slate-100 text-slate-900 border-slate-800';
+};
+
 export default function KepsekPenilaianPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [tasks, setTasks] = useState([]);
 	const [kelasList, setKelasList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
+	const [kktpList, setKktpList] = useState([]);
 	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
 	const [loading, setLoading] = useState(true);
 
@@ -25,6 +74,7 @@ export default function KepsekPenilaianPage() {
 	const [filterKategori, setFilterKategori] = useState('Semua');
 	const [searchQuery, setSearchQuery] = useState('');
 	const [selectedTask, setSelectedTask] = useState(null);
+	const [modalSearch, setModalSearch] = useState('');
 
 	// Pagination state
 	const [currentPage, setCurrentPage] = useState(1);
@@ -36,7 +86,7 @@ export default function KepsekPenilaianPage() {
 				setLoading(true);
 				const supabase = createClient();
 
-				const [resTasks, resKelas, resMapel, resProfil] = await Promise.all([
+				const [resTasks, resKelas, resMapel, resProfil, resKktp] = await Promise.all([
 					supabase
 						.from('nilai_tugas')
 						.select('*, users!nilai_tugas_guru_id_fkey(nama_lengkap, username), nilai_siswa(id, nilai, siswa_id, nama_siswa)')
@@ -44,6 +94,7 @@ export default function KepsekPenilaianPage() {
 					supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true }),
 					supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true }),
 					fetch('/api/settings?key=profil_sekolah').catch(() => ({ ok: false })),
+					fetch('/api/kktp').catch(() => ({ ok: false })),
 				]);
 
 				setTasks(resTasks.data || []);
@@ -56,6 +107,11 @@ export default function KepsekPenilaianPage() {
 						setSchoolProfile({ ...DEFAULT_PROFIL_SEKOLAH, ...pData.value });
 					}
 				}
+
+				if (resKktp && resKktp.ok) {
+					const kData = await resKktp.json();
+					setKktpList(Array.isArray(kData) ? kData : []);
+				}
 			} catch (err) {
 				console.error('Gagal memuat rekap nilai:', err);
 			} finally {
@@ -66,10 +122,37 @@ export default function KepsekPenilaianPage() {
 		fetchPenilaianData();
 	}, []);
 
+	// Peta KKTP/KKM berdasarkan nama mapel dan tingkat kelas
+	const kktpMap = useMemo(() => {
+		const map = {};
+		kktpList.forEach((item) => {
+			const tingkat = String(item.tingkat_kelas || '').toUpperCase().trim();
+			const val = item.nilai_kktp;
+			if (item.mapel?.mapel) {
+				map[`${String(item.mapel.mapel).toLowerCase().trim()}_${tingkat}`] = val;
+			}
+			if (item.mapel_id) {
+				map[`${String(item.mapel_id).toLowerCase().trim()}_${tingkat}`] = val;
+			}
+		});
+		return map;
+	}, [kktpList]);
+
 	// Reset pagination on filter change
 	useEffect(() => {
 		setCurrentPage(1);
 	}, [filterKelas, filterMapel, filterKategori, searchQuery]);
+
+	// Extract unique kategori list from database tasks
+	const kategoriOptions = useMemo(() => {
+		const set = new Set();
+		tasks.forEach((t) => {
+			if (t.kategori && t.kategori.trim()) {
+				set.add(t.kategori.trim());
+			}
+		});
+		return Array.from(set).sort();
+	}, [tasks]);
 
 	// Filter Data
 	const filteredTasks = useMemo(() => {
@@ -86,13 +169,14 @@ export default function KepsekPenilaianPage() {
 				desc.includes(q) ||
 				guruName.includes(q) ||
 				(t.mapel && t.mapel.toLowerCase().includes(q)) ||
-				(t.kelas && t.kelas.toLowerCase().includes(q));
+				(t.kelas && t.kelas.toLowerCase().includes(q)) ||
+				(t.kategori && t.kategori.toLowerCase().includes(q));
 
 			return matchKelas && matchMapel && matchKat && matchSearch;
 		});
 	}, [tasks, filterKelas, filterMapel, filterKategori, searchQuery]);
 
-	// Statistik Komprehensif
+	// Statistik Komprehensif (Menggunakan KKM spesifik masing-masing mapel & kelas)
 	const overallStats = useMemo(() => {
 		let totalScore = 0;
 		let scoreCount = 0;
@@ -100,13 +184,14 @@ export default function KepsekPenilaianPage() {
 		let passCount = 0;
 
 		tasks.forEach((t) => {
+			const taskKkm = getTaskKKM(t, kktpMap);
 			(t.nilai_siswa || []).forEach((s) => {
 				const val = parseFloat(s.nilai);
 				if (!isNaN(val)) {
 					totalScore += val;
 					scoreCount++;
 					if (val > highest) highest = val;
-					if (val >= 75) passCount++; // KKM acuan 75
+					if (val >= taskKkm) passCount++;
 				}
 			});
 		});
@@ -121,7 +206,7 @@ export default function KepsekPenilaianPage() {
 			ketuntasan: passRate,
 			tertinggi: highest,
 		};
-	}, [tasks]);
+	}, [tasks, kktpMap]);
 
 	// Pagination calculations
 	const totalPages = Math.max(1, Math.ceil(filteredTasks.length / itemsPerPage));
@@ -144,7 +229,7 @@ export default function KepsekPenilaianPage() {
 		setFilterKategori('Semua');
 	};
 
-	// Export to PDF with Kop Surat Resmi
+	// Export to PDF with Kop Surat Resmi (Memuat KKM spesifik per jenjang & mapel)
 	const handleExportPDF = () => {
 		if (filteredTasks.length === 0) {
 			Swal.fire('Info', 'Tidak ada data penilaian untuk diekspor.', 'info');
@@ -171,13 +256,14 @@ export default function KepsekPenilaianPage() {
 			);
 
 			const tableHead = [
-				['No', 'Tanggal', 'Deskripsi Penilaian', 'Guru Pengampu', 'Kelas', 'Mata Pelajaran', 'Kategori', 'Jml Siswa', 'Rata-rata', '% KKM (>=75)'],
+				['No', 'Tanggal', 'Deskripsi Penilaian', 'Guru Pengampu', 'Kelas', 'Mata Pelajaran', 'Kategori', 'KKM', 'Jml Siswa', 'Rata-rata', '% Tuntas'],
 			];
 
 			const tableBody = filteredTasks.map((t, idx) => {
+				const taskKkm = getTaskKKM(t, kktpMap);
 				const scores = (t.nilai_siswa || []).map((s) => parseFloat(s.nilai)).filter((v) => !isNaN(v));
 				const taskAvg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';
-				const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= 75).length / scores.length) * 100) : 0;
+				const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= taskKkm).length / scores.length) * 100) : 0;
 
 				return [
 					idx + 1,
@@ -187,6 +273,7 @@ export default function KepsekPenilaianPage() {
 					t.kelas || '-',
 					t.mapel || '-',
 					t.kategori || '-',
+					taskKkm,
 					scores.length,
 					taskAvg,
 					`${passRate}%`,
@@ -202,13 +289,14 @@ export default function KepsekPenilaianPage() {
 				bodyStyles: { fontSize: 7, textColor: [15, 23, 42] },
 				columnStyles: {
 					0: { halign: 'center', cellWidth: 8 },
-					1: { halign: 'center', cellWidth: 20 },
+					1: { halign: 'center', cellWidth: 18 },
 					2: { fontStyle: 'bold' },
-					4: { halign: 'center', cellWidth: 16 },
-					6: { halign: 'center', cellWidth: 18 },
-					7: { halign: 'center', cellWidth: 16 },
-					8: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
-					9: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+					4: { halign: 'center', cellWidth: 14 },
+					6: { halign: 'center', cellWidth: 16 },
+					7: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
+					8: { halign: 'center', cellWidth: 14 },
+					9: { halign: 'center', cellWidth: 16, fontStyle: 'bold' },
+					10: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
 				},
 			});
 
@@ -246,15 +334,17 @@ export default function KepsekPenilaianPage() {
 			'Kelas',
 			'Mata Pelajaran',
 			'Kategori',
+			'KKM Mapel',
 			'Jumlah Siswa Dinilai',
 			'Rata-rata Nilai',
-			'Persentase KKM (%)',
+			'Persentase Ketuntasan (%)',
 		];
 
 		const rows = filteredTasks.map((t) => {
+			const taskKkm = getTaskKKM(t, kktpMap);
 			const scores = (t.nilai_siswa || []).map((s) => parseFloat(s.nilai)).filter((v) => !isNaN(v));
 			const taskAvg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';
-			const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= 75).length / scores.length) * 100) : 0;
+			const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= taskKkm).length / scores.length) * 100) : 0;
 
 			return [
 				t.tanggal || '',
@@ -262,7 +352,8 @@ export default function KepsekPenilaianPage() {
 				`"${(t.users?.nama_lengkap || '').replace(/"/g, '""')}"`,
 				`"${(t.kelas || '').replace(/"/g, '""')}"`,
 				`"${(t.mapel || '').replace(/"/g, '""')}"`,
-				t.kategori || '-',
+				`"${(t.kategori || '-').replace(/"/g, '""')}"`,
+				taskKkm,
 				scores.length,
 				taskAvg,
 				passRate,
@@ -285,6 +376,71 @@ export default function KepsekPenilaianPage() {
 		document.body.removeChild(link);
 	};
 
+	// Export single task to CSV dengan KKM tugas yang sesuai
+	const handleExportSingleTaskCSV = (task) => {
+		if (!task || !task.nilai_siswa || task.nilai_siswa.length === 0) {
+			Swal.fire('Info', 'Tidak ada data nilai siswa untuk diunduh.', 'info');
+			return;
+		}
+
+		const taskKkm = getTaskKKM(task, kktpMap);
+		const headers = ['No', 'Nama Siswa', 'Nilai', `Status KKM (${taskKkm})`];
+		const rows = task.nilai_siswa.map((ns, idx) => {
+			const val = parseFloat(ns.nilai);
+			const isPass = !isNaN(val) && val >= taskKkm;
+			return [
+				idx + 1,
+				`"${(ns.nama_siswa || `Siswa ID ${ns.siswa_id}`).replace(/"/g, '""')}"`,
+				!isNaN(val) ? val : 0,
+				isPass ? 'Tuntas' : 'Remedial',
+			];
+		});
+
+		const csvContent =
+			'data:text/csv;charset=utf-8,\uFEFF' +
+			[headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+
+		const encodedUri = encodeURI(csvContent);
+		const link = document.createElement('a');
+		link.setAttribute('href', encodedUri);
+		const cleanTitle = (task.kategori || task.deskripsi || 'tugas').replace(/[^a-zA-Z0-9]/g, '_');
+		link.setAttribute(
+			'download',
+			`nilai_${task.kelas || ''}_${cleanTitle}_${new Date().toISOString().split('T')[0]}.csv`
+		);
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
+	// Modal task statistics (Menghitung ketuntasan berdasarkan KKM mapel & kelas terkait)
+	const selectedTaskStats = useMemo(() => {
+		if (!selectedTask) return null;
+		const taskKkm = getTaskKKM(selectedTask, kktpMap);
+		const scores = (selectedTask.nilai_siswa || [])
+			.map((s) => parseFloat(s.nilai))
+			.filter((v) => !isNaN(v));
+
+		const total = scores.length;
+		const avg = total > 0 ? (scores.reduce((a, b) => a + b, 0) / total).toFixed(1) : '0';
+		const highest = total > 0 ? Math.max(...scores) : 0;
+		const lowest = total > 0 ? Math.min(...scores) : 0;
+		const passCount = scores.filter((v) => v >= taskKkm).length;
+		const remedialCount = total - passCount;
+		const passRate = total > 0 ? Math.round((passCount / total) * 100) : 0;
+
+		return { kkm: taskKkm, total, avg, highest, lowest, passCount, remedialCount, passRate };
+	}, [selectedTask, kktpMap]);
+
+	// Modal student search filter
+	const filteredModalStudents = useMemo(() => {
+		if (!selectedTask) return [];
+		const list = selectedTask.nilai_siswa || [];
+		if (!modalSearch.trim()) return list;
+		const q = modalSearch.toLowerCase().trim();
+		return list.filter((s) => (s.nama_siswa || '').toLowerCase().includes(q));
+	}, [selectedTask, modalSearch]);
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -301,7 +457,7 @@ export default function KepsekPenilaianPage() {
 						Rekapitulasi Nilai Akademik Siswa
 					</h1>
 					<p className='text-xs sm:text-sm font-medium text-gray-600 mt-1'>
-						Evaluasi distribusi capaian nilai formatif, sumatif, dan persentase ketuntasan belajar siswa di seluruh kelas.
+						Evaluasi distribusi capaian nilai formatif, sumatif, dan persentase ketuntasan belajar siswa berbasis KKTP / KKM setiap mata pelajaran dan jenjang.
 					</p>
 				</div>
 
@@ -348,9 +504,9 @@ export default function KepsekPenilaianPage() {
 
 				<div className='bg-emerald-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
 					<div>
-						<p className='text-[11px] font-black uppercase text-emerald-800'>Ketuntasan KKM (75)</p>
+						<p className='text-[11px] font-black uppercase text-emerald-800'>Ketuntasan KKTP / KKM</p>
 						<p className='text-2xl sm:text-3xl font-black text-emerald-950 mt-0.5'>{overallStats.ketuntasan}%</p>
-						<span className='text-[10px] font-bold text-emerald-700'>Tuntas KKM nasional</span>
+						<span className='text-[10px] font-bold text-emerald-700'>Sesuai standar mapel & jenjang</span>
 					</div>
 					<span className='w-11 h-11 bg-emerald-300 border-2 border-black rounded-xl flex items-center justify-center font-black text-lg shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
 						🎯
@@ -380,7 +536,7 @@ export default function KepsekPenilaianPage() {
 				</div>
 			</div>
 
-			{/* Search & Multi Filter Box (Clean Structured Two-Tier Layout) */}
+			{/* Search & Multi Filter Box */}
 			<div className='bg-white border-2 border-black rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_#0D0D0D] space-y-4'>
 				{/* Row 1: Search & Active Filter State */}
 				<div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
@@ -397,7 +553,7 @@ export default function KepsekPenilaianPage() {
 							type='text'
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
-							placeholder='Cari deskripsi tugas, nama guru, mapel, atau kelas...'
+							placeholder='Cari deskripsi tugas, nama guru, mapel, kategori, atau kelas...'
 							className='neo-input neo-input-with-icon !py-2.5 text-xs sm:text-sm !w-full'
 						/>
 						{searchQuery && (
@@ -465,7 +621,7 @@ export default function KepsekPenilaianPage() {
 						</select>
 					</div>
 
-					{/* Filter Kategori */}
+					{/* Filter Kategori (Dinamic based on real database entries) */}
 					<div className='space-y-1.5'>
 						<label className='text-[11px] font-black uppercase text-gray-600 flex items-center gap-1.5'>
 							<span>🏷️</span> Kategori Penilaian
@@ -474,11 +630,12 @@ export default function KepsekPenilaianPage() {
 							value={filterKategori}
 							onChange={(e) => setFilterKategori(e.target.value)}
 							className='neo-input !py-2.5 text-xs font-bold bg-white cursor-pointer hover:bg-gray-50 !w-full'>
-							<option value='Semua'>Semua Kategori</option>
-							<option value='Formatif'>Formatif</option>
-							<option value='Sumatif'>Sumatif</option>
-							<option value='Tugas'>Tugas Harian</option>
-							<option value='UH'>Ulangan Harian</option>
+							<option value='Semua'>Semua Kategori ({kategoriOptions.length})</option>
+							{kategoriOptions.map((kat) => (
+								<option key={kat} value={kat}>
+									{kat}
+								</option>
+							))}
 						</select>
 					</div>
 				</div>
@@ -486,16 +643,34 @@ export default function KepsekPenilaianPage() {
 
 			{/* Main Table */}
 			<div className='bg-white border-2 border-black rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] overflow-hidden'>
+				{/* Mobile swipe hint */}
+				<div className='sm:hidden px-4 py-2 bg-teal-50 border-b border-black/10 flex items-center justify-between text-[11px] font-bold text-teal-900'>
+					<span>↔️ Geser ke samping untuk melihat detail nilai</span>
+					<span className='font-mono font-black'>TABEL</span>
+				</div>
+
 				<div className='overflow-x-auto'>
-					<table className='w-full text-left border-collapse'>
+					<table className='w-full text-left border-collapse min-w-[960px]'>
 						<thead>
 							<tr className='bg-teal-300 border-b-2 border-black'>
-								<th className='px-5 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Deskripsi Penilaian</th>
-								<th className='px-5 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Guru Pengampu</th>
-								<th className='px-5 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Rombel & Mapel</th>
-								<th className='px-5 py-3.5 text-xs font-black text-black uppercase tracking-wider'>Kategori</th>
-								<th className='px-5 py-3.5 text-center text-xs font-black text-black uppercase tracking-wider'>Rata-rata & KKM</th>
-								<th className='px-5 py-3.5 text-right text-xs font-black text-black uppercase tracking-wider'>Aksi</th>
+								<th className='px-4 py-3.5 text-xs font-black text-black uppercase tracking-wider w-[30%] min-w-[260px] whitespace-nowrap'>
+									Deskripsi Penilaian
+								</th>
+								<th className='px-4 py-3.5 text-xs font-black text-black uppercase tracking-wider w-[18%] min-w-[170px] whitespace-nowrap'>
+									Guru Pengampu
+								</th>
+								<th className='px-4 py-3.5 text-xs font-black text-black uppercase tracking-wider w-[14%] min-w-[130px] whitespace-nowrap'>
+									Rombel & Mapel
+								</th>
+								<th className='px-4 py-3.5 text-xs font-black text-black uppercase tracking-wider w-[14%] min-w-[130px] whitespace-nowrap'>
+									Kategori
+								</th>
+								<th className='px-4 py-3.5 text-center text-xs font-black text-black uppercase tracking-wider w-[16%] min-w-[140px] whitespace-nowrap'>
+									Rata-rata & KKM
+								</th>
+								<th className='px-4 py-3.5 text-center text-xs font-black text-black uppercase tracking-wider w-[8%] min-w-[90px] whitespace-nowrap'>
+									Aksi
+								</th>
 							</tr>
 						</thead>
 						<tbody className='divide-y-2 divide-black/10'>
@@ -511,7 +686,7 @@ export default function KepsekPenilaianPage() {
 											{isFilterActive && (
 												<button
 													onClick={handleResetFilters}
-													className='mt-2 px-4 py-2 bg-teal-200 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													className='mt-2 px-4 py-2 bg-teal-200 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer'>
 													Reset Semua Filter
 												</button>
 											)}
@@ -520,79 +695,122 @@ export default function KepsekPenilaianPage() {
 								</tr>
 							) : (
 								paginatedTasks.map((t, idx) => {
+									const taskKkm = getTaskKKM(t, kktpMap);
 									const scores = (t.nilai_siswa || []).map((s) => parseFloat(s.nilai)).filter((v) => !isNaN(v));
 									const taskAvg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';
-									const passRate = scores.length > 0 ? Math.round((scores.filter((v) => v >= 75).length / scores.length) * 100) : 0;
+									const passCount = scores.filter((v) => v >= taskKkm).length;
+									const passRate = scores.length > 0 ? Math.round((passCount / scores.length) * 100) : 0;
 
 									return (
 										<tr
 											key={t.tugas_id || t.id || idx}
 											className='hover:bg-teal-50/40 transition-colors'>
-											{/* Deskripsi */}
-											<td className='px-5 py-4'>
-												<div className='font-black text-xs sm:text-sm text-black'>{t.deskripsi || 'Sesi Penilaian'}</div>
-												<span className='text-[10px] font-bold text-gray-500 block mt-0.5'>
-													{t.tanggal ? new Date(t.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
-												</span>
+											{/* Deskripsi & Info Penilaian */}
+											<td className='px-4 py-4 align-middle'>
+												<div className='space-y-1.5'>
+													<p
+														className='font-black text-xs sm:text-sm text-black leading-snug line-clamp-2 hover:line-clamp-none transition-all cursor-default'
+														title={t.deskripsi || 'Sesi Penilaian'}>
+														{t.deskripsi || 'Sesi Penilaian'}
+													</p>
+													<div className='flex flex-wrap items-center gap-1.5'>
+														<span className='inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-black/15'>
+															<span>📅</span>
+															<span>
+																{t.tanggal
+																	? new Date(t.tanggal).toLocaleDateString('id-ID', {
+																			day: 'numeric',
+																			month: 'short',
+																			year: 'numeric',
+																	  })
+																	: '-'}
+															</span>
+														</span>
+														<span className='inline-flex items-center gap-1 text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200'>
+															<span>👥</span>
+															<span>{scores.length} Siswa</span>
+														</span>
+													</div>
+												</div>
 											</td>
 
-											{/* Guru */}
-											<td className='px-5 py-4'>
-												<div className='flex items-center gap-2'>
-													<div className='w-8 h-8 rounded-lg bg-teal-200 border-2 border-black flex items-center justify-center font-black text-xs shadow-[1px_1px_0px_0px_#0D0D0D] shrink-0'>
+											{/* Guru Pengampu */}
+											<td className='px-4 py-4 align-middle'>
+												<div className='flex items-center gap-2.5'>
+													<div className='w-9 h-9 rounded-xl bg-teal-200 border-2 border-black flex items-center justify-center font-black text-xs shadow-[1px_1px_0px_0px_#0D0D0D] shrink-0 text-teal-950'>
 														{t.users?.nama_lengkap ? t.users.nama_lengkap.charAt(0).toUpperCase() : 'G'}
 													</div>
 													<div className='min-w-0'>
-														<p className='font-black text-xs sm:text-sm text-black truncate max-w-[160px] sm:max-w-xs'>
+														<p
+															className='font-black text-xs sm:text-sm text-black truncate'
+															title={t.users?.nama_lengkap || 'Guru Pengampu'}>
 															{t.users?.nama_lengkap || 'Guru Pengampu'}
 														</p>
-														<span className='font-mono text-[10px] text-gray-500'>
-															@{t.users?.username || 'user'}
+														<span className='font-mono text-[10px] font-bold text-gray-500 block truncate'>
+															@{t.users?.username || 'guru'}
 														</span>
 													</div>
 												</div>
 											</td>
 
 											{/* Kelas & Mapel */}
-											<td className='px-5 py-4 whitespace-nowrap'>
+											<td className='px-4 py-4 align-middle whitespace-nowrap'>
 												<div className='flex flex-col gap-1 items-start'>
-													<span className='inline-block px-2.5 py-0.5 bg-yellow-200 text-black text-xs font-black rounded border border-black shadow-[1px_1px_0px_0px_#0D0D0D]'>
+													<span className='inline-block px-2.5 py-0.5 bg-yellow-300 text-black text-xs font-black rounded-md border-2 border-black shadow-[1px_1px_0px_0px_#0D0D0D]'>
 														{t.kelas}
 													</span>
-													<span className='text-xs font-bold text-gray-700'>{t.mapel}</span>
+													<span className='text-xs font-black text-gray-800 tracking-tight' title={t.mapel}>
+														{t.mapel}
+													</span>
 												</div>
 											</td>
 
 											{/* Kategori */}
-											<td className='px-5 py-4 whitespace-nowrap'>
-												<span className='inline-block px-2.5 py-1 bg-white border-2 border-black rounded-lg text-xs font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D]'>
+											<td className='px-4 py-4 align-middle'>
+												<span
+													className={`inline-block px-2.5 py-1 text-[11px] font-black uppercase rounded-lg border-2 shadow-[1px_1px_0px_0px_#0D0D0D] max-w-[170px] truncate ${getKategoriBadgeStyle(
+														t.kategori
+													)}`}
+													title={t.kategori || 'Tugas'}>
 													{t.kategori || 'Tugas'}
 												</span>
 											</td>
 
-											{/* Nilai Rata-rata & KKM */}
-											<td className='px-5 py-4 text-center whitespace-nowrap'>
-												<div className='inline-flex flex-col items-center gap-1'>
-													<span className='font-mono font-black text-sm text-black bg-gray-100 px-2.5 py-0.5 rounded border border-black/20'>
+											{/* Nilai Rata-rata & KKM Spesifik */}
+											<td className='px-4 py-4 text-center align-middle whitespace-nowrap'>
+												<div className='inline-flex flex-col items-center gap-1.5'>
+													<span className='font-mono font-black text-sm text-black bg-white px-2.5 py-0.5 rounded-lg border-2 border-black shadow-[1px_1px_0px_0px_#0D0D0D]'>
 														{taskAvg}
 													</span>
-													<span
-														className={`text-[10px] font-black px-2 py-0.2 rounded border ${
-															passRate >= 75
-																? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-																: 'bg-orange-100 text-orange-800 border-orange-300'
-														}`}>
-														{passRate}% Tuntas KKM
-													</span>
+													<div className='flex items-center gap-1.5'>
+														<span
+															className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+																passRate >= 75
+																	? 'bg-emerald-100 text-emerald-900 border-emerald-400'
+																	: 'bg-orange-100 text-orange-900 border-orange-400'
+															}`}>
+															{passRate}% Tuntas
+														</span>
+														<span
+															title={`KKTP/KKM untuk ${t.mapel} jenjang ${getTingkatKelas(t.kelas)} adalah ${taskKkm}`}
+															className='text-[10px] font-black px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-black/30'>
+															KKM {taskKkm}
+														</span>
+													</div>
 												</div>
 											</td>
 
-											{/* Detail */}
-											<td className='px-5 py-4 text-right whitespace-nowrap'>
+											{/* Detail / Aksi */}
+											<td className='px-4 py-4 text-center align-middle whitespace-nowrap'>
 												<button
-													onClick={() => setSelectedTask(t)}
-													className='px-3 py-1.5 bg-white hover:bg-teal-300 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer'>
-													🔍 Tinjau Nilai
+													onClick={() => {
+														setSelectedTask(t);
+														setModalSearch('');
+													}}
+													title='Tinjau daftar nilai siswa untuk sesi ini'
+													className='inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-white hover:bg-teal-300 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer'>
+													<span>👁️</span>
+													<span>Tinjau</span>
 												</button>
 											</td>
 										</tr>
@@ -664,54 +882,147 @@ export default function KepsekPenilaianPage() {
 			{/* Modal Tinjau Nilai Siswa */}
 			{selectedTask && (
 				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs'>
-					<div className='bg-white border-3 border-black rounded-2xl shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-150'>
+					<div className='bg-white border-3 border-black rounded-2xl shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in duration-150'>
+						{/* Modal Header */}
 						<div className='px-6 py-4 border-b-2 border-black flex items-center justify-between bg-teal-300'>
-							<div>
-								<h3 className='text-base sm:text-lg font-black text-black uppercase tracking-tight flex items-center gap-2'>
-									<span>📑</span>
-									<span>Daftar Nilai Siswa</span>
+							<div className='min-w-0 pr-4'>
+								<div className='flex items-center gap-2 flex-wrap'>
+									<span className='px-2.5 py-0.5 bg-yellow-300 text-black border border-black rounded-md text-[11px] font-black shadow-[1px_1px_0px_0px_#0D0D0D]'>
+										{selectedTask.kelas}
+									</span>
+									<span className='text-xs font-black text-gray-900'>
+										{selectedTask.mapel}
+									</span>
+									<span className='px-2 py-0.5 bg-white text-black border border-black rounded-md text-[11px] font-black'>
+										KKM: {selectedTaskStats?.kkm}
+									</span>
+									<span className='text-xs font-bold text-gray-700'>
+										&bull; {selectedTask.kategori || 'Tugas'}
+									</span>
+								</div>
+								<h3 className='text-base sm:text-lg font-black text-black tracking-tight mt-1 line-clamp-1'>
+									{selectedTask.deskripsi || 'Sesi Penilaian Siswa'}
 								</h3>
-								<p className='text-xs font-bold text-gray-800'>
-									{selectedTask.deskripsi} &bull; {selectedTask.kelas} &bull; {selectedTask.mapel}
+								<p className='text-[11px] font-bold text-gray-700'>
+									Guru: {selectedTask.users?.nama_lengkap || '-'} &bull; Tanggal:{' '}
+									{selectedTask.tanggal
+										? new Date(selectedTask.tanggal).toLocaleDateString('id-ID', {
+												dateStyle: 'medium',
+										  })
+										: '-'}
 								</p>
 							</div>
 							<button
 								onClick={() => setSelectedTask(null)}
-								className='w-8 h-8 bg-white border-2 border-black rounded-lg flex items-center justify-center text-black font-black hover:bg-rose-400 hover:text-white transition-colors shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer'>
+								className='w-8 h-8 bg-white border-2 border-black rounded-lg flex items-center justify-center text-black font-black hover:bg-rose-400 hover:text-white transition-colors shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer shrink-0'>
 								✕
 							</button>
 						</div>
 
-						<div className='p-6 max-h-[70vh] overflow-y-auto space-y-4 bg-[var(--background)]'>
-							<div className='overflow-x-auto border-2 border-black rounded-xl shadow-[3px_3px_0px_0px_#0D0D0D]'>
+						{/* Modal Body */}
+						<div className='p-6 max-h-[75vh] overflow-y-auto space-y-4 bg-slate-50'>
+							{/* Quick Stat Highlights inside Modal */}
+							{selectedTaskStats && (
+								<div className='grid grid-cols-2 sm:grid-cols-4 gap-2.5'>
+									<div className='bg-white border-2 border-black rounded-xl p-2.5 text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<span className='text-[10px] font-black uppercase text-gray-500 block'>Rata-rata</span>
+										<span className='font-mono font-black text-lg text-black'>{selectedTaskStats.avg}</span>
+									</div>
+									<div className='bg-white border-2 border-black rounded-xl p-2.5 text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<span className='text-[10px] font-black uppercase text-gray-500 block'>Tertinggi / Terendah</span>
+										<span className='font-mono font-black text-sm text-black'>
+											{selectedTaskStats.highest} / {selectedTaskStats.lowest}
+										</span>
+									</div>
+									<div className='bg-emerald-50 border-2 border-black rounded-xl p-2.5 text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<span className='text-[10px] font-black uppercase text-emerald-800 block'>
+											Tuntas KKM (&ge;{selectedTaskStats.kkm})
+										</span>
+										<span className='font-mono font-black text-sm text-emerald-950'>
+											{selectedTaskStats.passCount} ({selectedTaskStats.passRate}%)
+										</span>
+									</div>
+									<div className='bg-rose-50 border-2 border-black rounded-xl p-2.5 text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<span className='text-[10px] font-black uppercase text-rose-800 block'>
+											Remedial (&lt;{selectedTaskStats.kkm})
+										</span>
+										<span className='font-mono font-black text-sm text-rose-950'>
+											{selectedTaskStats.remedialCount} siswa
+										</span>
+									</div>
+								</div>
+							)}
+
+							{/* Student Search & Count */}
+							<div className='flex items-center justify-between gap-3'>
+								<div className='relative flex-1'>
+									<input
+										type='text'
+										value={modalSearch}
+										onChange={(e) => setModalSearch(e.target.value)}
+										placeholder='Cari nama siswa di kelas ini...'
+										className='neo-input !py-1.5 text-xs !w-full bg-white'
+									/>
+									{modalSearch && (
+										<button
+											onClick={() => setModalSearch('')}
+											className='absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400 hover:text-black'>
+											✕
+										</button>
+									)}
+								</div>
+								<button
+									onClick={() => handleExportSingleTaskCSV(selectedTask)}
+									className='px-3 py-1.5 bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0 cursor-pointer flex items-center gap-1.5'>
+									<span>📥</span>
+									<span>Unduh CSV</span>
+								</button>
+							</div>
+
+							{/* Student List Table */}
+							<div className='overflow-x-auto border-2 border-black rounded-xl shadow-[3px_3px_0px_0px_#0D0D0D] bg-white'>
 								<table className='w-full text-left bg-white text-xs'>
 									<thead>
-										<tr className='bg-yellow-200 border-b-2 border-black font-black'>
-											<th className='p-3'>No</th>
+										<tr className='bg-teal-200 border-b-2 border-black font-black text-black'>
+											<th className='p-3 text-center w-12'>No</th>
 											<th className='p-3'>Nama Siswa</th>
-											<th className='p-3 text-center'>Nilai</th>
-											<th className='p-3 text-center'>Status KKM (75)</th>
+											<th className='p-3 text-center w-28'>Nilai</th>
+											<th className='p-3 text-center w-36'>
+												Status KKM ({selectedTaskStats?.kkm || '-'})
+											</th>
 										</tr>
 									</thead>
 									<tbody className='divide-y divide-black/10'>
-										{(selectedTask.nilai_siswa || []).length === 0 ? (
+										{filteredModalStudents.length === 0 ? (
 											<tr>
 												<td colSpan={4} className='p-6 text-center text-gray-500 font-bold'>
-													Belum ada data nilai siswa yang dimasukkan untuk sesi ini.
+													{modalSearch
+														? `Tidak ditemukan siswa bernama "${modalSearch}"`
+														: 'Belum ada data nilai siswa yang dimasukkan untuk sesi ini.'}
 												</td>
 											</tr>
 										) : (
-											selectedTask.nilai_siswa.map((ns, idx) => {
+											filteredModalStudents.map((ns, idx) => {
 												const val = parseFloat(ns.nilai);
-												const isPass = !isNaN(val) && val >= 75;
+												const taskKkm = selectedTaskStats?.kkm || 70;
+												const isPass = !isNaN(val) && val >= taskKkm;
 												return (
-													<tr key={ns.id || idx} className='hover:bg-yellow-50'>
-														<td className='p-3 font-bold text-gray-500'>{idx + 1}</td>
-														<td className='p-3 font-black text-black'>{ns.nama_siswa || `Siswa ID: ${ns.siswa_id}`}</td>
-														<td className='p-3 text-center font-mono font-black text-sm'>{ns.nilai || 0}</td>
+													<tr key={ns.id || idx} className='hover:bg-teal-50/50 transition-colors'>
+														<td className='p-3 text-center font-bold text-gray-500'>{idx + 1}</td>
+														<td className='p-3 font-black text-black'>
+															{ns.nama_siswa || `Siswa ID: ${ns.siswa_id}`}
+														</td>
+														<td className='p-3 text-center font-mono font-black text-sm'>
+															{ns.nilai !== undefined && ns.nilai !== null ? ns.nilai : '-'}
+														</td>
 														<td className='p-3 text-center'>
-															<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${isPass ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-																{isPass ? 'Tuntas' : 'Remedial'}
+															<span
+																className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase border ${
+																	isPass
+																		? 'bg-emerald-100 text-emerald-900 border-emerald-400'
+																		: 'bg-rose-100 text-rose-900 border-rose-400'
+																}`}>
+																{isPass ? '✓ Tuntas' : '✗ Remedial'}
 															</span>
 														</td>
 													</tr>
@@ -722,10 +1033,14 @@ export default function KepsekPenilaianPage() {
 								</table>
 							</div>
 
-							<div className='pt-2 flex justify-end'>
+							{/* Modal Footer */}
+							<div className='pt-2 flex items-center justify-between'>
+								<span className='text-xs font-bold text-gray-500'>
+									Total: {selectedTask.nilai_siswa?.length || 0} siswa terdaftar
+								</span>
 								<button
 									onClick={() => setSelectedTask(null)}
-									className='neo-btn-primary text-xs sm:text-sm !py-2 !px-5 bg-black text-white cursor-pointer'>
+									className='px-4 py-2 bg-black hover:bg-gray-800 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all cursor-pointer'>
 									Tutup Tinjauan
 								</button>
 							</div>
