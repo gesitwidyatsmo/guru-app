@@ -39,7 +39,8 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const key = searchParams.get('key');
 
-		const supabase = await createClient();
+		// Gunakan supabaseAdmin agar tidak terblokir RLS saat membaca profil sekolah / kop surat
+		const supabase = supabaseAdmin || (await createClient());
 
 		if (key) {
 			const { data, error } = await supabase
@@ -119,7 +120,8 @@ export async function GET(req) {
 // PUT — Perbarui pengaturan aplikasi (Khusus Admin)
 export async function PUT(req) {
 	try {
-		const supabase = await createClient();
+		// Gunakan supabaseAdmin agar tidak terblokir RLS saat membaca profil sekolah / kop surat
+		const supabase = supabaseAdmin || (await createClient());
 		let role = req.headers.get('x-user-role');
 
 		if (!role) {

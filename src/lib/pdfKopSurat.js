@@ -6,6 +6,8 @@
  *    secara otomatis di dokumen PDF (jsPDF) untuk semua laporan.
  */
 
+import { DEFAULT_LOGO_KIRI, DEFAULT_LOGO_KANAN } from './defaultLogos';
+
 export const DEFAULT_PROFIL_SEKOLAH = {
 	nama_sekolah: 'SMP IT TEBUIRENG 4 AL-ISHLAH',
 	npsn: '69953165',
@@ -14,8 +16,8 @@ export const DEFAULT_PROFIL_SEKOLAH = {
 	telepon: '082131028161',
 	email: 'tebuireng4_alishlah@yahoo.com',
 	website: 'www.tebuireng4.com',
-	logo_kiri: '',
-	logo_kanan: '',
+	logo_kiri: DEFAULT_LOGO_KIRI,
+	logo_kanan: DEFAULT_LOGO_KANAN,
 	nama_kepsek: '',
 	nip_kepsek: '',
 	jenjang: 'SMP',
@@ -63,19 +65,24 @@ export function drawKopSuratPDF(doc, profil = {}, options = {}) {
 	let currentY = startY;
 	const logoSize = 22; // mm
 
+	const logoKiri = p.logo_kiri || DEFAULT_LOGO_KIRI;
+	const logoKanan = p.logo_kanan || DEFAULT_LOGO_KANAN;
+
 	// 1. Gambar Logo Kiri (jika ada)
-	if (p.logo_kiri && typeof p.logo_kiri === 'string' && p.logo_kiri.startsWith('data:image')) {
+	if (logoKiri && typeof logoKiri === 'string' && logoKiri.startsWith('data:image')) {
 		try {
-			doc.addImage(p.logo_kiri, 'PNG', margin, startY, logoSize, logoSize);
+			const format = logoKiri.includes('image/jpeg') || logoKiri.includes('image/jpg') ? 'JPEG' : 'PNG';
+			doc.addImage(logoKiri, format, margin, startY, logoSize, logoSize);
 		} catch (err) {
 			console.warn('Gagal merender logo kiri pada PDF:', err);
 		}
 	}
 
 	// 2. Gambar Logo Kanan (jika ada)
-	if (p.logo_kanan && typeof p.logo_kanan === 'string' && p.logo_kanan.startsWith('data:image')) {
+	if (logoKanan && typeof logoKanan === 'string' && logoKanan.startsWith('data:image')) {
 		try {
-			doc.addImage(p.logo_kanan, 'PNG', pageWidth - margin - logoSize, startY, logoSize, logoSize);
+			const format = logoKanan.includes('image/jpeg') || logoKanan.includes('image/jpg') ? 'JPEG' : 'PNG';
+			doc.addImage(logoKanan, format, pageWidth - margin - logoSize, startY, logoSize, logoSize);
 		} catch (err) {
 			console.warn('Gagal merender logo kanan pada PDF:', err);
 		}
@@ -152,15 +159,18 @@ export function drawKopSuratPDF(doc, profil = {}, options = {}) {
  */
 export function KopSuratHtmlPreview({ profil = {}, className = '' }) {
 	const p = { ...DEFAULT_PROFIL_SEKOLAH, ...profil };
+	const logoKiri = p.logo_kiri || DEFAULT_LOGO_KIRI;
+	const logoKanan = p.logo_kanan || DEFAULT_LOGO_KANAN;
 
 	return (
 		<div className={`p-4 bg-white border border-gray-300 rounded-xl font-sans text-black ${className}`}>
 			<div className='flex items-center justify-between gap-3'>
 				{/* Logo Kiri */}
 				<div className='w-16 h-16 shrink-0 flex items-center justify-center'>
-					{p.logo_kiri ? (
+					{logoKiri ? (
+						/* eslint-disable-next-line @next/next/no-img-element */
 						<img
-							src={p.logo_kiri}
+							src={logoKiri}
 							alt='Logo Kiri'
 							className='max-w-full max-h-full object-contain'
 						/>
@@ -202,9 +212,10 @@ export function KopSuratHtmlPreview({ profil = {}, className = '' }) {
 
 				{/* Logo Kanan */}
 				<div className='w-16 h-16 shrink-0 flex items-center justify-center'>
-					{p.logo_kanan ? (
+					{logoKanan ? (
+						/* eslint-disable-next-line @next/next/no-img-element */
 						<img
-							src={p.logo_kanan}
+							src={logoKanan}
 							alt='Logo Kanan'
 							className='max-w-full max-h-full object-contain'
 						/>

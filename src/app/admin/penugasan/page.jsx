@@ -40,7 +40,7 @@ export default function PenugasanPage() {
 			if (!user) throw new Error('Sesi telah habis, silakan login ulang.');
 
 			const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
-			if (profile?.role !== 'Admin' && profile?.role !== 'Kepala Sekolah') throw new Error('Akses KBM Ditolak.');
+			if (profile?.role !== 'Admin' && profile?.role !== 'Kepala Sekolah' && profile?.role !== 'Kurikulum') throw new Error('Akses KBM Ditolak.');
 			setCurrentUserRole(profile?.role);
 
 			// 1. Ambil data Penugasan KBM

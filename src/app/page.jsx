@@ -97,6 +97,12 @@ export default function Home() {
 					} else if (role === 'Bendahara') {
 						router.replace('/bendahara');
 						return;
+					} else if (role === 'Kesiswaan') {
+						router.replace('/kesiswaan');
+						return;
+					} else if (role === 'Kurikulum') {
+						router.replace('/kurikulum');
+						return;
 					} else if (role === 'Admin') {
 						router.replace('/admin');
 						return;

@@ -12,8 +12,8 @@ function generateUID() {
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin' && role !== 'Kepala Sekolah' && role !== 'Bendahara' && role !== 'Kesiswaan') {
-			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin, Kepala Sekolah, Bendahara, atau Kesiswaan yang diizinkan mengakses daftar pengguna.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kepala Sekolah' && role !== 'Bendahara' && role !== 'Kesiswaan' && role !== 'Kurikulum') {
+			return NextResponse.json({ error: 'Akses Ditolak: Hanya Admin, Kepala Sekolah, Bendahara, Kesiswaan, atau Kurikulum yang diizinkan mengakses daftar pengguna.' }, { status: 403 });
 		}
 
 		const supabase = await createClient();

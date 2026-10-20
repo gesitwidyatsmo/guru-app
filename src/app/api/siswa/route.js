@@ -26,8 +26,8 @@ export async function GET(req) {
 			allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
 		}
 
-		// Gunakan supabaseAdmin untuk Kesiswaan, Admin, Kepala Sekolah, atau akses internal
-		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan';
+		// Gunakan supabaseAdmin untuk Kesiswaan, Admin, Kepala Sekolah, Kurikulum, atau akses internal
+		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan' || role === 'Kurikulum';
 		const supabaseClient = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
 		let query = supabaseClient.from('siswa').select('*').order('nama_lengkap', { ascending: true });
@@ -53,8 +53,8 @@ export async function GET(req) {
 // --- METHOD POST (Tambah Data Baru - Manual & Bulk) ---
 export async function POST(request) {
 	const role = request.headers.get('x-user-role');
-	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kesiswaan') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, & Kesiswaan)' }, { status: 403 });
+	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kesiswaan' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, Kesiswaan, & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const contentType = request.headers.get('content-type') || '';
@@ -132,8 +132,8 @@ export async function POST(request) {
 // --- METHOD PUT (Update Data) ---
 export async function PUT(req) {
 	const role = req.headers.get('x-user-role');
-	if (role !== 'Admin' && role !== 'Guru') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
+	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const body = await req.json();
@@ -162,8 +162,8 @@ export async function PUT(req) {
 // --- METHOD DELETE (Hapus Data) ---
 export async function DELETE(req) {
 	const role = req.headers.get('x-user-role');
-	if (role !== 'Admin' && role !== 'Guru') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Guru)' }, { status: 403 });
+	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const { searchParams } = new URL(req.url);

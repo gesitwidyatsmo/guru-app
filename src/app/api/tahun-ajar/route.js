@@ -24,8 +24,8 @@ export async function GET() {
 export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses ditolak: khusus Admin' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kurikulum') {
+			return NextResponse.json({ error: 'Akses ditolak: khusus Admin dan Kurikulum' }, { status: 403 });
 		}
 
 		const body = await req.json();

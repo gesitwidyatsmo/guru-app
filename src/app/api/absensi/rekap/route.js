@@ -6,11 +6,11 @@ export async function GET(request) {
 	try {
 		const { searchParams } = new URL(request.url);
 		const kelas = searchParams.get('kelas');
-		const bulan = searchParams.get('bulan');
+		const bulan = searchParams.get('bulan') || 'all';
 		const tahun = searchParams.get('tahun') || new Date().getFullYear();
 
-		if (!kelas || !bulan) {
-			return NextResponse.json({ error: 'Parameter kelas dan bulan harus diisi' }, { status: 400 });
+		if (!kelas) {
+			return NextResponse.json({ error: 'Parameter kelas harus diisi' }, { status: 400 });
 		}
 
 		const supabase = await createClient();

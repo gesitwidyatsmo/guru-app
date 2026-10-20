@@ -40,6 +40,15 @@ export default function JurnalPage() {
 	const [mapelList, setMapelList] = useState([]);
 	const [guruAssignments, setGuruAssignments] = useState([]);
 
+	const METODE_OPTIONS = [
+		{ name: 'Ceramah', icon: '🗣️' },
+		{ name: 'Diskusi', icon: '💬' },
+		{ name: 'Praktikum', icon: '🔬' },
+		{ name: 'Presentasi', icon: '📊' },
+		{ name: 'Tanya Jawab', icon: '❓' },
+		{ name: 'Penugasan', icon: '📝' },
+	];
+
 	// Form Data
 	const initialForm = {
 		id: '',
@@ -48,6 +57,7 @@ export default function JurnalPage() {
 		pertemuan_ke: '', // Field Baru
 		kelas: '',
 		mapel: '',
+		metode: 'Ceramah',
 		materi: '',
 		kegiatan: '',
 		hambatan: '',
@@ -56,6 +66,23 @@ export default function JurnalPage() {
 		tuntas: false,
 	};
 	const [formData, setFormData] = useState(initialForm);
+
+	const handleToggleMetode = (methodName) => {
+		const current = (formData.metode || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean);
+		let next;
+		if (current.includes(methodName)) {
+			next = current.filter((m) => m !== methodName);
+		} else {
+			next = [...current, methodName];
+		}
+		setFormData((prev) => ({
+			...prev,
+			metode: next.join(', ') || 'Ceramah',
+		}));
+	};
 
 	// --- 1. FETCH DATA ---
 	useEffect(() => {
@@ -371,7 +398,7 @@ export default function JurnalPage() {
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
-			setFormData(journal);
+			setFormData({ ...initialForm, ...journal, metode: journal.metode || 'Ceramah' });
 		} else {
 			// Mode Tambah Baru
 			setIsEditing(false);
@@ -504,8 +531,15 @@ export default function JurnalPage() {
 				const updates = { ...others };
 				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
 				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
+				if (formData.metode) updates.metode = formData.metode;
 				
-				const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				if (error && error.code === 'PGRST204' && updates.metode) {
+					const fallback = { ...updates };
+					delete fallback.metode;
+					const retry = await supabase.from('jurnal').update(fallback).eq('id', id);
+					error = retry.error;
+				}
 				if (error) throw error;
 			} else {
 				const newId = Math.random().toString(36).substring(2, 11);
@@ -517,6 +551,7 @@ export default function JurnalPage() {
 					pertemuan_ke: formData.pertemuan_ke || '',
 					kelas: formData.kelas,
 					mapel: formData.mapel,
+					metode: formData.metode || 'Ceramah',
 					materi: formData.materi,
 					kegiatan: formData.kegiatan || '',
 					hambatan: formData.hambatan || '',
@@ -525,7 +560,16 @@ export default function JurnalPage() {
 					tahun_ajar: tahunAjarAktif,
 					semester: semesterAktif,
 				};
-				const { error } = await supabase.from('jurnal').insert(insertData);
+				let { error } = await supabase.from('jurnal').insert(insertData);
+				if (error && error.code === 'PGRST204' && insertData.metode) {
+					const fallback = { ...insertData };
+					delete fallback.metode;
+					if (!fallback.kegiatan.includes('[Metode:')) {
+						fallback.kegiatan = `[Metode: ${insertData.metode}] ${fallback.kegiatan}`.trim();
+					}
+					const retry = await supabase.from('jurnal').insert(fallback);
+					error = retry.error;
+				}
 				if (error) throw error;
 			}
 
@@ -798,6 +842,13 @@ export default function JurnalPage() {
 										{/* Badge Pertemuan */}
 										{journal.pertemuan_ke && <span className='px-4 py-2 bg-white text-[#0D0D0D] text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-1'>PERTEMUAN {journal.pertemuan_ke}</span>}
 
+										{/* Badge Metode Pembelajaran */}
+										{journal.metode && (
+											<span className='px-4 py-2 bg-purple-100 text-purple-950 text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center gap-1.5'>
+												<span>🎯</span> {journal.metode}
+											</span>
+										)}
+
 										{journal.tuntas ? (
 											<span className='px-4 py-2 bg-[#00A693] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>TUNTAS</span>
 										) : (
@@ -945,6 +996,49 @@ export default function JurnalPage() {
 										value={formData.materi}
 										onChange={(e) => setFormData({ ...formData, materi: e.target.value })}
 										className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
+								</div>
+
+								{/* Metode Pembelajaran */}
+								<div>
+									<div className='flex items-center justify-between mb-2'>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest'>
+											🎯 Metode Pembelajaran
+										</label>
+										<span className='text-[10px] text-gray-500 font-bold'>
+											(Klik chip untuk memilih satu / kombinasi)
+										</span>
+									</div>
+									<div className='flex flex-wrap gap-2 mb-2.5'>
+										{METODE_OPTIONS.map((m) => {
+											const selectedList = (formData.metode || '')
+												.split(',')
+												.map((s) => s.trim())
+												.filter(Boolean);
+											const isSelected = selectedList.includes(m.name);
+											return (
+												<button
+													key={m.name}
+													type='button'
+													onClick={() => handleToggleMetode(m.name)}
+													className={`px-3 py-1.5 border-[2px] border-[#0D0D0D] text-xs font-black uppercase transition-all cursor-pointer flex items-center gap-1.5 ${
+														isSelected
+															? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -translate-y-0.5'
+															: 'bg-white text-gray-700 hover:bg-yellow-100 shadow-[1px_1px_0px_0px_#0D0D0D]'
+													}`}>
+													<span>{m.icon}</span>
+													<span>{m.name}</span>
+													{isSelected && <span className='text-xs font-black'>✓</span>}
+												</button>
+											);
+										})}
+									</div>
+									<input
+										type='text'
+										value={formData.metode || ''}
+										onChange={(e) => setFormData({ ...formData, metode: e.target.value })}
+										placeholder='Pilih chip di atas atau ketik metode kustom...'
+										className='neo-input w-full px-4 py-2.5 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none text-xs sm:text-sm'
+									/>
 								</div>
 
 								{/* Detail Kegiatan */}

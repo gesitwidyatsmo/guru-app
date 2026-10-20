@@ -169,19 +169,20 @@ export function exportJurnalPDFReport({
 		},
 	});
 
-	let currentY = (doc.lastAutoTable?.finalY || endKop + 28) + 5;
+	let currentY = (doc.lastAutoTable?.finalY || endKop + 28) + 10;
 
 	// =========================================================================
 	// SECTION: DISTRIBUSI HARI MENGAJAR & STATISTIK PER GURU
 	// =========================================================================
-	// Header Section A
+	// Header Section A (Diberikan jarak vertikal yang cukup dan proporsional)
 	doc.setFont('helvetica', 'bold');
-	doc.setFontSize(8.5);
+	doc.setFontSize(9);
 	doc.setTextColor(30, 41, 59);
 	doc.text('A. DISTRIBUSI HARI MENGAJAR', margin, currentY);
 
-	const activeHariList = [1, 2, 3, 4, 5, 6];
-	if (hariStats[0].count > 0) activeHariList.push(0);
+	// Hari Efektif Belajar: Senin, Selasa, Rabu, Kamis, Sabtu, Minggu (Jumat Libur KBM)
+	const activeHariList = [1, 2, 3, 4, 6, 0];
+	if (hariStats[5] && hariStats[5].count > 0) activeHariList.push(5);
 
 	const hariBody = activeHariList.map((dayIdx, idx) => {
 		const h = hariStats[dayIdx];
@@ -205,7 +206,7 @@ export function exportJurnalPDFReport({
 	]);
 
 	autoTable(doc, {
-		startY: currentY + 1.5,
+		startY: currentY + 3.5,
 		margin: { left: margin, right: margin },
 		head: [['No', 'Hari Mengajar', 'Jumlah Jurnal / Sesi', 'Total Jam Pelajaran (JP)', 'Porsi Jam (%)']],
 		body: hariBody,
@@ -238,7 +239,7 @@ export function exportJurnalPDFReport({
 		},
 	});
 
-	currentY = (doc.lastAutoTable?.finalY || currentY + 35) + 5;
+	currentY = (doc.lastAutoTable?.finalY || currentY + 35) + 10;
 
 	// =========================================================================
 	// TABEL 3: STATISTIK KINERJA MENGAJAR PER GURU
@@ -246,11 +247,11 @@ export function exportJurnalPDFReport({
 	// Jika space di bawah terlalu mepet untuk tabel guru (< 45mm), pindah halaman baru
 	if (currentY + 45 > pageHeight) {
 		doc.addPage();
-		currentY = 14;
+		currentY = 16;
 	}
 
 	doc.setFont('helvetica', 'bold');
-	doc.setFontSize(8.5);
+	doc.setFontSize(9);
 	doc.setTextColor(30, 41, 59);
 	doc.text('B. STATISTIK KINERJA MENGAJAR PER GURU', margin, currentY);
 
@@ -272,7 +273,7 @@ export function exportJurnalPDFReport({
 	});
 
 	autoTable(doc, {
-		startY: currentY + 1.5,
+		startY: currentY + 3.5,
 		margin: { left: margin, right: margin },
 		head: [['No', 'Nama Guru Pengajar', 'Total Jurnal', 'Total Jam', 'Mata Pelajaran', 'Kelas / Rombel', 'Ketuntasan']],
 		body: guruBody,
@@ -301,39 +302,43 @@ export function exportJurnalPDFReport({
 		},
 	});
 
-	currentY = (doc.lastAutoTable?.finalY || currentY + 35) + 5;
-
 	// =========================================================================
 	// TABEL 4: RINCIAN DETAIL CATATAN JURNAL KBM
 	// =========================================================================
 	// Selalu buka halaman baru untuk detail jurnal agar bersih dan rapi
 	doc.addPage();
-	currentY = 14;
+	currentY = 16;
 
 	doc.setFont('helvetica', 'bold');
-	doc.setFontSize(8.5);
+	doc.setFontSize(9);
 	doc.setTextColor(30, 41, 59);
 	doc.text('C. RINCIAN CATATAN JURNAL PEMBELAJARAN (KBM)', margin, currentY);
 
 	const detailHead = [
-		['No', 'Tanggal', 'Jam', 'Guru Pengajar', 'Kelas', 'Mapel', 'Pert.', 'Materi Pokok Pembelajaran', 'Status', 'Catatan / Kendala'],
+		['No', 'Tanggal', 'Jam', 'Guru Pengajar', 'Kelas', 'Mapel', 'Pert.', 'Materi & Metode Pembelajaran', 'Status', 'Catatan / Kendala'],
 	];
 
-	const detailBody = journals.map((j, idx) => [
-		idx + 1,
-		j.tanggal ? new Date(j.tanggal).toLocaleDateString('id-ID') : '-',
-		j.jam_ke || '-',
-		j.users?.nama_lengkap || j.nama_guru || '-',
-		j.kelas || '-',
-		j.mapel || '-',
-		j.pertemuan_ke ? `Ke-${j.pertemuan_ke}` : '-',
-		j.materi || '-',
-		j.tuntas ? 'Tuntas' : 'Belum Tuntas',
-		j.hambatan || j.solusi || '-',
-	]);
+	const detailBody = journals.map((j, idx) => {
+		const materiWithMetode = j.metode
+			? `${j.materi || '-'}\n[Metode: ${j.metode}]`
+			: (j.materi || '-');
+
+		return [
+			idx + 1,
+			j.tanggal ? new Date(j.tanggal).toLocaleDateString('id-ID') : '-',
+			j.jam_ke || '-',
+			j.users?.nama_lengkap || j.nama_guru || '-',
+			j.kelas || '-',
+			j.mapel || '-',
+			j.pertemuan_ke ? `Ke-${j.pertemuan_ke}` : '-',
+			materiWithMetode,
+			j.tuntas ? 'Tuntas' : 'Belum Tuntas',
+			j.hambatan || j.solusi || '-',
+		];
+	});
 
 	autoTable(doc, {
-		startY: currentY + 1.5,
+		startY: currentY + 3.5,
 		margin: { left: margin, right: margin },
 		head: detailHead,
 		body: detailBody,

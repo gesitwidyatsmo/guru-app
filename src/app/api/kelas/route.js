@@ -15,7 +15,7 @@ export async function GET(request) {
 
 		let allowedClasses = null;
 
-		if (showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan') {
+		if (showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan' || role === 'Kurikulum') {
 			allowedClasses = null; // Ambil semua
 		} else if (role === 'Guru' && userId) {
 			const { data: kbmData } = await supabase
@@ -32,8 +32,8 @@ export async function GET(request) {
 			allowedClasses = []; // Guest / unauthorized
 		}
 
-		// Jika Admin, Kepsek, Kesiswaan, atau internal, gunakan supabaseAdmin
-		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan';
+		// Jika Admin, Kepsek, Kesiswaan, Kurikulum, atau internal, gunakan supabaseAdmin
+		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan' || role === 'Kurikulum';
 		const db = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
 		let query = db.from('kelas').select(`
@@ -70,8 +70,9 @@ export async function GET(request) {
 
 // 2. POST: Tambah kelas baru
 export async function POST(request) {
-	if (request.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = request.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const body = await request.json();
@@ -81,7 +82,7 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'Nama kelas wajib diisi' }, { status: 400 });
 		}
 
-		const supabase = await createClient();
+		const supabase = supabaseAdmin || (await createClient());
 		
 		const { error } = await supabase.from('kelas').insert({
 			id: generateId(),
@@ -105,8 +106,9 @@ export async function POST(request) {
 
 // 3. PUT: Edit/Update data kelas
 export async function PUT(request) {
-	if (request.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = request.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const body = await request.json();
@@ -116,7 +118,7 @@ export async function PUT(request) {
 			return NextResponse.json({ error: 'ID dan nama kelas wajib diisi' }, { status: 400 });
 		}
 
-		const supabase = await createClient();
+		const supabase = supabaseAdmin || (await createClient());
 		
 		const { error } = await supabase.from('kelas').update({
 			nama_kelas: kelas,
@@ -139,8 +141,9 @@ export async function PUT(request) {
 
 // 4. DELETE: Hapus kelas
 export async function DELETE(request) {
-	if (request.headers.get('x-user-role') !== 'Admin') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin)' }, { status: 403 });
+	const role = request.headers.get('x-user-role');
+	if (role !== 'Admin' && role !== 'Kurikulum') {
+		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin & Kurikulum)' }, { status: 403 });
 	}
 	try {
 		const { searchParams } = new URL(request.url);
@@ -150,7 +153,7 @@ export async function DELETE(request) {
 			return NextResponse.json({ error: 'ID wajib diisi' }, { status: 400 });
 		}
 
-		const supabase = await createClient();
+		const supabase = supabaseAdmin || (await createClient());
 		
 		const { error } = await supabase.from('kelas').delete().eq('id', id);
 

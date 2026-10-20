@@ -51,12 +51,31 @@ export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
 		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+			return NextResponse.json(
+				{ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' },
+				{ status: 403 }
+			);
 		}
 
 		const userId = req.headers.get('x-user-id');
 		const body = await req.json();
-		const { tanggal, jam_ke, pertemuan_ke, kelas, mapel, materi, kegiatan, hambatan, solusi, tuntas, tahun_ajar, semester, user_lat, user_lng } = body;
+		const {
+			tanggal,
+			jam_ke,
+			pertemuan_ke,
+			kelas,
+			mapel,
+			metode,
+			materi,
+			kegiatan,
+			hambatan,
+			solusi,
+			tuntas,
+			tahun_ajar,
+			semester,
+			user_lat,
+			user_lng,
+		} = body;
 
 		const supabase = await createClient();
 
@@ -71,16 +90,28 @@ export async function POST(req) {
 			const geofence = geofenceSetting?.value;
 			if (geofence?.enabled) {
 				if (user_lat === undefined || user_lng === undefined || user_lat === null || user_lng === null) {
-					return NextResponse.json({
-						error: `Akses Lokasi Wajib: Sistem pembatasan area aktif untuk ${geofence.nama_lokasi || 'Area Sekolah'}. Harap aktifkan GPS dan izinkan akses lokasi di browser Anda.`
-					}, { status: 403 });
+					return NextResponse.json(
+						{
+							error: `Akses Lokasi Wajib: Sistem pembatasan area aktif untuk ${
+								geofence.nama_lokasi || 'Area Sekolah'
+							}. Harap aktifkan GPS dan izinkan akses lokasi di browser Anda.`,
+						},
+						{ status: 403 }
+					);
 				}
 
 				const distance = haversine(user_lat, user_lng, geofence.lat, geofence.lng);
 				if (distance > geofence.radius) {
-					return NextResponse.json({
-						error: `Di Luar Radius: Anda terdeteksi berada ${Math.round(distance)} meter dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${geofence.radius}m). Jurnal hanya dapat diisi dari lingkungan sekolah.`
-					}, { status: 403 });
+					return NextResponse.json(
+						{
+							error: `Di Luar Radius: Anda terdeteksi berada ${Math.round(
+								distance
+							)} meter dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${
+								geofence.radius
+							}m). Jurnal hanya dapat diisi dari lingkungan sekolah.`,
+						},
+						{ status: 403 }
+					);
 				}
 			}
 		} catch (geoErr) {
@@ -88,7 +119,7 @@ export async function POST(req) {
 		}
 		const id = generateId();
 
-		const { error } = await supabase.from('jurnal').insert({
+		const insertPayload = {
 			id,
 			guru_id: userId || null,
 			tanggal,
@@ -103,7 +134,21 @@ export async function POST(req) {
 			tuntas: !!tuntas,
 			tahun_ajar: tahun_ajar || '2026/2027',
 			semester: semester ? parseInt(semester) : 1,
-		});
+		};
+		if (metode) insertPayload.metode = metode;
+
+		let { error } = await supabase.from('jurnal').insert(insertPayload);
+
+		// Fallback jika kolom metode belum ada di tabel Supabase
+		if (error && error.code === 'PGRST204' && insertPayload.metode) {
+			const fallbackPayload = { ...insertPayload };
+			delete fallbackPayload.metode;
+			if (!fallbackPayload.kegiatan.includes('[Metode:')) {
+				fallbackPayload.kegiatan = `[Metode: ${insertPayload.metode}] ${fallbackPayload.kegiatan}`.trim();
+			}
+			const retry = await supabase.from('jurnal').insert(fallbackPayload);
+			error = retry.error;
+		}
 
 		if (error) throw error;
 
@@ -119,16 +164,19 @@ export async function PUT(req) {
 	try {
 		const role = req.headers.get('x-user-role');
 		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+			return NextResponse.json(
+				{ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' },
+				{ status: 403 }
+			);
 		}
 
 		const userId = req.headers.get('x-user-id');
 
 		const body = await req.json();
-		const { id, pertemuan_ke, ...others } = body;
+		const { id, pertemuan_ke, metode, ...others } = body;
 
 		const supabase = await createClient();
-		
+
 		// Verifikasi kepemilikan jika Guru
 		if (role === 'Guru') {
 			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).single();
@@ -143,9 +191,18 @@ export async function PUT(req) {
 		const updates = { ...others };
 		if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
 		if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
+		if (metode !== undefined) updates.metode = metode;
 
-		const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
-		
+		let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+
+		// Fallback jika kolom metode belum ada di tabel Supabase
+		if (error && error.code === 'PGRST204' && updates.metode) {
+			const fallbackUpdates = { ...updates };
+			delete fallbackUpdates.metode;
+			const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
+			error = retry.error;
+		}
+
 		if (error) throw error;
 
 		return NextResponse.json({ success: true });
@@ -160,7 +217,10 @@ export async function DELETE(req) {
 	try {
 		const role = req.headers.get('x-user-role');
 		if (role === 'Kepala Sekolah' || role === 'Bendahara') {
-			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
+			return NextResponse.json(
+				{ error: 'Akses Ditolak: Kepala Sekolah dan Bendahara hanya memiliki hak akses pantau (read-only).' },
+				{ status: 403 }
+			);
 		}
 
 		const userId = req.headers.get('x-user-id');

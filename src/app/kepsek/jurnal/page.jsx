@@ -167,6 +167,7 @@ export default function KepsekJurnalPage() {
 			'Kelas',
 			'Mata Pelajaran',
 			'Pertemuan Ke',
+			'Metode Pembelajaran',
 			'Materi',
 			'Status',
 			'Kegiatan',
@@ -181,6 +182,7 @@ export default function KepsekJurnalPage() {
 			`"${(j.kelas || '').replace(/"/g, '""')}"`,
 			`"${(j.mapel || '').replace(/"/g, '""')}"`,
 			j.pertemuan_ke || '',
+			`"${(j.metode || 'Ceramah').replace(/"/g, '""')}"`,
 			`"${(j.materi || '').replace(/"/g, '""')}"`,
 			j.tuntas ? 'Tuntas' : 'Belum Tuntas',
 			`"${(j.kegiatan || '').replace(/"/g, '""')}"`,
@@ -574,6 +576,11 @@ export default function KepsekJurnalPage() {
 														Pertemuan Ke-{j.pertemuan_ke}
 													</span>
 												)}
+												{j.metode && (
+													<span className='text-[10px] font-black text-purple-900 bg-purple-100 px-1.5 py-0.5 rounded border border-purple-300 flex items-center gap-0.5'>
+														<span>🎯</span> {j.metode}
+													</span>
+												)}
 												{j.hambatan && (
 													<span className='text-[10px] font-black text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded border border-rose-300 flex items-center gap-0.5'>
 														<span>⚠️</span> Ada Kendala
@@ -720,6 +727,16 @@ export default function KepsekJurnalPage() {
 								</h4>
 								<p className='text-sm font-bold text-black'>{selectedJournal.materi || '-'}</p>
 							</div>
+
+							{/* Metode Pembelajaran */}
+							{selectedJournal.metode && (
+								<div className='bg-purple-50 border-2 border-black rounded-xl p-3.5 shadow-[3px_3px_0px_0px_#0D0D0D]'>
+									<h4 className='text-xs font-black uppercase tracking-wider text-purple-900 mb-1 flex items-center gap-1.5'>
+										<span>🎯</span> Metode Pembelajaran
+									</h4>
+									<p className='text-xs sm:text-sm font-black text-purple-950'>{selectedJournal.metode}</p>
+								</div>
+							)}
 
 							{/* Kegiatan Pembelajaran */}
 							<div className='bg-white border-2 border-black rounded-xl p-4 shadow-[3px_3px_0px_0px_#0D0D0D]'>

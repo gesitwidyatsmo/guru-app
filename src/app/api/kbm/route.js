@@ -11,8 +11,8 @@ function generateKBMId() {
 export async function GET(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin' && role !== 'Kepala Sekolah') {
-			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin dan Kepala Sekolah.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kepala Sekolah' && role !== 'Kurikulum') {
+			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin, Kepala Sekolah, dan Kurikulum.' }, { status: 403 });
 		}
 
 		const supabase = await createClient();
@@ -63,8 +63,8 @@ export async function GET(req) {
 export async function POST(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses Ditolak: Khusus Entitas Admin.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kurikulum') {
+			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin dan Kurikulum.' }, { status: 403 });
 		}
 
 		const body = await req.json();
@@ -101,8 +101,8 @@ export async function POST(req) {
 export async function DELETE(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin') {
-			return NextResponse.json({ error: 'Akses Ditolak: Khusus Entitas Admin.' }, { status: 403 });
+		if (role !== 'Admin' && role !== 'Kurikulum') {
+			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin dan Kurikulum.' }, { status: 403 });
 		}
 
 		const { searchParams } = new URL(req.url);

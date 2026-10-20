@@ -8,6 +8,7 @@ export const ROLES = {
 	KEPALA_SEKOLAH: 'Kepala Sekolah',
 	BENDAHARA: 'Bendahara',
 	KESISWAAN: 'Kesiswaan',
+	KURIKULUM: 'Kurikulum',
 	WALI_KELAS: 'Wali Kelas',
 	WALI_MURID: 'Wali Murid',
 	KEAMANAN: 'Keamanan',
@@ -17,9 +18,10 @@ export const ROLES = {
 };
 
 // Pengelompokan Role
-export const MANAGEMENT_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.BENDAHARA, ROLES.KESISWAAN];
-export const READ_ALL_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.KESISWAAN];
+export const MANAGEMENT_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.BENDAHARA, ROLES.KESISWAAN, ROLES.KURIKULUM];
+export const READ_ALL_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.KESISWAAN, ROLES.KURIKULUM];
 export const DISCIPLINE_MANAGERS = [ROLES.ADMIN, ROLES.KESISWAAN];
+export const ACADEMIC_MANAGERS = [ROLES.ADMIN, ROLES.KURIKULUM, ROLES.KEPALA_SEKOLAH];
 
 // Warna badge konsisten Neobrutalism
 export const ROLE_BADGE_STYLES = {
@@ -34,6 +36,12 @@ export const ROLE_BADGE_STYLES = {
 		border: 'border-indigo-400',
 		icon: '🎓',
 		label: 'Kepala Sekolah',
+	},
+	[ROLES.KURIKULUM]: {
+		bg: 'bg-amber-300 text-black',
+		border: 'border-amber-400',
+		icon: '📐',
+		label: 'Waka Kurikulum',
 	},
 	[ROLES.BENDAHARA]: {
 		bg: 'bg-teal-300 text-black',

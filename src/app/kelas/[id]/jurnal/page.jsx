@@ -29,6 +29,15 @@ export default function JurnalKelasPage() {
 	// Data Master
 	const [mapelList, setMapelList] = useState([]);
 
+	const METODE_OPTIONS = [
+		{ name: 'Ceramah', icon: '🗣️' },
+		{ name: 'Diskusi', icon: '💬' },
+		{ name: 'Praktikum', icon: '🔬' },
+		{ name: 'Presentasi', icon: '📊' },
+		{ name: 'Tanya Jawab', icon: '❓' },
+		{ name: 'Penugasan', icon: '📝' },
+	];
+
 	// Form Data
 	const initialForm = {
 		id: '',
@@ -36,6 +45,7 @@ export default function JurnalKelasPage() {
 		jam_ke: '',
 		pertemuan_ke: '',
 		mapel: '',
+		metode: 'Ceramah',
 		materi: '',
 		kegiatan: '',
 		hambatan: '',
@@ -44,6 +54,23 @@ export default function JurnalKelasPage() {
 		tuntas: false,
 	};
 	const [formData, setFormData] = useState(initialForm);
+
+	const handleToggleMetode = (methodName) => {
+		const current = (formData.metode || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean);
+		let next;
+		if (current.includes(methodName)) {
+			next = current.filter((m) => m !== methodName);
+		} else {
+			next = [...current, methodName];
+		}
+		setFormData((prev) => ({
+			...prev,
+			metode: next.join(', ') || 'Ceramah',
+		}));
+	};
 
 	// --- 1. FETCH DATA ---
 	useEffect(() => {
@@ -177,7 +204,10 @@ export default function JurnalKelasPage() {
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
-			setFormData(journal);
+			setFormData({
+				...journal,
+				metode: journal.metode || 'Ceramah',
+			});
 		} else {
 			// Mode Tambah Baru
 			setIsEditing(false);
@@ -228,7 +258,17 @@ export default function JurnalKelasPage() {
 				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
 				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
 				
-				const { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+				if (error && error.code === 'PGRST204' && updates.metode) {
+					// Fallback jika kolom metode belum dimigrasi di database
+					const safeUpdates = { ...updates };
+					delete safeUpdates.metode;
+					if (updates.metode && !safeUpdates.kegiatan?.includes('[Metode:')) {
+						safeUpdates.kegiatan = `[Metode: ${updates.metode}] ${safeUpdates.kegiatan || ''}`.trim();
+					}
+					const retry = await supabase.from('jurnal').update(safeUpdates).eq('id', id);
+					error = retry.error;
+				}
 				if (error) throw error;
 			} else {
 				const newId = Math.random().toString(36).substring(2, 11);
@@ -240,13 +280,24 @@ export default function JurnalKelasPage() {
 					pertemuan_ke: formData.pertemuan_ke || '',
 					kelas: namaKelas,
 					mapel: formData.mapel,
+					metode: formData.metode || 'Ceramah',
 					materi: formData.materi,
 					kegiatan: formData.kegiatan || '',
 					hambatan: formData.hambatan || '',
 					solusi: formData.solusi || '',
 					tuntas: !!formData.tuntas,
 				};
-				const { error } = await supabase.from('jurnal').insert(insertData);
+				let { error } = await supabase.from('jurnal').insert(insertData);
+				if (error && error.code === 'PGRST204') {
+					// Fallback jika kolom metode belum dimigrasi di database
+					const safeInsert = { ...insertData };
+					delete safeInsert.metode;
+					if (insertData.metode) {
+						safeInsert.kegiatan = `[Metode: ${insertData.metode}] ${safeInsert.kegiatan || ''}`.trim();
+					}
+					const retry = await supabase.from('jurnal').insert(safeInsert);
+					error = retry.error;
+				}
 				if (error) throw error;
 			}
 
@@ -262,6 +313,7 @@ export default function JurnalKelasPage() {
 			setIsModalOpen(false);
 			refreshJurnal();
 		} catch (err) {
+			console.error('Error saving journal:', err);
 			Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
 		} finally {
 			setSaving(false);
@@ -396,9 +448,16 @@ export default function JurnalKelasPage() {
 										</div>
 									</div>
 
-									<div className='flex flex-wrap gap-3 mb-8'>
+									<div className='flex flex-wrap items-center gap-3 mb-8'>
 										{/* Badge Pertemuan */}
 										{journal.pertemuan_ke && <span className='px-4 py-2 bg-white text-[#0D0D0D] text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-1'>PERTEMUAN {journal.pertemuan_ke}</span>}
+
+										{/* Badge Metode */}
+										{journal.metode && (
+											<span className='px-4 py-2 bg-[#F5C518] text-[#0D0D0D] text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>
+												🎯 {journal.metode}
+											</span>
+										)}
 
 										{journal.tuntas ? (
 											<span className='px-4 py-2 bg-[#00A693] text-white text-xs font-black uppercase tracking-widest border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1'>TUNTAS</span>
@@ -523,6 +582,41 @@ export default function JurnalKelasPage() {
 										value={formData.materi}
 										onChange={(e) => setFormData({ ...formData, materi: e.target.value })}
 										className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none resize-none'></textarea>
+								</div>
+
+								{/* Metode Pembelajaran */}
+								<div>
+									<div className='flex items-center justify-between mb-2'>
+										<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest'>Metode Pembelajaran</label>
+										<span className='text-[10px] font-bold text-[#E8451A] bg-[#FFF5F0] border-2 border-[#0D0D0D] px-2 py-0.5'>Bisa pilih &gt; 1</span>
+									</div>
+									<div className='flex flex-wrap gap-2 mb-3'>
+										{METODE_OPTIONS.map((item) => {
+											const currentMetodes = (formData.metode || '').split(',').map((m) => m.trim()).filter(Boolean);
+											const isSelected = currentMetodes.includes(item);
+											return (
+												<button
+													key={item}
+													type='button'
+													onClick={() => handleToggleMetode(item)}
+													className={`px-3 py-1.5 text-xs font-black uppercase tracking-wider border-[3px] border-[#0D0D0D] transition-all rounded-none ${
+														isSelected
+															? 'bg-[#00A693] text-white shadow-[3px_3px_0px_0px_#0D0D0D] -translate-y-0.5'
+															: 'bg-white text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-[#F5C518]'
+													}`}>
+													{isSelected ? '✓ ' : '+ '}
+													{item}
+												</button>
+											);
+										})}
+									</div>
+									<input
+										type='text'
+										placeholder='Atau ketik metode lain/kombinasi...'
+										value={formData.metode || ''}
+										onChange={(e) => setFormData({ ...formData, metode: e.target.value })}
+										className='neo-input w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none'
+									/>
 								</div>
 
 								{/* Detail Kegiatan */}
