@@ -1,7 +1,7 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Shuffle, TrendingUp, Loader2, GripVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Shuffle, TrendingUp, Loader2, Users } from 'lucide-react';
 import Loader from '@/app/components/loading';
 import DragDropBoard from '@/app/components/DragDropBoard';
 import Swal from 'sweetalert2';
@@ -31,7 +31,9 @@ export default function CreateGroupPage() {
 		mapel: '',
 		metode: 'random',
 		tugasSumber: 'all',
+		tipePembagian: 'jumlah_kelompok', // 'jumlah_kelompok' | 'anggota_per_kelompok'
 		jumlahGrup: 4,
+		anggotaPerGrup: 4,
 	});
 
 	// State Data
@@ -48,15 +50,13 @@ export default function CreateGroupPage() {
 	const [showBoard, setShowBoard] = useState(false);
 	const [generatedGroups, setGeneratedGroups] = useState([]);
 
-	// Fetch Data Kelas
+	// 1. Fetch Data Awal (Hanya Kelas & Mapel yang diampu oleh guru)
 	useEffect(() => {
-		const fetchAll = async () => {
+		const fetchInitial = async () => {
 			try {
-				const supabase = createClient();
-				const [{ data: dataKelas }, { data: mapelData }] = await Promise.all([
-					supabase.from('kelas').select('*'),
-					supabase.from('mapel').select('*')
-				]);
+				// Ambil kelas yang diizinkan untuk guru yang sedang login (/api/kelas otomatis memfilter role & userId)
+				const resKelas = await fetch('/api/kelas');
+				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 
 				const sortedKelas = (dataKelas || []).sort((a, b) => {
 					const nameA = a.nama_kelas || a.kelas || '';
@@ -64,23 +64,69 @@ export default function CreateGroupPage() {
 					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
 				});
 
-				const sortedMapel = (mapelData || []).sort((a, b) => {
+				setKelasList(sortedKelas);
+
+				// Ambil mapel awal untuk guru
+				const resMapel = await fetch('/api/mapel');
+				const dataMapel = resMapel.ok ? await resMapel.json() : [];
+				const sortedMapel = (dataMapel || []).sort((a, b) => {
 					const nameA = a.nama_mapel || a.mapel || '';
 					const nameB = b.nama_mapel || b.mapel || '';
 					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
 				});
-
-				setKelasList(sortedKelas);
 				setMapelList(sortedMapel);
+
+				// Jika guru hanya punya 1 kelas, auto-select kelas tersebut
+				if (sortedKelas.length === 1) {
+					const singleKelas = sortedKelas[0].nama_kelas || sortedKelas[0].kelas;
+					setForm((prev) => ({ ...prev, kelas: singleKelas }));
+				}
 			} catch (err) {
-				console.error('Error fetching kelas:', err);
+				console.error('Error fetching initial data:', err);
 			} finally {
 				setLoadingPage(false);
 			}
 		};
-		fetchAll();
+		fetchInitial();
 	}, []);
 
+	// 2. Fetch Mapel spesifik saat Kelas dipilih
+	useEffect(() => {
+		if (!form.kelas) {
+			return;
+		}
+
+		const fetchMapelForKelas = async () => {
+			try {
+				const res = await fetch(`/api/mapel?kelas=${encodeURIComponent(form.kelas)}`);
+				const data = res.ok ? await res.json() : [];
+				const sortedMapel = (data || []).sort((a, b) => {
+					const nameA = a.nama_mapel || a.mapel || '';
+					const nameB = b.nama_mapel || b.mapel || '';
+					return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+				});
+				setMapelList(sortedMapel);
+
+				// Jika hanya ada 1 mapel yang diambil di kelas ini, otomatis pilih mapel tersebut
+				if (sortedMapel.length === 1) {
+					const mName = sortedMapel[0].nama_mapel || sortedMapel[0].mapel;
+					setForm((prev) => ({ ...prev, mapel: mName }));
+				} else {
+					setForm((prev) => {
+						if (!prev.mapel) return prev;
+						const exists = sortedMapel.some((m) => (m.nama_mapel || m.mapel) === prev.mapel);
+						return exists ? prev : { ...prev, mapel: '' };
+					});
+				}
+			} catch (err) {
+				console.error('Error fetching mapel for kelas:', err);
+			}
+		};
+
+		fetchMapelForKelas();
+	}, [form.kelas]);
+
+	// 3. Fetch Siswa & Riwayat Nilai saat Kelas atau Mapel Berubah
 	useEffect(() => {
 		if (!form.kelas) {
 			setSiswaList([]);
@@ -141,7 +187,7 @@ export default function CreateGroupPage() {
 					const cCount = countNilaiMap[s.id] || 0;
 					if (tugasList.length > 0) {
 						total = Object.values(nMap).reduce((sum, val) => sum + val, 0);
-						avg = total / tugasList.length; // as per getScoreAvg logic
+						avg = total / tugasList.length;
 					}
 
 					return {
@@ -179,15 +225,21 @@ export default function CreateGroupPage() {
 		fetchSiswa();
 	}, [form.kelas, form.mapel]);
 
-	const fisherYatesShuffle = (arr) => {
-		const a = [...arr];
-		for (let i = a.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[a[i], a[j]] = [a[j], a[i]];
-		}
-		return a;
-	};
+	// --- 4. Kalkulasi Jumlah Siswa Aktif & Jumlah Kelompok Efektif ---
+	const activeSiswaCount = useMemo(() => {
+		return siswaList.filter((s) => !excludedSiswaIds.includes(s.id)).length;
+	}, [siswaList, excludedSiswaIds]);
 
+	const calculatedGroupCount = useMemo(() => {
+		if (form.tipePembagian === 'anggota_per_kelompok') {
+			const perGroup = Math.max(1, form.anggotaPerGrup || 1);
+			if (activeSiswaCount === 0) return 1;
+			return Math.max(1, Math.round(activeSiswaCount / perGroup));
+		}
+		return form.jumlahGrup;
+	}, [form.tipePembagian, form.jumlahGrup, form.anggotaPerGrup, activeSiswaCount]);
+
+	// --- 5. Logika Pembagian Grup (Random & Heterogen) ---
 	const generateRandomGroups = () => {
 		if (siswaList.length === 0) {
 			brutalSwal.fire({
@@ -201,16 +253,26 @@ export default function CreateGroupPage() {
 		const activeSiswa = siswaList.filter(s => !excludedSiswaIds.includes(s.id));
 		const excludedSiswa = siswaList.filter(s => excludedSiswaIds.includes(s.id));
 
+		if (activeSiswa.length === 0) {
+			brutalSwal.fire({
+				title: 'MAAF',
+				text: 'SEMUA SISWA DIKECUALIKAN. TIDAK ADA SISWA AKTIF UNTUK DIBAGI.',
+				icon: 'warning'
+			});
+			return;
+		}
+
+		const numGroups = calculatedGroupCount;
 		const shuffled = [...activeSiswa].sort(() => Math.random() - 0.5);
 
-		const groups = Array.from({ length: form.jumlahGrup }, (_, i) => ({
+		const groups = Array.from({ length: numGroups }, (_, i) => ({
 			id: i + 1,
 			nama: `KELOMPOK ${i + 1}`,
 			members: [],
 		}));
 
 		shuffled.forEach((siswa, index) => {
-			const groupIndex = index % form.jumlahGrup;
+			const groupIndex = index % numGroups;
 			groups[groupIndex].members.push({
 				id: siswa.id,
 				nama: siswa.nama_lengkap,
@@ -237,6 +299,18 @@ export default function CreateGroupPage() {
 			brutalSwal.fire({
 				title: 'MAAF',
 				text: 'TIDAK ADA SISWA UNTUK DIBAGI',
+				icon: 'warning'
+			});
+			return;
+		}
+
+		const activeSiswa = siswaList.filter(s => !excludedSiswaIds.includes(s.id));
+		const excludedSiswa = siswaList.filter(s => excludedSiswaIds.includes(s.id));
+
+		if (activeSiswa.length === 0) {
+			brutalSwal.fire({
+				title: 'MAAF',
+				text: 'SEMUA SISWA DIKECUALIKAN. TIDAK ADA SISWA AKTIF UNTUK DIBAGI.',
 				icon: 'warning'
 			});
 			return;
@@ -284,9 +358,6 @@ export default function CreateGroupPage() {
 			if (!result.isConfirmed) return;
 		}
 
-		const activeSiswa = siswaList.filter(s => !excludedSiswaIds.includes(s.id));
-		const excludedSiswa = siswaList.filter(s => excludedSiswaIds.includes(s.id));
-
 		const getScoreAvg = (siswa) => {
 			if (form.tugasSumber === 'poin_aktif') return siswa.netPoin || 0;
 			if (form.tugasSumber !== 'all') {
@@ -298,11 +369,13 @@ export default function CreateGroupPage() {
 			return totalMutlak / tugasList.length;
 		};
 
+		const numGroups = calculatedGroupCount;
+
 		// 1. Urutkan berdasarkan rata-rata atau poin
 		const sorted = [...activeSiswa].sort((a, b) => getScoreAvg(b) - getScoreAvg(a));
 
 		// 2. Siapkan wadah grup
-		const groups = Array.from({ length: form.jumlahGrup }, (_, i) => ({
+		const groups = Array.from({ length: numGroups }, (_, i) => ({
 			id: i + 1,
 			nama: `KELOMPOK ${i + 1}`,
 			members: [],
@@ -310,8 +383,8 @@ export default function CreateGroupPage() {
 
 		let arahMaju = true;
 
-		for (let i = 0; i < sorted.length; i += form.jumlahGrup) {
-			const batch = sorted.slice(i, i + form.jumlahGrup);
+		for (let i = 0; i < sorted.length; i += numGroups) {
+			const batch = sorted.slice(i, i + numGroups);
 
 			if (arahMaju) {
 				batch.forEach((siswa, idx) => {
@@ -324,7 +397,7 @@ export default function CreateGroupPage() {
 				});
 			} else {
 				batch.forEach((siswa, idx) => {
-					const reverseIdx = form.jumlahGrup - 1 - idx;
+					const reverseIdx = numGroups - 1 - idx;
 					if (groups[reverseIdx]) {
 						groups[reverseIdx].members.push({
 							id: siswa.id,
@@ -385,7 +458,7 @@ export default function CreateGroupPage() {
 			if (form.metode === 'random') {
 				generateRandomGroups();
 			} else {
-				generateHeterogenGroups();
+				await generateHeterogenGroups();
 			}
 		} catch (err) {
 			console.log('Error: ' + err.message);
@@ -400,7 +473,10 @@ export default function CreateGroupPage() {
 				<div className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6'>
 					<DragDropBoard
 						initialGroups={generatedGroups}
-						metaData={form}
+						metaData={{
+							...form,
+							jumlahGrup: calculatedGroupCount,
+						}}
 						onBack={() => setShowBoard(false)}
 					/>
 				</div>
@@ -485,6 +561,9 @@ export default function CreateGroupPage() {
 											<option key={k.id} value={k.nama_kelas || k.kelas}>{k.nama_kelas || k.kelas}</option>
 										))}
 									</select>
+									<p className='mt-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest'>
+										Hanya menampilkan kelas yang Anda ajar atau bina sebagai wali kelas.
+									</p>
 								</div>
 
 								{/* Mapel */}
@@ -501,6 +580,9 @@ export default function CreateGroupPage() {
 											<option key={m.id} value={m.nama_mapel || m.mapel}>{m.nama_mapel || m.mapel}</option>
 										))}
 									</select>
+									<p className='mt-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest'>
+										{form.kelas ? 'Hanya mata pelajaran yang Anda ampu di kelas ini.' : 'Pilih kelas terlebih dahulu.'}
+									</p>
 								</div>
 
 								{/* Metode */}
@@ -565,27 +647,97 @@ export default function CreateGroupPage() {
 									</div>
 								</div>
 
-								{/* Jumlah grup */}
-								<div className='md:col-span-2 pt-4'>
-									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-3'>
-										JUMLAH GRUP
-									</label>
-									<div className='flex flex-col gap-4 sm:flex-row sm:items-center'>
-										<select
-											value={form.jumlahGrup}
-											onChange={(e) => setForm({ ...form, jumlahGrup: parseInt(e.target.value) })}
-											className='w-full sm:w-64 h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
-											{Array.from({ length: 14 }, (_, i) => i + 2).map((num) => (
-												<option key={num} value={num}>
-													{num} KELOMPOK
-												</option>
-											))}
-										</select>
+								{/* Mode Pembagian Kelompok (Jumlah Kelompok vs Jumlah Anggota per Kelompok) */}
+								<div className='md:col-span-2 pt-4 border-t-[4px] border-[#0D0D0D]'>
+									<p className='text-xl font-black text-[#0D0D0D] uppercase tracking-widest mb-4'>ATURAN PEMBAGIAN KELOMPOK</p>
 
-										<div className='flex-1 border-[4px] border-[#0D0D0D] bg-[#A3E635] px-6 py-4 text-sm font-black uppercase tracking-widest text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
-											DIBAGI RATA MENJADI <span className='bg-white px-2 py-1 border-[2px] border-[#0D0D0D] mx-1 text-lg'>{form.jumlahGrup}</span> KELOMPOK
+									{/* Selector Mode Pembagian */}
+									<div className='grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6'>
+										<div
+											onClick={() => setForm({ ...form, tipePembagian: 'jumlah_kelompok' })}
+											className={`cursor-pointer border-[4px] border-[#0D0D0D] p-5 transition-all shadow-[6px_6px_0px_0px_#0D0D0D] ${form.tipePembagian === 'jumlah_kelompok' ? 'bg-[#A3E635] -translate-y-1 shadow-[8px_8px_0px_0px_#0D0D0D]' : 'bg-white hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D]'}`}>
+											<div className='flex items-center gap-3 mb-1'>
+												<div className={`w-6 h-6 rounded-full border-[3px] border-[#0D0D0D] flex items-center justify-center ${form.tipePembagian === 'jumlah_kelompok' ? 'bg-[#0D0D0D]' : 'bg-white'}`}>
+													{form.tipePembagian === 'jumlah_kelompok' && <div className='w-2.5 h-2.5 rounded-full bg-white'></div>}
+												</div>
+												<h4 className='text-base font-black text-[#0D0D0D] uppercase tracking-wider'>BERDASARKAN JUMLAH KELOMPOK</h4>
+											</div>
+											<p className='text-xs font-bold text-[#0D0D0D] pl-9 uppercase'>Bagi siswa secara merata ke dalam sejumlah kelompok tetap</p>
+										</div>
+
+										<div
+											onClick={() => setForm({ ...form, tipePembagian: 'anggota_per_kelompok' })}
+											className={`cursor-pointer border-[4px] border-[#0D0D0D] p-5 transition-all shadow-[6px_6px_0px_0px_#0D0D0D] ${form.tipePembagian === 'anggota_per_kelompok' ? 'bg-[#38BDF8] -translate-y-1 shadow-[8px_8px_0px_0px_#0D0D0D]' : 'bg-white hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0D0D0D]'}`}>
+											<div className='flex items-center gap-3 mb-1'>
+												<div className={`w-6 h-6 rounded-full border-[3px] border-[#0D0D0D] flex items-center justify-center ${form.tipePembagian === 'anggota_per_kelompok' ? 'bg-[#0D0D0D]' : 'bg-white'}`}>
+													{form.tipePembagian === 'anggota_per_kelompok' && <div className='w-2.5 h-2.5 rounded-full bg-white'></div>}
+												</div>
+												<h4 className='text-base font-black text-[#0D0D0D] uppercase tracking-wider'>BERDASARKAN JUMLAH ANGGOTA</h4>
+											</div>
+											<p className='text-xs font-bold text-[#0D0D0D] pl-9 uppercase'>Tentukan jumlah target anggota di setiap kelompok</p>
 										</div>
 									</div>
+
+									{/* Input Detail Berdasarkan Mode */}
+									{form.tipePembagian === 'jumlah_kelompok' ? (
+										<div className='space-y-3'>
+											<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest'>
+												TENTUKAN JUMLAH KELOMPOK YANG DIINGINKAN
+											</label>
+											<div className='flex flex-col gap-4 sm:flex-row sm:items-center'>
+												<select
+													value={form.jumlahGrup}
+													onChange={(e) => setForm({ ...form, jumlahGrup: parseInt(e.target.value) })}
+													className='w-full sm:w-64 h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
+													{Array.from({ length: 14 }, (_, i) => i + 2).map((num) => (
+														<option key={num} value={num}>
+															{num} KELOMPOK
+														</option>
+													))}
+												</select>
+
+												<div className='flex-1 border-[4px] border-[#0D0D0D] bg-[#A3E635] px-6 py-4 text-sm font-black uppercase tracking-widest text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+													DIBAGI RATA MENJADI <span className='bg-white px-2 py-1 border-[2px] border-[#0D0D0D] mx-1 text-lg'>{form.jumlahGrup}</span> KELOMPOK
+													{activeSiswaCount > 0 && (
+														<span className='block text-xs mt-1 font-bold'>
+															(~{Math.floor(activeSiswaCount / form.jumlahGrup)} s/d {Math.ceil(activeSiswaCount / form.jumlahGrup)} siswa per kelompok dari {activeSiswaCount} siswa aktif)
+														</span>
+													)}
+												</div>
+											</div>
+										</div>
+									) : (
+										<div className='space-y-3'>
+											<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest'>
+												TENTUKAN JUMLAH ANGGOTA PER KELOMPOK
+											</label>
+											<div className='flex flex-col gap-4 sm:flex-row sm:items-center'>
+												<select
+													value={form.anggotaPerGrup}
+													onChange={(e) => setForm({ ...form, anggotaPerGrup: parseInt(e.target.value) })}
+													className='w-full sm:w-64 h-[60px] px-4 border-[4px] border-[#0D0D0D] bg-white rounded-none text-[#0D0D0D] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all appearance-none cursor-pointer'>
+													{Array.from({ length: 14 }, (_, i) => i + 2).map((num) => (
+														<option key={num} value={num}>
+															{num} SISWA / KELOMPOK
+														</option>
+													))}
+												</select>
+
+												<div className='flex-1 border-[4px] border-[#0D0D0D] bg-[#38BDF8] px-6 py-4 text-sm font-black uppercase tracking-widest text-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+													TARGET <span className='bg-white px-2 py-1 border-[2px] border-[#0D0D0D] mx-1 text-lg'>{form.anggotaPerGrup}</span> ANGGOTA PER KELOMPOK
+													{activeSiswaCount > 0 ? (
+														<span className='block text-xs mt-1 font-bold'>
+															➔ Otomatis membentuk <span className='bg-white px-2 py-0.5 border-[2px] border-[#0D0D0D] text-sm font-black text-[#0D0D0D]'>{calculatedGroupCount} KELOMPOK</span> ({Math.floor(activeSiswaCount / calculatedGroupCount)} s/d {Math.ceil(activeSiswaCount / calculatedGroupCount)} siswa per kelompok)
+														</span>
+													) : (
+														<span className='block text-xs mt-1 font-bold'>
+															(Pilih kelas terlebih dahulu untuk melihat kalkulasi kelompok)
+														</span>
+													)}
+												</div>
+											</div>
+										</div>
+									)}
 								</div>
 							</div>
 
