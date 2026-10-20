@@ -322,6 +322,15 @@ export default function KurikulumDashboard() {
 							</Link>
 
 							<Link
+								href='/kurikulum/absensi'
+								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
+								<span className='flex items-center gap-2'>
+									<span>📋</span> Monitoring Presensi Mapel Siswa
+								</span>
+								<span className='group-hover:translate-x-1 transition-transform'>→</span>
+							</Link>
+
+							<Link
 								href='/kurikulum/penilaian'
 								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
 								<span className='flex items-center gap-2'>
