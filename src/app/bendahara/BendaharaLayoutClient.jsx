@@ -236,16 +236,10 @@ export default function BendaharaLayoutClient({ children, initialName = 'Bendaha
 				</nav>
 
 				{/* Sidebar Footer & Logout */}
-				<div className='p-4 border-t-2 border-black bg-gray-50 space-y-2'>
-					<Link
-						href='/'
-						className='w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-black rounded-xl text-xs font-black uppercase bg-yellow-200 hover:bg-yellow-300 shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
-						<span>🏠</span>
-						<span>Ke Beranda Guru</span>
-					</Link>
+				<div className='p-4 border-t-2 border-black bg-gray-50'>
 					<button
 						onClick={handleLogout}
-						className='w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-black rounded-xl text-xs font-black uppercase bg-rose-200 hover:bg-rose-300 text-rose-950 shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
+						className='w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-black rounded-xl text-xs font-black uppercase bg-rose-200 hover:bg-rose-300 text-rose-950 shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all'>
 						<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
 							<path strokeLinecap='round' strokeLinejoin='round' d='M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1' />
 						</svg>
