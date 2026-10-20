@@ -42,9 +42,36 @@ import LembarBimbinganDocument from '@/app/components/LembarBimbinganDocument';
 function WaliKelasHubContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const initialTab = searchParams.get('tab') || 'ringkasan';
+	const rawTab = searchParams.get('tab') || 'ringkasan';
 
-	const [activeTab, setActiveTab] = useState(initialTab);
+	// Mapping URL tab ke 4 kategori utama (backward compatible)
+	let defaultMainTab = 'ringkasan';
+	let defaultSubPembinaan = 'bimbingan';
+	let defaultSubAkademik = 'siswa';
+
+	if (rawTab === 'presensi') {
+		defaultMainTab = 'presensi';
+	} else if (rawTab === 'bimbingan') {
+		defaultMainTab = 'pembinaan';
+		defaultSubPembinaan = 'bimbingan';
+	} else if (rawTab === 'poin') {
+		defaultMainTab = 'pembinaan';
+		defaultSubPembinaan = 'poin';
+	} else if (rawTab === 'siswa') {
+		defaultMainTab = 'akademik';
+		defaultSubAkademik = 'siswa';
+	} else if (rawTab === 'leger') {
+		defaultMainTab = 'akademik';
+		defaultSubAkademik = 'leger';
+	} else if (rawTab === 'pembinaan') {
+		defaultMainTab = 'pembinaan';
+	} else if (rawTab === 'akademik') {
+		defaultMainTab = 'akademik';
+	}
+
+	const [activeTab, setActiveTab] = useState(defaultMainTab);
+	const [subTabPembinaan, setSubTabPembinaan] = useState(defaultSubPembinaan);
+	const [subTabAkademik, setSubTabAkademik] = useState(defaultSubAkademik);
 	const [dataHub, setDataHub] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [searchSiswa, setSearchSiswa] = useState('');
@@ -584,36 +611,73 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 
 			{/* MAIN CONTAINER */}
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6'>
-				{/* TAB BAR (Segmented Navigation) */}
-				<div className='flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none'>
+				{/* TAB BAR (4 Kategori Utama - Responsive Grid Mobile & Desktop) */}
+				<div className='grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3'>
 					{[
-						{ id: 'ringkasan', label: 'Ringkasan Rombel', icon: <BookOpen className='w-4 h-4' /> },
+						{
+							id: 'ringkasan',
+							label: 'Ringkasan',
+							sublabel: 'Dashboard Rombel',
+							icon: <BookOpen className='w-4 h-4' />,
+						},
 						{
 							id: 'presensi',
-							label: `Presensi Harian ${isAutoFeed ? '⚡ (Live)' : ''}`,
+							label: `Presensi KBM ${isAutoFeed ? '⚡' : ''}`,
+							sublabel: 'Sesi & Rekap Harian',
 							icon: <Calendar className='w-4 h-4' />,
 						},
 						{
-							id: 'bimbingan',
-							label: `Bimbingan Santri (${bimbinganList.length})`,
+							id: 'pembinaan',
+							label: 'Pembinaan',
+							sublabel: 'Bimbingan & Poin',
+							badge: bimbinganList.length > 0 ? `${bimbinganList.length}` : null,
 							icon: <HeartHandshake className='w-4 h-4' />,
 						},
-						{ id: 'siswa', label: `Daftar Siswa (${stats?.totalSiswa || 0})`, icon: <Users className='w-4 h-4' /> },
-						{ id: 'leger', label: 'Leger Nilai (Preview)', icon: <FileText className='w-4 h-4' /> },
-						{ id: 'poin', label: 'Poin Karakter', icon: <Award className='w-4 h-4' /> },
+						{
+							id: 'akademik',
+							label: 'Data Siswa',
+							sublabel: 'Buku Induk & Leger',
+							badge: stats?.totalSiswa ? `${stats.totalSiswa}` : null,
+							icon: <Users className='w-4 h-4' />,
+						},
 					].map((tab) => {
 						const isActive = activeTab === tab.id;
 						return (
 							<button
 								key={tab.id}
 								onClick={() => setActiveTab(tab.id)}
-								className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-[2.5px] border-black font-black text-xs sm:text-sm uppercase tracking-wide transition-all shrink-0 ${
+								className={`flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border-[2.5px] border-black transition-all text-left ${
 									isActive
-										? 'bg-[#E8451A] text-white shadow-[3px_3px_0_#000] -translate-y-0.5'
+										? 'bg-[#E8451A] text-white shadow-[4px_4px_0_#000] -translate-y-0.5'
 										: 'bg-white text-black hover:bg-yellow-200 shadow-[2px_2px_0_#000]'
 								}`}>
-								{tab.icon}
-								<span>{tab.label}</span>
+								<div className='flex items-center gap-2.5 min-w-0'>
+									<div
+										className={`p-1.5 sm:p-2 rounded-xl border-2 border-black shrink-0 ${
+											isActive ? 'bg-black text-yellow-300' : 'bg-yellow-100 text-black'
+										}`}>
+										{tab.icon}
+									</div>
+									<div className='min-w-0'>
+										<div className='font-black text-xs sm:text-sm uppercase tracking-wide truncate'>
+											{tab.label}
+										</div>
+										<div
+											className={`text-[10px] sm:text-xs font-bold truncate ${
+												isActive ? 'text-white/80' : 'text-gray-500'
+											}`}>
+											{tab.sublabel}
+										</div>
+									</div>
+								</div>
+								{tab.badge && (
+									<span
+										className={`text-[10px] font-black px-1.5 py-0.5 rounded-md border border-black shrink-0 ml-1.5 ${
+											isActive ? 'bg-white text-black' : 'bg-black text-white'
+										}`}>
+										{tab.badge}
+									</span>
+								)}
 							</button>
 						);
 					})}
@@ -888,7 +952,10 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 
 										{/* BIMBINGAN & KASUS SANTRI */}
 										<button
-											onClick={() => setActiveTab('bimbingan')}
+											onClick={() => {
+												setActiveTab('pembinaan');
+												setSubTabPembinaan('bimbingan');
+											}}
 											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group text-left'>
 											<div className='flex items-center gap-2.5'>
 												<div className='w-8 h-8 rounded-lg bg-amber-200 border border-black flex items-center justify-center font-bold text-amber-900'>
@@ -923,17 +990,20 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 											<ChevronRight className='w-4 h-4 group-hover:translate-x-1 transition-transform' />
 										</Link>
 
-										<Link
-											href={`/kelas/${kelas.id}/poin`}
-											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group'>
+										<button
+											onClick={() => {
+												setActiveTab('pembinaan');
+												setSubTabPembinaan('poin');
+											}}
+											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group text-left'>
 											<div className='flex items-center gap-2.5'>
 												<div className='w-8 h-8 rounded-lg bg-rose-200 border border-black flex items-center justify-center font-bold text-rose-900'>
 													🛡️
 												</div>
-												<span className='font-black text-xs uppercase'>Catat Poin Siswa Rombel</span>
+												<span className='font-black text-xs uppercase'>Rekap &amp; Log Poin Siswa</span>
 											</div>
 											<ChevronRight className='w-4 h-4 group-hover:translate-x-1 transition-transform' />
-										</Link>
+										</button>
 
 										<Link
 											href={`/kelas/${kelas.id}/riwayat-nilai`}
@@ -1211,12 +1281,41 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 				)}
 
 				{/* ======================================================== */}
-				{/* TAB 3: BIMBINGAN & KASUS SANTRI (WALI KELAS HUB)         */}
+				{/* TAB 3: PEMBINAAN & KARAKTER SANTRI                       */}
 				{/* ======================================================== */}
-				{activeTab === 'bimbingan' && (
+				{activeTab === 'pembinaan' && (
 					<div className='space-y-6'>
-						{/* Header Banner */}
-						<div className='p-6 bg-gradient-to-r from-amber-100 via-yellow-100 to-orange-100 border-[3px] border-black rounded-3xl shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
+						{/* SUB-NAVIGASI SEGMENTED (Buku Bimbingan vs Poin Karakter) */}
+						<div className='flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl border-[2.5px] border-black shadow-[3px_3px_0_#000] w-full sm:w-fit'>
+							<button
+								type='button'
+								onClick={() => setSubTabPembinaan('bimbingan')}
+								className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all flex-1 sm:flex-initial justify-center ${
+									subTabPembinaan === 'bimbingan'
+										? 'bg-[#F5C518] text-black border-2 border-black shadow-[2px_2px_0_#000] -translate-y-0.5'
+										: 'text-gray-700 hover:bg-yellow-50'
+								}`}>
+								<HeartHandshake className='w-4 h-4' />
+								<span>Buku Kasus &amp; Bimbingan ({bimbinganList.length})</span>
+							</button>
+							<button
+								type='button'
+								onClick={() => setSubTabPembinaan('poin')}
+								className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all flex-1 sm:flex-initial justify-center ${
+									subTabPembinaan === 'poin'
+										? 'bg-[#E8451A] text-white border-2 border-black shadow-[2px_2px_0_#000] -translate-y-0.5'
+										: 'text-gray-700 hover:bg-rose-50'
+								}`}>
+								<Award className='w-4 h-4' />
+								<span>Skor &amp; Log Poin Karakter</span>
+							</button>
+						</div>
+
+						{/* SUB-VIEW 1: BUKU BIMBINGAN SANTRI */}
+						{subTabPembinaan === 'bimbingan' && (
+							<div className='space-y-6'>
+								{/* Header Banner */}
+								<div className='p-6 bg-gradient-to-r from-amber-100 via-yellow-100 to-orange-100 border-[3px] border-black rounded-3xl shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
 							<div>
 								<div className='flex items-center gap-2 mb-1'>
 									<span className='px-2.5 py-0.5 bg-black text-yellow-400 font-black text-xs uppercase rounded'>
@@ -1444,11 +1543,114 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 					</div>
 				)}
 
-				{/* ======================================================== */}
-				{/* TAB 4: DAFTAR SISWA */}
-				{/* ======================================================== */}
-				{activeTab === 'siswa' && (
+				{/* SUB-VIEW 2: POIN KARAKTER */}
+				{subTabPembinaan === 'poin' && (
 					<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-4'>
+						<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-black'>
+							<div>
+								<h2 className='text-xl font-black uppercase text-black'>
+									Catatan Karakter &amp; Poin Siswa
+								</h2>
+								<p className='text-xs font-bold text-gray-600'>
+									Log prestasi dan pelanggaran siswa rombel {kelas.nama_kelas}
+								</p>
+							</div>
+							<Link
+								href={`/kelas/${kelas.id}/poin`}
+								className='neo-btn-primary bg-[#E8451A] text-white text-xs sm:text-sm font-black flex items-center gap-1.5 self-start sm:self-auto'>
+								<ShieldAlert className='w-4 h-4' />
+								<span>Catat Poin Baru</span>
+							</Link>
+						</div>
+
+						{/* Log list */}
+						{poinStats.recentLogs && poinStats.recentLogs.length > 0 ? (
+							<div className='space-y-3'>
+								{poinStats.recentLogs.map((item) => (
+									<div
+										key={item.id}
+										className={`p-4 border-2 border-black rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+											item.tipe === 'Positif' ? 'bg-emerald-50' : 'bg-rose-50'
+										}`}>
+										<div className='space-y-1'>
+											<div className='flex items-center gap-2'>
+												<span
+													className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border border-black ${
+														item.tipe === 'Positif'
+															? 'bg-emerald-200 text-emerald-950'
+															: 'bg-rose-200 text-rose-950'
+													}`}>
+													{item.tipe}
+												</span>
+												<span className='font-black text-sm text-black'>{item.nama_siswa}</span>
+											</div>
+											<p className='text-xs font-bold text-gray-800'>{item.aktifitas}</p>
+											{item.keterangan && (
+												<p className='text-[11px] text-gray-600 italic font-medium'>
+													&ldquo;{item.keterangan}&rdquo;
+												</p>
+											)}
+										</div>
+										<div className='flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0'>
+											<span
+												className={`text-base font-black px-3 py-1 rounded-lg border-2 border-black ${
+													item.tipe === 'Positif'
+														? 'bg-emerald-400 text-black'
+														: 'bg-rose-400 text-white'
+												}`}>
+												{item.tipe === 'Positif' ? `+${item.poin}` : `-${item.poin}`}
+											</span>
+											<span className='text-[11px] font-bold text-gray-500 font-mono'>
+												{item.tanggal}
+											</span>
+										</div>
+									</div>
+								))}
+							</div>
+						) : (
+							<p className='text-xs font-bold text-gray-500 italic p-6 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl'>
+								Belum ada catatan poin perilaku siswa di kelas ini.
+							</p>
+						)}
+					</div>
+				)}
+			</div>
+		)}
+
+				{/* ======================================================== */}
+				{/* TAB 4: DATA SISWA & AKADEMIK ROMBEL                     */}
+				{/* ======================================================== */}
+				{activeTab === 'akademik' && (
+					<div className='space-y-6'>
+						{/* SUB-NAVIGASI SEGMENTED (Buku Induk vs Leger Nilai) */}
+						<div className='flex flex-wrap items-center gap-2 bg-white p-1.5 rounded-2xl border-[2.5px] border-black shadow-[3px_3px_0_#000] w-full sm:w-fit'>
+							<button
+								type='button'
+								onClick={() => setSubTabAkademik('siswa')}
+								className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all flex-1 sm:flex-initial justify-center ${
+									subTabAkademik === 'siswa'
+										? 'bg-[#2F80ED] text-white border-2 border-black shadow-[2px_2px_0_#000] -translate-y-0.5'
+										: 'text-gray-700 hover:bg-blue-50'
+								}`}>
+								<Users className='w-4 h-4' />
+								<span>Buku Induk Siswa ({stats?.totalSiswa || 0})</span>
+							</button>
+							<button
+								type='button'
+								onClick={() => setSubTabAkademik('leger')}
+								className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all flex-1 sm:flex-initial justify-center ${
+									subTabAkademik === 'leger'
+										? 'bg-[#F5C518] text-black border-2 border-black shadow-[2px_2px_0_#000] -translate-y-0.5'
+										: 'text-gray-700 hover:bg-yellow-50'
+								}`}>
+								<FileText className='w-4 h-4' />
+								<span>Leger Nilai (Preview)</span>
+							</button>
+						</div>
+
+						{/* SUB-VIEW 1: BUKU INDUK SISWA */}
+						{subTabAkademik === 'siswa' && (
+							<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-4'>
 						<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-black'>
 							<div>
 								<h2 className='text-xl font-black uppercase text-black'>
@@ -1533,10 +1735,8 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 					</div>
 				)}
 
-				{/* ======================================================== */}
-				{/* TAB 4: LEGER NILAI (PREVIEW FASE 3) */}
-				{/* ======================================================== */}
-				{activeTab === 'leger' && (
+				{/* SUB-VIEW 2: LEGER NILAI */}
+				{subTabAkademik === 'leger' && (
 					<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-6'>
 						<div className='flex items-center justify-between pb-4 border-b-2 border-black'>
 							<div>
@@ -1582,81 +1782,9 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 						</div>
 					</div>
 				)}
-
-				{/* ======================================================== */}
-				{/* TAB 5: POIN KARAKTER */}
-				{/* ======================================================== */}
-				{activeTab === 'poin' && (
-					<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-4'>
-						<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-black'>
-							<div>
-								<h2 className='text-xl font-black uppercase text-black'>
-									Catatan Karakter & Poin Siswa
-								</h2>
-								<p className='text-xs font-bold text-gray-600'>
-									Log prestasi dan pelanggaran siswa rombel {kelas.nama_kelas}
-								</p>
-							</div>
-							<Link
-								href={`/kelas/${kelas.id}/poin`}
-								className='neo-btn-primary bg-[#E8451A] text-white text-xs sm:text-sm font-black flex items-center gap-1.5 self-start sm:self-auto'>
-								<ShieldAlert className='w-4 h-4' />
-								<span>Catat Poin Baru</span>
-							</Link>
-						</div>
-
-						{/* Log list */}
-						{poinStats.recentLogs && poinStats.recentLogs.length > 0 ? (
-							<div className='space-y-3'>
-								{poinStats.recentLogs.map((item) => (
-									<div
-										key={item.id}
-										className={`p-4 border-2 border-black rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-											item.tipe === 'Positif' ? 'bg-emerald-50' : 'bg-rose-50'
-										}`}>
-										<div className='space-y-1'>
-											<div className='flex items-center gap-2'>
-												<span
-													className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border border-black ${
-														item.tipe === 'Positif'
-															? 'bg-emerald-200 text-emerald-950'
-															: 'bg-rose-200 text-rose-950'
-													}`}>
-													{item.tipe}
-												</span>
-												<span className='font-black text-sm text-black'>{item.nama_siswa}</span>
-											</div>
-											<p className='text-xs font-bold text-gray-800'>{item.aktifitas}</p>
-											{item.keterangan && (
-												<p className='text-[11px] text-gray-600 italic font-medium'>
-													&ldquo;{item.keterangan}&rdquo;
-												</p>
-											)}
-										</div>
-										<div className='flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0'>
-											<span
-												className={`text-base font-black px-3 py-1 rounded-lg border-2 border-black ${
-													item.tipe === 'Positif'
-														? 'bg-emerald-400 text-black'
-														: 'bg-rose-400 text-white'
-												}`}>
-												{item.tipe === 'Positif' ? `+${item.poin}` : `-${item.poin}`}
-											</span>
-											<span className='text-[11px] font-bold text-gray-500 font-mono'>
-												{item.tanggal}
-											</span>
-										</div>
-									</div>
-								))}
-							</div>
-						) : (
-							<p className='text-xs font-bold text-gray-500 italic p-6 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl'>
-								Belum ada catatan poin perilaku siswa di kelas ini.
-							</p>
-						)}
-					</div>
-				)}
 			</div>
+		)}
+	</div>
 
 			{/* ======================================================================== */}
 			{/* MODAL FORM CATAT / EDIT BIMBINGAN SANTRI ROMBEL                          */}
