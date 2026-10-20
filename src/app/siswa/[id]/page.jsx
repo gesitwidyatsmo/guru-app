@@ -254,13 +254,31 @@ export default function SiswaPage() {
 		return waliKelasInfo.id_wali_kelas === currentUserId;
 	}, [waliKelasInfo, currentUserId]);
 
-	const canDeleteSiswa = useMemo(() => {
+	const canManageSiswa = useMemo(() => {
 		if (currentUserRole === 'Admin' || currentUserRole === 'Kurikulum') return true;
 		if (currentUserRole === 'Guru' && isWaliKelas) return true;
 		return false;
 	}, [currentUserRole, isWaliKelas]);
 
+	const canDeleteSiswa = canManageSiswa;
+
 	const handleOpenEdit = async () => {
+		if (!canManageSiswa) {
+			Swal.fire({
+				title: 'AKSES DITOLAK',
+				text: 'Hak akses edit data siswa hanya bisa digunakan oleh Admin, Kurikulum, atau Wali Kelas yang bersangkutan.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
 		if (kelasList.length === 0) {
 			try {
 				const res = await fetch('/api/kelas?all=true');
@@ -280,6 +298,22 @@ export default function SiswaPage() {
 	};
 
 	const handleUpdateSiswa = async (updatedData) => {
+		if (!canManageSiswa) {
+			Swal.fire({
+				title: 'AKSES DITOLAK',
+				text: 'Hak akses mutasi dan edit data siswa hanya bisa digunakan oleh Admin, Kurikulum, atau Wali Kelas yang bersangkutan.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
 		if (!updatedData.id) {
 			Swal.fire({
 				title: 'ERROR',
@@ -363,6 +397,22 @@ export default function SiswaPage() {
 	};
 
 	const handleUbahStatusQuick = async () => {
+		if (!canManageSiswa) {
+			Swal.fire({
+				title: 'AKSES DITOLAK',
+				text: 'Hak akses mutasi status siswa hanya bisa digunakan oleh Admin, Kurikulum, atau Wali Kelas yang bersangkutan.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
 		const { value: statusPilihan } = await Swal.fire({
 			title: 'UBAH STATUS SISWA',
 			text: 'Pilih status akademik terbaru untuk siswa ini:',
@@ -572,12 +622,17 @@ export default function SiswaPage() {
 									<span className='px-4 py-2 bg-[#F5C518] border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest text-[#0D0D0D]'>
 										{siswaData.jenis_kelamin || 'LAKI-LAKI'}
 									</span>
-									<span className='px-4 py-2 bg-[#00A693] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest'>
-										POS (+): {poinSiswa.positif}
-									</span>
-									<span className='px-4 py-2 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest'>
-										NEG (-): {poinSiswa.negatif}
-									</span>
+									<Link
+										href={`/siswa/${id}/riwayat-poin`}
+										title='Lihat Detail Riwayat Poin Siswa'
+										className='group inline-flex items-center gap-2 hover:-translate-y-1 transition-transform'>
+										<span className='px-4 py-2 bg-[#00A693] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all flex items-center gap-1'>
+											POS (+): {poinSiswa.positif}
+										</span>
+										<span className='px-4 py-2 bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-sm font-black uppercase tracking-widest hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all flex items-center gap-1'>
+											NEG (-): {poinSiswa.negatif}
+										</span>
+									</Link>
 								</div>
 							</div>
 						</div>
@@ -610,36 +665,48 @@ export default function SiswaPage() {
 						</div>
 					</Link>
 
+					<Link
+						href={`/siswa/${id}/riwayat-poin`}
+						className='group flex items-center gap-5 bg-[#00A693] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'>
+						<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-12 transition-transform text-2xl font-black'>
+							⭐
+						</div>
+						<div>
+							<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>RIWAYAT POIN</h3>
+							<p className='text-sm font-bold text-white/80 uppercase'>Perilaku & sikap siswa</p>
+						</div>
+					</Link>
+
 					{currentUserRole !== 'Kepala Sekolah' ? (
-						<>
-							<button
-								onClick={handleUbahStatusQuick}
-								className='group flex items-center gap-5 bg-[#00A693] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
-								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-12 transition-transform text-2xl font-black'>
-									🎓
-								</div>
-								<div>
-									<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>MUTASI / STATUS</h3>
-									<p className='text-sm font-bold text-white/80 uppercase'>Pindah, Lulus, dsb</p>
-								</div>
-							</button>
+						canManageSiswa ? (
+							<>
+								<button
+									onClick={handleUbahStatusQuick}
+									className='group flex items-center gap-5 bg-[#A3E635] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+									<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:rotate-12 transition-transform text-2xl font-black'>
+										🎓
+									</div>
+									<div>
+										<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>MUTASI / STATUS</h3>
+										<p className='text-sm font-bold text-[#0D0D0D]/80 uppercase'>Pindah, Lulus, dsb</p>
+									</div>
+								</button>
 
-							<button
-								onClick={handleOpenEdit}
-								className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
-								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
-									<IconEdit className='h-8 w-8' />
-								</div>
-								<div>
-									<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>EDIT DATA</h3>
-									<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Perbarui profil siswa</p>
-								</div>
-							</button>
+								<button
+									onClick={handleOpenEdit}
+									className='group flex items-center gap-5 bg-[#FF90E8] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
+									<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:-rotate-6 transition-transform'>
+										<IconEdit className='h-8 w-8' />
+									</div>
+									<div>
+										<h3 className='font-black text-xl text-[#0D0D0D] uppercase tracking-widest mb-1'>EDIT DATA</h3>
+										<p className='text-sm font-bold text-[#0D0D0D]/70 uppercase'>Perbarui profil siswa</p>
+									</div>
+								</button>
 
-							{canDeleteSiswa && (
 								<button
 									onClick={handleDeleteSiswa}
-									className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
+									className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left'>
 									<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
 										<IconTrash className='h-8 w-8' />
 									</div>
@@ -648,8 +715,16 @@ export default function SiswaPage() {
 										<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
 									</div>
 								</button>
-							)}
-						</>
+							</>
+						) : (
+							<div className='flex items-center gap-4 bg-amber-50 p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] sm:col-span-2 lg:col-span-3'>
+								<span className='text-3xl'>🔒</span>
+								<div>
+									<h3 className='font-black text-sm text-[#0D0D0D] uppercase tracking-widest'>Akses Manajemen Terbatas</h3>
+									<p className='text-xs font-bold text-[#0D0D0D]/70'>Fitur Mutasi, Edit Data, dan Hapus Siswa khusus untuk Wali Kelas yang bersangkutan, Admin, atau Kurikulum.</p>
+								</div>
+							</div>
+						)
 					) : (
 						<div className='flex items-center gap-4 bg-indigo-50 p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] sm:col-span-2 lg:col-span-1'>
 							<span className='text-3xl'>🎓</span>

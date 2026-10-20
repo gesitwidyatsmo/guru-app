@@ -782,18 +782,13 @@ export default function LaporanPage() {
 						</div>
 						<div className='grid grid-cols-2 md:flex gap-3 mt-4 md:mt-0 w-full md:w-auto'>
 							<button
-								onClick={() => window.print()}
-								className='bg-white text-black border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center'>
-								Print
-							</button>
-							<button
 								onClick={handleExportPDF}
 								className='bg-[#E8451A] text-white border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center text-center'>
 								Export PDF
 							</button>
 							<button
 								onClick={handleExportExcel}
-								className='col-span-2 md:col-auto bg-[#00A693] text-white border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center text-center'>
+								className='bg-[#00A693] text-white border-[3px] border-black px-4 py-2 rounded-xl font-black uppercase hover:-translate-y-[2px] hover:-translate-x-[2px] hover:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex items-center justify-center text-center'>
 								Export Excel
 							</button>
 						</div>

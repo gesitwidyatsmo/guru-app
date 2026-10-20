@@ -34,6 +34,9 @@ export async function GET(req) {
 			poin,
 			keterangan,
 			created_at,
+			guru:guru_id (
+				nama_lengkap
+			),
 			siswa!inner (
 				kelas
 			)
@@ -62,17 +65,23 @@ export async function GET(req) {
 			poin: parseInt(d.poin || '0', 10),
 			keterangan: d.keterangan,
 			created_at: d.created_at,
-			_kelas: d.siswa.kelas // for filtering
+			nama_guru: d.guru?.nama_lengkap || '',
+			_kelas: d.siswa?.kelas // for filtering
 		}));
 
 		if (role === 'Guru') {
-			const { data: kbmData } = await supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId);
-			const allowedClasses = (kbmData || []).map(r => r.nama_kelas);
-			
+			const [resKbm, resWali] = await Promise.all([
+				supabase.from('guru_kbm').select('kelas').eq('id_user', userId),
+				supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId),
+			]);
+			const kbmClasses = resKbm.data ? resKbm.data.map(r => r.kelas) : [];
+			const waliClasses = resWali.data ? resWali.data.map(r => r.nama_kelas) : [];
+			const allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
+
 			result = result.filter(d => {
-				const isWaliKelas = allowedClasses.includes(d._kelas);
+				const isAllowedClass = allowedClasses.includes(d._kelas);
 				const isPembuat = String(d.guru_id) === String(userId);
-				return isWaliKelas || isPembuat;
+				return isAllowedClass || isPembuat;
 			});
 		}
 

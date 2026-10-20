@@ -630,8 +630,6 @@ export default function EditNilaiPage() {
 									<option value='Formatif'>Formatif</option>
 									<option value='Sumatif'>Sumatif</option>
 									<option value='SAS'>SAS</option>
-									<option value='PTS'>PTS</option>
-									<option value='PAS'>PAS</option>
 								</select>
 								<div className='absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none'>
 									<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' strokeWidth='3' stroke='currentColor' className='w-5 h-5'>

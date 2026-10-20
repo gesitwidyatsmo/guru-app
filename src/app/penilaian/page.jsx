@@ -1185,8 +1185,6 @@ export default function PenilaianPage() {
 											<option value='Formatif'>Formatif</option>
 											<option value='Sumatif'>Sumatif</option>
 											<option value='SAS'>SAS</option>
-											<option value='PTS'>PTS</option>
-											<option value='PAS'>PAS</option>
 										</select>
 										<div className='absolute inset-y-0 right-4 flex items-center pointer-events-none font-bold text-[#0D0D0D]'>▼</div>
 									</div>

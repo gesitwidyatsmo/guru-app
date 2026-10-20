@@ -177,6 +177,9 @@ export default function KurikulumLaporanPage() {
 									tugasScores.push(val);
 								} else if (
 									typeLower === 'sumatif' ||
+									typeLower === 'pts' ||
+									typeLower === 'uts' ||
+									typeLower === 'sts' ||
 									titleLower.includes('sts') ||
 									titleLower.includes('uts') ||
 									titleLower.includes('pts')
@@ -185,7 +188,9 @@ export default function KurikulumLaporanPage() {
 								} else if (
 									typeLower === 'sas' ||
 									typeLower === 'uas' ||
+									typeLower === 'pas' ||
 									titleLower.includes('sas') ||
+									titleLower.includes('pas') ||
 									titleLower.includes('uas')
 								) {
 									uasScores.push(val);

@@ -18,16 +18,14 @@ export async function GET(request) {
 		if (showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan' || role === 'Kurikulum') {
 			allowedClasses = null; // Ambil semua
 		} else if (role === 'Guru' && userId) {
-			const { data: kbmData } = await supabase
-				.from('guru_kbm')
-				.select('kelas')
-				.eq('id_user', userId);
-			
-			if (kbmData) {
-				allowedClasses = [...new Set(kbmData.map(r => r.kelas))];
-			} else {
-				allowedClasses = [];
-			}
+			const [{ data: kbmData }, { data: waliData }] = await Promise.all([
+				supabase.from('guru_kbm').select('kelas').eq('id_user', userId),
+				supabase.from('kelas').select('nama_kelas').eq('id_wali_kelas', userId),
+			]);
+
+			const kbmClasses = (kbmData || []).map((r) => r.kelas).filter(Boolean);
+			const waliClasses = (waliData || []).map((r) => r.nama_kelas).filter(Boolean);
+			allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
 		} else {
 			allowedClasses = []; // Guest / unauthorized
 		}

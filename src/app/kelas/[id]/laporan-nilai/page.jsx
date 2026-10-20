@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import SectionHeader from '@/app/components/SectionHeader'; // Adjust path if needed
 import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
@@ -17,6 +16,13 @@ export default function LaporanPage() {
 	const [siswaList, setSiswaList] = useState([]);
 	const [mapelList, setMapelList] = useState([]);
 	const [nilaiList, setNilaiList] = useState([]);
+
+	// Hak Akses & User State
+	const [authLoading, setAuthLoading] = useState(true);
+	const [isAuthorized, setIsAuthorized] = useState(false);
+	const [authError, setAuthError] = useState(null);
+	const [currentUser, setCurrentUser] = useState(null);
+	const [isWaliKelas, setIsWaliKelas] = useState(false);
 
 	// State UI/Filter
 	const [selectedMapel, setSelectedMapel] = useState('');
@@ -39,54 +45,141 @@ export default function LaporanPage() {
 		nhMax: 95,
 	});
 
-	// --- 1. Fetch Data Initial ---
+	// --- 1. Fetch Data Initial with Authorization Check ---
 	useEffect(() => {
+		if (!id) return;
+
 		const init = async () => {
+			setAuthLoading(true);
+			setAuthError(null);
 			try {
 				const supabase = createClient();
+
+				// 1. Dapatkan user session
+				const resAuth = await fetch('/api/auth/me');
+				if (!resAuth.ok) {
+					setAuthError('Sesi login telah berakhir. Silakan login kembali.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					setLoading(false);
+					return;
+				}
+				const authData = await resAuth.json();
+				const user = authData?.user;
+				if (!user) {
+					setAuthError('Pengguna tidak terautentikasi.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					setLoading(false);
+					return;
+				}
+				setCurrentUser(user);
 				
-				// Fetch Kelas
-				const { data: k } = await supabase.from('kelas').select('*').eq('id', id).single();
-				if (k) setKelasInfo(k);
+				// 2. Fetch Kelas
+				const { data: k, error: errK } = await supabase.from('kelas').select('*').eq('id', id).single();
+				if (errK || !k) {
+					setAuthError('Data kelas tidak ditemukan.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					setLoading(false);
+					return;
+				}
+				setKelasInfo(k);
 
-				// Fetch Mapel
-				const { data: dataMapel } = await supabase.from('mapel').select('*');
-				if (dataMapel) setMapelList(dataMapel);
+				const namaKelas = k.kelas || k.nama_kelas;
+				const role = user.role;
+				const userId = user.id;
 
+				const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kurikulum' || role === 'Kesiswaan';
+				const isHomeroom = (k.id_wali_kelas && k.id_wali_kelas === userId) || (k.wali_kelas && k.wali_kelas === user.nama_lengkap);
+
+				setIsWaliKelas(Boolean(isHomeroom));
+
+				let allowedMapels = [];
+
+				if (isPrivileged || isHomeroom) {
+					// Privileged atau Wali Kelas: dapat melihat seluruh mapel di kelas ini
+					setIsAuthorized(true);
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', namaKelas);
+
+					const kbmMapels = kbmData ? [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))] : [];
+					if (kbmMapels.length > 0) {
+						allowedMapels = kbmMapels;
+					} else {
+						const { data: allMapels } = await supabase.from('mapel').select('mapel').order('mapel');
+						allowedMapels = (allMapels || []).map((m) => m.mapel);
+					}
+				} else if (role === 'Guru') {
+					// Guru mapel biasa: HANYA berhak jika mengajar di kelas ini
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', namaKelas)
+						.eq('id_user', userId);
+
+					const teacherMapels = kbmData ? [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))] : [];
+
+					if (teacherMapels.length > 0) {
+						setIsAuthorized(true);
+						allowedMapels = teacherMapels;
+					} else {
+						// Guru tidak mengajar di kelas ini dan bukan wali kelas -> AKSES DITOLAK
+						setIsAuthorized(false);
+						setAuthError('Akses Ditolak: Anda bukan wali kelas ataupun guru mata pelajaran di kelas ini.');
+						setAuthLoading(false);
+						setLoading(false);
+						return;
+					}
+				} else {
+					setIsAuthorized(false);
+					setAuthError('Akses Ditolak: Role Anda tidak diizinkan mengakses laporan ini.');
+					setAuthLoading(false);
+					setLoading(false);
+					return;
+				}
+
+				const mapelObjects = allowedMapels.map((m) => ({ id: m, mapel: m }));
+				setMapelList(mapelObjects);
+				if (mapelObjects.length > 0) {
+					setSelectedMapel(mapelObjects[0].mapel);
+				}
+
+				// Fetch Poin Siswa di Kelas Ini
 				let poinMap = {};
-				if (k) {
-					const namaKelas = k.kelas || k.nama_kelas;
-					const { data: dataPoin } = await supabase.from('poin_siswa').select('*').eq('kelas', namaKelas);
-					(dataPoin || []).forEach((p) => {
-						if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
-						if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
-						if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
-					});
-				}
+				const { data: dataPoin } = await supabase.from('poin_siswa').select('*').eq('kelas', namaKelas);
+				(dataPoin || []).forEach((p) => {
+					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+					if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+				});
 
-				// Fetch Siswa
-				if (k) {
-					const namaKelas = k.kelas || k.nama_kelas;
-					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('kelas', namaKelas).eq('status', 'Aktif');
-					const siswaKelas = (dataSiswa || []).map((s) => ({
-						...s,
-						poinPositif: poinMap[s.id]?.positif || 0,
-						poinNegatif: poinMap[s.id]?.negatif || 0,
-					}));
-					setSiswaList(siswaKelas);
-				}
+				// Fetch Siswa Aktif di Kelas Ini
+				const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('kelas', namaKelas).eq('status', 'Aktif');
+				const siswaKelas = (dataSiswa || []).map((s) => ({
+					...s,
+					poinPositif: poinMap[s.id]?.positif || 0,
+					poinNegatif: poinMap[s.id]?.negatif || 0,
+				}));
+				setSiswaList(siswaKelas);
 			} catch (err) {
-				console.error(err);
+				console.error('Error init laporan nilai:', err);
+				setAuthError(err.message);
+				setIsAuthorized(false);
 			} finally {
+				setAuthLoading(false);
 				setLoading(false);
 			}
 		};
+
 		init();
 	}, [id]);
 
 	// --- 2. Fetch Nilai when Mapel changes ---
 	useEffect(() => {
-		if (!kelasInfo || !selectedMapel) {
+		if (!kelasInfo || !selectedMapel || !isAuthorized) {
 			setNilaiList([]);
 			return;
 		}
@@ -96,14 +189,17 @@ export default function LaporanPage() {
 			try {
 				const namaKelas = kelasInfo.kelas || kelasInfo.nama_kelas;
 				
+				// Validasi ekstra: guru biasa tidak boleh mengambil mapel di luar wewenangnya
+				if (currentUser?.role === 'Guru' && !isWaliKelas) {
+					const allowed = mapelList.map((m) => m.mapel);
+					if (!allowed.includes(selectedMapel)) {
+						setNilaiList([]);
+						setLoading(false);
+						return;
+					}
+				}
+
 				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				if (!user) throw new Error('Unauthenticated');
-
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const role = userData?.role;
-				const userId = userData?.id_user;
-
 				let query = supabase.from('nilai_siswa').select(`
 					id,
 					tugas_id,
@@ -121,14 +217,15 @@ export default function LaporanPage() {
 					)
 				`).eq('nilai_tugas.kelas', namaKelas).eq('nilai_tugas.mapel', selectedMapel);
 
-				if (role === 'Guru' && userId) {
-					query = query.eq('nilai_tugas.guru_id', userId);
+				// Guru mapel biasa hanya dapat melihat tugas yang ia buat sendiri
+				if (currentUser?.role === 'Guru' && !isWaliKelas && currentUser?.id) {
+					query = query.eq('nilai_tugas.guru_id', currentUser.id);
 				}
 
 				const { data: rawData, error } = await query;
 				if (error) throw error;
 
-				const formattedData = (rawData || []).map(row => ({
+				const formattedData = (rawData || []).map((row) => ({
 					id: row.id + '_' + row.siswa_id,
 					guru_id: row.nilai_tugas.guru_id || '',
 					siswa_id: row.siswa_id,
@@ -152,14 +249,12 @@ export default function LaporanPage() {
 		};
 
 		fetchNilai();
-	}, [kelasInfo, selectedMapel]);
+	}, [kelasInfo, selectedMapel, isAuthorized, currentUser, isWaliKelas, mapelList]);
 
 	// --- 3. Calculation Logic ---
 
 	// Categorize Assignments
 	const assignments = useMemo(() => {
-		// Group by title (kategori) + tugas_id
-		// Assuming 'tugas_id' is unique for an assignment
 		const groups = {};
 		nilaiList.forEach((n) => {
 			if (!groups[n.tugas_id]) {
@@ -174,59 +269,71 @@ export default function LaporanPage() {
 				const typeLower = (n.type || '').toLowerCase();
 				const titleLower = (n.kategori || '').toLowerCase();
 				
-				if (typeLower === 'sas' || typeLower === 'uas') {
+				if (typeLower === 'sas' || typeLower === 'uas' || typeLower === 'pas') {
 					groups[n.tugas_id].type = 'uas';
-				} else if (typeLower === 'sumatif') {
+				} else if (typeLower === 'sumatif' || typeLower === 'pts' || typeLower === 'uts' || typeLower === 'sts') {
 					groups[n.tugas_id].type = 'sumatif';
-				} else if (typeLower === 'formatif' || typeLower === 'harian') {
+				} else if (typeLower === 'formatif' || typeLower === 'harian' || typeLower === 'tugas' || typeLower === 'kuis') {
 					groups[n.tugas_id].type = 'harian';
 				} else {
-					// Priority 2: Fallback for legacy data using title keyword matching
-					if (titleLower.includes('uas') || titleLower.includes('pas') || titleLower.includes('sas')) {
+					// Fallback to title inspection
+					if (titleLower.includes('sas') || titleLower.includes('uas') || titleLower.includes('akhir semester') || titleLower.includes('pas')) {
 						groups[n.tugas_id].type = 'uas';
-					} else if (titleLower.includes('uts') || titleLower.includes('pts') || titleLower.includes('sumatif')) {
+					} else if (titleLower.includes('sumatif') || titleLower.includes('pts') || titleLower.includes('uts') || titleLower.includes('tengah semester')) {
 						groups[n.tugas_id].type = 'sumatif';
 					} else {
 						groups[n.tugas_id].type = 'harian';
 					}
 				}
 			}
-			groups[n.tugas_id].scores.push({ siswa_id: n.siswa_id, nilai: parseInt(n.nilai) || 0 });
+			groups[n.tugas_id].scores.push({
+				siswa_id: n.siswa_id,
+				nilai: n.nilai,
+			});
 		});
-		return Object.values(groups);
+
+		const list = Object.values(groups);
+		return {
+			harian: list.filter((a) => a.type === 'harian'),
+			sumatif: list.filter((a) => a.type === 'sumatif'),
+			uas: list.filter((a) => a.type === 'uas'),
+			all: list,
+		};
 	}, [nilaiList]);
 
-	// Calculate Student Grades
+	// Calculate Average per Category for each Student
 	const studentGrades = useMemo(() => {
 		return siswaList.map((siswa) => {
-			// Get scores for this student
-			const studentScores = {
-				harian: [],
-				sumatif: [],
-				uas: [],
+			// Helper to calc avg
+			const getAvg = (assignList) => {
+				if (!assignList || assignList.length === 0) return null;
+				let total = 0;
+				let count = 0;
+				assignList.forEach((a) => {
+					const scoreObj = a.scores.find((s) => s.siswa_id === siswa.id);
+					if (scoreObj && scoreObj.nilai !== null && scoreObj.nilai !== undefined) {
+						total += Number(scoreObj.nilai);
+						count++;
+					}
+				});
+				return count > 0 ? total / count : null;
 			};
 
-			assignments.forEach((asg) => {
-				const scoreEntry = asg.scores.find((s) => s.siswa_id === siswa.id);
-				if (scoreEntry) {
-					studentScores[asg.type].push(scoreEntry.nilai);
-				}
-			});
+			const nilaiHarian = getAvg(assignments.harian);
+			const nilaiSumatif = getAvg(assignments.sumatif);
+			const nilaiUAS = getAvg(assignments.uas);
 
-			const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
-
-			const nilaiHarian = avg(studentScores.harian);
-			const nilaiSumatif = avg(studentScores.sumatif);
-			const nilaiUAS = avg(studentScores.uas);
-
-			// Calculate Final
-			// If a category has no scores, we might need to adjust logic or treat as 0
-			// Or normalize weights? For now, standard weighted sum.
-			// Format: (NH * W_H + NS * W_S + NU * W_U) / 100
+			// Final Score Calculation
 			let finalOrig = 0;
 			if (calcMethod === 'sederhana') {
-				finalOrig = ((nilaiHarian || 0) + (nilaiSumatif || 0) + (nilaiUAS || 0)) / 3;
+				let totalScore = 0;
+				let totalCount = 0;
+				if (nilaiHarian !== null) { totalScore += nilaiHarian; totalCount++; }
+				if (nilaiSumatif !== null) { totalScore += nilaiSumatif; totalCount++; }
+				if (nilaiUAS !== null) { totalScore += nilaiUAS; totalCount++; }
+				finalOrig = totalCount > 0 ? totalScore / totalCount : 0;
 			} else {
+				// Weighted Percentage
 				finalOrig = ((nilaiHarian || 0) * bobot.harian + (nilaiSumatif || 0) * bobot.sumatif + (nilaiUAS || 0) * bobot.uas) / 100;
 			}
 
@@ -234,12 +341,9 @@ export default function LaporanPage() {
 			let finalConvert = finalOrig;
 			if (convertConfig.useConversion) {
 				const { ncMin, ncMax, nhMin, nhMax } = convertConfig;
-				// Formula: NK = NHmin + ( (NCx - NCmin) / (NCmax - NCmin) ) * (NHmax - NHmin)
 				if (ncMax - ncMin !== 0) {
 					finalConvert = nhMin + ((finalOrig - ncMin) / (ncMax - ncMin)) * (nhMax - nhMin);
 				}
-				// Clamp result to 0-100 or max limit?
-				// Usually optional, but let's keep it raw formatted
 			}
 
 			return {
@@ -286,14 +390,14 @@ export default function LaporanPage() {
 				NIS: siswa.nis,
 				'Total Pt (+)': siswa.poinPositif || 0,
 				'Total Pt (-)': siswa.poinNegatif || 0,
-				'Nilai Harian': parseFloat(siswa.harian.toFixed(1)),
-				'Nilai Sumatif': parseFloat(siswa.sumatif.toFixed(1)),
-				'Nilai UAS': parseFloat(siswa.uas.toFixed(1)),
-				'Nilai Akhir': parseFloat(siswa.finalOrig.toFixed(2)),
+				'Formatif': siswa.harian !== null && !isNaN(siswa.harian) ? parseFloat(siswa.harian.toFixed(1)) : '-',
+				'Sumatif': siswa.sumatif !== null && !isNaN(siswa.sumatif) ? parseFloat(siswa.sumatif.toFixed(1)) : '-',
+				'SAS': siswa.uas !== null && !isNaN(siswa.uas) ? parseFloat(siswa.uas.toFixed(1)) : '-',
+				'Nilai Akhir': parseFloat((siswa.finalOrig || 0).toFixed(2)),
 			};
 
 			if (convertConfig.useConversion) {
-				row['Nilai Konversi'] = parseFloat(siswa.finalConvert.toFixed(2));
+				row['Nilai Konversi'] = parseFloat((siswa.finalConvert || 0).toFixed(2));
 			}
 
 			return row;
@@ -309,9 +413,9 @@ export default function LaporanPage() {
 			{ wch: 15 }, // NIS
 			{ wch: 10 }, // Pt +
 			{ wch: 10 }, // Pt -
-			{ wch: 12 }, // Harian
+			{ wch: 12 }, // Formatif
 			{ wch: 12 }, // Sumatif
-			{ wch: 12 }, // UAS
+			{ wch: 12 }, // SAS
 			{ wch: 12 }, // Akhir
 		];
 		if (convertConfig.useConversion) {
@@ -333,13 +437,71 @@ export default function LaporanPage() {
 		XLSX.writeFile(wb, fileName);
 	};
 
+	// 1. Loading State
+	if (authLoading) {
+		return (
+			<div className='min-h-screen bg-[#FFF5F0] flex flex-col items-center justify-center p-4 font-sans'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] p-8 shadow-[8px_8px_0px_0px_#0D0D0D] text-center max-w-md w-full'>
+					<div className='w-12 h-12 border-[4px] border-[#0D0D0D] border-t-transparent rounded-full animate-spin mx-auto mb-4 bg-[#F5C518]'></div>
+					<p className='font-black uppercase tracking-wider text-lg text-[#0D0D0D]'>Memeriksa Hak Akses...</p>
+				</div>
+			</div>
+		);
+	}
+
+	// 2. Access Denied State
+	if (!isAuthorized) {
+		return (
+			<div className='min-h-screen bg-[#FFF5F0] flex flex-col items-center justify-center p-4 font-sans'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] p-8 md:p-10 shadow-[10px_10px_0px_0px_#0D0D0D] text-center max-w-lg w-full relative'>
+					<div className='bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] font-black uppercase text-xs px-3 py-1 inline-block mb-4 shadow-[3px_3px_0px_0px_#0D0D0D]'>
+						AKSES DITOLAK
+					</div>
+					<div className='text-6xl mb-4'>🚫</div>
+					<h2 className='text-2xl md:text-3xl font-black uppercase tracking-tight text-[#0D0D0D] mb-3'>
+						HAK AKSES DIBATASI
+					</h2>
+					<p className='text-sm font-bold text-gray-700 uppercase mb-8 leading-relaxed'>
+						{authError || 'Anda tidak memiliki hak akses untuk melihat data kelas ini karena Anda bukan wali kelas ataupun guru mata pelajaran di kelas ini.'}
+					</p>
+					<div className='flex flex-col sm:flex-row gap-3 justify-center'>
+						<button
+							onClick={() => router.push('/kelas')}
+							className='bg-[#F5C518] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black uppercase px-6 py-3 shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all'>
+							Daftar Kelas
+						</button>
+						<button
+							onClick={() => router.push('/dashboard')}
+							className='bg-white text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black uppercase px-6 py-3 shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all'>
+							Dashboard
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>
-			<div className='bg-[#00A693] border-b-[4px] border-[#0D0D0D] p-4 sm:p-6 flex items-center gap-4 sticky top-0 z-50'>
-				<button onClick={() => window.history.back()} className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none'>
-					<svg className='w-6 h-6 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
-				</button>
-				<h1 className='text-xl sm:text-2xl font-black text-white uppercase tracking-widest drop-shadow-[2px_2px_0px_#0D0D0D]'>LAPORAN PENILAIAN</h1>
+			<div className='bg-[#00A693] border-b-[4px] border-[#0D0D0D] p-4 sm:p-6 flex items-center justify-between sticky top-0 z-50'>
+				<div className='flex items-center gap-4'>
+					<button onClick={() => window.history.back()} className='p-3 bg-white border-[4px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none'>
+						<svg className='w-6 h-6 text-[#0D0D0D]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M15 19l-7-7 7-7'/></svg>
+					</button>
+					<div>
+						<h1 className='text-xl sm:text-2xl font-black text-white uppercase tracking-widest drop-shadow-[2px_2px_0px_#0D0D0D]'>LAPORAN PENILAIAN</h1>
+						<div className='flex flex-wrap items-center gap-2 mt-1'>
+							<span className='bg-[#F5C518] text-[#0D0D0D] font-black text-xs px-2 py-0.5 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase'>
+								KELAS {kelasInfo?.kelas || kelasInfo?.nama_kelas || '-'}
+							</span>
+							{isWaliKelas && (
+								<span className='bg-white text-[#0D0D0D] font-black text-xs px-2 py-0.5 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] uppercase'>
+									WALI KELAS
+								</span>
+							)}
+						</div>
+					</div>
+				</div>
 			</div>
 
 			<div className='max-w-7xl mx-auto px-4 sm:px-8 pt-10 space-y-10 relative z-10'>
@@ -442,7 +604,10 @@ export default function LaporanPage() {
 								<div className='space-y-6'>
 									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 										<div className='flex justify-between items-center mb-2'>
-											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>HARIAN</label>
+											<div>
+												<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>FORMATIF</label>
+												<span className='block text-[10px] font-bold text-gray-500'>Tugas Harian / Formatif</span>
+											</div>
 											<div className='bg-[#00A693] text-white font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] -rotate-2'>{bobot.harian}%</div>
 										</div>
 										<input
@@ -456,8 +621,11 @@ export default function LaporanPage() {
 									</div>
 									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 										<div className='flex justify-between items-center mb-2'>
-											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>SUMATIF</label>
-											<div className='bg-[#FF90E8] text-[#0D0D0D] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] rotate-1'>{bobot.sumatif}%</div>
+											<div>
+												<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>SUMATIF</label>
+												<span className='block text-[10px] font-bold text-gray-500'>Ulangan Tengah / Bab</span>
+											</div>
+											<div className='bg-[#2F80ED] text-white font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] rotate-1'>{bobot.sumatif}%</div>
 										</div>
 										<input
 											type='range'
@@ -470,8 +638,11 @@ export default function LaporanPage() {
 									</div>
 									<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
 										<div className='flex justify-between items-center mb-2'>
-											<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>UAS</label>
-											<div className='bg-[#A3E635] text-[#0D0D0D] font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] -rotate-1'>{bobot.uas}%</div>
+											<div>
+												<label className='font-black uppercase text-[#0D0D0D] text-sm tracking-wider'>SAS</label>
+												<span className='block text-[10px] font-bold text-gray-500'>Sumatif Akhir Semester</span>
+											</div>
+											<div className='bg-[#E8451A] text-white font-black px-2 py-0.5 border-[2px] border-[#0D0D0D] -rotate-1'>{bobot.uas}%</div>
 										</div>
 										<input
 											type='range'
@@ -482,162 +653,83 @@ export default function LaporanPage() {
 											className='w-full accent-[#0D0D0D] cursor-pointer'
 										/>
 									</div>
-
-									<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] mt-4 flex gap-3 items-start'>
-										<svg className='w-6 h-6 text-[#E8451A] flex-shrink-0 mt-0.5' fill='none' viewBox='0 0 24 24' strokeWidth='3' stroke='currentColor'><path strokeLinecap='square' strokeLinejoin='miter' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' /></svg>
-										<div>
-											<div className='font-black uppercase text-[#0D0D0D] mb-1'>TOTAL BOBOT: {bobot.harian + bobot.sumatif + bobot.uas}%</div>
-											<p className='text-xs font-medium text-[#0D0D0D]'>Pastikan total keseluruhannya 100% untuk mendapatkan hasil kalkulasi yang seimbang.</p>
+									{bobot.harian + bobot.sumatif + bobot.uas !== 100 && (
+										<div className='bg-[#E8451A] text-white p-3 border-[2px] border-[#0D0D0D] font-black text-xs uppercase tracking-wider text-center'>
+											Total Bobot ({bobot.harian + bobot.sumatif + bobot.uas}%) Harus 100%!
 										</div>
-									</div>
+									)}
 								</div>
 							) : (
-								<div className='p-6 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-center flex flex-col items-center gap-4'>
-									<div className='w-14 h-14 bg-[#2F80ED] border-[3px] border-[#0D0D0D] flex items-center justify-center -rotate-6 shadow-[2px_2px_0px_0px_#0D0D0D]'>
-										<svg
-											className='w-8 h-8 text-white'
-											fill='none'
-											stroke='currentColor'
-											viewBox='0 0 24 24'>
-											<path
-												strokeLinecap='square'
-												strokeLinejoin='miter'
-												strokeWidth={3}
-												d='M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'
-											/>
-										</svg>
-									</div>
-									<div>
-										<h4 className='font-black uppercase text-[#0D0D0D] mb-2 text-lg'>RATA-RATA SEDERHANA</h4>
-										<p className='text-sm font-medium text-[#0D0D0D]'>Semua komponen (Harian, Sumatif, UAS) dianggap setara dan akan dirata-rata lurus (dibagi 3).</p>
-									</div>
+								<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] text-center'>
+									<p className='text-xs font-black uppercase text-[#0D0D0D]'>Metode rata-rata sederhana aktif.</p>
+									<p className='text-[10px] font-bold text-gray-500 mt-1 uppercase'>Semua kategori dinilai sama rata.</p>
 								</div>
 							)}
 
-							<div className='w-full h-[4px] bg-[#0D0D0D] my-8'></div>
-
-							{/* Conversion Tool */}
-							<div>
-								<div className='flex items-center justify-between mb-6'>
-									<h3 className='font-black text-[#0D0D0D] text-xl uppercase tracking-widest'>KONVERSI NILAI</h3>
-									<div
+							{/* Konversi Nilai Box */}
+							<div className='mt-8 pt-6 border-t-[4px] border-[#0D0D0D]'>
+								<div className='flex items-center justify-between mb-4'>
+									<label className='font-black text-[#0D0D0D] text-sm uppercase tracking-wider'>KONVERSI NILAI</label>
+									<button
 										onClick={toggleConversion}
-										className={`w-14 h-8 border-[3px] border-[#0D0D0D] rounded-full p-1 cursor-pointer transition-colors shadow-[2px_2px_0px_0px_#0D0D0D] relative ${convertConfig.useConversion ? 'bg-[#00A693]' : 'bg-white'}`}>
-										<div className={`bg-[#0D0D0D] w-5 h-5 rounded-full transform transition-transform ${convertConfig.useConversion ? 'translate-x-6' : ''}`}></div>
-									</div>
+										className={`px-3 py-1 font-black text-xs uppercase border-[2px] border-[#0D0D0D] transition-colors ${convertConfig.useConversion ? 'bg-[#00A693] text-white shadow-[2px_2px_0px_0px_#0D0D0D]' : 'bg-white text-[#0D0D0D]'}`}>
+										{convertConfig.useConversion ? 'AKTIF' : 'NONAKTIF'}
+									</button>
 								</div>
 
 								{convertConfig.useConversion && (
-									<div className='space-y-6 animate-in fade-in slide-in-from-top-2'>
-										<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
-											<div className='flex items-center gap-2 mb-3'>
-												<span className='bg-[#E8451A] text-white px-2 py-0.5 font-black border-[2px] border-[#0D0D0D] text-xs -rotate-2'>ASLI</span>
-												<span className='font-black uppercase tracking-wider text-sm'>NILAI SISWA</span>
-											</div>
-											<div className='grid grid-cols-2 gap-4'>
-												<div>
-													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MIN (NCmin)</label>
-													<input
-														type='number'
-														value={convertConfig.ncMin}
-														onWheel={(e) => e.target.blur()}
-														onChange={(e) => setConvertConfig({ ...convertConfig, ncMin: parseInt(e.target.value) })}
-														className='neo-input w-full px-3 py-2 text-lg font-black'
-													/>
-												</div>
-												<div>
-													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MAX (NCmax)</label>
-													<input
-														type='number'
-														value={convertConfig.ncMax}
-														onWheel={(e) => e.target.blur()}
-														onChange={(e) => setConvertConfig({ ...convertConfig, ncMax: parseInt(e.target.value) })}
-														className='neo-input w-full px-3 py-2 text-lg font-black'
-													/>
-												</div>
-											</div>
+									<div className='space-y-4 bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+										<div className='text-[10px] font-bold text-gray-500 uppercase leading-snug'>
+											Rentang Nilai Aktual: <span className='font-black text-[#0D0D0D]'>{actualStats.min}</span> s/d <span className='font-black text-[#0D0D0D]'>{actualStats.max}</span>
 										</div>
 
-										{/* Tampilan Aktual Nilai Kelas & Tombol Gunakan */}
-										<div className='bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] p-4 flex flex-col gap-3 items-center text-center'>
+										<div className='grid grid-cols-2 gap-2'>
 											<div>
-												<p className='font-black uppercase tracking-widest text-[#0D0D0D] mb-1'>NILAI KELAS AKTUAL</p>
-												<div className='flex items-center justify-center gap-4 font-black text-lg'>
-													<span className='bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D]'>
-														MIN: {actualStats.min}
-													</span>
-													<span className='bg-[#F5C518] px-2 py-1 border-[2px] border-[#0D0D0D]'>
-														MAX: {actualStats.max}
-													</span>
-												</div>
-											</div>
-											<button
-												onClick={() => setConvertConfig((prev) => ({ ...prev, ncMin: Math.floor(actualStats.min), ncMax: Math.ceil(actualStats.max) }))}
-												className='w-full py-2 bg-[#2F80ED] hover:bg-[#0D0D0D] hover:-translate-y-1 text-white border-[3px] border-[#0D0D0D] font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all'>
-												GUNAKAN AKTUAL
-											</button>
-										</div>
-
-										<div className='flex justify-center text-[#0D0D0D] py-2'>
-											<svg
-												className='w-8 h-8'
-												fill='none'
-												viewBox='0 0 24 24'
-												stroke='currentColor'>
-												<path
-													strokeLinecap='square'
-													strokeLinejoin='miter'
-													strokeWidth={4}
-													d='M19 14l-7 7m0 0l-7-7m7 7V3'
+												<label className='text-[10px] font-black uppercase text-[#0D0D0D] block'>Min Capaian</label>
+												<input
+													type='number'
+													value={convertConfig.ncMin}
+													onChange={(e) => setConvertConfig({ ...convertConfig, ncMin: parseFloat(e.target.value) || 0 })}
+													className='w-full p-2 border-[2px] border-[#0D0D0D] text-xs font-bold outline-none'
 												/>
-											</svg>
-										</div>
-
-										<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
-											<div className='flex items-center gap-2 mb-3'>
-												<span className='bg-[#00A693] text-white px-2 py-0.5 font-black border-[2px] border-[#0D0D0D] text-xs rotate-2'>TARGET</span>
-												<span className='font-black uppercase tracking-wider text-sm'>NILAI HARAPAN</span>
 											</div>
-											<div className='grid grid-cols-2 gap-4'>
-												<div>
-													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MIN (NHmin)</label>
-													<input
-														type='number'
-														value={convertConfig.nhMin}
-														onWheel={(e) => e.target.blur()}
-														onChange={(e) => setConvertConfig({ ...convertConfig, nhMin: parseInt(e.target.value) })}
-														className='neo-input w-full px-3 py-2 text-lg font-black'
-													/>
-												</div>
-												<div>
-													<label className='font-bold uppercase text-[10px] tracking-widest mb-1 block'>MAX (NHmax)</label>
-													<input
-														type='number'
-														value={convertConfig.nhMax}
-														onWheel={(e) => e.target.blur()}
-														onChange={(e) => setConvertConfig({ ...convertConfig, nhMax: parseInt(e.target.value) })}
-														className='neo-input w-full px-3 py-2 text-lg font-black'
-													/>
-												</div>
+											<div>
+												<label className='text-[10px] font-black uppercase text-[#0D0D0D] block'>Max Capaian</label>
+												<input
+													type='number'
+													value={convertConfig.ncMax}
+													onChange={(e) => setConvertConfig({ ...convertConfig, ncMax: parseFloat(e.target.value) || 0 })}
+													className='w-full p-2 border-[2px] border-[#0D0D0D] text-xs font-bold outline-none'
+												/>
 											</div>
 										</div>
 
-										<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
-											<div className='inline-block bg-[#0D0D0D] text-white px-2 py-0.5 font-black uppercase text-[10px] tracking-widest mb-2'>RUMUS KONVERSI</div>
-											<p className='text-xs font-bold text-[#0D0D0D] mb-2 font-mono'>NK = NHmin + ((NCx - NCmin) / (NCmax - NCmin)) * (NHmax - NHmin)</p>
-											<ul className='text-[10px] text-[#0D0D0D] font-medium space-y-1 leading-tight'>
-												<li><strong>NK</strong> = Nilai Konversi (Hasil Akhir)</li>
-												<li><strong>NCx</strong> = Nilai Asli Siswa saat ini</li>
-												<li><strong>NCmin / NCmax</strong> = Rentang Nilai Asli</li>
-												<li><strong>NHmin / NHmax</strong> = Rentang Target Nilai</li>
-											</ul>
+										<div className='grid grid-cols-2 gap-2 pt-2 border-t-[2px] border-gray-200'>
+											<div>
+												<label className='text-[10px] font-black uppercase text-[#0D0D0D] block'>Target Min</label>
+												<input
+													type='number'
+													value={convertConfig.nhMin}
+													onChange={(e) => setConvertConfig({ ...convertConfig, nhMin: parseFloat(e.target.value) || 0 })}
+													className='w-full p-2 border-[2px] border-[#0D0D0D] text-xs font-bold outline-none'
+												/>
+											</div>
+											<div>
+												<label className='text-[10px] font-black uppercase text-[#0D0D0D] block'>Target Max</label>
+												<input
+													type='number'
+													value={convertConfig.nhMax}
+													onChange={(e) => setConvertConfig({ ...convertConfig, nhMax: parseFloat(e.target.value) || 0 })}
+													className='w-full p-2 border-[2px] border-[#0D0D0D] text-xs font-bold outline-none'
+												/>
+											</div>
 										</div>
 									</div>
 								)}
 							</div>
 						</div>
 
-						{/* 3. Table */}
+						{/* 3. Table Rekapitulasi */}
 						<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] lg:col-span-2 flex flex-col h-fit overflow-hidden'>
 							<div className='bg-[#0D0D0D] px-6 py-4 flex items-center justify-between'>
 								<h3 className='text-white font-black uppercase tracking-widest text-lg'>REKAP NILAI SISWA</h3>
@@ -649,7 +741,7 @@ export default function LaporanPage() {
 										<tr>
 											<th className='px-6 py-4 text-left text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[4px] border-[#0D0D0D]'>Siswa</th>
 											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>
-												Harian <br />
+												Formatif <br />
 												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.harian}%</span>}
 											</th>
 											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>
@@ -657,7 +749,7 @@ export default function LaporanPage() {
 												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.sumatif}%</span>}
 											</th>
 											<th className='px-4 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[4px] border-[#0D0D0D]'>
-												UAS <br />
+												SAS <br />
 												{calcMethod === 'persentase' && <span className='text-[10px] bg-white px-1 border-[2px] border-[#0D0D0D] inline-block mt-1'>{bobot.uas}%</span>}
 											</th>
 											<th className='px-2 py-4 text-center text-xs font-black text-[#0D0D0D] uppercase tracking-wider border-r-[2px] border-[#0D0D0D]'>Pt (+)</th>

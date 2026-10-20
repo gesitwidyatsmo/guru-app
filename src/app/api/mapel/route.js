@@ -15,24 +15,68 @@ export async function GET(request) {
 		const userId = request.headers.get('x-user-id');
 		const { searchParams } = new URL(request.url);
 		const showAll = searchParams.get('all') === 'true';
+		const kelasParam = searchParams.get('kelas');
 
 		let allowedMapels = null;
 
-		if (showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kurikulum') {
-			allowedMapels = null; // Semua mapel
-		} else if (role === 'Guru' && userId) {
-			const { data: kbmData } = await supabase
-				.from('guru_kbm')
-				.select('mapel')
-				.eq('id_user', userId);
+		const isPrivileged = showAll || role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kurikulum';
 
-			if (kbmData) {
-				allowedMapels = [...new Set(kbmData.map((r) => r.mapel))];
+		if (kelasParam) {
+			if (isPrivileged) {
+				const { data: kbmData } = await supabase
+					.from('guru_kbm')
+					.select('mapel')
+					.eq('kelas', kelasParam);
+				if (kbmData && kbmData.length > 0) {
+					allowedMapels = [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))];
+				} else {
+					allowedMapels = null; // fallback jika belum ada data KBM spesifik
+				}
+			} else if (role === 'Guru' && userId) {
+				// Cek apakah guru adalah Wali Kelas untuk kelas ini
+				const { data: waliClass } = await supabase
+					.from('kelas')
+					.select('id')
+					.eq('nama_kelas', kelasParam)
+					.eq('id_wali_kelas', userId)
+					.maybeSingle();
+
+				if (waliClass) {
+					// Wali Kelas dapat melihat semua mapel di kelas binaannya
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', kelasParam);
+					allowedMapels = kbmData ? [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))] : [];
+				} else {
+					// Guru mapel hanya dapat melihat mapel yang diajarkannya di kelas ini
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', kelasParam)
+						.eq('id_user', userId);
+					allowedMapels = kbmData ? [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))] : [];
+				}
 			} else {
 				allowedMapels = [];
 			}
 		} else {
-			allowedMapels = [];
+			if (isPrivileged) {
+				allowedMapels = null; // Semua mapel
+			} else if (role === 'Guru' && userId) {
+				const { data: kbmData } = await supabase
+					.from('guru_kbm')
+					.select('mapel')
+					.eq('id_user', userId);
+
+				if (kbmData) {
+					allowedMapels = [...new Set(kbmData.map((r) => r.mapel).filter(Boolean))];
+				} else {
+					allowedMapels = [];
+				}
+			} else {
+				allowedMapels = [];
+			}
 		}
 
 		let query = supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true });
@@ -48,7 +92,17 @@ export async function GET(request) {
 
 		if (error) throw error;
 
-		return NextResponse.json(mapelData || []);
+		let result = mapelData || [];
+		if (allowedMapels !== null && allowedMapels.length > 0) {
+			const existingNames = new Set(result.map((r) => r.mapel));
+			for (const m of allowedMapels) {
+				if (!existingNames.has(m)) {
+					result.push({ id: `MP-${m.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)}`, mapel: m });
+				}
+			}
+		}
+
+		return NextResponse.json(result);
 	} catch (error) {
 		console.error('Error GET Mapel:', error);
 		return NextResponse.json({ error: error.message }, { status: 500 });

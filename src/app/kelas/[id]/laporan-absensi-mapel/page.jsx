@@ -1,24 +1,38 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import SectionHeader from '../../../components/SectionHeader';
 import * as XLSX from 'xlsx';
-import { useParams } from 'next/navigation';
-import { useRouter } from 'next/router';
+import { useParams, useRouter } from 'next/navigation';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
 
+export const normStatus = (val) => {
+	const s = String(val || '').trim().toLowerCase();
+	if (s === 'hadir' || s === 'h') return 'hadir';
+	if (s === 'sakit' || s === 's') return 'sakit';
+	if (s === 'izin' || s === 'i') return 'izin';
+	if (s === 'alfa' || s === 'alpa' || s === 'alpha' || s === 'a') return 'alfa';
+	return s;
+};
+
 export default function LaporanAbsensiMapelPage() {
 	const params = useParams();
+	const router = useRouter();
 	const { id } = params;
 
-	const [kelasList, setKelasList] = useState([]);
 	const [namaKelas, setNamaKelas] = useState('');
 	const [selectedBulan, setSelectedBulan] = useState('');
 	const [rekapData, setRekapData] = useState(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(null);
 	const [searchQuery, setSearchQuery] = useState('');
+
+	// Hak Akses & User State
+	const [authLoading, setAuthLoading] = useState(true);
+	const [isAuthorized, setIsAuthorized] = useState(false);
+	const [authError, setAuthError] = useState(null);
+	const [currentUser, setCurrentUser] = useState(null);
+	const [isWaliKelas, setIsWaliKelas] = useState(false);
 
 	const [mapelList, setMapelList] = useState([]);
 	const [selectedMapel, setSelectedMapel] = useState('');
@@ -53,37 +67,118 @@ export default function LaporanAbsensiMapelPage() {
 		{ value: '12', label: 'Desember' },
 	];
 
-	// Fetch daftar kelas
+	// Validasi Hak Akses & Inisialisasi Data Kelas & Mapel
 	useEffect(() => {
-		const fetchKelas = async () => {
-			if (!id) return;
-			try {
-				const supabase = createClient();
-				const { data: dataKelas, error } = await supabase.from('kelas').select('*').eq('id', id).single();
-				if (error) throw error;
-				if (dataKelas) {
-					setNamaKelas(dataKelas.nama_kelas);
-				}
-			} catch (error) {
-				console.error('Error fetching kelas:', error);
-				setKelasList([]);
-			}
-		};
+		if (!id) return;
 
-		const fetchMapel = async () => {
+		const init = async () => {
+			setAuthLoading(true);
+			setAuthError(null);
 			try {
 				const supabase = createClient();
-				const { data: dataMapel } = await supabase.from('mapel').select('*');
-				if (dataMapel) {
-					setMapelList(dataMapel);
+
+				// 1. Dapatkan user session
+				const resAuth = await fetch('/api/auth/me');
+				if (!resAuth.ok) {
+					setAuthError('Sesi login telah berakhir. Silakan login kembali.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					return;
+				}
+				const authData = await resAuth.json();
+				const user = authData?.user;
+				if (!user) {
+					setAuthError('Pengguna tidak terautentikasi.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					return;
+				}
+				setCurrentUser(user);
+
+				// 2. Ambil data kelas
+				const { data: dataKelas, error: errKelas } = await supabase
+					.from('kelas')
+					.select('*')
+					.eq('id', id)
+					.single();
+
+				if (errKelas || !dataKelas) {
+					setAuthError('Data kelas tidak ditemukan.');
+					setIsAuthorized(false);
+					setAuthLoading(false);
+					return;
+				}
+
+				const klsNama = dataKelas.nama_kelas;
+				setNamaKelas(klsNama);
+
+				// 3. Evaluasi hak akses
+				const role = user.role;
+				const userId = user.id;
+				const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kurikulum' || role === 'Kesiswaan';
+				const isHomeroom = (dataKelas.id_wali_kelas && dataKelas.id_wali_kelas === userId) || (dataKelas.wali_kelas && dataKelas.wali_kelas === user.nama_lengkap);
+
+				setIsWaliKelas(Boolean(isHomeroom));
+
+				let allowedMapels = [];
+
+				if (isPrivileged || isHomeroom) {
+					// Privileged atau Wali Kelas: dapat melihat seluruh mapel yang diajarkan di kelas ini
+					setIsAuthorized(true);
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', klsNama);
+
+					const kbmMapels = kbmData ? [...new Set(kbmData.map((k) => k.mapel).filter(Boolean))] : [];
+					if (kbmMapels.length > 0) {
+						allowedMapels = kbmMapels;
+					} else {
+						const { data: allMapels } = await supabase.from('mapel').select('mapel').order('mapel');
+						allowedMapels = (allMapels || []).map((m) => m.mapel);
+					}
+				} else if (role === 'Guru') {
+					// Guru mapel biasa: HANYA berhak jika mengajar di kelas ini
+					const { data: kbmData } = await supabase
+						.from('guru_kbm')
+						.select('mapel')
+						.eq('kelas', klsNama)
+						.eq('id_user', userId);
+
+					const teacherMapels = kbmData ? [...new Set(kbmData.map((k) => k.mapel).filter(Boolean))] : [];
+
+					if (teacherMapels.length > 0) {
+						setIsAuthorized(true);
+						allowedMapels = teacherMapels;
+					} else {
+						// Guru tidak mengajar di kelas ini dan bukan wali kelas -> AKSES DITOLAK
+						setIsAuthorized(false);
+						setAuthError('Akses Ditolak: Anda bukan wali kelas ataupun guru mata pelajaran di kelas ini.');
+						setAuthLoading(false);
+						return;
+					}
+				} else {
+					setIsAuthorized(false);
+					setAuthError('Akses Ditolak: Role Anda tidak diizinkan mengakses laporan ini.');
+					setAuthLoading(false);
+					return;
+				}
+
+				const mapelObjects = allowedMapels.map((m) => ({ id: m, mapel: m }));
+				setMapelList(mapelObjects);
+				if (mapelObjects.length === 1) {
+					setSelectedMapel(mapelObjects[0].mapel);
 				}
 			} catch (err) {
-				console.error('Gagal fetch mapel:', err);
+				console.error('Error init laporan absensi mapel:', err);
+				setAuthError(err.message);
+				setIsAuthorized(false);
+			} finally {
+				setAuthLoading(false);
 			}
 		};
 
-		fetchKelas();
-		fetchMapel();
+		init();
 	}, [id]);
 
 	// Fetch rekap absensi
@@ -91,6 +186,15 @@ export default function LaporanAbsensiMapelPage() {
 		if (!selectedBulan || !selectedMapel) {
 			Swal.fire('Oops', 'Pilih Mapel & Periode terlebih dahulu', 'warning');
 			return;
+		}
+
+		// Keamanan ganda: Guru biasa tidak boleh mengambil mapel di luar wewenangnya
+		if (currentUser?.role === 'Guru' && !isWaliKelas) {
+			const allowed = mapelList.map((m) => m.mapel);
+			if (!allowed.includes(selectedMapel)) {
+				Swal.fire('Akses Ditolak', 'Anda tidak memiliki hak akses untuk melihat absensi mata pelajaran ini.', 'error');
+				return;
+			}
 		}
 
 		setLoading(true);
@@ -127,6 +231,10 @@ export default function LaporanAbsensiMapelPage() {
 			// 2. Ambil data absensi mapel (sesi)
 			let querySesi = supabase.from('absensi_mapel').select('sesi_id, tanggal').eq('kelas', namaKelas).eq('mapel', selectedMapel);
 
+			if (currentUser?.role === 'Guru' && !isWaliKelas) {
+				querySesi = querySesi.eq('guru_id', currentUser.id);
+			}
+
 			if (selectedBulan !== 'all') {
 				const startDate = new Date(tahun, parseInt(selectedBulan) - 1, 1).toISOString();
 				const endDate = new Date(tahun, parseInt(selectedBulan), 0, 23, 59, 59).toISOString();
@@ -142,7 +250,7 @@ export default function LaporanAbsensiMapelPage() {
 
 			const sessions = sesiData || [];
 			const tanggalSet = new Set();
-			sessions.forEach(s => {
+			sessions.forEach((s) => {
 				if (s.tanggal) tanggalSet.add(String(s.tanggal).slice(0, 10));
 			});
 			const tanggalList = Array.from(tanggalSet).sort();
@@ -164,7 +272,7 @@ export default function LaporanAbsensiMapelPage() {
 				return;
 			}
 
-			const sesiIds = sessions.map(s => s.sesi_id);
+			const sesiIds = sessions.map((s) => s.sesi_id);
 
 			// 3. Ambil detail absensi siswa
 			const { data: detailData, error: detailError } = await supabase
@@ -176,7 +284,7 @@ export default function LaporanAbsensiMapelPage() {
 			const absensiDetails = detailData || [];
 
 			const sesiTanggalMap = {};
-			sessions.forEach(s => {
+			sessions.forEach((s) => {
 				sesiTanggalMap[s.sesi_id] = String(s.tanggal).slice(0, 10);
 			});
 
@@ -185,9 +293,9 @@ export default function LaporanAbsensiMapelPage() {
 				const absensiSiswa = {};
 				const ringkasan = { H: 0, I: 0, S: 0, A: 0, T: 0, C: 0 };
 
-				const studentAbsensi = absensiDetails.filter(d => String(d.siswa_id) === String(siswa.id));
+				const studentAbsensi = absensiDetails.filter((d) => String(d.siswa_id) === String(siswa.id));
 
-				studentAbsensi.forEach(detail => {
+				studentAbsensi.forEach((detail) => {
 					const tanggal = sesiTanggalMap[detail.sesi_id];
 					if (!tanggal) return;
 
@@ -196,13 +304,16 @@ export default function LaporanAbsensiMapelPage() {
 					
 					absensiSiswa[tanggal] = { status, keterangan };
 
-					const s = status.toLowerCase();
-					if (s === 'hadir' || s === 'h') ringkasan.H++;
-					else if (s === 'izin' || s === 'i') ringkasan.I++;
-					else if (s === 'sakit' || s === 's') ringkasan.S++;
-					else if (s === 'alpa' || s === 'a' || s === 'alpha' || s === 'alfa') ringkasan.A++;
-					else if (s === 'terlambat' || s === 't') ringkasan.T++;
-					else if (s === 'cabut' || s === 'c') ringkasan.C++;
+					const normalized = normStatus(status);
+					if (normalized === 'hadir') ringkasan.H++;
+					else if (normalized === 'izin') ringkasan.I++;
+					else if (normalized === 'sakit') ringkasan.S++;
+					else if (normalized === 'alfa') ringkasan.A++;
+					else {
+						const s = status.toLowerCase();
+						if (s === 'terlambat' || s === 't') ringkasan.T++;
+						else if (s === 'cabut' || s === 'c') ringkasan.C++;
+					}
 				});
 
 				return {
@@ -232,16 +343,6 @@ export default function LaporanAbsensiMapelPage() {
 	const getDatesInMonth = (dates) => {
 		if (!dates || !Array.isArray(dates) || dates.length === 0) return [];
 		return dates.sort((a, b) => new Date(a) - new Date(b));
-	};
-
-	const getStatusColor = (status) => {
-		const colors = {
-			Hadir: 'bg-green-100 text-green-800',
-			Izin: 'bg-blue-100 text-blue-800',
-			Sakit: 'bg-yellow-100 text-yellow-800',
-			Alpha: 'bg-red-100 text-red-800',
-		};
-		return colors[status] || 'bg-gray-100 text-gray-800';
 	};
 
 	// Fungsi Export ke Excel
@@ -274,7 +375,8 @@ export default function LaporanAbsensiMapelPage() {
 			tanggalList.forEach((tanggal) => {
 				const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
 				const status = absensi?.status || '-';
-				const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : (status === 'Alpha' || status === 'Alpa') ? 'A' : '-';
+				const normalized = normStatus(status);
+				const kode = normalized === 'hadir' ? 'H' : normalized === 'izin' ? 'I' : normalized === 'sakit' ? 'S' : normalized === 'alfa' ? 'A' : '-';
 				row.push(kode);
 			});
 
@@ -288,6 +390,7 @@ export default function LaporanAbsensiMapelPage() {
 		// Gabungkan header dan data
 		const worksheetData = [
 			[`REKAP ABSENSI - ${rekapData.kelas}`],
+			[`Mata Pelajaran: ${selectedMapel || '-'}`],
 			[`Periode: ${rekapData.periode}`],
 			[`Total Siswa: ${rekapData.siswa.length}`],
 			[], // Baris kosong
@@ -303,6 +406,7 @@ export default function LaporanAbsensiMapelPage() {
 			{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
 			{ s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
 			{ s: { r: 2, c: 0 }, e: { r: 2, c: headers.length - 1 } },
+			{ s: { r: 3, c: 0 }, e: { r: 3, c: headers.length - 1 } },
 		];
 
 		// Set column widths
@@ -324,11 +428,56 @@ export default function LaporanAbsensiMapelPage() {
 
 		// Generate nama file
 		const bulanLabel = bulanOptions.find((b) => b.value === selectedBulan)?.label || 'Semua_Bulan';
-		const filename = `Rekap_Absensi_${rekapData.kelas}_${bulanLabel}_${new Date().getFullYear()}.xlsx`;
+		const cleanMapel = (selectedMapel || 'MAPEL').replace(/[^a-zA-Z0-9]/g, '_');
+		const filename = `Rekap_Absensi_${rekapData.kelas}_${cleanMapel}_${bulanLabel}_${new Date().getFullYear()}.xlsx`;
 
 		// Download file
 		XLSX.writeFile(wb, filename);
 	};
+
+	// 1. Loading State
+	if (authLoading) {
+		return (
+			<div className='min-h-screen bg-[#FFF5F0] flex flex-col items-center justify-center p-4 font-sans'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] p-8 shadow-[8px_8px_0px_0px_#0D0D0D] text-center max-w-md w-full'>
+					<div className='w-12 h-12 border-[4px] border-[#0D0D0D] border-t-transparent rounded-full animate-spin mx-auto mb-4 bg-[#F5C518]'></div>
+					<p className='font-black uppercase tracking-wider text-lg text-[#0D0D0D]'>Memeriksa Hak Akses...</p>
+				</div>
+			</div>
+		);
+	}
+
+	// 2. Access Denied State
+	if (!isAuthorized) {
+		return (
+			<div className='min-h-screen bg-[#FFF5F0] flex flex-col items-center justify-center p-4 font-sans'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] p-8 md:p-10 shadow-[10px_10px_0px_0px_#0D0D0D] text-center max-w-lg w-full relative'>
+					<div className='bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] font-black uppercase text-xs px-3 py-1 inline-block mb-4 shadow-[3px_3px_0px_0px_#0D0D0D]'>
+						AKSES DITOLAK
+					</div>
+					<div className='text-6xl mb-4'>🚫</div>
+					<h2 className='text-2xl md:text-3xl font-black uppercase tracking-tight text-[#0D0D0D] mb-3'>
+						HAK AKSES DIBATASI
+					</h2>
+					<p className='text-sm font-bold text-gray-700 uppercase mb-8 leading-relaxed'>
+						{authError || 'Anda tidak memiliki hak akses untuk melihat data kelas ini karena Anda bukan wali kelas ataupun guru mata pelajaran di kelas ini.'}
+					</p>
+					<div className='flex flex-col sm:flex-row gap-3 justify-center'>
+						<button
+							onClick={() => router.push('/kelas')}
+							className='bg-[#F5C518] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black uppercase px-6 py-3 shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all'>
+							Daftar Kelas
+						</button>
+						<button
+							onClick={() => router.push('/dashboard')}
+							className='bg-white text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black uppercase px-6 py-3 shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all'>
+							Dashboard
+						</button>
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className='min-h-screen bg-[#FFF5F0] bg-[url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjEiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+")] pb-20 font-sans'>
@@ -349,9 +498,16 @@ export default function LaporanAbsensiMapelPage() {
 							<h1 className='text-3xl sm:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[4px_4px_0px_#0D0D0D] mb-2'>
 								LAPORAN ABSENSI
 							</h1>
-							<p className='text-[#0D0D0D] font-black tracking-widest uppercase bg-[#F5C518] inline-block px-3 py-1 border-[2px] border-[#0D0D0D] text-xs sm:text-sm shadow-[2px_2px_0px_0px_#0D0D0D]'>
-								KELAS {namaKelas}
-							</p>
+							<div className='flex flex-wrap items-center gap-2'>
+								<p className='text-[#0D0D0D] font-black tracking-widest uppercase bg-[#F5C518] inline-block px-3 py-1 border-[2px] border-[#0D0D0D] text-xs sm:text-sm shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									KELAS {namaKelas}
+								</p>
+								{isWaliKelas && (
+									<span className='bg-[#00A693] text-white font-black tracking-widest uppercase px-3 py-1 border-[2px] border-[#0D0D0D] text-xs shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										WALI KELAS
+									</span>
+								)}
+							</div>
 						</div>
 					</div>
 				</div>
@@ -549,77 +705,78 @@ export default function LaporanAbsensiMapelPage() {
 											</thead>
 											<tbody className='bg-white'>
 												{filteredSiswa.map((siswa, index) => {
-												const totalPertemuan = Math.max(rekapData.tanggalList ? rekapData.tanggalList.length : 1, 1);
-												const renderNilai = (val) => {
-													if (tampilanStyle === 'jumlah') return val;
-													return Math.round((val / totalPertemuan) * 100) + '%';
-												};
+													const totalPertemuan = Math.max(rekapData.tanggalList ? rekapData.tanggalList.length : 1, 1);
+													const renderNilai = (val) => {
+														if (tampilanStyle === 'jumlah') return val;
+														return Math.round((val / totalPertemuan) * 100) + '%';
+													};
 
-												return (
-													<tr key={siswa.id} className='hover:bg-[#FFF5F0] transition-colors group'>
-														<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-4 py-3 text-center font-bold text-sm sticky left-0 bg-white group-hover:bg-[#FFF5F0] z-10'>{index + 1}</td>
-														<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-6 py-3'>
-															<div className='flex items-center gap-4'>
-																<div className='w-10 h-10 border-[3px] border-[#0D0D0D] bg-[#8B5CF6] flex items-center justify-center text-white font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>
-																	{siswa.nama_lengkap.charAt(0)}
-																</div>
-																<div>
-																	<div className='text-sm font-black text-[#0D0D0D] uppercase'>{siswa.nama_lengkap}</div>
-																	<div className='text-xs font-bold text-gray-600 bg-[#F5C518] border-[2px] border-[#0D0D0D] px-1 mt-1 inline-block'>NIS: {siswa.nis || '-'}</div>
-																</div>
-															</div>
-														</td>
-
-														{/* Data Per Tanggal */}
-														{getDatesInMonth(rekapData.tanggalList).map((tanggal) => {
-															const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
-															const status = absensi?.status || '-';
-															const kode = status === 'Hadir' ? 'H' : status === 'Izin' ? 'I' : status === 'Sakit' ? 'S' : (status === 'Alpha' || status === 'Alpa') ? 'A' : '-';
-
-															let cellStyle = 'font-bold text-gray-400';
-															let boxStyle = '';
-															if (kode === 'H') { cellStyle = 'text-[#0D0D0D]'; boxStyle = 'bg-[#A3E635] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-[#0D0D0D]'; }
-															else if (kode === 'I') { cellStyle = 'text-white'; boxStyle = 'bg-[#2F80ED] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-white'; }
-															else if (kode === 'S') { cellStyle = 'text-[#0D0D0D]'; boxStyle = 'bg-[#F5C518] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-[#0D0D0D]'; }
-															else if (kode === 'A') { cellStyle = 'text-white'; boxStyle = 'bg-[#E8451A] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-white'; }
-
-															return (
-																<td key={tanggal} className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-2 py-3 text-center'>
-																	<div className='flex justify-center'>
-																		{kode !== '-' ? (
-																			<span className={`w-7 h-7 flex items-center justify-center text-xs font-black ${boxStyle}`} title={absensi?.keterangan ? `${status} - ${absensi.keterangan}` : status}>
-																				{kode}
-																			</span>
-																		) : (
-																			<span className={cellStyle}>{kode}</span>
-																		)}
+													return (
+														<tr key={siswa.id} className='hover:bg-[#FFF5F0] transition-colors group'>
+															<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-4 py-3 text-center font-bold text-sm sticky left-0 bg-white group-hover:bg-[#FFF5F0] z-10'>{index + 1}</td>
+															<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-6 py-3'>
+																<div className='flex items-center gap-4'>
+																	<div className='w-10 h-10 border-[3px] border-[#0D0D0D] bg-[#8B5CF6] flex items-center justify-center text-white font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>
+																		{siswa.nama_lengkap.charAt(0)}
 																	</div>
-																</td>
-															);
-														})}
+																	<div>
+																		<div className='text-sm font-black text-[#0D0D0D] uppercase'>{siswa.nama_lengkap}</div>
+																		<div className='text-xs font-bold text-gray-600 bg-[#F5C518] border-[2px] border-[#0D0D0D] px-1 mt-1 inline-block'>NIS: {siswa.nis || '-'}</div>
+																	</div>
+																</div>
+															</td>
 
-														{/* Ringkasan */}
-														<td className='border-b-[2px] border-l-[4px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#A3E635]/20'>
-															<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.H || 0)}</span>
-														</td>
-														<td className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#2F80ED]/20'>
-															<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.I || 0)}</span>
-														</td>
-														<td className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#F5C518]/20'>
-															<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.S || 0)}</span>
-														</td>
-														<td className='border-b-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#E8451A]/20'>
-															<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.A || 0)}</span>
-														</td>
-													</tr>
-												);
-											})}
-										</tbody>
-									</table>
-								</div>
-							)}
-						</div>
-					) : (
+															{/* Data Per Tanggal */}
+															{getDatesInMonth(rekapData.tanggalList).map((tanggal) => {
+																const absensi = siswa.absensi && siswa.absensi[tanggal] ? siswa.absensi[tanggal] : null;
+																const status = absensi?.status || '-';
+																const normalized = normStatus(status);
+																const kode = normalized === 'hadir' ? 'H' : normalized === 'izin' ? 'I' : normalized === 'sakit' ? 'S' : normalized === 'alfa' ? 'A' : '-';
+
+																let cellStyle = 'font-bold text-gray-400';
+																let boxStyle = '';
+																if (kode === 'H') { cellStyle = 'text-[#0D0D0D]'; boxStyle = 'bg-[#A3E635] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-[#0D0D0D]'; }
+																else if (kode === 'I') { cellStyle = 'text-white'; boxStyle = 'bg-[#2F80ED] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-white'; }
+																else if (kode === 'S') { cellStyle = 'text-[#0D0D0D]'; boxStyle = 'bg-[#F5C518] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-[#0D0D0D]'; }
+																else if (kode === 'A') { cellStyle = 'text-white'; boxStyle = 'bg-[#E8451A] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-white'; }
+
+																return (
+																	<td key={tanggal} className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-2 py-3 text-center'>
+																		<div className='flex justify-center'>
+																			{kode !== '-' ? (
+																				<span className={`w-7 h-7 flex items-center justify-center text-xs font-black ${boxStyle}`} title={absensi?.keterangan ? `${status} - ${absensi.keterangan}` : status}>
+																					{kode}
+																				</span>
+																			) : (
+																				<span className={cellStyle}>{kode}</span>
+																			)}
+																		</div>
+																	</td>
+																);
+															})}
+
+															{/* Ringkasan */}
+															<td className='border-b-[2px] border-l-[4px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#A3E635]/20'>
+																<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.H || 0)}</span>
+															</td>
+															<td className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#2F80ED]/20'>
+																<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.I || 0)}</span>
+															</td>
+															<td className='border-b-[2px] border-r-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#F5C518]/20'>
+																<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.S || 0)}</span>
+															</td>
+															<td className='border-b-[2px] border-[#0D0D0D] px-3 py-3 text-center bg-[#E8451A]/20'>
+																<span className='font-black text-sm text-[#0D0D0D]'>{renderNilai(siswa.ringkasan?.A || 0)}</span>
+															</td>
+														</tr>
+													);
+												})}
+											</tbody>
+										</table>
+									</div>
+								)}
+							</div>
+						) : (
 							<div className='p-16 text-center flex flex-col items-center justify-center relative overflow-hidden bg-white'>
 								<div className='absolute -top-10 -right-10 w-40 h-40 bg-[#F5C518] rounded-full border-[4px] border-[#0D0D0D] opacity-20'></div>
 								<div className='absolute -bottom-10 -left-10 w-40 h-40 bg-[#00A693] border-[4px] border-[#0D0D0D] rotate-45 opacity-20'></div>
@@ -636,5 +793,4 @@ export default function LaporanAbsensiMapelPage() {
 			</div>
 		</div>
 	);
-
 }
