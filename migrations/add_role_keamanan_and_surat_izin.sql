@@ -77,3 +77,8 @@ DROP POLICY IF EXISTS "Keamanan & Admin can manage surat izin" ON public.keamana
 CREATE POLICY "Keamanan & Admin can manage surat izin"
 ON public.keamanan_surat_izin FOR ALL TO authenticated
 USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) IN ('Admin', 'Keamanan') );
+
+-- 5. GRANTS AKSES DATA API (SUPABASE POST-OCTOBER 30 COMPLIANCE)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.keamanan_surat_izin TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.keamanan_surat_izin TO service_role;
+

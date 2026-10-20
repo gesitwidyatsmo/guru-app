@@ -73,6 +73,14 @@ CREATE POLICY "Kesiswaan & Admin can modify pemanggilan ortu"
 ON public.kesiswaan_pemanggilan_ortu FOR ALL TO authenticated
 USING ( (SELECT role FROM public.users WHERE auth_id = auth.uid()) IN ('Admin', 'Kesiswaan') );
 
+-- Grants Akses Data API (Supabase Post-October 30 Compliance)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kesiswaan_penanganan_santri TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kesiswaan_penanganan_santri TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kesiswaan_pemanggilan_ortu TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.kesiswaan_pemanggilan_ortu TO service_role;
+
+
 -- ===========================================================================
 -- 4. CONTOH SEED DATA AWAL (BERBASIS KASUS EDARAN BOLOS SANTRI)
 -- ===========================================================================

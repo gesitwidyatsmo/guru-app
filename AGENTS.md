@@ -36,3 +36,21 @@ Ketika melakukan filter data alfa pada tabel database (seperti `absensi_mapel_si
 // Query filter yang benar:
 .or('status.ilike.alfa%,status.ilike.alpa%,status.ilike.alpha%,status.eq.A,status.eq.a')
 ```
+
+---
+
+## 2. Aturan SQL Migration Supabase: Wajib GRANT Permissions (Mulai 30 Oktober)
+
+### Aturan Utama:
+Supabase menghentikan pemberian hak akses Data API otomatis (`default privileges`) untuk tabel baru di schema `public`. Oleh karena itu, **setiap pembuatan tabel baru melalui file migrasi SQL WAJIB menyertakan perintah `GRANT` eksplisit** setelah deklarasi tabel dan RLS.
+
+### Standar Sintaks Migration:
+Setiap file migrasi yang membuat tabel baru (`CREATE TABLE ...`) wajib menyertakan blok berikut:
+
+```sql
+-- Berikan izin akses Data API (PostgREST / Supabase JS)
+GRANT SELECT ON public.nama_tabel TO anon; -- (Hanya jika tabel boleh dibaca guest/tanpa login)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.nama_tabel TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.nama_tabel TO service_role;
+```
+*(Catatan: RLS tetap wajib diaktifkan (`ENABLE ROW LEVEL SECURITY`) untuk mengontrol baris data mana yang boleh dibaca/ditulis oleh masing-masing role).*

@@ -257,20 +257,10 @@ export default function KepsekLayoutClient({ children, initialName = 'Kepala Sek
 			</div>
 
 			{/* Bottom Action Footer */}
-			<div className='p-4 border-t-2 border-black bg-indigo-50/50 space-y-2'>
-				<Link
-					href='/'
-					onClick={() => isMobile && setIsMobileOpen(false)}
-					className='w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-white hover:bg-indigo-200 text-black border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] transition-all'>
-					<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
-						<path strokeLinecap='round' strokeLinejoin='round' d='M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' />
-					</svg>
-					<span>Beralih ke Beranda Guru</span>
-				</Link>
-
+			<div className='p-4 border-t-2 border-black bg-indigo-50/50'>
 				<button
 					onClick={handleLogout}
-					className='w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-rose-500 hover:bg-rose-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] transition-all'>
+					className='w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-rose-500 hover:bg-rose-600 text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] transition-all cursor-pointer'>
 					<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
 						<path strokeLinecap='round' strokeLinejoin='round' d='M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1' />
 					</svg>
@@ -340,12 +330,6 @@ export default function KepsekLayoutClient({ children, initialName = 'Kepala Sek
 
 						{/* Top Right Quick Badges */}
 						<div className='flex items-center gap-2'>
-							<Link
-								href='/'
-								className='hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100 hover:bg-yellow-300 text-black border-2 border-black rounded-xl text-xs font-bold shadow-[2px_2px_0px_0px_#0D0D0D] transition-all'>
-								<span>🏫 Beranda Guru</span>
-							</Link>
-
 							<span className='px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-emerald-300 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1.5'>
 								<span className='w-2 h-2 rounded-full bg-emerald-700 animate-pulse'></span>
 								<span>Sistem Online</span>
