@@ -21,6 +21,53 @@ export async function GET(req) {
 		const tahun = searchParams.get('tahun');
 
 		if (!kelas || !mapel) {
+			const crossCheck = searchParams.get('cross_check') === 'true';
+			const startDate = searchParams.get('startDate') || searchParams.get('start_date');
+			const endDate = searchParams.get('endDate') || searchParams.get('end_date');
+			const guruId = searchParams.get('guru_id');
+
+			// Izinkan query jika mode cross-check atau date range oleh Bendahara/Kepsek/Admin
+			const isCrossAudit =
+				crossCheck ||
+				Boolean(startDate || endDate) ||
+				['Bendahara', 'Kepala Sekolah', 'Admin', 'Kurikulum', 'Kesiswaan'].includes(role);
+
+			if (isCrossAudit) {
+				const supabase = await createClient();
+				let query = supabase
+					.from('absensi_mapel')
+					.select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel, absensi_mapel_siswa(id, status, keterangan)')
+					.order('tanggal', { ascending: false });
+
+				if (kelas) query = query.eq('kelas', kelas);
+				if (mapel) query = query.eq('mapel', mapel);
+				if (tanggal) query = query.eq('tanggal', tanggal);
+				if (startDate) query = query.gte('tanggal', startDate);
+				if (endDate) query = query.lte('tanggal', endDate);
+				if (guruId) query = query.eq('guru_id', guruId);
+				if (role === 'Guru' && userId) query = query.eq('guru_id', userId);
+
+				const { data: sessions, error } = await query;
+				if (error) throw error;
+
+				const pertemuan = (sessions || []).map((r) => {
+					const details = r.absensi_mapel_siswa || [];
+					return {
+						id: r.sesi_id,
+						sesi_id: r.sesi_id,
+						guru_id: r.guru_id || '',
+						tanggal: normDate(r.tanggal),
+						jam_ke: r.jam_ke,
+						kelas: r.kelas,
+						mapel: r.mapel,
+						data_absensi: details,
+						summary: calculateAttendanceSummary(details),
+					};
+				});
+
+				return NextResponse.json(pertemuan);
+			}
+
 			return NextResponse.json({ error: 'Parameter kelas & mapel wajib' }, { status: 400 });
 		}
 

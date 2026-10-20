@@ -9,12 +9,18 @@ import {
 	normalizeBisarohSettings,
 	getGuruTingkatanInfo,
 } from '@/lib/bisaroh';
+import {
+	buildCrossValidationMap,
+	validateJurnalWithAbsensi,
+	calculateGuruCompliance,
+} from '@/lib/crossValidation';
 
 export default function BendaharaJTMPage() {
 	const [loading, setLoading] = useState(true);
 	const [users, setUsers] = useState([]);
 	const [journals, setJournals] = useState([]);
 	const [kelas, setKelas] = useState([]);
+	const [absensiSessions, setAbsensiSessions] = useState([]);
 	const [settings, setSettings] = useState(DEFAULT_BISAROH_SETTINGS);
 	
 	// Date range state
@@ -30,11 +36,12 @@ export default function BendaharaJTMPage() {
 		const loadData = async () => {
 			setLoading(true);
 			try {
-				const [resUsers, resJurnal, resKelas, resSettings] = await Promise.all([
+				const [resUsers, resJurnal, resKelas, resSettings, resAbsensi] = await Promise.all([
 					fetch('/api/users').catch(() => ({ ok: false })),
 					fetch('/api/jurnal').catch(() => ({ ok: false })),
 					fetch('/api/kelas').catch(() => ({ ok: false })),
 					fetch('/api/settings?key=bisaroh_settings').catch(() => ({ ok: false })),
+					fetch('/api/absensi-mapel?cross_check=true').catch(() => ({ ok: false })),
 				]);
 
 				if (resUsers.ok) {
@@ -57,6 +64,11 @@ export default function BendaharaJTMPage() {
 					if (data?.value) {
 						setSettings(normalizeBisarohSettings(data.value));
 					}
+				}
+
+				if (resAbsensi.ok) {
+					const data = await resAbsensi.json();
+					setAbsensiSessions(Array.isArray(data) ? data : []);
 				}
 			} catch (err) {
 				console.error('Error load JTM data:', err);
@@ -81,6 +93,11 @@ export default function BendaharaJTMPage() {
 		});
 		return names;
 	}, [kelas]);
+
+	// Cross validation map
+	const crossMap = useMemo(() => {
+		return buildCrossValidationMap(absensiSessions);
+	}, [absensiSessions]);
 
 	// Filter jurnal sesuai tanggal yang dipilih
 	const filteredJournals = useMemo(() => {
@@ -129,6 +146,11 @@ export default function BendaharaJTMPage() {
 
 		let list = Object.values(map);
 
+		// Hitung skor kepatuhan presensi siswa per guru
+		list.forEach((item) => {
+			item.compliance = calculateGuruCompliance(item.sessions, crossMap);
+		});
+
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
 			list = list.filter((item) =>
@@ -138,11 +160,24 @@ export default function BendaharaJTMPage() {
 		}
 
 		return list.sort((a, b) => b.totalJP - a.totalJP);
-	}, [guruList, filteredJournals, waliKelasNames, searchQuery]);
+	}, [guruList, filteredJournals, waliKelasNames, settings, crossMap, searchQuery]);
 
 	// Total ringkasan
 	const totalJPAll = useMemo(() => guruJTMList.reduce((acc, c) => acc + c.totalJP, 0), [guruJTMList]);
 	const totalSesiAll = useMemo(() => guruJTMList.reduce((acc, c) => acc + c.totalSesi, 0), [guruJTMList]);
+	
+	const totalComplianceStats = useMemo(() => {
+		let total = 0;
+		let lengkap = 0;
+		guruJTMList.forEach((item) => {
+			if (item.compliance) {
+				total += item.compliance.totalSesi;
+				lengkap += item.compliance.sesiLengkap;
+			}
+		});
+		const pct = total > 0 ? Math.round((lengkap / total) * 100) : 100;
+		return { total, lengkap, belumLengkap: total - lengkap, pct };
+	}, [guruJTMList]);
 
 	// Preset tanggal
 	const handlePreset = (type) => {
@@ -173,7 +208,19 @@ export default function BendaharaJTMPage() {
 	const handleExportCSV = () => {
 		if (guruJTMList.length === 0) return;
 
-		const headers = ['No', 'Nama Guru', 'Username', 'Status Wali Kelas', 'Hari Hadir Mengajar', 'Total Sesi KBM', 'Total Jam Pelajaran (JP)', 'Jumlah Kendala'];
+		const headers = [
+			'No',
+			'Nama Guru',
+			'Username',
+			'Status Wali Kelas',
+			'Hari Hadir Mengajar',
+			'Total Sesi KBM',
+			'Total Jam Pelajaran (JP)',
+			'Kepatuhan Presensi Siswa (%)',
+			'Sesi Lengkap Diabsen',
+			'Sesi Belum Diabsen',
+			'Jumlah Kendala',
+		];
 		const rows = guruJTMList.map((item, idx) => [
 			idx + 1,
 			`"${(item.guru.nama_lengkap || '').replace(/"/g, '""')}"`,
@@ -182,6 +229,9 @@ export default function BendaharaJTMPage() {
 			item.dates.size,
 			item.totalSesi,
 			item.totalJP,
+			`${item.compliance?.persentase || 0}%`,
+			item.compliance?.sesiLengkap || 0,
+			item.compliance?.sesiBelumLengkap || 0,
 			item.kendalaCount,
 		]);
 
@@ -208,7 +258,7 @@ export default function BendaharaJTMPage() {
 						<span>Rekap Jam Tatap Muka (JTM) Guru</span>
 					</h1>
 					<p className='text-xs sm:text-sm font-bold text-gray-600 mt-1'>
-						Akumulasi jam mengajar riil hasil parsing jurnal KBM sebagai bukti fisik kehadiran (*proof of teaching*).
+						Akumulasi jam mengajar riil hasil parsing jurnal KBM dan tingkat kepatuhan presensi siswa untuk bisaroh.
 					</p>
 				</div>
 
@@ -266,7 +316,7 @@ export default function BendaharaJTMPage() {
 					</div>
 				</div>
 
-				{/* Presets */}
+				{/* Quick Preset Buttons */}
 				<div className='flex flex-wrap items-center gap-2 pt-2 border-t-2 border-black/10'>
 					<span className='text-[10px] font-black uppercase text-gray-500 mr-1'>Pintasan Periode:</span>
 					<button
@@ -292,19 +342,32 @@ export default function BendaharaJTMPage() {
 				</div>
 			</div>
 
-			{/* Mini Summary Strip */}
-			<div className='bg-teal-100 border-2 border-black rounded-xl p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-wrap items-center justify-between gap-3 text-xs font-black'>
-				<div className='flex items-center gap-2'>
-					<span className='px-2 py-0.5 bg-black text-white rounded text-[10px] uppercase'>Data Terpilih</span>
-					<span>{guruJTMList.length} Guru</span>
-					<span className='text-gray-400'>&bull;</span>
-					<span>{totalSesiAll} Sesi Mengajar</span>
+			{/* Mini Summary Strip with Compliance Indicator */}
+			<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+				<div className='bg-teal-100 border-2 border-black rounded-xl p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-[10px] font-black uppercase text-teal-900'>Total Dewan Guru Aktif</p>
+						<p className='text-lg font-black text-black mt-0.5'>{guruJTMList.length} Guru</p>
+					</div>
+					<span className='text-2xl'>👥</span>
 				</div>
-				<div className='flex items-center gap-2'>
-					<span>Total Jam Pelajaran:</span>
-					<span className='px-2.5 py-0.5 bg-yellow-300 border-2 border-black rounded-lg shadow-[1px_1px_0px_0px_#0D0D0D]'>
-						{totalJPAll} JP
-					</span>
+
+				<div className='bg-yellow-200 border-2 border-black rounded-xl p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-[10px] font-black uppercase text-yellow-950'>Total Jam Pelajaran</p>
+						<p className='text-lg font-black text-black mt-0.5'>{totalJPAll} JP <span className='text-xs font-bold text-gray-700'>({totalSesiAll} Sesi)</span></p>
+					</div>
+					<span className='text-2xl'>⏱️</span>
+				</div>
+
+				<div className={`border-2 rounded-xl p-3 shadow-[3px_3px_0px_0px_#0D0D0D] flex items-center justify-between ${
+					totalComplianceStats.pct >= 90 ? 'bg-emerald-100 border-emerald-800' : 'bg-amber-100 border-amber-800'
+				}`}>
+					<div>
+						<p className='text-[10px] font-black uppercase text-gray-700'>Integritas Presensi Siswa</p>
+						<p className='text-lg font-black text-black mt-0.5'>{totalComplianceStats.pct}% <span className='text-xs font-bold text-gray-700'>({totalComplianceStats.lengkap}/{totalComplianceStats.total} Sesi)</span></p>
+					</div>
+					<span className='text-2xl'>{totalComplianceStats.pct >= 90 ? '🟢' : '🟡'}</span>
 				</div>
 			</div>
 
@@ -319,6 +382,7 @@ export default function BendaharaJTMPage() {
 								<th className='px-4 py-3.5 text-center'>Hadir Mengajar</th>
 								<th className='px-4 py-3.5 text-center'>Total Sesi</th>
 								<th className='px-4 py-3.5 text-center'>Total JP Riil</th>
+								<th className='px-4 py-3.5 text-center'>Presensi Siswa</th>
 								<th className='px-4 py-3.5 text-center'>Status Kendala</th>
 								<th className='px-4 py-3.5 text-right'>Aksi</th>
 							</tr>
@@ -326,13 +390,13 @@ export default function BendaharaJTMPage() {
 						<tbody className='divide-y-2 divide-black/10 text-xs font-bold'>
 							{loading ? (
 								<tr>
-									<td colSpan={7} className='px-6 py-12 text-center text-gray-500 font-bold'>
+									<td colSpan={8} className='px-6 py-12 text-center text-gray-500 font-bold'>
 										Memuat rekap jam mengajar dewan guru...
 									</td>
 								</tr>
 							) : guruJTMList.length === 0 ? (
 								<tr>
-									<td colSpan={7} className='px-6 py-12 text-center text-gray-500 font-bold'>
+									<td colSpan={8} className='px-6 py-12 text-center text-gray-500 font-bold'>
 										Tidak ada data guru atau jurnal yang cocok dengan filter tanggal ini.
 									</td>
 								</tr>
@@ -378,6 +442,27 @@ export default function BendaharaJTMPage() {
 												{item.totalJP} JP
 											</span>
 										</td>
+										{/* Tingkat Kepatuhan Presensi Siswa */}
+										<td className='px-4 py-4 text-center'>
+											{item.compliance ? (
+												<div className='inline-flex flex-col items-center'>
+													<span className={`px-2.5 py-0.5 rounded-lg border text-[10px] font-black ${
+														item.compliance.persentase >= 90
+															? 'bg-emerald-100 border-emerald-500 text-emerald-950'
+															: item.compliance.persentase >= 75
+															? 'bg-amber-100 border-amber-500 text-amber-950'
+															: 'bg-rose-100 border-rose-500 text-rose-950'
+													}`}>
+														{item.compliance.persentase}% Lengkap
+													</span>
+													<span className='text-[9px] text-gray-500 font-bold mt-0.5'>
+														{item.compliance.sesiLengkap}/{item.compliance.totalSesi} Sesi
+													</span>
+												</div>
+											) : (
+												<span className='text-[10px] text-gray-400'>-</span>
+											)}
+										</td>
 										<td className='px-4 py-4 text-center'>
 											{item.kendalaCount > 0 ? (
 												<span className='px-2 py-0.5 bg-rose-100 border border-rose-300 text-rose-800 text-[10px] font-black rounded-lg'>
@@ -411,9 +496,20 @@ export default function BendaharaJTMPage() {
 						{/* Modal Header */}
 						<div className='p-5 bg-teal-300 border-b-2 border-black flex items-center justify-between'>
 							<div>
-								<span className='text-[10px] font-black uppercase text-teal-950 bg-teal-200 px-2 py-0.5 rounded border border-teal-800 inline-block mb-1'>
-									Rincian Bukti Mengajar
-								</span>
+								<div className='flex items-center gap-2 mb-1'>
+									<span className='text-[10px] font-black uppercase text-teal-950 bg-teal-200 px-2 py-0.5 rounded border border-teal-800 inline-block'>
+										Rincian Bukti Mengajar
+									</span>
+									{selectedGuru.compliance && (
+										<span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+											selectedGuru.compliance.persentase >= 90
+												? 'bg-emerald-200 border-emerald-700 text-emerald-950'
+												: 'bg-amber-200 border-amber-700 text-amber-950'
+										}`}>
+											Presensi Siswa: {selectedGuru.compliance.persentase}% ({selectedGuru.compliance.sesiLengkap}/{selectedGuru.compliance.totalSesi} Sesi)
+										</span>
+									)}
+								</div>
 								<h3 className='text-lg font-black text-black uppercase tracking-tight'>
 									{selectedGuru.guru.nama_lengkap}
 								</h3>
@@ -443,33 +539,48 @@ export default function BendaharaJTMPage() {
 												<th className='px-3 py-2'>Kelas & Mapel</th>
 												<th className='px-3 py-2 text-center'>Jam Ke-</th>
 												<th className='px-3 py-2 text-center'>JP</th>
+												<th className='px-3 py-2 text-center'>Presensi Siswa</th>
 												<th className='px-3 py-2'>Materi Pokok</th>
 											</tr>
 										</thead>
 										<tbody className='divide-y divide-black/10'>
-											{selectedGuru.sessions.map((s, i) => (
-												<tr key={s.id || i} className='hover:bg-yellow-50/50'>
-													<td className='px-3 py-2 font-mono whitespace-nowrap'>{s.tanggal}</td>
-													<td className='px-3 py-2 whitespace-nowrap'>
-														<span className='font-black text-black'>{s.mapel}</span>
-														<span className='block text-[10px] text-gray-500'>Kelas {s.kelas}</span>
-													</td>
-													<td className='px-3 py-2 text-center font-mono'>{s.jam_ke}</td>
-													<td className='px-3 py-2 text-center font-mono font-black text-teal-900'>
-														<span className='px-2 py-0.5 bg-yellow-200 border border-black/30 rounded'>
-															{s.jp} JP
-														</span>
-													</td>
-													<td className='px-3 py-2'>
-														<p className='line-clamp-2'>{s.materi || '-'}</p>
-														{s.hambatan && s.hambatan.trim() && s.hambatan.trim() !== '-' && (
-															<span className='text-[10px] text-rose-700 block mt-0.5'>
-																⚠️ {s.hambatan}
+											{selectedGuru.sessions.map((s, i) => {
+												const val = validateJurnalWithAbsensi(s, crossMap);
+												return (
+													<tr key={s.id || i} className='hover:bg-teal-50/50 transition-colors'>
+														<td className='px-3 py-2.5 font-mono text-gray-700 whitespace-nowrap'>{s.tanggal}</td>
+														<td className='px-3 py-2.5'>
+															<span className='font-black text-black'>{s.mapel}</span>
+															<span className='text-[10px] text-gray-500 block font-normal'>Kelas {s.kelas}</span>
+														</td>
+														<td className='px-3 py-2.5 text-center font-mono'>{s.jam_ke}</td>
+														<td className='px-3 py-2.5 text-center font-mono'>
+															<span className='px-2 py-0.5 bg-yellow-200 border border-black/30 rounded font-black'>
+																{s.jp} JP
 															</span>
-														)}
-													</td>
-												</tr>
-											))}
+														</td>
+														<td className='px-3 py-2.5 text-center whitespace-nowrap'>
+															{val.isValid ? (
+																<span className='px-2 py-0.5 bg-emerald-100 border border-emerald-500 text-emerald-950 text-[10px] font-black rounded-lg'>
+																	✓ {val.studentCount} Siswa
+																</span>
+															) : (
+																<span className='px-2 py-0.5 bg-amber-100 border border-amber-500 text-amber-950 text-[10px] font-black rounded-lg'>
+																	⚠️ Belum Absen
+																</span>
+															)}
+														</td>
+														<td className='px-3 py-2.5'>
+															<p className='line-clamp-1 text-black font-normal'>{s.materi || '-'}</p>
+															{s.hambatan && s.hambatan.trim() && s.hambatan.trim() !== '-' && (
+																<span className='text-[10px] text-rose-700 font-bold block mt-0.5'>
+																	Kendala: {s.hambatan}
+																</span>
+															)}
+														</td>
+													</tr>
+												);
+											})}
 										</tbody>
 									</table>
 								</div>
@@ -477,10 +588,13 @@ export default function BendaharaJTMPage() {
 						</div>
 
 						{/* Modal Footer */}
-						<div className='p-4 bg-gray-50 border-t-2 border-black flex justify-end'>
+						<div className='p-4 bg-gray-50 border-t-2 border-black flex justify-between items-center text-xs font-black'>
+							<span className='text-gray-500'>
+								Terpilih {selectedGuru.sessions.length} sesi mengajar
+							</span>
 							<button
 								onClick={() => setSelectedGuru(null)}
-								className='px-5 py-2 bg-black text-white border-2 border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-gray-800 transition-colors'>
+								className='px-5 py-2 bg-black text-white border-2 border-black rounded-xl text-xs font-black uppercase hover:bg-gray-800 transition-colors shadow-[2px_2px_0px_0px_#0D0D0D]'>
 								Tutup
 							</button>
 						</div>
