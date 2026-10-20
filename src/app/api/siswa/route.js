@@ -161,15 +161,75 @@ export async function PUT(req) {
 
 // --- METHOD DELETE (Hapus Data) ---
 export async function DELETE(req) {
-	const role = req.headers.get('x-user-role');
-	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kurikulum') {
-		return NextResponse.json({ error: 'Akses Ditolak (Khusus Admin, Guru, & Kurikulum)' }, { status: 403 });
+	let role = req.headers.get('x-user-role');
+	let userId = req.headers.get('x-user-id');
+
+	if (!role || (role === 'Guru' && !userId)) {
+		const supabase = await createClient();
+		const { data: { user } } = await supabase.auth.getUser();
+		if (user) {
+			const { data: userProfile } = await supabaseAdmin
+				.from('users')
+				.select('id_user, role')
+				.eq('auth_id', user.id)
+				.single();
+			if (userProfile) {
+				role = role || userProfile.role;
+				userId = userId || userProfile.id_user;
+			}
+		}
 	}
+
+	if (role !== 'Admin' && role !== 'Guru' && role !== 'Kurikulum') {
+		return NextResponse.json({
+			error: 'Akses Ditolak: Hak akses hapus siswa hanya bisa digunakan oleh Admin, Kurikulum, atau Wali Kelas yang bersangkutan.'
+		}, { status: 403 });
+	}
+
 	try {
 		const { searchParams } = new URL(req.url);
 		const id = searchParams.get('id');
 
 		if (!id) return NextResponse.json({ error: 'ID diperlukan' }, { status: 400 });
+
+		// Ambil data siswa yang akan dihapus
+		const { data: targetSiswa, error: siswaErr } = await supabaseAdmin
+			.from('siswa')
+			.select('id, nama_lengkap, kelas')
+			.eq('id', id)
+			.single();
+
+		if (siswaErr || !targetSiswa) {
+			return NextResponse.json({ error: 'Data siswa tidak ditemukan' }, { status: 404 });
+		}
+
+		// Validasi khusus role Guru: selain Admin & Kurikulum, hanya Wali Kelas yang bersangkutan yang boleh menghapus
+		if (role === 'Guru') {
+			if (!userId) {
+				return NextResponse.json({
+					error: 'Akses Ditolak: Identitas guru tidak valid atau sesi telah berakhir.'
+				}, { status: 403 });
+			}
+
+			if (!targetSiswa.kelas) {
+				return NextResponse.json({
+					error: 'Akses Ditolak: Siswa ini belum memiliki kelas terdaftar.'
+				}, { status: 403 });
+			}
+
+			// Cek apakah guru adalah wali kelas dari kelas siswa ini
+			const { data: kelasData, error: kelasErr } = await supabaseAdmin
+				.from('kelas')
+				.select('id_wali_kelas, nama_kelas')
+				.ilike('nama_kelas', targetSiswa.kelas.trim())
+				.maybeSingle();
+
+			if (kelasErr || !kelasData || kelasData.id_wali_kelas !== userId) {
+				return NextResponse.json({
+					error: 'Akses Ditolak: Anda bukan wali kelas dari siswa ini. Hak akses hapus siswa selain Admin dan Kurikulum hanya bisa digunakan oleh Wali Kelas yang bersangkutan.'
+				}, { status: 403 });
+			}
+		}
 
 		// Cek apakah siswa memiliki riwayat akademik masa lalu (nilai, absensi, poin)
 		const [resNilai, resAbsenH, resAbsenM, resPoin] = await Promise.all([

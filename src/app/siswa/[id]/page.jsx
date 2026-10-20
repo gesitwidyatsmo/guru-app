@@ -192,20 +192,28 @@ export default function SiswaPage() {
 	const [poinSiswa, setPoinSiswa] = useState({ positif: 0, negatif: 0 });
 	const [loading, setLoading] = useState(true);
 	const [currentUserRole, setCurrentUserRole] = useState(null);
+	const [currentUserId, setCurrentUserId] = useState(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [kelasList, setKelasList] = useState([]);
 
 	const fetchSiswa = useCallback(async () => {
 		try {
-			const [resSiswa, resPoin, resAuth] = await Promise.all([
+			const [resSiswa, resPoin, resAuth, resKelas] = await Promise.all([
 				fetch(`/api/siswa`),
 				fetch(`/api/poin?siswa_id=${id}`),
 				fetch(`/api/auth/me`),
+				fetch(`/api/kelas?all=true`),
 			]);
 
 			if (resAuth.ok) {
 				const authData = await resAuth.json();
 				if (authData?.user?.role) setCurrentUserRole(authData.user.role);
+				if (authData?.user?.id) setCurrentUserId(authData.user.id);
+			}
+
+			if (resKelas.ok) {
+				const dataKelas = await resKelas.json();
+				if (Array.isArray(dataKelas)) setKelasList(dataKelas);
 			}
 
 			const data = await resSiswa.json();
@@ -235,10 +243,27 @@ export default function SiswaPage() {
 		if (id) fetchSiswa();
 	}, [id, fetchSiswa]);
 
+	const waliKelasInfo = useMemo(() => {
+		if (!siswaData?.kelas || !kelasList.length) return null;
+		const sKelas = siswaData.kelas.trim().toLowerCase();
+		return kelasList.find((k) => (k.kelas || k.nama_kelas || '').trim().toLowerCase() === sKelas) || null;
+	}, [siswaData?.kelas, kelasList]);
+
+	const isWaliKelas = useMemo(() => {
+		if (!waliKelasInfo || !currentUserId) return false;
+		return waliKelasInfo.id_wali_kelas === currentUserId;
+	}, [waliKelasInfo, currentUserId]);
+
+	const canDeleteSiswa = useMemo(() => {
+		if (currentUserRole === 'Admin' || currentUserRole === 'Kurikulum') return true;
+		if (currentUserRole === 'Guru' && isWaliKelas) return true;
+		return false;
+	}, [currentUserRole, isWaliKelas]);
+
 	const handleOpenEdit = async () => {
 		if (kelasList.length === 0) {
 			try {
-				const res = await fetch('/api/kelas');
+				const res = await fetch('/api/kelas?all=true');
 				if (res.ok) setKelasList(await res.json());
 				else
 					setKelasList([
@@ -370,6 +395,22 @@ export default function SiswaPage() {
 	};
 
 	const handleDeleteSiswa = async () => {
+		if (!canDeleteSiswa) {
+			Swal.fire({
+				title: 'AKSES DITOLAK',
+				text: 'Hak akses hapus siswa hanya bisa digunakan oleh Admin, Kurikulum, atau Wali Kelas yang bersangkutan.',
+				icon: 'error',
+				background: '#FFF5F0',
+				color: '#0D0D0D',
+				customClass: {
+					popup: 'border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none',
+					title: 'font-black uppercase tracking-widest',
+					confirmButton: 'bg-[#E8451A] text-white font-black border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] rounded-none px-6 py-2 uppercase hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all',
+				},
+			});
+			return;
+		}
+
 		const result = await Swal.fire({
 			title: 'HAPUS SISWA?',
 			html: `
@@ -509,8 +550,15 @@ export default function SiswaPage() {
 							<div className='text-center w-full'>
 								<h2 className='text-3xl sm:text-4xl font-black text-[#0D0D0D] uppercase tracking-widest break-words'>{siswaData.nama_lengkap}</h2>
 								
-								<div className='mt-3 mb-6 inline-block bg-[#0D0D0D] text-white px-4 py-1 text-lg font-black uppercase tracking-widest border-[2px] border-[#0D0D0D]'>
-									KELAS {siswaData.kelas}
+								<div className='mt-3 mb-6 flex flex-wrap items-center justify-center gap-2'>
+									<div className='inline-block bg-[#0D0D0D] text-white px-4 py-1 text-lg font-black uppercase tracking-widest border-[2px] border-[#0D0D0D]'>
+										KELAS {siswaData.kelas}
+									</div>
+									{waliKelasInfo?.wali_kelas && (
+										<div className='inline-block bg-[#FFF5F0] text-[#0D0D0D] px-3 py-1 text-sm font-black uppercase tracking-widest border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+											Wali Kelas: {waliKelasInfo.wali_kelas}
+										</div>
+									)}
 								</div>
 
 								<div className='flex flex-wrap justify-center gap-4 mt-2'>
@@ -588,17 +636,19 @@ export default function SiswaPage() {
 								</div>
 							</button>
 
-							<button
-								onClick={handleDeleteSiswa}
-								className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
-								<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
-									<IconTrash className='h-8 w-8' />
-								</div>
-								<div>
-									<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
-									<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
-								</div>
-							</button>
+							{canDeleteSiswa && (
+								<button
+									onClick={handleDeleteSiswa}
+									className='group flex items-center gap-5 bg-[#E8451A] p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none text-left sm:col-span-2 lg:col-span-1'>
+									<div className='flex h-16 w-16 items-center justify-center bg-white border-[3px] border-[#0D0D0D] text-[#0D0D0D] group-hover:scale-110 group-hover:rotate-3 transition-transform'>
+										<IconTrash className='h-8 w-8' />
+									</div>
+									<div>
+										<h3 className='font-black text-xl text-white uppercase tracking-widest mb-1'>HAPUS SISWA</h3>
+										<p className='text-sm font-bold text-white/80 uppercase'>Hanya untuk salah input</p>
+									</div>
+								</button>
+							)}
 						</>
 					) : (
 						<div className='flex items-center gap-4 bg-indigo-50 p-6 border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] sm:col-span-2 lg:col-span-1'>
