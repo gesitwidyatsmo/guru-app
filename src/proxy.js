@@ -111,6 +111,8 @@ export async function proxy(request) {
 			? '/kesiswaan'
 			: payload.role === 'Kurikulum'
 			? '/kurikulum'
+			: payload.role === 'Keamanan'
+			? '/keamanan'
 			: payload.role === 'Admin'
 			? '/admin'
 			: '/';
@@ -134,6 +136,10 @@ export async function proxy(request) {
 		finalResponse = NextResponse.redirect(new URL('/kurikulum', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
+	else if (pathname === '/' && payload?.role === 'Keamanan') {
+		finalResponse = NextResponse.redirect(new URL('/keamanan', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
 	else if (pathname === '/' && payload?.role === 'Admin') {
 		finalResponse = NextResponse.redirect(new URL('/admin', request.url));
 		attachUserCookies(finalResponse, payload);
@@ -154,6 +160,18 @@ export async function proxy(request) {
 	else if (pathname === '/admin' && payload?.role === 'Kurikulum') {
 		finalResponse = NextResponse.redirect(new URL('/kurikulum', request.url));
 		attachUserCookies(finalResponse, payload);
+	}
+	else if (pathname === '/admin' && payload?.role === 'Keamanan') {
+		finalResponse = NextResponse.redirect(new URL('/keamanan', request.url));
+		attachUserCookies(finalResponse, payload);
+	}
+	// Area keamanan: bisa diakses oleh Keamanan, Admin, dan Kepala Sekolah (monitoring)
+	else if (pathname.startsWith('/keamanan') && payload?.role !== 'Keamanan' && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {
+		if (!payload) {
+			finalResponse = NextResponse.redirect(new URL('/login', request.url));
+		} else {
+			finalResponse = NextResponse.redirect(new URL('/', request.url));
+		}
 	}
 	// Area kurikulum: bisa diakses oleh Kurikulum, Admin, dan Kepala Sekolah (monitoring)
 	else if (pathname.startsWith('/kurikulum') && payload?.role !== 'Kurikulum' && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {

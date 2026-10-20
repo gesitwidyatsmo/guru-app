@@ -103,6 +103,9 @@ export default function Home() {
 					} else if (role === 'Kurikulum') {
 						router.replace('/kurikulum');
 						return;
+					} else if (role === 'Keamanan') {
+						router.replace('/keamanan');
+						return;
 					} else if (role === 'Admin') {
 						router.replace('/admin');
 						return;

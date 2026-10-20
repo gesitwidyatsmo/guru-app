@@ -155,6 +155,7 @@ export default function PenggunaPage() {
 	const kurikulumCount = useMemo(() => users.filter((u) => u.role === 'Kurikulum').length, [users]);
 	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
 	const kesiswaanCount = useMemo(() => users.filter((u) => u.role === 'Kesiswaan').length, [users]);
+	const keamananCount = useMemo(() => users.filter((u) => u.role === 'Keamanan').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	const openCreateModal = () => {
@@ -815,6 +816,16 @@ export default function PenggunaPage() {
 					</span>
 				</div>
 
+				<div className='bg-orange-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
+					<div>
+						<p className='text-xs font-black uppercase text-orange-800'>Keamanan</p>
+						<p className='text-2xl font-black text-orange-950 mt-0.5'>{keamananCount}</p>
+					</div>
+					<span className='w-10 h-10 bg-orange-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+						👮‍♂️
+					</span>
+				</div>
+
 				<div className='bg-rose-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
 					<div>
 						<p className='text-xs font-black uppercase text-rose-800'>Administrator</p>
@@ -855,6 +866,7 @@ export default function PenggunaPage() {
 						{ id: 'Kurikulum', label: 'Kurikulum' },
 						{ id: 'Kepala Sekolah', label: 'Kepsek' },
 						{ id: 'Bendahara', label: 'Bendahara' },
+						{ id: 'Keamanan', label: 'Keamanan' },
 						{ id: 'Admin', label: 'Admin' },
 					].map((tab) => (
 						<button
@@ -900,6 +912,7 @@ export default function PenggunaPage() {
 									const isBendahara = u.role === 'Bendahara';
 									const isKesiswaan = u.role === 'Kesiswaan';
 									const isKurikulum = u.role === 'Kurikulum';
+									const isKeamanan = u.role === 'Keamanan';
 									const waliClasses = getWaliKelas(u);
 									const isWali = waliClasses.length > 0;
 									return (
@@ -909,7 +922,7 @@ export default function PenggunaPage() {
 											{/* Name & Avatar */}
 											<td className='px-6 py-4'>
 												<div className='flex items-center gap-3'>
-													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : isKurikulum ? 'bg-amber-300 text-black' : isBendahara ? 'bg-teal-300 text-black' : isKesiswaan ? 'bg-violet-300 text-black' : 'bg-emerald-300 text-black'}`}>
+													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : isKurikulum ? 'bg-amber-300 text-black' : isBendahara ? 'bg-teal-300 text-black' : isKesiswaan ? 'bg-violet-300 text-black' : isKeamanan ? 'bg-orange-300 text-black' : 'bg-emerald-300 text-black'}`}>
 														{initial}
 													</div>
 													<div>
@@ -938,6 +951,8 @@ export default function PenggunaPage() {
 																	? 'Pengelola Keuangan & Bisaroh Guru'
 																	: isKesiswaan
 																	? 'Ketertiban, Poin, & Prestasi Siswa'
+																	: isKeamanan
+																	? 'Petugas Pos Keamanan & Surat Izin Digital'
 																	: isWali
 																	? `Wali Kelas ${waliClasses.join(', ')} • Tenaga Pendidik`
 																	: 'Tenaga Pendidik / Pengajar'}
@@ -961,11 +976,13 @@ export default function PenggunaPage() {
 															? 'bg-teal-300 text-black'
 															: isKesiswaan
 															? 'bg-violet-300 text-black'
+															: isKeamanan
+															? 'bg-orange-300 text-black'
 															: isWali
 															? 'bg-emerald-300 text-black'
 															: 'bg-emerald-200 text-black'
 													}`}>
-													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isKurikulum ? '📐' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : isWali ? '🏫' : '👨‍🏫'}</span>
+													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isKurikulum ? '📐' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : isKeamanan ? '👮‍♂️' : isWali ? '🏫' : '👨‍🏫'}</span>
 													<span>{isWali ? `Guru & Wali Kelas ${waliClasses.join(', ')}` : u.role}</span>
 												</span>
 											</td>
@@ -1116,6 +1133,7 @@ export default function PenggunaPage() {
 											<option value='Kurikulum'>📐 Kurikulum (Akademik & Jadwal)</option>
 											<option value='Kepala Sekolah'>🎓 Kepala Sekolah (Monitoring)</option>
 											<option value='Bendahara'>💼 Bendahara (Keuangan & Bisaroh)</option>
+											<option value='Keamanan'>👮‍♂️ Keamanan (Pos Gerbang & Surat Izin)</option>
 											<option value='Admin'>👑 Admin (Super Master)</option>
 										</select>
 									</div>

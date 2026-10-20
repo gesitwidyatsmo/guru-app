@@ -9,7 +9,7 @@ import ButtonBack from '../components/button/ButtonBack';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap } from '@/lib/absensiUtils';
+import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran } from '@/lib/absensiUtils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
@@ -45,6 +45,10 @@ export default function AbsensiMapelPage() {
 	const [existingId, setExistingId] = useState(null);
 	const [sesiHariIni, setSesiHariIni] = useState([]);
 	const [loadingSesiHariIni, setLoadingSesiHariIni] = useState(false);
+
+	// Surat Izin Pos Keamanan
+	const [suratKeamananHariIni, setSuratKeamananHariIni] = useState([]);
+	const [loadingSuratKeamanan, setLoadingSuratKeamanan] = useState(false);
 
 	// MODE: 'input' (Form Input), 'edit' (Form Edit), 'rekap' (Tampilan Tabel Hasil)
 	const [mode, setMode] = useState('input');
@@ -194,6 +198,67 @@ export default function AbsensiMapelPage() {
 		fetchSesiHariIni();
 	}, [fetchSesiHariIni]);
 
+	// Fetch Riwayat Surat Izin dari Pos Keamanan untuk kelas & tanggal ini
+	const fetchSuratKeamanan = useCallback(async () => {
+		if (!selectedKelas || !tanggal) {
+			setSuratKeamananHariIni([]);
+			return;
+		}
+
+		try {
+			setLoadingSuratKeamanan(true);
+			const params = new URLSearchParams({
+				kelas: selectedKelas,
+				tanggal: tanggal,
+				status_surat: 'aktif',
+			});
+			const res = await fetch(`/api/keamanan/surat?${params.toString()}`);
+			if (res.ok) {
+				const json = await res.json();
+				setSuratKeamananHariIni(Array.isArray(json.data) ? json.data : []);
+			} else {
+				setSuratKeamananHariIni([]);
+			}
+		} catch (err) {
+			console.error('Error fetching surat keamanan:', err);
+			setSuratKeamananHariIni([]);
+		} finally {
+			setLoadingSuratKeamanan(false);
+		}
+	}, [selectedKelas, tanggal]);
+
+	useEffect(() => {
+		fetchSuratKeamanan();
+	}, [fetchSuratKeamanan]);
+
+	// Helper: Cek apakah surat keamanan berlaku untuk jam KBM tertentu
+	const isLetterMatchingJam = useCallback((letter, targetJam) => {
+		if (!letter) return false;
+		if (letter.berlaku_seharian) return true;
+		if (!targetJam) return true;
+
+		const sessionHours = parseJamPelajaran(targetJam);
+		if (sessionHours.length === 0) return true;
+
+		const startH = letter.jam_ke_mulai ? parseInt(letter.jam_ke_mulai, 10) : null;
+		const endH = letter.jam_ke_selesai ? parseInt(letter.jam_ke_selesai, 10) : startH;
+
+		if (startH === null) return true;
+		return sessionHours.some((h) => h >= startH && h <= (endH || startH));
+	}, []);
+
+	const getLetterTargetStatus = useCallback((letter) => {
+		if (!letter) return 'Hadir';
+		if (letter.status_absensi) return letter.status_absensi;
+		if (letter.tipe_surat === 'pulang_cepat') {
+			return String(letter.alasan || '').toLowerCase().includes('sakit') ? 'Sakit' : 'Izin';
+		}
+		if (letter.tipe_surat === 'tidak_masuk') {
+			return String(letter.alasan || '').toLowerCase().includes('sakit') ? 'Sakit' : 'Izin';
+		}
+		return 'Izin';
+	}, []);
+
 	// 3. Fungsi Muat Detail Absensi Jam Tertentu
 	const muatDetailSesi = useCallback(async (targetJam) => {
 		if (!selectedKelas || !selectedMapel || !tanggal || !targetJam || siswaKelasIni.length === 0) {
@@ -234,10 +299,22 @@ export default function AbsensiMapelPage() {
 						setMode('input');
 						setExistingId(null);
 					} else {
-						// Data baru
+						// Data baru: Terapkan otomatis surat izin satpam jika ada yang cocok dengan jam ini!
 						const newAbsensi = {};
 						siswaKelasIni.forEach((s) => {
-							newAbsensi[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+							const matchingLetter = suratKeamananHariIni.find(
+								(surat) => String(surat.siswa_id).trim() === String(s.id).trim() && isLetterMatchingJam(surat, targetJam)
+							);
+
+							if (matchingLetter) {
+								const targetStatus = getLetterTargetStatus(matchingLetter);
+								newAbsensi[s.id] = {
+									status: targetStatus,
+									keterangan: `[Surat Satpam: ${matchingLetter.nomor_surat}] ${matchingLetter.alasan}`,
+								};
+							} else {
+								newAbsensi[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+							}
 						});
 						setAbsensi(newAbsensi);
 						setMode('input');
@@ -248,7 +325,7 @@ export default function AbsensiMapelPage() {
 		} catch (err) {
 			console.error('Error checking absensi:', err);
 		}
-	}, [selectedKelas, selectedMapel, tanggal, siswaKelasIni, statusList, buildPeriodeQuery]);
+	}, [selectedKelas, selectedMapel, tanggal, siswaKelasIni, statusList, suratKeamananHariIni, isLetterMatchingJam, getLetterTargetStatus, buildPeriodeQuery]);
 
 	// Trigger cek detail absensi setiap jamKe diubah
 	useEffect(() => {
@@ -270,9 +347,51 @@ export default function AbsensiMapelPage() {
 		setMode('input');
 		const init = {};
 		siswaKelasIni.forEach((s) => {
-			init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+			const matchingLetter = suratKeamananHariIni.find(
+				(surat) => String(surat.siswa_id).trim() === String(s.id).trim() && isLetterMatchingJam(surat, '')
+			);
+			if (matchingLetter) {
+				const targetStatus = getLetterTargetStatus(matchingLetter);
+				init[s.id] = {
+					status: targetStatus,
+					keterangan: `[Surat Satpam: ${matchingLetter.nomor_surat}] ${matchingLetter.alasan}`,
+				};
+			} else {
+				init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
+			}
 		});
 		setAbsensi(init);
+	};
+
+	// Handler terapkan surat keamanan secara manual ke form
+	const handleTerapkanSuratKeamanan = () => {
+		if (suratKeamananHariIni.length === 0) return;
+		let appliedCount = 0;
+		setAbsensi((prev) => {
+			const updated = { ...prev };
+			siswaKelasIni.forEach((s) => {
+				const matchingLetter = suratKeamananHariIni.find(
+					(surat) => String(surat.siswa_id).trim() === String(s.id).trim() && isLetterMatchingJam(surat, jamKe)
+				);
+				if (matchingLetter) {
+					const targetStatus = getLetterTargetStatus(matchingLetter);
+					updated[s.id] = {
+						status: targetStatus,
+						keterangan: `[Surat Satpam: ${matchingLetter.nomor_surat}] ${matchingLetter.alasan}`,
+					};
+					appliedCount++;
+				}
+			});
+			return updated;
+		});
+
+		Swal.fire({
+			icon: 'success',
+			title: 'Surat Keamanan Diterapkan!',
+			text: `${appliedCount || suratKeamananHariIni.length} siswa disesuaikan dengan surat izin pos keamanan.`,
+			timer: 1500,
+			showConfirmButton: false,
+		});
 	};
 
 	const handleStatusChange = (siswaId, labelStatus) => {
@@ -726,6 +845,70 @@ export default function AbsensiMapelPage() {
 						</div>
 					</div>
 
+					{/* Banner Surat Izin Pos Keamanan (Muncul jika ada surat aktif di kelas & tanggal terpilih) */}
+					{suratKeamananHariIni.length > 0 && (
+						<div className='mt-3 p-3.5 bg-orange-50 border-2 border-[#0D0D0D] rounded-xl shadow-[3px_3px_0px_0px_#0D0D0D] space-y-2.5'>
+							<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-orange-200'>
+								<div className='flex items-center gap-2'>
+									<span className='text-xl'>👮‍♂️</span>
+									<div>
+										<h4 className='font-black text-xs uppercase text-[#0D0D0D] tracking-tight flex items-center gap-1.5'>
+											<span>Surat Izin Pos Keamanan</span>
+											<span className='bg-orange-300 text-black px-1.5 py-0.2 rounded border border-black text-[10px]'>
+												{suratKeamananHariIni.length} Siswa
+											</span>
+										</h4>
+										<p className='text-[11px] font-bold text-orange-950'>
+											Diterbitkan di pos gerbang untuk <b>{selectedKelas}</b> pada tanggal ini.
+										</p>
+									</div>
+								</div>
+								{mode !== 'rekap' && userRole !== 'Kepala Sekolah' && (
+									<button
+										type='button'
+										onClick={handleTerapkanSuratKeamanan}
+										className='px-2.5 py-1 bg-[#00A693] hover:bg-emerald-600 text-white rounded-lg border border-[#0D0D0D] text-[11px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all shrink-0 flex items-center gap-1 cursor-pointer'>
+										<span>⚡ Terapkan Otomatis ke Form</span>
+									</button>
+								)}
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2'>
+								{suratKeamananHariIni.map((surat) => {
+									const isMatchingThisJam = isLetterMatchingJam(surat, jamKe);
+									return (
+										<div
+											key={surat.id}
+											className={`bg-white p-2.5 rounded-lg border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-xs space-y-1 transition-all ${
+												isMatchingThisJam ? 'ring-2 ring-emerald-500 bg-emerald-50/20' : ''
+											}`}>
+											<div className='flex items-center justify-between gap-1'>
+												<span className='font-black text-[#0D0D0D] line-clamp-1'>{surat.nama_siswa}</span>
+												<span className='px-1.5 py-0.2 rounded text-[10px] font-black uppercase bg-orange-200 border border-black shrink-0'>
+													{surat.status_absensi || 'Izin'}
+												</span>
+											</div>
+											<p className='text-[11px] text-gray-700 font-bold'>
+												<span className='text-orange-900'>
+													{surat.tipe_surat === 'terlambat' ? '🕒 Terlambat' : surat.tipe_surat === 'izin_keluar' ? '🚪 Keluar' : surat.tipe_surat === 'pulang_cepat' ? '🏠 Pulang Cepat' : '📋 Titip Izin'}:
+												</span>{' '}
+												<span className='font-normal italic'>{surat.alasan}</span>
+											</p>
+											<div className='flex items-center justify-between text-[10px] text-gray-500 font-mono pt-1 border-t border-gray-100'>
+												<span>{surat.berlaku_seharian ? 'Seharian' : `Jam ${surat.jam_ke_mulai || '1'}-${surat.jam_ke_selesai || '1'}`}</span>
+												{isMatchingThisJam ? (
+													<span className='text-emerald-700 font-sans font-black'>✓ Cocok Jam Ini</span>
+												) : (
+													<span>{surat.nomor_surat}</span>
+												)}
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
+
 					{/* Indikator Jam Tersimpan & Konflik Tumpang Tindih */}
 					{jamKe && currentJamConflict?.overlapType === 'overlap' && (
 						<div className='mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 bg-rose-50 border-2 border-[#E8451A] rounded-xl text-xs font-bold text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] animate-shake'>
@@ -992,6 +1175,11 @@ export default function AbsensiMapelPage() {
 																)}
 															</p>
 															<p className='text-sm text-gray-600 font-mono font-bold mt-1'>{siswa.nis}</p>
+															{suratKeamananHariIni.some((s) => String(s.siswa_id).trim() === String(siswa.id).trim()) && (
+																<span className='inline-block text-[10px] font-black uppercase text-orange-950 bg-orange-100 px-1.5 py-0.5 rounded border border-orange-400 mt-1'>
+																	👮‍♂️ Ada Surat Satpam
+																</span>
+															)}
 														</td>
 														<td className='px-6 py-4 text-center border-r-2 border-[#0D0D0D]'>{getBadgeRekap(status)}</td>
 														<td className='px-6 py-4 text-sm font-semibold text-[#0D0D0D]'>{ket !== '-' ? ket : <span className='text-gray-400 italic'>Tidak ada keterangan</span>}</td>
@@ -1007,6 +1195,9 @@ export default function AbsensiMapelPage() {
 							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
 								{filteredSiswa.map((siswa, idx) => {
 									const currentStatus = absensi[siswa.id]?.status || 'Hadir';
+									const siswaLetter = suratKeamananHariIni.find(
+										(surat) => String(surat.siswa_id).trim() === String(siswa.id).trim()
+									);
 
 									return (
 										<div
@@ -1046,6 +1237,24 @@ export default function AbsensiMapelPage() {
 													{idx + 1}
 												</span>
 											</div>
+
+											{/* Indikator Surat Satpam Aktif di Kartu Siswa */}
+											{siswaLetter && (
+												<div className='flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-100 border-2 border-orange-500 text-orange-950 text-xs font-bold shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													<div className='flex items-center gap-1.5 overflow-hidden'>
+														<span className='text-sm shrink-0'>👮‍♂️</span>
+														<div className='overflow-hidden'>
+															<span className='font-black uppercase text-[10px] text-orange-900 block'>
+																Surat Satpam ({siswaLetter.tipe_surat === 'terlambat' ? 'Terlambat' : siswaLetter.tipe_surat === 'izin_keluar' ? 'Izin Keluar' : siswaLetter.tipe_surat === 'pulang_cepat' ? 'Pulang Cepat' : 'Titip Izin'}):
+															</span>
+															<span className='line-clamp-1 text-[11px]'>{siswaLetter.alasan}</span>
+														</div>
+													</div>
+													<span className='px-1.5 py-0.5 rounded bg-white text-black text-[10px] font-mono font-bold border border-orange-300 shrink-0'>
+														{siswaLetter.berlaku_seharian ? 'Seharian' : `Jam ${siswaLetter.jam_ke_mulai || '1'}-${siswaLetter.jam_ke_selesai || '1'}`}
+													</span>
+												</div>
+											)}
 
 											<div className='grid grid-cols-4 gap-2 my-2'>
 												{statusList.map((st) => {

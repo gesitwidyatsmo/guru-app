@@ -22,6 +22,7 @@ export const MANAGEMENT_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.BENDAH
 export const READ_ALL_ROLES = [ROLES.ADMIN, ROLES.KEPALA_SEKOLAH, ROLES.KESISWAAN, ROLES.KURIKULUM];
 export const DISCIPLINE_MANAGERS = [ROLES.ADMIN, ROLES.KESISWAAN];
 export const ACADEMIC_MANAGERS = [ROLES.ADMIN, ROLES.KURIKULUM, ROLES.KEPALA_SEKOLAH];
+export const SECURITY_ROLES = [ROLES.ADMIN, ROLES.KEAMANAN];
 
 // Warna badge konsisten Neobrutalism
 export const ROLE_BADGE_STYLES = {
@@ -54,6 +55,12 @@ export const ROLE_BADGE_STYLES = {
 		border: 'border-violet-400',
 		icon: '🛡️',
 		label: 'Kesiswaan',
+	},
+	[ROLES.KEAMANAN]: {
+		bg: 'bg-orange-300 text-black',
+		border: 'border-orange-400',
+		icon: '👮‍♂️',
+		label: 'Petugas Keamanan',
 	},
 	[ROLES.GURU]: {
 		bg: 'bg-emerald-300 text-black',
