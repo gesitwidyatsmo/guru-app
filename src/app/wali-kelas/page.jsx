@@ -23,11 +23,21 @@ import {
 	Zap,
 	RefreshCw,
 	AlertCircle,
+	HeartHandshake,
+	Plus,
+	Trash2,
+	Edit3,
+	Printer,
+	Copy,
+	Check,
 } from 'lucide-react';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import { normStatus } from '@/lib/absensiUtils';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
+import { fetchSchoolProfile, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
+import { getTodayDateString } from '@/lib/dateUtils';
+import LembarBimbinganDocument from '@/app/components/LembarBimbinganDocument';
 
 function WaliKelasHubContent() {
 	const router = useRouter();
@@ -225,6 +235,273 @@ function WaliKelasHubContent() {
 		}
 	};
 
+	// Bimbingan & Kasus Santri State
+	const [bimbinganList, setBimbinganList] = useState([]);
+	const [bimbinganSummary, setBimbinganSummary] = useState({
+		total: 0,
+		menungguBimbingan: 0,
+		sudahDibina: 0,
+		perluPanggilanOrtu: 0,
+		selesai: 0,
+	});
+	const [loadingBimbingan, setLoadingBimbingan] = useState(false);
+	const [searchBimbingan, setSearchBimbingan] = useState('');
+	const [statusFilterBimbingan, setStatusFilterBimbingan] = useState('Semua');
+
+	// Form Modal State
+	const [showModalBimbingan, setShowModalBimbingan] = useState(false);
+	const [selectedKasus, setSelectedKasus] = useState(null);
+	const [formSiswa, setFormSiswa] = useState(null);
+	const [formJumlahAlpa, setFormJumlahAlpa] = useState(1);
+	const [selectedPelanggaranOption, setSelectedPelanggaranOption] = useState('Bolos Jam Pelajaran');
+	const [customPelanggaranText, setCustomPelanggaranText] = useState('');
+	const [isPelanggaranManual, setIsPelanggaranManual] = useState(false);
+	const [formTanggalBimbingan, setFormTanggalBimbingan] = useState(getTodayDateString());
+	const [formBentukPenanganan, setFormBentukPenanganan] = useState('');
+	const [formHasilCatatan, setFormHasilCatatan] = useState('');
+	const [formStatus, setFormStatus] = useState('Sudah Dibina');
+	const [formRekomendasi, setFormRekomendasi] = useState('Pembinaan Wali Kelas');
+	const [submittingBimbingan, setSubmittingBimbingan] = useState(false);
+
+	// Print Modal State
+	const [showPrintModal, setShowPrintModal] = useState(false);
+	const [printItem, setPrintItem] = useState(null);
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
+
+	// Fetch catatan bimbingan kelas ini
+	const fetchBimbingan = useCallback(async () => {
+		if (!kelas?.nama_kelas) return;
+		setLoadingBimbingan(true);
+		try {
+			const res = await fetch(`/api/kesiswaan/penanganan?kelas=${encodeURIComponent(kelas.nama_kelas)}`);
+			if (!res.ok) throw new Error('Gagal memuat catatan bimbingan');
+			const json = await res.json();
+			setBimbinganList(json.penangananList || []);
+			if (json.summary) {
+				setBimbinganSummary(json.summary);
+			}
+		} catch (err) {
+			console.error('Error fetch bimbingan:', err);
+		} finally {
+			setLoadingBimbingan(false);
+		}
+	}, [kelas?.nama_kelas]);
+
+	useEffect(() => {
+		if (kelas?.nama_kelas) {
+			fetchBimbingan();
+			fetchSchoolProfile()
+				.then((p) => {
+					if (p) setSchoolProfile(p);
+				})
+				.catch(() => {});
+		}
+	}, [kelas?.nama_kelas, fetchBimbingan]);
+
+	// Filter bimbingan list
+	const filteredBimbinganList = useMemo(() => {
+		let list = bimbinganList;
+		if (statusFilterBimbingan && statusFilterBimbingan !== 'Semua') {
+			list = list.filter((b) => b.status === statusFilterBimbingan);
+		}
+		if (searchBimbingan.trim()) {
+			const q = searchBimbingan.toLowerCase();
+			list = list.filter(
+				(b) =>
+					(b.nama_santri && b.nama_santri.toLowerCase().includes(q)) ||
+					(b.jenis_pelanggaran && b.jenis_pelanggaran.toLowerCase().includes(q)) ||
+					(b.bentuk_penanganan && b.bentuk_penanganan.toLowerCase().includes(q)) ||
+					(b.hasil_catatan && b.hasil_catatan.toLowerCase().includes(q))
+			);
+		}
+		return list;
+	}, [bimbinganList, statusFilterBimbingan, searchBimbingan]);
+
+	const handleOpenAddModal = (defaultSiswa = null, defaultPelanggaran = 'Bolos Jam Pelajaran', defaultAlpa = 1) => {
+		setSelectedKasus(null);
+		setFormSiswa(defaultSiswa || (siswaList && siswaList.length > 0 ? siswaList[0] : null));
+		setFormJumlahAlpa(defaultAlpa || 1);
+		setSelectedPelanggaranOption(defaultPelanggaran);
+		setCustomPelanggaranText('');
+		setIsPelanggaranManual(defaultPelanggaran === 'Lainnya');
+		setFormTanggalBimbingan(getTodayDateString());
+		setFormBentukPenanganan('');
+		setFormHasilCatatan('');
+		setFormStatus('Sudah Dibina');
+		setFormRekomendasi('Pembinaan Wali Kelas');
+		setShowModalBimbingan(true);
+	};
+
+	const handleOpenEditModal = (item) => {
+		setSelectedKasus(item);
+		const s = (siswaList || []).find((sw) => String(sw.id) === String(item.siswa_id)) || {
+			id: item.siswa_id,
+			nama_lengkap: item.nama_santri,
+			nis: item.nis || '',
+			kelas: item.kelas,
+		};
+		setFormSiswa(s);
+		setFormJumlahAlpa(item.jumlah_alpa || 1);
+
+		const standardOptions = [
+			'Bolos Jam Pelajaran',
+			'Keluyuran saat KBM',
+			'Tidak Hadir Tanpa Keterangan (Alpa)',
+			'Keterlambatan Berulang',
+		];
+		if (standardOptions.includes(item.jenis_pelanggaran)) {
+			setSelectedPelanggaranOption(item.jenis_pelanggaran);
+			setIsPelanggaranManual(false);
+			setCustomPelanggaranText('');
+		} else {
+			setSelectedPelanggaranOption('Lainnya');
+			setIsPelanggaranManual(true);
+			setCustomPelanggaranText(item.jenis_pelanggaran);
+		}
+
+		setFormTanggalBimbingan(item.tanggal_bimbingan || getTodayDateString());
+		setFormBentukPenanganan(item.bentuk_penanganan || '');
+		setFormHasilCatatan(item.hasil_catatan || '');
+		setFormStatus(item.status || 'Sudah Dibina');
+		setFormRekomendasi(item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas');
+		setShowModalBimbingan(true);
+	};
+
+	const handleSubmitBimbingan = async (e) => {
+		e.preventDefault();
+		if (!formSiswa) {
+			Swal.fire({ icon: 'warning', title: 'Perhatian', text: 'Pilih santri terlebih dahulu' });
+			return;
+		}
+
+		const jenisPelanggaranFinal = isPelanggaranManual
+			? customPelanggaranText.trim() || 'Pelanggaran Lainnya'
+			: selectedPelanggaranOption;
+
+		setSubmittingBimbingan(true);
+		try {
+			const payload = {
+				siswa_id: formSiswa.id,
+				nama_santri: formSiswa.nama_lengkap,
+				kelas: kelas.nama_kelas,
+				wali_kelas_id: kelas.wali_kelas_id || null,
+				wali_kelas_nama: kelas.wali_kelas || 'Wali Kelas',
+				jenis_pelanggaran: jenisPelanggaranFinal,
+				jumlah_alpa: Number(formJumlahAlpa) || 1,
+				tanggal_bimbingan: formTanggalBimbingan,
+				bentuk_penanganan: formBentukPenanganan,
+				hasil_catatan: formHasilCatatan,
+				status: formStatus,
+				rekomendasi_tindak_lanjut: formRekomendasi,
+				created_by: `Wali Kelas ${kelas.nama_kelas}`,
+			};
+
+			if (selectedKasus) {
+				payload.id = selectedKasus.id;
+				const res = await fetch('/api/kesiswaan/penanganan', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+				const resJson = await res.json();
+				if (!res.ok) throw new Error(resJson.error || 'Gagal memperbarui catatan bimbingan');
+			} else {
+				const res = await fetch('/api/kesiswaan/penanganan', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+				const resJson = await res.json();
+				if (!res.ok) throw new Error(resJson.error || 'Gagal menyimpan catatan bimbingan');
+			}
+
+			Swal.fire({
+				icon: 'success',
+				title: 'Berhasil Disimpan',
+				text: selectedKasus ? 'Catatan bimbingan berhasil diperbarui.' : 'Kasus & bimbingan santri berhasil dicatat.',
+				confirmButtonColor: '#10B981',
+			});
+
+			setShowModalBimbingan(false);
+			fetchBimbingan();
+		} catch (err) {
+			Swal.fire({
+				icon: 'error',
+				title: 'Gagal Menyimpan',
+				text: err.message,
+			});
+		} finally {
+			setSubmittingBimbingan(false);
+		}
+	};
+
+	const handleDeleteBimbingan = async (id, nama) => {
+		const confirm = await Swal.fire({
+			title: 'Hapus Catatan Bimbingan?',
+			text: `Kasus santri ${nama} akan dihapus secara permanen.`,
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: 'Ya, Hapus',
+			cancelButtonText: 'Batal',
+			confirmButtonColor: '#E8451A',
+		});
+
+		if (confirm.isConfirmed) {
+			try {
+				const res = await fetch(`/api/kesiswaan/penanganan?id=${id}`, { method: 'DELETE' });
+				const json = await res.json();
+				if (!res.ok) throw new Error(json.error || 'Gagal menghapus catatan bimbingan');
+
+				Swal.fire({
+					icon: 'success',
+					title: 'Terhapus',
+					text: 'Catatan bimbingan berhasil dihapus.',
+					confirmButtonColor: '#10B981',
+				});
+				fetchBimbingan();
+			} catch (err) {
+				Swal.fire({
+					icon: 'error',
+					title: 'Gagal Menghapus',
+					text: err.message,
+				});
+			}
+		}
+	};
+
+	const handleCopyWABimbingan = (item) => {
+		const text = `*LAPORAN BIMBINGAN SANTRI ROMBEL ${kelas?.nama_kelas?.toUpperCase() || ''}*
+
+Nama Santri : ${item.nama_santri}
+Kelas : ${item.kelas}
+Wali Kelas : ${item.wali_kelas_nama || kelas?.wali_kelas || '—'}
+Jenis Pelanggaran : ${item.jenis_pelanggaran}
+Akumulasi Kejadian : ${item.jumlah_alpa} Kali
+Tanggal Bimbingan : ${item.tanggal_bimbingan}
+Bentuk Pembinaan : ${item.bentuk_penanganan}
+Hasil / Evaluasi : ${item.hasil_catatan}
+Status Kasus : ${item.status}
+Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
+
+		navigator.clipboard.writeText(text);
+		Swal.fire({
+			icon: 'success',
+			title: 'Tersalin!',
+			text: 'Format teks laporan bimbingan telah disalin ke clipboard.',
+			timer: 1500,
+			showConfirmButton: false,
+		});
+	};
+
+	const handleOpenPrintBimbingan = (item) => {
+		setPrintItem(item);
+		setShowPrintModal(true);
+	};
+
+	const handleExecutePrintBimbingan = () => {
+		window.print();
+	};
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -266,7 +543,7 @@ function WaliKelasHubContent() {
 	const isOfficial = absensiToday.source === 'official';
 
 	return (
-		<div className='min-h-screen bg-[#FFF5F0] text-black pb-24 font-sans'>
+		<div className={`min-h-screen bg-[#FFF5F0] text-black pb-24 font-sans ${showPrintModal ? 'print:hidden' : ''}`}>
 			{/* TOP NAVBAR / HEADER */}
 			<div className='sticky top-0 z-40 bg-[#F5C518] border-b-[3px] border-black px-4 sm:px-6 py-4 shadow-[0_4px_0_#000]'>
 				<div className='max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4'>
@@ -315,6 +592,11 @@ function WaliKelasHubContent() {
 							id: 'presensi',
 							label: `Presensi Harian ${isAutoFeed ? '⚡ (Live)' : ''}`,
 							icon: <Calendar className='w-4 h-4' />,
+						},
+						{
+							id: 'bimbingan',
+							label: `Bimbingan Santri (${bimbinganList.length})`,
+							icon: <HeartHandshake className='w-4 h-4' />,
 						},
 						{ id: 'siswa', label: `Daftar Siswa (${stats?.totalSiswa || 0})`, icon: <Users className='w-4 h-4' /> },
 						{ id: 'leger', label: 'Leger Nilai (Preview)', icon: <FileText className='w-4 h-4' /> },
@@ -466,6 +748,21 @@ function WaliKelasHubContent() {
 															</div>
 														</div>
 														<div className='flex items-center gap-2 shrink-0'>
+															<button
+																type='button'
+																onClick={() => {
+																	const s = (siswaList || []).find((sw) => String(sw.id) === String(item.siswa_id)) || {
+																		id: item.siswa_id,
+																		nama_lengkap: item.nama_lengkap,
+																		nis: item.nis || '',
+																		kelas: kelas.nama_kelas,
+																	};
+																	handleOpenAddModal(s, item.judulKasus || 'Bolos Jam Pelajaran', 1);
+																}}
+																className='neo-btn-primary !py-1 !px-2.5 bg-amber-400 hover:bg-amber-500 text-black text-xs font-black flex items-center gap-1 shadow-[2px_2px_0_#000]'>
+																<HeartHandshake className='w-3.5 h-3.5' />
+																<span>Bina Kasus</span>
+															</button>
 															<Link
 																href={`/kelas/${kelas.id}/poin`}
 																className='neo-btn-primary !py-1 !px-2.5 bg-rose-600 text-white text-xs font-black flex items-center gap-1'>
@@ -576,6 +873,32 @@ function WaliKelasHubContent() {
 										<span>⚡</span> Aksi Cepat Wali Kelas
 									</h2>
 									<div className='space-y-3'>
+										{/* JURNAL KBM ROMBEL */}
+										<Link
+											href={`/kelas/${kelas.id}/jurnal`}
+											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group'>
+											<div className='flex items-center gap-2.5'>
+												<div className='w-8 h-8 rounded-lg bg-emerald-200 border border-black flex items-center justify-center font-bold text-emerald-900'>
+													📖
+												</div>
+												<span className='font-black text-xs uppercase'>Jurnal KBM Rombel</span>
+											</div>
+											<ChevronRight className='w-4 h-4 group-hover:translate-x-1 transition-transform' />
+										</Link>
+
+										{/* BIMBINGAN & KASUS SANTRI */}
+										<button
+											onClick={() => setActiveTab('bimbingan')}
+											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group text-left'>
+											<div className='flex items-center gap-2.5'>
+												<div className='w-8 h-8 rounded-lg bg-amber-200 border border-black flex items-center justify-center font-bold text-amber-900'>
+													🤝
+												</div>
+												<span className='font-black text-xs uppercase'>Buku Bimbingan &amp; Kasus</span>
+											</div>
+											<ChevronRight className='w-4 h-4 group-hover:translate-x-1 transition-transform' />
+										</button>
+
 										<button
 											onClick={() => setActiveTab('presensi')}
 											className='w-full neo-card bg-white hover:bg-yellow-300 p-3.5 border-2 border-black shadow-[2px_2px_0_#000] flex items-center justify-between transition-all group text-left'>
@@ -888,7 +1211,241 @@ function WaliKelasHubContent() {
 				)}
 
 				{/* ======================================================== */}
-				{/* TAB 3: DAFTAR SISWA */}
+				{/* TAB 3: BIMBINGAN & KASUS SANTRI (WALI KELAS HUB)         */}
+				{/* ======================================================== */}
+				{activeTab === 'bimbingan' && (
+					<div className='space-y-6'>
+						{/* Header Banner */}
+						<div className='p-6 bg-gradient-to-r from-amber-100 via-yellow-100 to-orange-100 border-[3px] border-black rounded-3xl shadow-[5px_5px_0px_0px_#0D0D0D] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
+							<div>
+								<div className='flex items-center gap-2 mb-1'>
+									<span className='px-2.5 py-0.5 bg-black text-yellow-400 font-black text-xs uppercase rounded'>
+										Bimbingan Wali Kelas
+									</span>
+									<span className='text-xs font-bold text-gray-700 font-mono'>
+										Rombel {kelas.nama_kelas}
+									</span>
+								</div>
+								<h2 className='text-xl sm:text-2xl font-black uppercase text-black tracking-tight'>
+									Buku Bimbingan &amp; Kasus Santri
+								</h2>
+								<p className='text-xs sm:text-sm font-semibold text-gray-700 mt-1'>
+									Pencatatan pembinaan santri rombel terhadap kasus bolos KBM, ketidakhadiran alfa, dan kedisiplinan yang terhubung ke Kesiswaan &amp; BK.
+								</p>
+							</div>
+
+							<div className='flex items-center gap-2 shrink-0'>
+								<button
+									onClick={() => fetchBimbingan()}
+									disabled={loadingBimbingan}
+									title='Refresh Catatan'
+									className='p-2.5 bg-white hover:bg-gray-100 text-black border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 transition-all'>
+									<RefreshCw className={`w-4 h-4 ${loadingBimbingan ? 'animate-spin' : ''}`} />
+								</button>
+								<button
+									onClick={() => handleOpenAddModal()}
+									className='px-4 py-2.5 bg-emerald-400 hover:bg-emerald-500 text-black border-2 border-black rounded-2xl font-black text-xs uppercase shadow-[3px_3px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center gap-1.5'>
+									<Plus className='w-4 h-4 stroke-[3]' />
+									<span>+ Catat Bimbingan</span>
+								</button>
+							</div>
+						</div>
+
+						{/* 5 BENTO STATS CARDS */}
+						<div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3'>
+							<div className='p-4 bg-white border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col justify-between'>
+								<span className='text-[10px] font-black uppercase tracking-wider text-gray-600'>Total Kasus</span>
+								<div className='text-2xl sm:text-3xl font-black text-black mt-2'>{bimbinganSummary.total}</div>
+							</div>
+
+							<div className='p-4 bg-amber-50 border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col justify-between'>
+								<span className='text-[10px] font-black uppercase tracking-wider text-amber-900'>Menunggu Bimbingan</span>
+								<div className='text-2xl sm:text-3xl font-black text-amber-950 mt-2'>{bimbinganSummary.menungguBimbingan}</div>
+							</div>
+
+							<div className='p-4 bg-blue-50 border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col justify-between'>
+								<span className='text-[10px] font-black uppercase tracking-wider text-blue-900'>Sudah Dibina</span>
+								<div className='text-2xl sm:text-3xl font-black text-blue-950 mt-2'>{bimbinganSummary.sudahDibina}</div>
+							</div>
+
+							<div className='p-4 bg-rose-50 border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col justify-between'>
+								<span className='text-[10px] font-black uppercase tracking-wider text-rose-900'>Panggilan Ortu</span>
+								<div className='text-2xl sm:text-3xl font-black text-rose-950 mt-2'>{bimbinganSummary.perluPanggilanOrtu}</div>
+							</div>
+
+							<div className='p-4 bg-emerald-50 border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col justify-between col-span-2 sm:col-span-1'>
+								<span className='text-[10px] font-black uppercase tracking-wider text-emerald-900'>Kasus Selesai</span>
+								<div className='text-2xl sm:text-3xl font-black text-emerald-950 mt-2'>{bimbinganSummary.selesai}</div>
+							</div>
+						</div>
+
+						{/* FILTER & TOOLBAR */}
+						<div className='p-4 bg-white border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+							<div className='relative flex-1'>
+								<Search className='w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2' />
+								<input
+									type='text'
+									value={searchBimbingan}
+									onChange={(e) => setSearchBimbingan(e.target.value)}
+									placeholder='Cari santri, jenis pelanggaran, atau hasil bimbingan...'
+									className='neo-input w-full pl-9 text-xs font-bold'
+								/>
+							</div>
+
+							<div className='flex items-center gap-2'>
+								<select
+									value={statusFilterBimbingan}
+									onChange={(e) => setStatusFilterBimbingan(e.target.value)}
+									className='neo-input text-xs font-bold py-2 bg-white'>
+									<option value='Semua'>Semua Status</option>
+									<option value='Menunggu Bimbingan'>⏳ Menunggu Bimbingan</option>
+									<option value='Sudah Dibina'>✅ Sudah Dibina</option>
+									<option value='Perlu Panggilan Orang Tua'>🚨 Perlu Panggilan Orang Tua</option>
+									<option value='Selesai'>🟢 Selesai</option>
+								</select>
+							</div>
+						</div>
+
+						{/* CASE TABLE */}
+						<div className='neo-card bg-white p-4 sm:p-6 border-[3px] border-black shadow-[4px_4px_0_#000]'>
+							<div className='flex items-center justify-between pb-3 border-b-2 border-black mb-4'>
+								<h3 className='font-black text-sm uppercase text-black flex items-center gap-2'>
+									<span>📋</span> Daftar Catatan Kasus &amp; Bimbingan Santri ({filteredBimbinganList.length})
+								</h3>
+								<span className='text-xs font-bold text-gray-500'>
+									Wali Kelas: {kelas.wali_kelas}
+								</span>
+							</div>
+
+							{loadingBimbingan ? (
+								<div className='text-center py-12'>
+									<div className='inline-block w-8 h-8 border-3 border-black border-t-transparent rounded-full animate-spin'></div>
+									<p className='text-xs font-black text-black uppercase mt-3'>Memuat Catatan Bimbingan...</p>
+								</div>
+							) : filteredBimbinganList.length === 0 ? (
+								<div className='p-8 bg-gray-50 border-2 border-dashed border-gray-300 rounded-2xl text-center'>
+									<div className='text-3xl mb-2'>🌱</div>
+									<p className='font-black text-sm text-black uppercase'>
+										{searchBimbingan || statusFilterBimbingan !== 'Semua'
+											? 'Tidak Ada Catatan yang Sesuai Filter'
+											: 'Belum Ada Catatan Bimbingan Kasus'}
+									</p>
+									<p className='text-xs font-bold text-gray-600 mt-1 max-w-md mx-auto'>
+										{searchBimbingan || statusFilterBimbingan !== 'Semua'
+											? 'Coba ganti filter status atau kata kunci pencarian.'
+											: 'Catat pembinaan santri rombel saat terdeteksi anomali kehadiran, bolos KBM, atau ketidakhadiran berulang.'}
+									</p>
+									<button
+										type='button'
+										onClick={() => handleOpenAddModal()}
+										className='mt-4 px-4 py-2 bg-yellow-300 hover:bg-yellow-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0_#000] active:translate-x-0.5 active:translate-y-0.5'>
+										+ Catat Kasus Sekarang
+									</button>
+								</div>
+							) : (
+								<div className='overflow-x-auto'>
+									<table className='w-full text-left text-xs'>
+										<thead>
+											<tr className='border-b-2 border-black bg-gray-100 uppercase tracking-wider font-black text-black'>
+												<th className='py-3 px-3 w-12'>No</th>
+												<th className='py-3 px-3'>Tanggal</th>
+												<th className='py-3 px-3'>Santri</th>
+												<th className='py-3 px-3'>Pelanggaran &amp; Kejadian</th>
+												<th className='py-3 px-3'>Pembinaan &amp; Hasil</th>
+												<th className='py-3 px-3'>Status</th>
+												<th className='py-3 px-3 text-center w-36'>Aksi</th>
+											</tr>
+										</thead>
+										<tbody className='divide-y divide-gray-200'>
+											{filteredBimbinganList.map((item, idx) => (
+												<tr key={item.id} className='hover:bg-yellow-50/60 transition-colors'>
+													<td className='py-3 px-3 font-mono font-bold'>{idx + 1}</td>
+													<td className='py-3 px-3 font-mono font-bold whitespace-nowrap'>
+														{item.tanggal_bimbingan}
+													</td>
+													<td className='py-3 px-3'>
+														<div className='font-black text-black'>{item.nama_santri}</div>
+														<div className='text-[10px] text-gray-500 font-mono'>
+															NIS: {item.siswa_id || '—'}
+														</div>
+													</td>
+													<td className='py-3 px-3'>
+														<div className='font-bold text-rose-700'>{item.jenis_pelanggaran}</div>
+														<div className='text-[10px] font-mono text-gray-600 mt-0.5'>
+															Akumulasi: <span className='font-bold text-black'>{item.jumlah_alpa} Kali</span>
+														</div>
+													</td>
+													<td className='py-3 px-3 max-w-xs'>
+														<div className='line-clamp-2 text-gray-800 font-medium'>
+															<span className='font-bold text-black'>Bina:</span> {item.bentuk_penanganan}
+														</div>
+														<div className='line-clamp-2 text-gray-600 italic text-[11px] mt-0.5'>
+															<span className='font-bold not-italic text-gray-800'>Hasil:</span> {item.hasil_catatan}
+														</div>
+													</td>
+													<td className='py-3 px-3 whitespace-nowrap'>
+														<span
+															className={`inline-block px-2 py-0.5 text-[10px] font-black uppercase rounded border border-black ${
+																item.status === 'Selesai'
+																	? 'bg-emerald-200 text-emerald-950'
+																	: item.status === 'Sudah Dibina'
+																	? 'bg-blue-200 text-blue-950'
+																	: item.status === 'Perlu Panggilan Orang Tua'
+																	? 'bg-rose-200 text-rose-950'
+																	: 'bg-amber-200 text-amber-950'
+															}`}>
+															{item.status}
+														</span>
+														{item.rekomendasi_tindak_lanjut && (
+															<div className='text-[10px] font-bold text-gray-600 mt-1'>
+																{item.rekomendasi_tindak_lanjut}
+															</div>
+														)}
+													</td>
+													<td className='py-3 px-3'>
+														<div className='flex items-center justify-center gap-1.5'>
+															<button
+																type='button'
+																onClick={() => handleCopyWABimbingan(item)}
+																title='Salin Format Teks WA'
+																className='p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-black rounded-lg shadow-[1px_1px_0_#000] active:translate-x-0.5 active:translate-y-0.5'>
+																<Copy className='w-3.5 h-3.5' />
+															</button>
+															<button
+																type='button'
+																onClick={() => handleOpenPrintBimbingan(item)}
+																title='Cetak Lembar Dokumen Bimbingan A4'
+																className='p-1.5 bg-yellow-200 hover:bg-yellow-300 text-yellow-950 border border-black rounded-lg shadow-[1px_1px_0_#000] active:translate-x-0.5 active:translate-y-0.5'>
+																<Printer className='w-3.5 h-3.5' />
+															</button>
+															<button
+																type='button'
+																onClick={() => handleOpenEditModal(item)}
+																title='Edit Kasus'
+																className='p-1.5 bg-blue-100 hover:bg-blue-200 text-blue-900 border border-black rounded-lg shadow-[1px_1px_0_#000] active:translate-x-0.5 active:translate-y-0.5'>
+																<Edit3 className='w-3.5 h-3.5' />
+															</button>
+															<button
+																type='button'
+																onClick={() => handleDeleteBimbingan(item.id, item.nama_santri)}
+																title='Hapus Kasus'
+																className='p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-900 border border-black rounded-lg shadow-[1px_1px_0_#000] active:translate-x-0.5 active:translate-y-0.5'>
+																<Trash2 className='w-3.5 h-3.5' />
+															</button>
+														</div>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
+
+				{/* ======================================================== */}
+				{/* TAB 4: DAFTAR SISWA */}
 				{/* ======================================================== */}
 				{activeTab === 'siswa' && (
 					<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-4'>
@@ -1100,6 +1657,360 @@ function WaliKelasHubContent() {
 					</div>
 				)}
 			</div>
+
+			{/* ======================================================================== */}
+			{/* MODAL FORM CATAT / EDIT BIMBINGAN SANTRI ROMBEL                          */}
+			{/* ======================================================================== */}
+			{showModalBimbingan && (
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto print:hidden'>
+					<div className='bg-white border-3 border-black rounded-3xl p-6 shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in duration-150'>
+						<div className='flex items-center justify-between pb-3 mb-4 border-b-2 border-black'>
+							<div className='flex items-center gap-2'>
+								<span className='w-8 h-8 rounded-xl bg-amber-300 border-2 border-black flex items-center justify-center text-sm shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									{selectedKasus ? '✏️' : '📝'}
+								</span>
+								<h3 className='font-black text-base text-black uppercase tracking-tight'>
+									{selectedKasus ? 'Edit Catatan Bimbingan Santri' : 'Catat Bimbingan & Kasus Santri'}
+								</h3>
+							</div>
+							<button
+								type='button'
+								onClick={() => setShowModalBimbingan(false)}
+								className='w-7 h-7 rounded-lg border-2 border-black flex items-center justify-center bg-gray-100 hover:bg-rose-500 hover:text-white transition-colors'>
+								✕
+							</button>
+						</div>
+
+						<form onSubmit={handleSubmitBimbingan} className='space-y-4'>
+							{/* Pilih Santri Rombel Ini */}
+							<div>
+								<label className='block text-xs font-black uppercase text-black mb-1'>
+									1. Pilih Santri Rombel {kelas.nama_kelas} <span className='text-rose-500'>*</span>
+								</label>
+								{selectedKasus ? (
+									<div className='p-3 bg-gray-100 border-2 border-black rounded-xl font-black text-xs text-black'>
+										{formSiswa?.nama_lengkap || formSiswa?.nama_santri} (NIS: {formSiswa?.nis || '—'})
+									</div>
+								) : (
+									<select
+										value={formSiswa ? formSiswa.id : ''}
+										onChange={(e) => {
+											const found = (siswaList || []).find((s) => String(s.id) === String(e.target.value));
+											setFormSiswa(found || null);
+										}}
+										required
+										className='neo-input w-full text-xs font-bold bg-white'>
+										<option value=''>-- Pilih Santri --</option>
+										{(siswaList || []).map((s) => (
+											<option key={s.id} value={s.id}>
+												{s.nama_lengkap} {s.nis ? `(NIS: ${s.nis})` : ''}
+											</option>
+										))}
+									</select>
+								)}
+							</div>
+
+							{/* Wali Kelas (Auto) */}
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-3 bg-yellow-50/80 p-3 border-2 border-black rounded-xl text-xs'>
+								<div>
+									<span className='font-bold text-gray-600 block text-[10px] uppercase'>Rombongan Belajar</span>
+									<span className='font-black text-black'>Kelas {kelas.nama_kelas}</span>
+								</div>
+								<div>
+									<span className='font-bold text-gray-600 block text-[10px] uppercase'>Wali Kelas Pembina</span>
+									<span className='font-black text-black'>{kelas.wali_kelas || 'Wali Kelas'}</span>
+								</div>
+							</div>
+
+							{/* Jenis Pelanggaran & Jumlah Alpa */}
+							<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+								<div className='sm:col-span-2'>
+									<label className='block text-xs font-black uppercase text-black mb-1'>
+										2. Jenis Pelanggaran <span className='text-rose-500'>*</span>
+									</label>
+									<select
+										value={isPelanggaranManual ? 'Lainnya' : selectedPelanggaranOption}
+										onChange={(e) => {
+											const val = e.target.value;
+											if (val === 'Lainnya') {
+												setIsPelanggaranManual(true);
+											} else {
+												setIsPelanggaranManual(false);
+												setSelectedPelanggaranOption(val);
+											}
+										}}
+										className='neo-input w-full text-xs font-bold bg-white'>
+										<option value='Bolos Jam Pelajaran'>Bolos Jam Pelajaran</option>
+										<option value='Keluyuran saat KBM'>Keluyuran saat KBM</option>
+										<option value='Tidak Hadir Tanpa Keterangan (Alpa)'>Tidak Hadir Tanpa Keterangan (Alpa)</option>
+										<option value='Keterlambatan Berulang'>Keterlambatan Berulang</option>
+										<option value='Lainnya'>✏️ Pelanggaran Lainnya (Input Manual)...</option>
+									</select>
+
+									{isPelanggaranManual && (
+										<div className='mt-2'>
+											<input
+												type='text'
+												value={customPelanggaranText}
+												onChange={(e) => setCustomPelanggaranText(e.target.value)}
+												placeholder='Tuliskan jenis pelanggaran secara spesifik...'
+												required
+												className='neo-input w-full text-xs font-bold bg-yellow-50 border-rose-400'
+											/>
+										</div>
+									)}
+								</div>
+
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1'>
+										Jumlah Alpa / Jam
+									</label>
+									<input
+										type='number'
+										min='1'
+										value={formJumlahAlpa}
+										onChange={(e) => setFormJumlahAlpa(e.target.value)}
+										className='neo-input w-full text-xs font-mono font-bold bg-white'
+									/>
+								</div>
+							</div>
+
+							{/* Tanggal Bimbingan */}
+							<div>
+								<label className='block text-xs font-black uppercase text-black mb-1'>
+									3. Tanggal Bimbingan <span className='text-rose-500'>*</span>
+								</label>
+								<input
+									type='date'
+									value={formTanggalBimbingan}
+									onChange={(e) => setFormTanggalBimbingan(e.target.value)}
+									required
+									className='neo-input w-full text-xs font-bold bg-white'
+								/>
+							</div>
+
+							{/* Bentuk Penanganan */}
+							<div>
+								<label className='block text-xs font-black uppercase text-black mb-1'>
+									4. Bentuk Penanganan / Pembinaan yang Dilakukan <span className='text-rose-500'>*</span>
+								</label>
+								<textarea
+									rows='2'
+									value={formBentukPenanganan}
+									onChange={(e) => setFormBentukPenanganan(e.target.value)}
+									placeholder='Contoh: Pemanggilan santri ke meja wali kelas, klarifikasi penyebab ketidakhadiran, nasihat kedisiplinan...'
+									required
+									className='neo-input w-full text-xs font-medium bg-white'></textarea>
+							</div>
+
+							{/* Hasil / Catatan */}
+							<div>
+								<label className='block text-xs font-black uppercase text-black mb-1'>
+									5. Hasil Bimbingan &amp; Komitmen Santri <span className='text-rose-500'>*</span>
+								</label>
+								<textarea
+									rows='2'
+									value={formHasilCatatan}
+									onChange={(e) => setFormHasilCatatan(e.target.value)}
+									placeholder='Contoh: Santri mengakui kesalahan, menandatangani surat komitmen tidak mengulang, dan bersedia menerima sanksi bila melanggar...'
+									required
+									className='neo-input w-full text-xs font-medium bg-white'></textarea>
+							</div>
+
+							{/* Status & Rekomendasi */}
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1'>Status Kasus</label>
+									<select
+										value={formStatus}
+										onChange={(e) => setFormStatus(e.target.value)}
+										className='neo-input w-full text-xs font-bold bg-white'>
+										<option value='Sudah Dibina'>✅ Sudah Dibina</option>
+										<option value='Menunggu Bimbingan'>⏳ Menunggu Bimbingan</option>
+										<option value='Perlu Panggilan Orang Tua'>🚨 Perlu Panggilan Orang Tua</option>
+										<option value='Selesai'>🟢 Selesai / Terbina</option>
+									</select>
+								</div>
+
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1'>Rekomendasi Tindak Lanjut</label>
+									<select
+										value={formRekomendasi}
+										onChange={(e) => setFormRekomendasi(e.target.value)}
+										className='neo-input w-full text-xs font-bold bg-white'>
+										<option value='Pembinaan Wali Kelas'>Cukup Pantauan Wali Kelas</option>
+										<option value='Panggilan Orang Tua'>Eskalasi: Panggilan Orang Tua</option>
+										<option value='Bimbingan Konseling'>Rujukan ke Guru BK</option>
+										<option value='Selesai'>Kasus Tuntas</option>
+									</select>
+								</div>
+							</div>
+
+							{/* Actions */}
+							<div className='flex items-center justify-end gap-2 pt-3 border-t-2 border-black'>
+								<button
+									type='button'
+									onClick={() => setShowModalBimbingan(false)}
+									className='px-4 py-2 border-2 border-black rounded-xl font-bold text-xs bg-gray-100 hover:bg-gray-200'>
+									Batal
+								</button>
+								<button
+									type='submit'
+									disabled={submittingBimbingan}
+									className='px-5 py-2 border-2 border-black rounded-xl font-black text-xs bg-emerald-400 hover:bg-emerald-500 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1.5 disabled:opacity-60'>
+									{submittingBimbingan ? (
+										<>
+											<span className='inline-block w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin'></span>
+											<span>Menyimpan...</span>
+										</>
+									) : (
+										<>
+											<span>💾</span>
+											<span>Simpan Catatan</span>
+										</>
+									)}
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			)}
+
+			{/* ======================================================================== */}
+			{/* MODAL PRATINJAU CETAK DOKUMEN RESMI A4 (print:hidden)                    */}
+			{/* ======================================================================== */}
+			{showPrintModal && printItem && (
+				<div className='fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto print:hidden'>
+					<div className='bg-white border-3 border-black rounded-3xl shadow-[8px_8px_0px_0px_#0D0D0D] w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150'>
+						{/* Modal Toolbar Header */}
+						<div className='p-4 bg-yellow-200 border-b-2 border-black flex items-center justify-between gap-3'>
+							<div className='flex items-center gap-2.5'>
+								<span className='w-9 h-9 bg-white border-2 border-black rounded-xl flex items-center justify-center text-lg shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									🖨️
+								</span>
+								<div>
+									<div className='flex items-center gap-2'>
+										<span className='px-1.5 py-0.5 bg-black text-white text-[9px] font-black uppercase rounded'>
+											Dokumen Resmi
+										</span>
+										<span className='text-xs font-mono font-bold text-gray-700'>
+											REG-KSW/{new Date(printItem.tanggal_bimbingan || Date.now()).getFullYear()}/{String(printItem.id).padStart(4, '0')}
+										</span>
+									</div>
+									<h3 className='font-black text-sm text-black'>
+										Pratinjau Lembar Berita Acara Bimbingan Santri
+									</h3>
+								</div>
+							</div>
+
+							<div className='flex items-center gap-2'>
+								<button
+									type='button'
+									onClick={handleExecutePrintBimbingan}
+									className='px-3.5 py-1.5 bg-yellow-400 hover:bg-yellow-500 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center gap-1.5'>
+									<span>🖨️</span>
+									<span>Cetak Dokumen (A4)</span>
+								</button>
+
+								<button
+									type='button'
+									onClick={() => {
+										setShowPrintModal(false);
+										setPrintItem(null);
+									}}
+									title='Tutup Pratinjau'
+									className='w-8 h-8 rounded-xl border-2 border-black bg-white hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none'>
+									✕
+								</button>
+							</div>
+						</div>
+
+						{/* Area Kertas Preview Lembar A4 */}
+						<div className='p-4 sm:p-6 overflow-y-auto bg-gray-100 [scrollbar-width:thin]'>
+							<div className='bg-white border-2 border-black rounded-xl p-8 max-w-3xl mx-auto shadow-[4px_4px_0px_0px_#0D0D0D] text-black font-sans'>
+								<LembarBimbinganDocument
+									printItem={printItem}
+									schoolProfile={schoolProfile}
+									allSiswa={siswaList}
+								/>
+							</div>
+						</div>
+
+						{/* Modal Footer */}
+						<div className='p-4 bg-gray-50 border-t-2 border-black flex items-center justify-between gap-3'>
+							<button
+								type='button'
+								onClick={() => {
+									setShowPrintModal(false);
+									setPrintItem(null);
+								}}
+								className='px-4 py-2 border-2 border-black rounded-xl font-bold text-xs bg-white hover:bg-gray-100 shadow-[2px_2px_0px_0px_#0D0D0D] active:translate-x-0.5 active:translate-y-0.5'>
+								Tutup Pratinjau
+							</button>
+
+							<button
+								type='button'
+								onClick={handleExecutePrintBimbingan}
+								className='px-5 py-2 border-2 border-black rounded-xl font-black text-xs bg-yellow-300 hover:bg-yellow-400 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-2 active:translate-x-0.5 active:translate-y-0.5 transition-all'>
+								<span>🖨️</span>
+								<span>Cetak Lembar Dokumen (A4)</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* ======================================================================== */}
+			{/* DOKUMEN CETAK MURNI (HANYA AKTIF SAAT WINDOW.PRINT())                     */}
+			{/* Bebas dari modal, backdrop, flexbox, fixed, maupun overflow              */}
+			{/* ======================================================================== */}
+			{showPrintModal && printItem && (
+				<div id='print-clean-document' className='hidden print:block w-full text-black font-sans bg-white'>
+					<LembarBimbinganDocument
+						printItem={printItem}
+						schoolProfile={schoolProfile}
+						allSiswa={siswaList}
+					/>
+				</div>
+			)}
+
+			{/* CSS Khusus Print Dokumen Lembar Bimbingan Santri */}
+			<style dangerouslySetInnerHTML={{
+				__html: `
+					@media print {
+						@page {
+							size: A4 portrait;
+							margin: 10mm 15mm 10mm 15mm;
+						}
+						html, body {
+							background: #ffffff !important;
+							color: #000000 !important;
+							margin: 0 !important;
+							padding: 0 !important;
+							width: 100% !important;
+							height: auto !important;
+							overflow: visible !important;
+							-webkit-print-color-adjust: exact !important;
+							print-color-adjust: exact !important;
+						}
+						.print\\:hidden,
+						header,
+						aside,
+						nav {
+							display: none !important;
+						}
+						#print-clean-document {
+							display: block !important;
+							position: static !important;
+							width: 100% !important;
+							max-width: 100% !important;
+							margin: 0 !important;
+							padding: 0 !important;
+							background: #ffffff !important;
+						}
+					}
+				`
+			}} />
 		</div>
 	);
 }
