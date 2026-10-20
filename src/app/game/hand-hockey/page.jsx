@@ -456,6 +456,32 @@ export default function HandHockey() {
 		</h1>
 	);
 
+	// Fitur Game Hand Hockey Sedang Dikunci (Dalam Pengembangan)
+	const isLocked = true;
+	if (isLocked) {
+		return (
+			<div className='min-h-screen bg-[#FFF5F0] flex flex-col items-center justify-center p-4 font-sans'>
+				<div className='bg-white border-[4px] border-[#0D0D0D] p-8 md:p-10 shadow-[10px_10px_0px_0px_#0D0D0D] text-center max-w-lg w-full relative'>
+					<div className='bg-[#E8451A] text-white border-[3px] border-[#0D0D0D] font-black uppercase text-xs px-3 py-1 inline-block mb-4 shadow-[3px_3px_0px_0px_#0D0D0D]'>
+						FITUR DIKUNCI
+					</div>
+					<div className='text-6xl mb-4'>🚧 🔒</div>
+					<h2 className='text-2xl md:text-3xl font-black uppercase tracking-tight text-[#0D0D0D] mb-3'>
+						SEDANG DALAM PENGEMBANGAN
+					</h2>
+					<p className='text-sm font-bold text-gray-700 uppercase mb-8 leading-relaxed'>
+						Game Hand Hockey saat ini sedang dalam proses pengembangan dan penyempurnaan sistem. Silakan kembali lagi nanti!
+					</p>
+					<button
+						onClick={() => router.push('/game')}
+						className='w-full bg-[#F5C518] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black uppercase px-6 py-3 shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:shadow-none transition-all'>
+						Kembali ke Menu Game
+					</button>
+				</div>
+			</div>
+		);
+	}
+
 	// ── Render ─────────────────────────────────────────────────────────────────
 	return (
 		<div
