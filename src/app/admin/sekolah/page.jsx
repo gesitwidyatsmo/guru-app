@@ -162,9 +162,14 @@ export default function AdminSekolahPage() {
 				throw new Error(data.error || 'Gagal menyimpan profil sekolah.');
 			}
 
-			// Simpan juga nama sekolah ke localStorage untuk sinkronisasi header aplikasi
+			// Simpan juga nama sekolah dan logo ke localStorage untuk sinkronisasi instan
 			if (typeof window !== 'undefined') {
 				localStorage.setItem('school_name', profil.nama_sekolah);
+				if (profil.logo_kiri || profil.logo_kanan) {
+					localStorage.setItem('school_logo', profil.logo_kiri || profil.logo_kanan);
+				} else {
+					localStorage.removeItem('school_logo');
+				}
 			}
 
 			setInitialProfil(profil);

@@ -8,6 +8,8 @@ export default function LoginPage() {
 	const router = useRouter();
 
 	const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
+	const [logoSekolah, setLogoSekolah] = useState(null);
+	const [namaSekolah, setNamaSekolah] = useState(null);
 
 	useEffect(() => {
 		const searchParams = new URLSearchParams(window.location.search);
@@ -24,6 +26,45 @@ export default function LoginPage() {
 			router.replace('/login');
 		}
 	}, [router]);
+
+	// Ambil logo dan nama sekolah dari cache localStorage & database
+	useEffect(() => {
+		// Baca cache lokal di client setelah mount untuk menghindari hydration mismatch
+		const cachedLogo = localStorage.getItem('school_logo');
+		const cachedName = localStorage.getItem('school_name');
+		if (cachedLogo) setLogoSekolah(cachedLogo);
+		if (cachedName) setNamaSekolah(cachedName);
+
+		let isMounted = true;
+		const fetchSchoolLogo = async () => {
+			try {
+				const res = await fetch('/api/settings?key=profil_sekolah');
+				if (res.ok) {
+					const data = await res.json();
+					const logo = data?.value?.logo_kiri || data?.value?.logo_kanan || null;
+					const name = data?.value?.nama_sekolah || null;
+					if (isMounted) {
+						setLogoSekolah(logo);
+						if (name) setNamaSekolah(name);
+						if (logo) {
+							localStorage.setItem('school_logo', logo);
+						} else {
+							localStorage.removeItem('school_logo');
+						}
+						if (name) {
+							localStorage.setItem('school_name', name);
+						}
+					}
+				}
+			} catch (err) {
+				console.warn('Gagal memuat profil sekolah:', err);
+			}
+		};
+		fetchSchoolLogo();
+		return () => {
+			isMounted = false;
+		};
+	}, []);
 	const [loading, setLoading] = useState(false);
 	const [showPswd, setShowPswd] = useState(false);
 
@@ -146,32 +187,110 @@ export default function LoginPage() {
 					<div className='absolute left-4 bottom-4 w-6 h-6 bg-teal-400 border-2 border-black transform -rotate-12 shadow-[2px_2px_0px_0px_#0D0D0D]'></div>
 				</div>
 
-				<div className='flex justify-center mb-8 relative'>
-					{/* Simple offset square behind logo */}
-					<div className='absolute top-1/2 left-1/2 w-20 h-20 bg-orange-200 border-[3px] border-black rounded-xl -translate-x-4 -translate-y-4 -z-20 shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-3'></div>
-
-					<div className='w-20 h-20 rounded-xl bg-orange-500 border-[3px] border-black flex items-center justify-center shadow-[6px_6px_0px_0px_#0D0D0D] transform hover:-rotate-6 transition-transform cursor-pointer relative z-10'>
+				{/* Logo Showcase with Rich Neo-Brutalist Frame & Accents */}
+				<div className='flex flex-col items-center justify-center mb-6 relative group'>
+					{/* 1. Sparkle Star Top-Right */}
+					<div className='absolute -top-3.5 -right-6 sm:-right-8 pointer-events-none select-none z-20'>
 						<svg
-							className='w-12 h-12 text-black'
-							fill='none'
-							stroke='currentColor'
+							className='w-8 h-8 text-yellow-300 drop-shadow-[2px_2px_0px_#0D0D0D] animate-bounce'
+							style={{ animationDuration: '3s' }}
 							viewBox='0 0 24 24'
-							strokeWidth='2.5'>
+							fill='currentColor'>
 							<path
-								strokeLinecap='round'
+								d='M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2L12 0Z'
+								stroke='black'
+								strokeWidth='2'
 								strokeLinejoin='round'
-								d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
 							/>
 						</svg>
 					</div>
+
+					{/* 2. Sparkle Star Bottom-Left */}
+					<div className='absolute -bottom-2 -left-6 sm:-left-8 pointer-events-none select-none z-20'>
+						<svg
+							className='w-6 h-6 text-teal-300 drop-shadow-[2px_2px_0px_#0D0D0D] transform -rotate-12'
+							viewBox='0 0 24 24'
+							fill='currentColor'>
+							<path
+								d='M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2L12 0Z'
+								stroke='black'
+								strokeWidth='2'
+								strokeLinejoin='round'
+							/>
+						</svg>
+					</div>
+
+					{/* 3. Layered Neo-Brutalist Card Frame */}
+					<div className='relative flex items-center justify-center'>
+						{/* Background Layer 2 (Teal Offset Shadow Card) */}
+						<div className='absolute w-24 h-24 sm:w-28 sm:h-28 bg-teal-300 border-[3px] border-black rounded-2xl -translate-x-3 translate-y-3 -z-20 shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-6 transition-transform duration-300 group-hover:-rotate-12 group-hover:-translate-x-4'></div>
+
+						{/* Background Layer 1 (Warm Peach/Orange Offset Card) */}
+						<div className='absolute w-24 h-24 sm:w-28 sm:h-28 bg-orange-200 border-[3px] border-black rounded-2xl translate-x-3 -translate-y-2 -z-10 shadow-[4px_4px_0px_0px_#0D0D0D] transform rotate-6 transition-transform duration-300 group-hover:rotate-12 group-hover:translate-x-4'></div>
+
+						{/* Main Interactive Logo Box */}
+						{logoSekolah ? (
+							<div className='w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white border-[3px] border-black p-3 flex items-center justify-center shadow-[6px_6px_0px_0px_#0D0D0D] transform transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[8px_8px_0px_0px_#0D0D0D] cursor-pointer relative z-10'>
+								{/* Mini Verification Badge on Corner */}
+								<div className='absolute -top-3 -right-3 px-2 py-0.5 bg-yellow-300 border-2 border-black rounded-md text-[9px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#0D0D0D] rotate-12 flex items-center gap-0.5 select-none'>
+									<span className='text-amber-700'>★</span>
+									<span>RESMI</span>
+								</div>
+
+								{/* eslint-disable-next-line @next/next/no-img-element */}
+								<img
+									src={logoSekolah}
+									alt='Logo Sekolah'
+									className='w-full h-full object-contain filter drop-shadow-xs transition-transform duration-300 group-hover:scale-105'
+								/>
+							</div>
+						) : (
+							<div className='w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-orange-500 border-[3px] border-black flex items-center justify-center shadow-[6px_6px_0px_0px_#0D0D0D] transform transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[8px_8px_0px_0px_#0D0D0D] cursor-pointer relative z-10'>
+								<svg
+									className='w-14 h-14 text-black transition-transform duration-300 group-hover:scale-110'
+									fill='none'
+									stroke='currentColor'
+									viewBox='0 0 24 24'
+									strokeWidth='2.5'>
+									<path
+										strokeLinecap='round'
+										strokeLinejoin='round'
+										d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
+									/>
+								</svg>
+							</div>
+						)}
+					</div>
 				</div>
 
-				<h2 className='text-4xl sm:text-5xl font-black text-black tracking-tight uppercase'>Guru-App</h2>
+				{/* Nama Resmi Sekolah (Headline Utama jika tersedia dari Database) */}
+				{namaSekolah && (
+					<h2 className='text-lg sm:text-xl font-black text-black uppercase tracking-tight max-w-sm sm:max-w-md mx-auto px-4 mt-1 mb-1 leading-snug'>
+						{namaSekolah}
+					</h2>
+				)}
 
-				<div className='mt-6 mb-2'>
-					<p className='text-xs sm:text-sm text-black font-bold border-[3px] border-black bg-white inline-block px-4 py-1.5 rounded-full shadow-[4px_4px_0px_0px_#0D0D0D]'>
-						Sistem Manajemen Akademika Digital
-					</p>
+				{/* Badge Tagline "Sistem Manajemen Akademika Digital" dengan Style Neo-Brutalist Badge */}
+				<div className='mt-2 mb-2 flex items-center justify-center'>
+					<div className='inline-flex items-center gap-2.5 px-4 py-2 bg-white border-[2.5px] border-black rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] transform -rotate-1 hover:rotate-0 transition-all duration-200 cursor-default'>
+						{/* Icon Badge Kecil Bertema Edukasi */}
+						<div className='w-5 h-5 rounded-md bg-yellow-300 border-2 border-black flex items-center justify-center shadow-[1.5px_1.5px_0px_0px_#0D0D0D] shrink-0'>
+							<svg
+								className='w-3 h-3 text-black'
+								fill='none'
+								viewBox='0 0 24 24'
+								stroke='currentColor'
+								strokeWidth='2.5'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M12 14l9-5-9-5-9 5 9 5z' />
+								<path strokeLinecap='round' strokeLinejoin='round' d='M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z' />
+							</svg>
+						</div>
+
+						{/* Teks Tagline */}
+						<span className='text-[11px] sm:text-xs font-black uppercase tracking-wider text-black'>
+							Sistem Manajemen Akademika Digital
+						</span>
+					</div>
 				</div>
 			</div>
 
@@ -367,15 +486,17 @@ export default function LoginPage() {
 						</div>
 					</form>
 				</div>
+			</div>
 
-				{/* Footer Copy */}
-				<div className='mt-8 relative inline-block mx-auto'>
+			{/* Footer Copyright (Center Aligned) */}
+			<footer className='mt-8 sm:mt-10 w-full flex justify-center items-center z-10 px-4'>
+				<div className='relative inline-block text-center'>
 					<div className='absolute inset-0 bg-yellow-300 border-2 border-black rounded-lg transform translate-x-1.5 translate-y-1.5'></div>
-					<div className='relative bg-white border-2 border-black rounded-lg px-6 py-3 font-bold text-black text-xs sm:text-sm uppercase text-center'>
-						Copyright &copy; {new Date().getFullYear()} Gesit Widi Atmoko. <br className='sm:hidden' /> All Rights Reserved.
+					<div className='relative bg-white border-2 border-black rounded-lg px-6 py-2.5 font-bold text-black text-xs sm:text-sm uppercase text-center shadow-xs'>
+						Copyright &copy; {new Date().getFullYear()} GWA. <br className='sm:hidden' /> All Rights Reserved.
 					</div>
 				</div>
-			</div>
+			</footer>
 		</div>
 	);
 }

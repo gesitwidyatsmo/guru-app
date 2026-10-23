@@ -39,6 +39,18 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const key = searchParams.get('key');
 
+		// Hanya key 'profil_sekolah' yang bersifat publik (dibutuhkan untuk halaman login, identitas, dll)
+		if (key !== 'profil_sekolah') {
+			let role = req.headers.get('x-user-role');
+			if (!role) {
+				const authClient = await createClient();
+				const { data: { user } } = await authClient.auth.getUser();
+				if (!user) {
+					return NextResponse.json({ error: 'Unauthorized: Harap login terlebih dahulu' }, { status: 401 });
+				}
+			}
+		}
+
 		// Gunakan supabaseAdmin agar tidak terblokir RLS saat membaca profil sekolah / kop surat
 		const supabase = supabaseAdmin || (await createClient());
 
