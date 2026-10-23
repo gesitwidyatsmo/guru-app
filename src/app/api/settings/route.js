@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { clearSchoolBrandingCache } from '@/lib/schoolBranding';
 
 const DEFAULT_GEOFENCE = {
 	enabled: false,
@@ -193,6 +194,10 @@ export async function PUT(req) {
 				);
 			}
 			throw error;
+		}
+
+		if (key === 'profil_sekolah') {
+			clearSchoolBrandingCache();
 		}
 
 		return NextResponse.json({ success: true, setting: data }, { status: 200 });

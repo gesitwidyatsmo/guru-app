@@ -15,6 +15,7 @@ import {
 	Printer,
 	LayoutDashboard,
 	ShieldAlert,
+	Trophy,
 } from 'lucide-react';
 import AcademicPeriodChip from '@/app/components/AcademicPeriodChip';
 
@@ -100,7 +101,7 @@ export default function ERaporLayoutClient({
 	}, []);
 
 	const isGuruMapelPage = ['/erapor/rekap-nilai', '/erapor/tujuan-pembelajaran', '/erapor/nilai-kuantitatif', '/erapor/nilai-kualitatif'].includes(pathname);
-	const isWaliKelasPage = ['/erapor/ketidakhadiran', '/erapor/ekstrakurikuler', '/erapor/rekap-leger', '/erapor/cetak'].includes(pathname);
+	const isWaliKelasPage = ['/erapor/ketidakhadiran', '/erapor/ekstrakurikuler', '/erapor/rekap-leger', '/erapor/juara', '/erapor/cetak'].includes(pathname);
 	const isDashboard = pathname === '/erapor';
 
 	const guruMapelNav = useMemo(
@@ -154,6 +155,12 @@ export default function ERaporLayoutClient({
 				icon: TableProperties,
 			},
 			{
+				href: '/erapor/juara',
+				label: 'Juara & Piagam',
+				shortLabel: 'Juara',
+				icon: Trophy,
+			},
+			{
 				href: '/erapor/cetak',
 				label: 'Cetak Rapor',
 				shortLabel: 'Cetak',
@@ -175,6 +182,7 @@ export default function ERaporLayoutClient({
 			'/erapor/ketidakhadiran',
 			'/erapor/ekstrakurikuler',
 			'/erapor/rekap-leger',
+			'/erapor/juara',
 			'/erapor/cetak',
 		];
 

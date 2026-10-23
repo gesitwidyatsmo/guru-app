@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import {
 	Printer,
@@ -25,12 +25,21 @@ import {
 	Check,
 	X,
 	Sparkles,
+	Trophy,
+	Crown,
+	Download,
+	FileSpreadsheet,
+	Search,
+	Filter,
 } from 'lucide-react';
 import Loader from '@/app/components/loading';
 import { normalizeTingkatArray } from '@/lib/eraporEkskulUtils';
+import { generateSinglePiagamPDF, generateBatchPiagamPDF } from '@/lib/pdfPiagam';
+import { fetchSchoolProfile, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
+import * as XLSX from 'xlsx';
 
 export default function KurikulumRaporManagementPage() {
-	const [activeTab, setActiveTab] = useState('titimangsa'); // 'titimangsa' | 'locking' | 'ekskul_catatan' | 'pleno'
+	const [activeTab, setActiveTab] = useState('titimangsa'); // 'titimangsa' | 'locking' | 'ekskul_catatan' | 'pleno' | 'juara_piagam'
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [notification, setNotification] = useState(null);
@@ -66,6 +75,280 @@ export default function KurikulumRaporManagementPage() {
 	const [plenoData, setPlenoData] = useState(null);
 	const [plenoDecisions, setPlenoDecisions] = useState({});
 	const [loadingPleno, setLoadingPleno] = useState(false);
+
+	// 5. Data Juara & Piagam Penghargaan
+	const [juaraData, setJuaraData] = useState(null);
+	const [loadingJuara, setLoadingJuara] = useState(false);
+	const [juaraSubTab, setJuaraSubTab] = useState('kelas'); // 'kelas' | 'umum'
+	const [selectedJuaraKelas, setSelectedJuaraKelas] = useState('');
+	const [selectedJuaraTingkat, setSelectedJuaraTingkat] = useState('sekolah'); // 'sekolah' | 'VII' | 'VIII' | 'IX'
+	const [juaraSearchQuery, setJuaraSearchQuery] = useState('');
+
+	const fetchJuaraData = useCallback(async () => {
+		try {
+			setLoadingJuara(true);
+			const res = await fetch(`/api/erapor/juara?tahun_ajaran=${encodeURIComponent(tahunAjaran)}&semester=${semester}`);
+			if (res.ok) {
+				const jData = await res.json();
+				setJuaraData(jData);
+				if (jData?.kelas_list?.length > 0 && !selectedJuaraKelas) {
+					setSelectedJuaraKelas(jData.kelas_list[0].nama_kelas);
+				}
+			}
+		} catch (err) {
+			console.error('Error load data juara kurikulum:', err);
+		} finally {
+			setLoadingJuara(false);
+		}
+	}, [tahunAjaran, semester, selectedJuaraKelas]);
+
+	useEffect(() => {
+		if (activeTab === 'juara_piagam') {
+			fetchJuaraData();
+		}
+	}, [activeTab, fetchJuaraData]);
+
+	// Cetak Piagam Single
+	const handleCetakPiagamSingle = (siswa, defaultLabel) => {
+		try {
+			const label = defaultLabel || siswa.juara_label || `PERINGKAT KE-${siswa.rank_kelas || 1} KELAS ${siswa.kelas}`;
+			generateSinglePiagamPDF({
+				siswa,
+				juaraLabel: label,
+				kategori: 'Hasil Belajar Akademik (E-Rapor)',
+				kelas: siswa.kelas,
+				tahunAjaran,
+				semester,
+				schoolProfile: {
+					...DEFAULT_PROFIL_SEKOLAH,
+					...settings,
+				},
+				tanggalPiagam: semester === 1 ? settings.tanggal_rapor_ganjil : settings.tanggal_rapor_genap,
+				waliKelasName: siswa.wali_kelas,
+				waliKelasNip: siswa.nip_wali,
+				wakaKurikulumName: 'Waka Kurikulum',
+				rataRata: siswa.rata_rata,
+				totalNilai: siswa.total_nilai,
+			});
+			if (showToast) showToast(`Piagam untuk ${siswa.nama_lengkap} berhasil diunduh!`);
+		} catch (err) {
+			if (showToast) showToast('Gagal cetak piagam: ' + err.message, 'error');
+		}
+	};
+
+	// Cetak Piagam Top 3 Kelas Terpilih
+	const handleCetakPiagamTop3Kelas = () => {
+		const classStudents = (juaraData?.juara_kelas_map?.[selectedJuaraKelas] || []).slice(0, 3);
+		if (classStudents.length === 0) {
+			if (showToast) showToast('Belum ada data nilai di kelas ini', 'error');
+			return;
+		}
+
+		try {
+			const items = classStudents.map((s) => ({
+				siswa: s,
+				juaraLabel: s.juara_label || `JUARA KELAS ${selectedJuaraKelas}`,
+				kelas: selectedJuaraKelas,
+				waliKelasName: s.wali_kelas,
+				waliKelasNip: s.nip_wali,
+				rataRata: s.rata_rata,
+				totalNilai: s.total_nilai,
+			}));
+
+			generateBatchPiagamPDF(items, {
+				schoolProfile: { ...DEFAULT_PROFIL_SEKOLAH, ...settings },
+				tahunAjaran,
+				semester,
+				tanggalPiagam: semester === 1 ? settings.tanggal_rapor_ganjil : settings.tanggal_rapor_genap,
+				batchTitle: `Piagam_Juara_Top3_Kelas_${selectedJuaraKelas}`,
+			});
+			if (showToast) showToast(`Piagam Juara Top 3 Kelas ${selectedJuaraKelas} berhasil dibuat!`);
+		} catch (err) {
+			if (showToast) showToast('Gagal cetak batch: ' + err.message, 'error');
+		}
+	};
+
+	// Cetak Semua Juara 1, 2, 3 Seluruh Rombel Sekolah
+	const handleCetakSemuaJuaraKelas = () => {
+		const allTopItems = [];
+		const kMap = juaraData?.juara_kelas_map || {};
+		Object.keys(kMap).forEach((klsNama) => {
+			const top3 = (kMap[klsNama] || []).slice(0, 3);
+			top3.forEach((s) => {
+				allTopItems.push({
+					siswa: s,
+					juaraLabel: s.juara_label || `JUARA KELAS ${klsNama}`,
+					kelas: klsNama,
+					waliKelasName: s.wali_kelas,
+					waliKelasNip: s.nip_wali,
+					rataRata: s.rata_rata,
+					totalNilai: s.total_nilai,
+				});
+			});
+		});
+
+		if (allTopItems.length === 0) {
+			if (showToast) showToast('Belum ada data juara kelas', 'error');
+			return;
+		}
+
+		try {
+			generateBatchPiagamPDF(allTopItems, {
+				schoolProfile: { ...DEFAULT_PROFIL_SEKOLAH, ...settings },
+				tahunAjaran,
+				semester,
+				tanggalPiagam: semester === 1 ? settings.tanggal_rapor_ganjil : settings.tanggal_rapor_genap,
+				batchTitle: `Piagam_Semua_Juara_Kelas_${tahunAjaran.replace('/', '-')}`,
+			});
+			if (showToast) showToast(`Sebanyak ${allTopItems.length} piagam juara kelas berhasil digenerate!`);
+		} catch (err) {
+			if (showToast) showToast('Gagal cetak massal: ' + err.message, 'error');
+		}
+	};
+
+	// Cetak Piagam Juara Umum
+	const handleCetakPiagamJuaraUmum = () => {
+		let listToPrint = [];
+		const jUmum = juaraData?.juara_umum || {};
+		if (selectedJuaraTingkat === 'VII') listToPrint = jUmum.tingkat_7?.slice(0, 3) || [];
+		else if (selectedJuaraTingkat === 'VIII') listToPrint = jUmum.tingkat_8?.slice(0, 3) || [];
+		else if (selectedJuaraTingkat === 'IX') listToPrint = jUmum.tingkat_9?.slice(0, 3) || [];
+		else listToPrint = jUmum.sekolah?.slice(0, 3) || [];
+
+		if (listToPrint.length === 0) {
+			if (showToast) showToast('Belum ada data juara umum', 'error');
+			return;
+		}
+
+		try {
+			const labelKategori = selectedJuaraTingkat === 'sekolah' ? 'SEKOLAH' : `TINGKAT ${selectedJuaraTingkat}`;
+			const items = listToPrint.map((s) => ({
+				siswa: s,
+				juaraLabel: s.juara_label || `JUARA UMUM ${labelKategori}`,
+				kelas: s.kelas,
+				waliKelasName: s.wali_kelas,
+				rataRata: s.rata_rata,
+				totalNilai: s.total_nilai,
+			}));
+
+			generateBatchPiagamPDF(items, {
+				schoolProfile: { ...DEFAULT_PROFIL_SEKOLAH, ...settings },
+				tahunAjaran,
+				semester,
+				tanggalPiagam: semester === 1 ? settings.tanggal_rapor_ganjil : settings.tanggal_rapor_genap,
+				batchTitle: `Piagam_Juara_Umum_${labelKategori.replace(/\s+/g, '_')}`,
+			});
+			if (showToast) showToast(`Piagam Juara Umum (${labelKategori}) berhasil dibuat!`);
+		} catch (err) {
+			if (showToast) showToast('Gagal cetak juara umum: ' + err.message, 'error');
+		}
+	};
+
+	const juaraKelasMap = juaraData?.juara_kelas_map || {};
+	const juaraUmum = juaraData?.juara_umum || {};
+	const kelasListJuara = juaraData?.kelas_list || [];
+
+	const currentJuaraClassStudents = useMemo(() => {
+		if (selectedJuaraKelas === 'ALL') {
+			const all = [];
+			Object.keys(juaraKelasMap).forEach((k) => {
+				const top3 = (juaraKelasMap[k] || []).slice(0, 3);
+				all.push(...top3);
+			});
+			if (!juaraSearchQuery.trim()) return all;
+			const q = juaraSearchQuery.toLowerCase();
+			return all.filter(
+				(s) =>
+					s.nama_lengkap?.toLowerCase().includes(q) ||
+					s.nis?.includes(q) ||
+					s.kelas?.toLowerCase().includes(q)
+			);
+		}
+
+		if (!selectedJuaraKelas || !juaraKelasMap[selectedJuaraKelas]) return [];
+		const list = (juaraKelasMap[selectedJuaraKelas] || []).slice(0, 3);
+		if (!juaraSearchQuery.trim()) return list;
+		const q = juaraSearchQuery.toLowerCase();
+		return list.filter((s) => s.nama_lengkap?.toLowerCase().includes(q) || s.nis?.includes(q));
+	}, [selectedJuaraKelas, juaraKelasMap, juaraSearchQuery]);
+
+	const top3JuaraKelas = useMemo(() => {
+		if (selectedJuaraKelas === 'ALL') {
+			const firstK = Object.keys(juaraKelasMap)[0];
+			return (juaraKelasMap[firstK] || []).slice(0, 3);
+		}
+		if (!selectedJuaraKelas || !juaraKelasMap[selectedJuaraKelas]) return [];
+		return (juaraKelasMap[selectedJuaraKelas] || []).slice(0, 3);
+	}, [selectedJuaraKelas, juaraKelasMap]);
+
+	const currentJuaraUmumList = useMemo(() => {
+		let list = [];
+		if (selectedJuaraTingkat === 'VII') list = (juaraUmum.tingkat_7 || []).slice(0, 3);
+		else if (selectedJuaraTingkat === 'VIII') list = (juaraUmum.tingkat_8 || []).slice(0, 3);
+		else if (selectedJuaraTingkat === 'IX') list = (juaraUmum.tingkat_9 || []).slice(0, 3);
+		else list = (juaraUmum.sekolah || []).slice(0, 3);
+
+		if (!juaraSearchQuery.trim()) return list;
+		const q = juaraSearchQuery.toLowerCase();
+		return list.filter((s) => s.nama_lengkap?.toLowerCase().includes(q) || s.kelas?.toLowerCase().includes(q));
+	}, [selectedJuaraTingkat, juaraUmum, juaraSearchQuery]);
+
+	const top3JuaraUmum = useMemo(() => {
+		return currentJuaraUmumList.slice(0, 3);
+	}, [currentJuaraUmumList]);
+
+	const handleExportJuaraExcel = () => {
+		if (!juaraData) {
+			showToast('Data juara belum siap diekspor', 'error');
+			return;
+		}
+
+		try {
+			const wb = XLSX.utils.book_new();
+
+			// 1. Sheet Juara 1-3 Setiap Rombel
+			const rowsKelas = [];
+			const kMap = juaraData.juara_kelas_map || {};
+			Object.keys(kMap).forEach((kls) => {
+				(kMap[kls] || []).slice(0, 3).forEach((s) => {
+					rowsKelas.push({
+						Kelas: s.kelas,
+						Peringkat: `Juara ${s.rank_kelas}`,
+						NIS: s.nis || '-',
+						NISN: s.nisn || '-',
+						'Nama Lengkap': s.nama_lengkap,
+						'Total Nilai': s.total_nilai,
+						'Rata-Rata': s.rata_rata,
+						Predikat: s.juara_label,
+						'Wali Kelas': s.wali_kelas || '-',
+					});
+				});
+			});
+			const wsKelas = XLSX.utils.json_to_sheet(rowsKelas);
+			XLSX.utils.book_append_sheet(wb, wsKelas, 'Juara 1-3 Tiap Rombel');
+
+			// 2. Sheet Juara Umum (1-3 Besar)
+			const rowsUmum = [];
+			(juaraData.juara_umum?.sekolah || []).slice(0, 3).forEach((s, idx) => {
+				rowsUmum.push({
+					Peringkat: `Juara Umum ${idx + 1}`,
+					Kelas: s.kelas,
+					NIS: s.nis || '-',
+					'Nama Lengkap': s.nama_lengkap,
+					'Total Nilai': s.total_nilai,
+					'Rata-Rata': s.rata_rata,
+					Predikat: s.juara_label,
+				});
+			});
+			const wsUmum = XLSX.utils.json_to_sheet(rowsUmum);
+			XLSX.utils.book_append_sheet(wb, wsUmum, 'Juara Umum Top 3');
+
+			XLSX.writeFile(wb, `Rekap_Juara_Top3_Rapor_${tahunAjaran.replace('/', '-')}_Sem${semester}.xlsx`);
+			showToast('Rekapitulasi Juara 1-3 Rapor berhasil diekspor ke Excel!');
+		} catch (err) {
+			showToast('Gagal ekspor excel: ' + err.message, 'error');
+		}
+	};
 
 	const showToast = (msg, type = 'success') => {
 		setNotification({ msg, type });
@@ -603,6 +886,20 @@ export default function KurikulumRaporManagementPage() {
 					<span>Pleno Kenaikan Kelas</span>
 					<span className='px-2 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-black'>
 						Sem 2
+					</span>
+				</button>
+
+				<button
+					onClick={() => setActiveTab('juara_piagam')}
+					className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer ${
+						activeTab === 'juara_piagam'
+							? 'bg-yellow-300 text-black border-2 border-black shadow-[2px_2px_0px_#000]'
+							: 'text-gray-700 hover:bg-gray-100'
+					}`}>
+					<Trophy className='w-4 h-4 text-amber-700' />
+					<span>Juara & Piagam</span>
+					<span className='px-2 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black'>
+						Piagam
 					</span>
 				</button>
 			</div>
@@ -1369,6 +1666,620 @@ export default function KurikulumRaporManagementPage() {
 								</tbody>
 							</table>
 						</div>
+					)}
+				</div>
+			)}
+
+			{/* ========================================================================= */}
+			{/* TAB 5: JUARA KELAS, JUARA UMUM & CETAK PIAGAM                             */}
+			{/* ========================================================================= */}
+			{activeTab === 'juara_piagam' && (
+				<div className='bg-white p-6 sm:p-8 border-3 border-black rounded-3xl shadow-[4px_4px_0px_0px_#000] space-y-6'>
+					{/* Header Tab Juara & Piagam */}
+					<div className='bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-100 border-2 border-black rounded-2xl p-5 shadow-[3px_3px_0px_0px_#000] flex flex-col md:flex-row items-start md:items-center justify-between gap-4'>
+						<div>
+							<div className='inline-flex items-center gap-2 px-3 py-1 bg-black text-amber-300 rounded-full text-xs font-black uppercase shadow-[2px_2px_0px_0px_#000] mb-2'>
+								<Trophy className='w-4 h-4' />
+								<span>Prestasi Belajar & Piagam Penghargaan</span>
+							</div>
+							<h2 className='text-xl sm:text-2xl font-black text-black tracking-tight'>
+								Juara Kelas & Juara Umum (E-Rapor)
+							</h2>
+							<p className='text-xs text-gray-700 font-medium mt-1 max-w-2xl'>
+								Pemeringkatan resmi hasil belajar akademik santri / siswa, podium prestasi, serta fasilitas pencetakan piagam penghargaan berbingkai emas resmi sekolah.
+							</p>
+						</div>
+
+						<div className='flex items-center gap-2 shrink-0 flex-wrap'>
+							<span className='px-3 py-2 bg-white border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000]'>
+								TA {tahunAjaran} • Sem {semester}
+							</span>
+							<button
+								onClick={fetchJuaraData}
+								disabled={loadingJuara}
+								className='p-2 bg-white hover:bg-gray-100 border-2 border-black rounded-xl text-black shadow-[2px_2px_0px_#000] cursor-pointer transition-all'
+								title='Segarkan Data'>
+								<RefreshCw className={`w-4 h-4 ${loadingJuara ? 'animate-spin' : ''}`} />
+							</button>
+							<button
+								onClick={handleExportJuaraExcel}
+								className='px-3.5 py-2 bg-emerald-300 hover:bg-emerald-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5 transition-all cursor-pointer'>
+								<FileSpreadsheet className='w-4 h-4' />
+								<span>Ekspor Excel</span>
+							</button>
+						</div>
+					</div>
+
+					{/* Sub Tab Switcher & Quick Actions */}
+					<div className='flex flex-wrap items-center justify-between gap-3 bg-gray-50 p-2 border-2 border-black rounded-2xl'>
+						<div className='flex items-center gap-2'>
+							<button
+								onClick={() => setJuaraSubTab('kelas')}
+								className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer ${
+									juaraSubTab === 'kelas'
+										? 'bg-yellow-300 text-black border-2 border-black shadow-[2px_2px_0px_#000]'
+										: 'text-gray-700 hover:bg-gray-200'
+								}`}>
+								<Award className='w-4 h-4' />
+								<span>Juara Kelas (Per Rombel)</span>
+							</button>
+
+							<button
+								onClick={() => setJuaraSubTab('umum')}
+								className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center gap-2 cursor-pointer ${
+									juaraSubTab === 'umum'
+										? 'bg-yellow-300 text-black border-2 border-black shadow-[2px_2px_0px_#000]'
+										: 'text-gray-700 hover:bg-gray-200'
+								}`}>
+								<Crown className='w-4 h-4 text-amber-700' />
+								<span>Juara Umum (Tingkat & Sekolah)</span>
+								<span className='px-2 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black'>
+									Grand
+								</span>
+							</button>
+						</div>
+
+						{/* Quick Actions Cetak Piagam Massal */}
+						<div className='flex items-center gap-2 flex-wrap'>
+							{juaraSubTab === 'kelas' ? (
+								<>
+									<button
+										onClick={handleCetakPiagamTop3Kelas}
+										className='px-3 py-1.5 bg-amber-300 hover:bg-amber-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5 cursor-pointer'>
+										<Printer className='w-3.5 h-3.5' />
+										<span>Cetak Piagam Juara 1-3 ({selectedJuaraKelas})</span>
+									</button>
+									<button
+										onClick={handleCetakSemuaJuaraKelas}
+										className='px-3 py-1.5 bg-rose-300 hover:bg-rose-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5 cursor-pointer'>
+										<Award className='w-3.5 h-3.5' />
+										<span>Cetak Semua Juara Kelas (Batch)</span>
+									</button>
+								</>
+							) : (
+								<button
+									onClick={handleCetakPiagamJuaraUmum}
+									className='px-3 py-1.5 bg-amber-400 hover:bg-amber-500 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5 cursor-pointer'>
+									<Crown className='w-3.5 h-3.5' />
+									<span>Cetak Piagam Juara Umum Top 3</span>
+								</button>
+							)}
+						</div>
+					</div>
+
+					{loadingJuara ? (
+						<div className='py-12'>
+							<Loader text='Memuat data rekapitulasi juara & piagam...' />
+						</div>
+					) : (
+						<>
+							{/* ================================================================= */}
+							{/* SUB TAB A: JUARA KELAS (PER ROMBEL)                               */}
+							{/* ================================================================= */}
+							{juaraSubTab === 'kelas' && (
+								<div className='space-y-6'>
+									{/* Toolbar Pemilihan Rombel Kelas & Pencarian */}
+									<div className='bg-gray-50 border-2 border-black rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+										<div className='flex flex-wrap items-center gap-3 flex-1'>
+											<div className='flex items-center gap-2'>
+												<span className='text-xs font-black uppercase text-gray-700 flex items-center gap-1.5'>
+													<Filter className='w-4 h-4' />
+													<span>Pilih Rombel:</span>
+												</span>
+												<select
+													value={selectedJuaraKelas}
+													onChange={(e) => setSelectedJuaraKelas(e.target.value)}
+													className='px-3 py-2 bg-yellow-100 border-2 border-black rounded-xl text-xs font-black cursor-pointer shadow-[2px_2px_0px_#000] focus:outline-none'>
+													<option value='ALL'>★ Rekap Semua Rombel (Juara 1-3)</option>
+													{kelasListJuara.map((k) => (
+														<option key={k.id || k.nama_kelas} value={k.nama_kelas}>
+															Kelas {k.nama_kelas} (Juara 1-3)
+														</option>
+													))}
+												</select>
+											</div>
+
+											<div className='relative flex-1 min-w-[200px]'>
+												<input
+													type='text'
+													value={juaraSearchQuery}
+													onChange={(e) => setJuaraSearchQuery(e.target.value)}
+													placeholder='Cari nama atau NIS santri...'
+													className='w-full pl-8 pr-3 py-2 border-2 border-black rounded-xl text-xs font-bold shadow-[2px_2px_0px_#000] focus:outline-none bg-white'
+												/>
+												<Search className='w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400' />
+											</div>
+										</div>
+
+										<div className='text-xs font-bold text-gray-600 shrink-0'>
+											Total: <span className='font-black text-black'>{currentJuaraClassStudents.length} Santri Juara (1–3)</span>
+										</div>
+									</div>
+
+									{/* PODIUM TOP 3 JUARA KELAS */}
+									{selectedJuaraKelas === 'ALL' ? (
+										<div className='bg-gradient-to-r from-amber-100 to-yellow-100 border-2 border-black rounded-2xl p-4 shadow-[3px_3px_0px_#000] flex items-center gap-3'>
+											<Trophy className='w-6 h-6 text-amber-600 shrink-0' />
+											<p className='text-xs font-bold text-gray-800'>
+												Menampilkan rekapitulasi peringkat <span className='font-black text-black'>Juara I, II, dan III (Top 3)</span> dari setiap rombel kelas di sekolah. Pilih rombel tertentu pada filter dropdown untuk melihat podium visual per kelas.
+											</p>
+										</div>
+									) : (
+										<div className='grid grid-cols-1 md:grid-cols-3 gap-4 items-end'>
+											{/* Juara 2 (Perak) */}
+											<div className='order-2 md:order-1 bg-gradient-to-b from-slate-100 to-slate-200 border-3 border-black rounded-3xl p-5 shadow-[4px_4px_0px_#000] text-center space-y-3 relative overflow-hidden'>
+												<div className='w-12 h-12 mx-auto rounded-full bg-slate-300 border-2 border-black flex items-center justify-center text-2xl font-black shadow-[2px_2px_0px_#000]'>
+													🥈
+												</div>
+												<span className='inline-block px-3 py-0.5 bg-slate-800 text-white rounded-full text-[10px] font-black uppercase tracking-wider'>
+													Juara II Kelas
+												</span>
+												<div>
+													<h3 className='text-base font-black text-black line-clamp-1'>
+														{top3JuaraKelas[1]?.nama_lengkap || 'Belum Ada Data'}
+													</h3>
+													<p className='text-[11px] font-mono font-bold text-gray-600'>NIS: {top3JuaraKelas[1]?.nis || '-'}</p>
+												</div>
+												<div className='p-2.5 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+													<p className='text-xs font-black text-slate-900'>Rata-Rata: {top3JuaraKelas[1]?.rata_rata || '0.00'}</p>
+													<p className='text-[10px] font-bold text-gray-500'>Total: {top3JuaraKelas[1]?.total_nilai || 0}</p>
+												</div>
+												{top3JuaraKelas[1] && (
+													<button
+														onClick={() => handleCetakPiagamSingle(top3JuaraKelas[1], `JUARA II KELAS ${selectedJuaraKelas}`)}
+														className='w-full py-2 bg-slate-300 hover:bg-slate-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer transition-all'>
+														<Printer className='w-3.5 h-3.5' />
+														<span>Cetak Piagam Juara 2</span>
+													</button>
+												)}
+											</div>
+
+											{/* Juara 1 (Emas - Center Big) */}
+											<div className='order-1 md:order-2 bg-gradient-to-b from-amber-200 via-yellow-300 to-amber-200 border-3 border-black rounded-3xl p-6 shadow-[6px_6px_0px_#000] text-center space-y-3 relative overflow-hidden -translate-y-2'>
+												<div className='w-16 h-16 mx-auto rounded-full bg-yellow-400 border-2 border-black flex items-center justify-center text-3xl font-black shadow-[3px_3px_0px_#000]'>
+													🥇
+												</div>
+												<span className='inline-block px-4 py-1 bg-amber-950 text-yellow-300 rounded-full text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_#000]'>
+													★ JUARA I KELAS ★
+												</span>
+												<div>
+													<h3 className='text-lg font-black text-black line-clamp-1'>
+														{top3JuaraKelas[0]?.nama_lengkap || 'Belum Ada Data'}
+													</h3>
+													<p className='text-xs font-mono font-bold text-amber-900'>NIS: {top3JuaraKelas[0]?.nis || '-'}</p>
+												</div>
+												<div className='p-3 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+													<p className='text-sm font-black text-amber-950'>Rata-Rata: {top3JuaraKelas[0]?.rata_rata || '0.00'}</p>
+													<p className='text-[11px] font-bold text-gray-600'>Total Nilai: {top3JuaraKelas[0]?.total_nilai || 0}</p>
+												</div>
+												{top3JuaraKelas[0] && (
+													<button
+														onClick={() => handleCetakPiagamSingle(top3JuaraKelas[0], `JUARA I KELAS ${selectedJuaraKelas}`)}
+														className='w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 border-2 border-black rounded-xl text-xs font-black shadow-[3px_3px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer transition-all'>
+														<Trophy className='w-4 h-4' />
+														<span>Cetak Piagam Juara 1</span>
+													</button>
+												)}
+											</div>
+
+											{/* Juara 3 (Perunggu) */}
+											<div className='order-3 md:order-3 bg-gradient-to-b from-amber-100 to-amber-200 border-3 border-black rounded-3xl p-5 shadow-[4px_4px_0px_#000] text-center space-y-3 relative overflow-hidden'>
+												<div className='w-12 h-12 mx-auto rounded-full bg-amber-300 border-2 border-black flex items-center justify-center text-2xl font-black shadow-[2px_2px_0px_#000]'>
+													🥉
+												</div>
+												<span className='inline-block px-3 py-0.5 bg-amber-900 text-white rounded-full text-[10px] font-black uppercase tracking-wider'>
+													Juara III Kelas
+												</span>
+												<div>
+													<h3 className='text-base font-black text-black line-clamp-1'>
+														{top3JuaraKelas[2]?.nama_lengkap || 'Belum Ada Data'}
+													</h3>
+													<p className='text-[11px] font-mono font-bold text-gray-600'>NIS: {top3JuaraKelas[2]?.nis || '-'}</p>
+												</div>
+												<div className='p-2.5 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+													<p className='text-xs font-black text-amber-950'>Rata-Rata: {top3JuaraKelas[2]?.rata_rata || '0.00'}</p>
+													<p className='text-[10px] font-bold text-gray-500'>Total: {top3JuaraKelas[2]?.total_nilai || 0}</p>
+												</div>
+												{top3JuaraKelas[2] && (
+													<button
+														onClick={() => handleCetakPiagamSingle(top3JuaraKelas[2], `JUARA III KELAS ${selectedJuaraKelas}`)}
+														className='w-full py-2 bg-amber-300 hover:bg-amber-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer transition-all'>
+														<Printer className='w-3.5 h-3.5' />
+														<span>Cetak Piagam Juara 3</span>
+													</button>
+												)}
+											</div>
+										</div>
+									)}
+
+									{/* Tabel Peringkat Lengkap Rombel */}
+									<div className='bg-white border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#000] overflow-hidden'>
+										<div className='p-4 border-b-2 border-black bg-yellow-200 flex items-center justify-between'>
+											<h3 className='text-sm font-black text-black uppercase flex items-center gap-2'>
+												<Award className='w-4 h-4' />
+												<span>
+													{selectedJuaraKelas === 'ALL'
+														? 'Rekapitulasi Juara I, II, dan III Seluruh Rombel'
+														: `Daftar Juara I, II, dan III (Top 3) — Kelas ${selectedJuaraKelas}`}
+												</span>
+											</h3>
+											{selectedJuaraKelas !== 'ALL' && (
+												<span className='text-xs font-bold text-gray-700'>
+													Wali Kelas: {top3JuaraKelas[0]?.wali_kelas || 'Belum Terploting'}
+												</span>
+											)}
+										</div>
+
+										<div className='overflow-x-auto'>
+											<table className='w-full text-left border-collapse text-xs'>
+												<thead>
+													<tr className='border-b-2 border-black bg-gray-50 font-black uppercase text-[11px] text-gray-700'>
+														<th className='py-3 px-4 text-center w-16'>Rank</th>
+														{selectedJuaraKelas === 'ALL' && <th className='py-3 px-4 text-center'>Rombel</th>}
+														<th className='py-3 px-4'>NIS</th>
+														<th className='py-3 px-4'>Nama Lengkap Santri / Siswa</th>
+														<th className='py-3 px-4 text-center'>Total Nilai</th>
+														<th className='py-3 px-4 text-center'>Rata-Rata</th>
+														<th className='py-3 px-4 text-center'>Predikat Prestasi</th>
+														<th className='py-3 px-4 text-right'>Aksi Piagam</th>
+													</tr>
+												</thead>
+												<tbody className='divide-y-2 divide-gray-100 font-bold'>
+													{currentJuaraClassStudents.length === 0 ? (
+														<tr>
+															<td colSpan={selectedJuaraKelas === 'ALL' ? 8 : 7} className='text-center py-8 text-gray-500'>
+																Belum ada data nilai yang diinput untuk kategori ini.
+															</td>
+														</tr>
+													) : (
+														currentJuaraClassStudents.map((item) => {
+															const isTop3 = item.rank_kelas <= 3;
+															const badgeColor =
+																item.rank_kelas === 1
+																	? 'bg-amber-300 border-amber-600 text-amber-950 font-black'
+																	: item.rank_kelas === 2
+																	? 'bg-slate-200 border-slate-400 text-slate-900 font-black'
+																	: item.rank_kelas === 3
+																	? 'bg-amber-100 border-amber-500 text-amber-900 font-black'
+																	: 'bg-gray-100 border-gray-300 text-gray-700';
+
+															return (
+																<tr
+																	key={`${item.id}-${item.kelas}`}
+																	className={`hover:bg-yellow-50/60 transition-colors ${
+																		isTop3 ? 'bg-yellow-50/30 font-bold' : ''
+																	}`}>
+																	<td className='py-3 px-4 text-center'>
+																		<span
+																			className={`inline-flex items-center justify-center w-7 h-7 rounded-full border-2 border-black font-black text-xs shadow-[1px_1px_0px_#000] ${
+																				item.rank_kelas === 1
+																					? 'bg-yellow-400 text-black'
+																					: item.rank_kelas === 2
+																					? 'bg-slate-300 text-black'
+																					: item.rank_kelas === 3
+																					? 'bg-amber-300 text-black'
+																					: 'bg-white text-gray-700'
+																			}`}>
+																			{item.rank_kelas}
+																		</span>
+																	</td>
+																	{selectedJuaraKelas === 'ALL' && (
+																		<td className='py-3 px-4 text-center'>
+																			<span className='px-2.5 py-0.5 bg-black text-yellow-300 rounded font-black text-xs'>
+																				{item.kelas}
+																			</span>
+																		</td>
+																	)}
+																	<td className='py-3 px-4 font-mono text-gray-600'>{item.nis || '-'}</td>
+																	<td className='py-3 px-4 text-black font-black'>
+																		<div className='flex items-center gap-2'>
+																			<span>{item.nama_lengkap}</span>
+																			{item.rank_kelas === 1 && <span title='Juara 1'>👑</span>}
+																		</div>
+																	</td>
+																	<td className='py-3 px-4 text-center font-mono'>{item.total_nilai}</td>
+																	<td className='py-3 px-4 text-center'>
+																		<span className='px-2.5 py-1 bg-white border-2 border-black rounded-lg font-black font-mono shadow-[1px_1px_0px_#000]'>
+																			{item.rata_rata}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 text-center'>
+																		<span className={`px-2.5 py-0.5 rounded-full text-[10px] border ${badgeColor}`}>
+																			{item.juara_label}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 text-right'>
+																		<button
+																			onClick={() => handleCetakPiagamSingle(item)}
+																			className='px-2.5 py-1 bg-yellow-300 hover:bg-yellow-400 border border-black rounded-lg text-xs font-black shadow-[1px_1px_0px_#000] inline-flex items-center gap-1 cursor-pointer'>
+																			<Printer className='w-3 h-3' />
+																			<span>Cetak Piagam</span>
+																		</button>
+																	</td>
+																</tr>
+															);
+														})
+													)}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* ================================================================= */}
+							{/* SUB TAB B: JUARA UMUM (TINGKAT & KESELURUHAN SEKOLAH)             */}
+							{/* ================================================================= */}
+							{juaraSubTab === 'umum' && (
+								<div className='space-y-6'>
+									{/* Toolbar Filter Tingkat Juara Umum */}
+									<div className='bg-gray-50 border-2 border-black rounded-2xl p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+										<div className='flex flex-wrap items-center gap-2.5'>
+											<span className='text-xs font-black uppercase text-gray-700 flex items-center gap-1.5'>
+												<Crown className='w-4 h-4 text-amber-600' />
+												<span>Kategori:</span>
+											</span>
+											<button
+												onClick={() => setSelectedJuaraTingkat('sekolah')}
+												className={`px-3 py-1.5 rounded-xl text-xs font-black border-2 border-black transition-all cursor-pointer ${
+													selectedJuaraTingkat === 'sekolah'
+														? 'bg-yellow-300 shadow-[2px_2px_0px_#000]'
+														: 'bg-white hover:bg-gray-100'
+												}`}>
+												★ Seluruh Sekolah
+											</button>
+											<button
+												onClick={() => setSelectedJuaraTingkat('VII')}
+												className={`px-3 py-1.5 rounded-xl text-xs font-black border-2 border-black transition-all cursor-pointer ${
+													selectedJuaraTingkat === 'VII'
+														? 'bg-yellow-300 shadow-[2px_2px_0px_#000]'
+														: 'bg-white hover:bg-gray-100'
+												}`}>
+												Tingkat VII
+											</button>
+											<button
+												onClick={() => setSelectedJuaraTingkat('VIII')}
+												className={`px-3 py-1.5 rounded-xl text-xs font-black border-2 border-black transition-all cursor-pointer ${
+													selectedJuaraTingkat === 'VIII'
+														? 'bg-yellow-300 shadow-[2px_2px_0px_#000]'
+														: 'bg-white hover:bg-gray-100'
+												}`}>
+												Tingkat VIII
+											</button>
+											<button
+												onClick={() => setSelectedJuaraTingkat('IX')}
+												className={`px-3 py-1.5 rounded-xl text-xs font-black border-2 border-black transition-all cursor-pointer ${
+													selectedJuaraTingkat === 'IX'
+														? 'bg-yellow-300 shadow-[2px_2px_0px_#000]'
+														: 'bg-white hover:bg-gray-100'
+												}`}>
+												Tingkat IX
+											</button>
+										</div>
+
+										<div className='relative min-w-[200px]'>
+											<input
+												type='text'
+												value={juaraSearchQuery}
+												onChange={(e) => setJuaraSearchQuery(e.target.value)}
+												placeholder='Cari nama atau kelas...'
+												className='w-full pl-8 pr-3 py-1.5 border-2 border-black rounded-xl text-xs font-bold shadow-[2px_2px_0px_#000] focus:outline-none bg-white'
+											/>
+											<Search className='w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400' />
+										</div>
+									</div>
+
+									{/* PODIUM TOP 3 JUARA UMUM */}
+									<div className='grid grid-cols-1 md:grid-cols-3 gap-4 items-end'>
+										{/* Juara Umum 2 */}
+										<div className='order-2 md:order-1 bg-gradient-to-b from-slate-100 to-slate-200 border-3 border-black rounded-3xl p-5 shadow-[4px_4px_0px_#000] text-center space-y-3'>
+											<div className='w-12 h-12 mx-auto rounded-full bg-slate-300 border-2 border-black flex items-center justify-center text-2xl font-black shadow-[2px_2px_0px_#000]'>
+												🥈
+											</div>
+											<span className='inline-block px-3 py-0.5 bg-slate-800 text-white rounded-full text-[10px] font-black uppercase tracking-wider'>
+												Juara Umum II
+											</span>
+											<div>
+												<h3 className='text-base font-black text-black line-clamp-1'>
+													{top3JuaraUmum[1]?.nama_lengkap || 'Belum Ada Data'}
+												</h3>
+												<p className='text-[11px] font-bold text-gray-600'>Kelas {top3JuaraUmum[1]?.kelas || '-'}</p>
+											</div>
+											<div className='p-2.5 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+												<p className='text-xs font-black text-slate-900'>Rata-Rata: {top3JuaraUmum[1]?.rata_rata || '0.00'}</p>
+												<p className='text-[10px] font-bold text-gray-500'>Total: {top3JuaraUmum[1]?.total_nilai || 0}</p>
+											</div>
+											{top3JuaraUmum[1] && (
+												<button
+													onClick={() =>
+														handleCetakPiagamSingle(
+															top3JuaraUmum[1],
+															`JUARA UMUM II ${selectedJuaraTingkat === 'sekolah' ? 'SEKOLAH' : `TINGKAT ${selectedJuaraTingkat}`}`
+														)
+													}
+													className='w-full py-2 bg-slate-300 hover:bg-slate-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer'>
+													<Printer className='w-3.5 h-3.5' />
+													<span>Cetak Piagam Juara Umum 2</span>
+												</button>
+											)}
+										</div>
+
+										{/* Juara Umum 1 */}
+										<div className='order-1 md:order-2 bg-gradient-to-b from-amber-200 via-yellow-300 to-amber-200 border-3 border-black rounded-3xl p-6 shadow-[6px_6px_0px_#000] text-center space-y-3 -translate-y-2'>
+											<div className='w-16 h-16 mx-auto rounded-full bg-yellow-400 border-2 border-black flex items-center justify-center text-3xl font-black shadow-[3px_3px_0px_#000]'>
+												👑
+											</div>
+											<span className='inline-block px-4 py-1 bg-amber-950 text-yellow-300 rounded-full text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_#000]'>
+												★ JUARA UMUM I ★
+											</span>
+											<div>
+												<h3 className='text-lg font-black text-black line-clamp-1'>
+													{top3JuaraUmum[0]?.nama_lengkap || 'Belum Ada Data'}
+												</h3>
+												<p className='text-xs font-bold text-amber-950'>Rombel Kelas {top3JuaraUmum[0]?.kelas || '-'}</p>
+											</div>
+											<div className='p-3 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+												<p className='text-sm font-black text-amber-950'>Rata-Rata: {top3JuaraUmum[0]?.rata_rata || '0.00'}</p>
+												<p className='text-[11px] font-bold text-gray-600'>Total Nilai: {top3JuaraUmum[0]?.total_nilai || 0}</p>
+											</div>
+											{top3JuaraUmum[0] && (
+												<button
+													onClick={() =>
+														handleCetakPiagamSingle(
+															top3JuaraUmum[0],
+															`JUARA UMUM I ${selectedJuaraTingkat === 'sekolah' ? 'SEKOLAH' : `TINGKAT ${selectedJuaraTingkat}`}`
+														)
+													}
+													className='w-full py-2.5 bg-yellow-400 hover:bg-yellow-500 border-2 border-black rounded-xl text-xs font-black shadow-[3px_3px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer'>
+													<Crown className='w-4 h-4' />
+													<span>Cetak Piagam Juara Umum 1</span>
+												</button>
+											)}
+										</div>
+
+										{/* Juara Umum 3 */}
+										<div className='order-3 md:order-3 bg-gradient-to-b from-amber-100 to-amber-200 border-3 border-black rounded-3xl p-5 shadow-[4px_4px_0px_#000] text-center space-y-3'>
+											<div className='w-12 h-12 mx-auto rounded-full bg-amber-300 border-2 border-black flex items-center justify-center text-2xl font-black shadow-[2px_2px_0px_#000]'>
+												🥉
+											</div>
+											<span className='inline-block px-3 py-0.5 bg-amber-900 text-white rounded-full text-[10px] font-black uppercase tracking-wider'>
+												Juara Umum III
+											</span>
+											<div>
+												<h3 className='text-base font-black text-black line-clamp-1'>
+													{top3JuaraUmum[2]?.nama_lengkap || 'Belum Ada Data'}
+												</h3>
+												<p className='text-[11px] font-bold text-gray-600'>Kelas {top3JuaraUmum[2]?.kelas || '-'}</p>
+											</div>
+											<div className='p-2.5 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_#000]'>
+												<p className='text-xs font-black text-amber-950'>Rata-Rata: {top3JuaraUmum[2]?.rata_rata || '0.00'}</p>
+												<p className='text-[10px] font-bold text-gray-500'>Total: {top3JuaraUmum[2]?.total_nilai || 0}</p>
+											</div>
+											{top3JuaraUmum[2] && (
+												<button
+													onClick={() =>
+														handleCetakPiagamSingle(
+															top3JuaraUmum[2],
+															`JUARA UMUM III ${selectedJuaraTingkat === 'sekolah' ? 'SEKOLAH' : `TINGKAT ${selectedJuaraTingkat}`}`
+														)
+													}
+													className='w-full py-2 bg-amber-300 hover:bg-amber-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] flex items-center justify-center gap-1.5 cursor-pointer'>
+													<Printer className='w-3.5 h-3.5' />
+													<span>Cetak Piagam Juara Umum 3</span>
+												</button>
+											)}
+										</div>
+									</div>
+
+									{/* Tabel Top Leaderboard Juara Umum */}
+									<div className='bg-white border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#000] overflow-hidden'>
+										<div className='p-4 border-b-2 border-black bg-yellow-200 flex items-center justify-between'>
+											<h3 className='text-sm font-black text-black uppercase flex items-center gap-2'>
+												<Crown className='w-4 h-4 text-amber-700' />
+												<span>
+													Juara Umum I, II, dan III (Top 3) —{' '}
+													{selectedJuaraTingkat === 'sekolah' ? 'Seluruh Sekolah' : `Tingkat ${selectedJuaraTingkat}`}
+												</span>
+											</h3>
+										</div>
+
+										<div className='overflow-x-auto'>
+											<table className='w-full text-left border-collapse text-xs'>
+												<thead>
+													<tr className='border-b-2 border-black bg-gray-50 font-black uppercase text-[11px] text-gray-700'>
+														<th className='py-3 px-4 text-center w-16'>Rank</th>
+														<th className='py-3 px-4'>NIS</th>
+														<th className='py-3 px-4'>Nama Lengkap Santri / Siswa</th>
+														<th className='py-3 px-4 text-center'>Asal Kelas</th>
+														<th className='py-3 px-4 text-center'>Total Nilai</th>
+														<th className='py-3 px-4 text-center'>Rata-Rata</th>
+														<th className='py-3 px-4 text-center'>Predikat Prestasi</th>
+														<th className='py-3 px-4 text-right'>Aksi Piagam</th>
+													</tr>
+												</thead>
+												<tbody className='divide-y-2 divide-gray-100 font-bold'>
+													{currentJuaraUmumList.length === 0 ? (
+														<tr>
+															<td colSpan={8} className='text-center py-8 text-gray-500'>
+																Tidak ada data untuk kategori tingkat ini.
+															</td>
+														</tr>
+													) : (
+														currentJuaraUmumList.map((item, idx) => {
+															const rankNum = idx + 1;
+															return (
+																<tr key={item.id} className='hover:bg-yellow-50/60 transition-colors'>
+																	<td className='py-3 px-4 text-center'>
+																		<span
+																			className={`inline-flex items-center justify-center w-7 h-7 rounded-full border-2 border-black font-black text-xs shadow-[1px_1px_0px_#000] ${
+																				rankNum === 1
+																					? 'bg-yellow-400 text-black'
+																					: rankNum === 2
+																					? 'bg-slate-300 text-black'
+																					: rankNum === 3
+																					? 'bg-amber-300 text-black'
+																					: 'bg-white text-gray-700'
+																			}`}>
+																			{rankNum}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 font-mono text-gray-600'>{item.nis || '-'}</td>
+																	<td className='py-3 px-4 text-black font-black'>{item.nama_lengkap}</td>
+																	<td className='py-3 px-4 text-center'>
+																		<span className='px-2.5 py-0.5 bg-black text-yellow-300 rounded font-black text-xs'>
+																			{item.kelas}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 text-center font-mono'>{item.total_nilai}</td>
+																	<td className='py-3 px-4 text-center'>
+																		<span className='px-2.5 py-1 bg-white border-2 border-black rounded-lg font-black font-mono shadow-[1px_1px_0px_#000]'>
+																			{item.rata_rata}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 text-center'>
+																		<span className='px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 border border-amber-400 text-amber-950'>
+																			{item.juara_label}
+																		</span>
+																	</td>
+																	<td className='py-3 px-4 text-right'>
+																		<button
+																			onClick={() => handleCetakPiagamSingle(item, item.juara_label)}
+																			className='px-2.5 py-1 bg-yellow-300 hover:bg-yellow-400 border border-black rounded-lg text-xs font-black shadow-[1px_1px_0px_#000] inline-flex items-center gap-1 cursor-pointer'>
+																			<Printer className='w-3 h-3' />
+																			<span>Cetak Piagam</span>
+																		</button>
+																	</td>
+																</tr>
+															);
+														})
+													)}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								</div>
+							)}
+						</>
 					)}
 				</div>
 			)}
