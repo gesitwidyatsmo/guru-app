@@ -4,6 +4,9 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { fetchSchoolProfile, drawKopSuratPDF, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
 import Loader from '../components/loading';
 import ButtonBack from '../components/button/ButtonBack';
 import { useAcademic } from '@/context/AcademicContext';
@@ -723,6 +726,130 @@ export default function AbsensiMapelPage() {
 		}
 	};
 
+	const handleExportPDF = async () => {
+		if (siswaKelasIni.length === 0) {
+			Swal.fire('Info', 'Tidak ada data siswa untuk dicetak ke PDF', 'info');
+			return;
+		}
+
+		try {
+			const prof = await fetchSchoolProfile().catch(() => DEFAULT_PROFIL_SEKOLAH);
+			const doc = new jsPDF({ orientation: 'portrait' });
+			const endKop = drawKopSuratPDF(doc, prof);
+
+			doc.setFont('helvetica', 'bold');
+			doc.setFontSize(12);
+			doc.setTextColor(15, 23, 42);
+			doc.text(
+				'PRESENSI KEHADIRAN SISWA PER KBM',
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 4,
+				{ align: 'center' }
+			);
+
+			doc.setFont('helvetica', 'normal');
+			doc.setFontSize(8.5);
+			doc.setTextColor(71, 85, 105);
+			doc.text(
+				`Kelas: ${selectedKelas}   •   Mapel: ${selectedMapel}   •   Tanggal: ${tanggal} (Jam ke-${jamKe || '-'})`,
+				doc.internal.pageSize.getWidth() / 2,
+				endKop + 9,
+				{ align: 'center' }
+			);
+
+			let h = 0, s = 0, i = 0, a = 0;
+			const tableBody = siswaKelasIni.map((siswa, idx) => {
+				const statusRaw = absensi[siswa.id]?.status || absensi[siswa.id] || 'Hadir';
+				const statusClean = normStatus(statusRaw);
+				if (statusClean === 'hadir') h++;
+				else if (statusClean === 'sakit') s++;
+				else if (statusClean === 'izin') i++;
+				else if (statusClean === 'alfa') a++;
+
+				return [
+					idx + 1,
+					siswa.nis || siswa.nisn || '-',
+					siswa.nama_lengkap,
+					siswa.jenis_kelamin || '-',
+					statusClean.toUpperCase(),
+					absensi[siswa.id]?.keterangan || '-',
+				];
+			});
+
+			tableBody.push([
+				{
+					content: `RINGKASAN: Hadir: ${h}  |  Sakit: ${s}  |  Izin: ${i}  |  Alfa: ${a} (Total: ${siswaKelasIni.length} Siswa)`,
+					colSpan: 6,
+					styles: { halign: 'center', fontStyle: 'bold', fillColor: [248, 247, 240] },
+				},
+			]);
+
+			autoTable(doc, {
+				startY: endKop + 13,
+				head: [
+					[
+						{ content: 'No', styles: { halign: 'center' } },
+						{ content: 'NIS / NISN', styles: { halign: 'center' } },
+						{ content: 'Nama Siswa', styles: { halign: 'left' } },
+						{ content: 'L/P', styles: { halign: 'center' } },
+						{ content: 'Status Presensi', styles: { halign: 'center' } },
+						{ content: 'Keterangan', styles: { halign: 'left' } },
+					],
+				],
+				body: tableBody,
+				theme: 'grid',
+				headStyles: {
+					fillColor: [245, 197, 24],
+					textColor: [0, 0, 0],
+					fontStyle: 'bold',
+					fontSize: 8,
+				},
+				bodyStyles: {
+					fontSize: 8,
+					textColor: [15, 23, 42],
+				},
+				columnStyles: {
+					0: { halign: 'center', cellWidth: 10 },
+					1: { halign: 'center', cellWidth: 26 },
+					2: { cellWidth: 45 },
+					3: { halign: 'center', cellWidth: 14 },
+					4: { halign: 'center', cellWidth: 30, fontStyle: 'bold' },
+					5: { cellWidth: 'auto' },
+				},
+			});
+
+			const finalY = (doc.lastAutoTable?.finalY || endKop + 60) + 8;
+			const pageWidth = doc.internal.pageSize.getWidth();
+			const pageHeight = doc.internal.pageSize.getHeight();
+
+			let signY = finalY;
+			if (signY + 36 > pageHeight) {
+				doc.addPage();
+				signY = 20;
+			}
+
+			const todayFormatted = new Intl.DateTimeFormat('id-ID', {
+				day: 'numeric',
+				month: 'long',
+				year: 'numeric',
+			}).format(new Date());
+
+			doc.setFontSize(8.5);
+			doc.setFont('helvetica', 'normal');
+			doc.setTextColor(0, 0, 0);
+
+			doc.text(`Batang Cenaku, ${todayFormatted}`, pageWidth - 70, signY);
+			doc.text('Guru Pengampu Mapel,', pageWidth - 70, signY + 4.5);
+			doc.setFont('helvetica', 'bold');
+			doc.text('( .......................................... )', pageWidth - 70, signY + 24);
+
+			doc.save(`Presensi_${selectedKelas}_${selectedMapel}_${tanggal}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_'));
+		} catch (err) {
+			console.error('Gagal cetak PDF presensi mapel:', err);
+			Swal.fire('Gagal', 'Terjadi kesalahan saat mencetak PDF: ' + err.message, 'error');
+		}
+	};
+
 	const goToRiwayat = () => {
 		const kelasObj = kelasList.find(k => k.kelas === selectedKelas || k.nama_kelas === selectedKelas);
 		if (kelasObj && kelasObj.id) {
@@ -1117,6 +1244,13 @@ export default function AbsensiMapelPage() {
 										</p>
 									</div>
 									<div className='flex flex-wrap gap-3'>
+										<button
+											onClick={handleExportPDF}
+											className='neo-btn-outline bg-rose-100 text-rose-950 hover:bg-rose-200 flex items-center gap-1.5 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-black text-sm cursor-pointer'
+											title='Cetak / Unduh presensi KBM ini ke format PDF'>
+											<span>📄</span>
+											<span>Cetak PDF</span>
+										</button>
 										{userRole !== 'Kepala Sekolah' && (
 											<button
 												onClick={handleHapus}

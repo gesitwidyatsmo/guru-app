@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { getTodayDateString } from '@/lib/dateUtils';
@@ -6,6 +7,7 @@ import { normStatus, evaluateDailyAttendance, calculateHariAlfa } from '@/lib/ab
 
 export async function GET(req) {
 	try {
+		const cookieStore = await cookies();
 		const supabase = await createClient();
 		const { searchParams } = new URL(req.url);
 		const requestedKelasId = searchParams.get('id_kelas');
@@ -13,22 +15,18 @@ export async function GET(req) {
 		// Ambil identitas user dari session
 		const {
 			data: { user: authUser },
-			error: authError,
 		} = await supabase.auth.getUser();
 
-		if (authError || !authUser) {
-			return NextResponse.json({ error: 'Belum terautentikasi' }, { status: 401 });
-		}
+		// Ambil detail profil user dari header / cookie
+		let userId = req.headers.get('x-user-id') || cookieStore.get('user_id')?.value;
+		let userRole = req.headers.get('x-user-role') || cookieStore.get('user_role')?.value;
+		let userName = req.headers.get('x-user-name')
+			? decodeURIComponent(req.headers.get('x-user-name'))
+			: cookieStore.get('user_name')?.value
+			? decodeURIComponent(cookieStore.get('user_name').value)
+			: '';
 
-		// Ambil detail profil user
-		const roleHeader = req.headers.get('x-user-role');
-		const userIdHeader = req.headers.get('x-user-id');
-
-		let userId = userIdHeader;
-		let userRole = roleHeader;
-		let userName = '';
-
-		if (!userId || !userRole) {
+		if (authUser && (!userId || !userRole)) {
 			const { data: profile } = await supabaseAdmin
 				.from('users')
 				.select('id_user, role, nama_lengkap')
@@ -40,6 +38,24 @@ export async function GET(req) {
 				userRole = profile.role;
 				userName = profile.nama_lengkap;
 			}
+		}
+
+		if (!userId && userName) {
+			const { data: profile } = await supabaseAdmin
+				.from('users')
+				.select('id_user, role, nama_lengkap')
+				.eq('nama_lengkap', userName)
+				.maybeSingle();
+
+			if (profile) {
+				userId = profile.id_user;
+				userRole = profile.role;
+				userName = profile.nama_lengkap;
+			}
+		}
+
+		if (!userId) {
+			return NextResponse.json({ error: 'Belum terautentikasi' }, { status: 401 });
 		}
 
 		// Ambil tahun ajar aktif

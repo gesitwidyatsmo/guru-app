@@ -1738,46 +1738,60 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 				{/* SUB-VIEW 2: LEGER NILAI */}
 				{subTabAkademik === 'leger' && (
 					<div className='neo-card bg-white p-6 border-[3px] border-black shadow-[4px_4px_0_#000] space-y-6'>
-						<div className='flex items-center justify-between pb-4 border-b-2 border-black'>
+						<div className='flex items-center justify-between pb-4 border-b-2 border-black flex-wrap gap-4'>
 							<div>
 								<div className='text-xs font-black uppercase px-2 py-0.5 bg-yellow-300 text-black border border-black rounded inline-block mb-1'>
-									Roadmap Fase 3
+									Modul E-Rapor Digital
 								</div>
 								<h2 className='text-xl font-black uppercase text-black'>
-									Leger Nilai Lintas Mata Pelajaran
+									Leger Nilai & Cetak Rapor Rombel
 								</h2>
 								<p className='text-xs font-bold text-gray-600'>
-									Matriks nilai seluruh siswa rombel {kelas.nama_kelas} dari semua guru mapel pengajar
+									Matriks nilai seluruh siswa rombel {kelas.nama_kelas} dari semua guru mapel pengajar dan pencetakan rapor Kurikulum Merdeka.
 								</p>
 							</div>
-							<Link
-								href={`/kelas/${kelas.id}/riwayat-nilai`}
-								className='neo-btn-primary bg-black text-white text-xs sm:text-sm font-black flex items-center gap-1.5'>
-								<span>Buka Nilai Rombel Saat Ini</span>
-								<ExternalLink className='w-4 h-4' />
-							</Link>
+							<div className='flex items-center gap-2'>
+								<Link
+									href='/erapor/rekap-leger'
+									className='neo-btn-primary bg-yellow-300 text-black text-xs sm:text-sm font-black flex items-center gap-1.5 border-2 border-black shadow-[3px_3px_0px_0px_#000]'>
+									<span>Buka Leger Lengkap</span>
+									<ExternalLink className='w-4 h-4' />
+								</Link>
+							</div>
 						</div>
 
-						<div className='p-6 bg-amber-50 border-2 border-black rounded-2xl flex flex-col items-center text-center space-y-3'>
-							<div className='w-14 h-14 bg-amber-200 border-2 border-black rounded-2xl flex items-center justify-center text-2xl shadow-[2px_2px_0_#000]'>
-								📑
+						<div className='p-6 bg-yellow-50 border-3 border-black rounded-2xl flex flex-col items-center text-center space-y-4 shadow-[4px_4px_0px_0px_#000]'>
+							<div className='w-14 h-14 bg-yellow-300 border-2 border-black rounded-2xl flex items-center justify-center text-2xl shadow-[2px_2px_0_#000]'>
+								📊
 							</div>
 							<h3 className='text-base font-black uppercase text-black'>
-								Matriks Leger Nilai Sedang Dirancang
+								Pusat Leger & Rapor Kelas {kelas.nama_kelas}
 							</h3>
 							<p className='text-xs font-bold text-gray-700 max-w-lg'>
-								Modul ini akan mengagregasikan nilai tugas, kuis, dan ujian dari seluruh guru mapel pengajar di kelas {kelas.nama_kelas} ke dalam format matriks terpusat untuk persiapan rapat kenaikan kelas dan pencetakan rapor.
+								Modul E-Rapor kini telah aktif dan terhubung langsung. Anda dapat melihat rekapitulasi nilai kuantitatif, rangking siswa, menarik absensi harian otomatis, serta mencetak lembar rapor Kurikulum Merdeka.
 							</p>
-							<div className='pt-2 flex flex-wrap gap-2 justify-center'>
-								<span className='px-3 py-1 bg-white border border-black rounded-md text-xs font-bold'>
-									✅ Pengecekan KKM Otomatis
-								</span>
-								<span className='px-3 py-1 bg-white border border-black rounded-md text-xs font-bold'>
-									✅ Monitor Guru yang Belum Setor Nilai
-								</span>
-								<span className='px-3 py-1 bg-white border border-black rounded-md text-xs font-bold'>
-									✅ Cetak Leger Excel / PDF
-								</span>
+							<div className='pt-2 flex flex-wrap gap-3 justify-center'>
+								<Link
+									href='/erapor/rekap-leger'
+									className='px-4 py-2 bg-white hover:bg-yellow-100 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#000] flex items-center gap-1.5'>
+									<span>Matriks Leger Nilai</span>
+								</Link>
+								<Link
+									href='/erapor/ketidakhadiran'
+									className='px-4 py-2 bg-white hover:bg-teal-100 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#000] flex items-center gap-1.5'>
+									<span>Rekap Ketidakhadiran</span>
+								</Link>
+								<Link
+									href='/erapor/ekstrakurikuler'
+									className='px-4 py-2 bg-white hover:bg-violet-100 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#000] flex items-center gap-1.5'>
+									<span>Catatan Ekskul</span>
+								</Link>
+								<Link
+									href='/erapor/cetak'
+									className='px-4 py-2 bg-yellow-300 hover:bg-yellow-400 border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#000] flex items-center gap-1.5'>
+									<Printer className='w-3.5 h-3.5' />
+									<span>Cetak Rapor Siswa</span>
+								</Link>
 							</div>
 						</div>
 					</div>

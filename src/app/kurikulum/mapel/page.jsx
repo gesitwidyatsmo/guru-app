@@ -53,7 +53,13 @@ export default function KurikulumMapelPage() {
 	const [isMapelModalOpen, setIsMapelModalOpen] = useState(false);
 	const [isEditMapelMode, setIsEditMapelMode] = useState(false);
 	const [editMapelId, setEditMapelId] = useState(null);
-	const [mapelFormData, setMapelFormData] = useState({ mapel: '' });
+	const [mapelFormData, setMapelFormData] = useState({
+		mapel: '',
+		nama_resmi: '',
+		kelompok: 'A',
+		urutan: 1,
+		tingkat: [7, 8, 9],
+	});
 	const [isSavingMapel, setIsSavingMapel] = useState(false);
 
 	const fetchAllData = async () => {
@@ -100,13 +106,15 @@ export default function KurikulumMapelPage() {
 		return map;
 	}, [kktpList]);
 
-	// Filter Mapel
+	// Filter Mapel (Diurutkan berdasarkan kolom urutan)
 	const filteredMapel = useMemo(() => {
 		const q = searchQuery.toLowerCase().trim();
-		return mapelList.filter((m) => {
-			const fullName = (MAPEL_DISPLAY_NAMES[m.id] || m.mapel).toLowerCase();
-			return fullName.includes(q) || m.mapel.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
-		});
+		return mapelList
+			.filter((m) => {
+				const fullName = (MAPEL_DISPLAY_NAMES[m.id] || m.mapel).toLowerCase();
+				return fullName.includes(q) || m.mapel.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
+			})
+			.sort((a, b) => (Number(a.urutan) || 0) - (Number(b.urutan) || 0));
 	}, [mapelList, searchQuery]);
 
 	// Statistik Rata-rata KKTP per Tingkat Kelas
@@ -149,12 +157,114 @@ export default function KurikulumMapelPage() {
 		setIsKktpModalOpen(true);
 	};
 
+	// Buka Modal Tambah Mapel
+	const handleOpenAddMapel = () => {
+		setIsEditMapelMode(false);
+		setEditMapelId(null);
+		const nextUrutan = mapelList.length > 0
+			? Math.max(...mapelList.map((m) => Number(m.urutan) || 0)) + 1
+			: 1;
+		setMapelFormData({
+			mapel: '',
+			nama_resmi: '',
+			kelompok: 'A',
+			urutan: nextUrutan,
+			tingkat: [7, 8, 9],
+		});
+		setIsMapelModalOpen(true);
+	};
+
 	// Buka Modal Edit Nama Mapel
 	const handleOpenEditMapel = (mapelItem) => {
 		setIsEditMapelMode(true);
 		setEditMapelId(mapelItem.id);
-		setMapelFormData({ mapel: mapelItem.mapel });
+		setMapelFormData({
+			mapel: mapelItem.mapel || '',
+			nama_resmi: mapelItem.nama_resmi || mapelItem.mapel || '',
+			kelompok: mapelItem.kelompok || 'A',
+			urutan: mapelItem.urutan != null ? Number(mapelItem.urutan) : 1,
+			tingkat: Array.isArray(mapelItem.tingkat) && mapelItem.tingkat.length > 0
+				? mapelItem.tingkat
+				: [7, 8, 9],
+		});
 		setIsMapelModalOpen(true);
+	};
+
+	// Pindah urutan mapel (Naik / Turun)
+	const handleMoveMapel = async (currentIndex, direction) => {
+		const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+		if (targetIndex < 0 || targetIndex >= filteredMapel.length) return;
+
+		const newList = [...filteredMapel];
+		const temp = newList[currentIndex];
+		newList[currentIndex] = newList[targetIndex];
+		newList[targetIndex] = temp;
+
+		// Hitung ulang urutan 1..N
+		const itemsToSave = newList.map((m, idx) => ({
+			id: m.id,
+			urutan: idx + 1,
+		}));
+
+		// Optimistic UI update
+		const idMap = Object.fromEntries(itemsToSave.map((it) => [it.id, it.urutan]));
+		setMapelList((prev) =>
+			[...prev]
+				.map((m) => ({
+					...m,
+					urutan: idMap[m.id] !== undefined ? idMap[m.id] : m.urutan,
+				}))
+				.sort((a, b) => (Number(a.urutan) || 0) - (Number(b.urutan) || 0))
+		);
+
+		try {
+			const res = await fetch('/api/mapel', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ reorder: true, items: itemsToSave }),
+			});
+			if (!res.ok) {
+				const errData = await res.json();
+				throw new Error(errData.error || 'Gagal menyimpan urutan mapel.');
+			}
+		} catch (err) {
+			console.error('Reorder mapel error:', err);
+			fetchAllData();
+		}
+	};
+
+	// Quick Toggle Jenjang Kelas pada Baris Tabel
+	const handleToggleTingkat = async (mapelItem, gradeNum) => {
+		const currentTingkat = Array.isArray(mapelItem.tingkat) ? mapelItem.tingkat : [7, 8, 9];
+		let newTingkat = currentTingkat.includes(gradeNum)
+			? currentTingkat.filter((n) => n !== gradeNum)
+			: [...currentTingkat, gradeNum].sort((a, b) => a - b);
+
+		if (newTingkat.length === 0) {
+			Swal.fire('Peringatan', 'Minimal harus memilih satu jenjang kelas!', 'warning');
+			return;
+		}
+
+		// Optimistic UI update
+		setMapelList((prev) =>
+			prev.map((m) => (m.id === mapelItem.id ? { ...m, tingkat: newTingkat } : m))
+		);
+
+		try {
+			const res = await fetch('/api/mapel', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: mapelItem.id,
+					mapel: mapelItem.mapel,
+					tingkat: newTingkat,
+				}),
+			});
+			if (!res.ok) throw new Error('Gagal memperbarui jenjang kelas');
+		} catch (err) {
+			console.error('Toggle tingkat error:', err);
+			fetchAllData();
+		}
 	};
 
 	// Simpan Nilai KKTP ke Database
@@ -230,8 +340,21 @@ export default function KurikulumMapelPage() {
 			setIsSavingMapel(true);
 			const method = isEditMapelMode ? 'PUT' : 'POST';
 			const payload = isEditMapelMode
-				? { id: editMapelId, mapel: mapelFormData.mapel.trim() }
-				: { mapel: mapelFormData.mapel.trim() };
+				? {
+						id: editMapelId,
+						mapel: mapelFormData.mapel.trim(),
+						nama_resmi: (mapelFormData.nama_resmi || mapelFormData.mapel).trim(),
+						kelompok: mapelFormData.kelompok || 'A',
+						urutan: parseInt(mapelFormData.urutan, 10) || 1,
+						tingkat: mapelFormData.tingkat || [7, 8, 9],
+				  }
+				: {
+						mapel: mapelFormData.mapel.trim(),
+						nama_resmi: (mapelFormData.nama_resmi || mapelFormData.mapel).trim(),
+						kelompok: mapelFormData.kelompok || 'A',
+						urutan: parseInt(mapelFormData.urutan, 10) || (mapelList.length + 1),
+						tingkat: mapelFormData.tingkat || [7, 8, 9],
+				  };
 
 			const res = await fetch('/api/mapel', {
 				method,
@@ -243,7 +366,7 @@ export default function KurikulumMapelPage() {
 
 			Swal.fire(
 				'Berhasil!',
-				isEditMapelMode ? 'Nama mata pelajaran diperbarui.' : 'Mata pelajaran berhasil ditambahkan.',
+				isEditMapelMode ? 'Data mata pelajaran diperbarui.' : 'Mata pelajaran berhasil ditambahkan.',
 				'success'
 			);
 			setIsMapelModalOpen(false);
@@ -453,12 +576,7 @@ export default function KurikulumMapelPage() {
 				<div className='flex flex-wrap items-center gap-2.5 shrink-0'>
 					<AcademicPeriodChip />
 					<button
-						onClick={() => {
-							setIsEditMapelMode(false);
-							setEditMapelId(null);
-							setMapelFormData({ mapel: '' });
-							setIsMapelModalOpen(true);
-						}}
+						onClick={handleOpenAddMapel}
 						className='px-4 sm:px-5 py-2.5 bg-black text-white hover:bg-neutral-800 font-black text-xs sm:text-sm rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_#FFFFFF] flex items-center gap-2 transition-all active:translate-x-0.5 active:translate-y-0.5 cursor-pointer'>
 						<span>➕</span> Tambah Mapel
 					</button>
@@ -548,11 +666,11 @@ export default function KurikulumMapelPage() {
 						<thead>
 							{/* Header Tingkat 1 */}
 							<tr className='border-b-2 border-black bg-amber-100 text-[11px] font-black uppercase text-black'>
-								<th rowSpan={2} className='py-3 px-3 text-center border-r-2 border-black w-14'>
-									NO
+								<th rowSpan={2} className='py-3 px-2 text-center border-r-2 border-black w-24'>
+									URUTAN
 								</th>
 								<th rowSpan={2} className='py-3 px-4 border-r-2 border-black'>
-									MATA PELAJARAN
+									MATA PELAJARAN & JENJANG KELAS
 								</th>
 								<th colSpan={3} className='py-2 px-3 text-center border-r-2 border-black bg-amber-200'>
 									KBM / STANDAR KKTP
@@ -609,15 +727,84 @@ export default function KurikulumMapelPage() {
 
 									return (
 										<tr key={item.id} className='hover:bg-amber-50/60 transition-colors'>
-											<td className='py-3 px-3 text-center font-mono font-bold border-r border-gray-200'>
-												{idx + 1}
+											<td className='py-3 px-2 text-center font-mono font-bold border-r border-gray-200'>
+												<div className='flex items-center justify-center gap-1.5'>
+													<span className='w-7 h-7 rounded-lg bg-amber-200 border-2 border-black font-black text-xs flex items-center justify-center shadow-[1px_1px_0px_#000]'>
+														{item.urutan != null ? item.urutan : idx + 1}
+													</span>
+													<div className='flex flex-col gap-0.5'>
+														<button
+															type='button'
+															onClick={() => handleMoveMapel(idx, 'up')}
+															disabled={idx === 0}
+															title='Naikkan urutan mapel'
+															className='w-5 h-4 bg-gray-100 hover:bg-amber-300 border border-black rounded text-[9px] flex items-center justify-center disabled:opacity-30 disabled:hover:bg-gray-100 cursor-pointer transition-all active:translate-y-0.5'>
+															▲
+														</button>
+														<button
+															type='button'
+															onClick={() => handleMoveMapel(idx, 'down')}
+															disabled={idx === filteredMapel.length - 1}
+															title='Turunkan urutan mapel'
+															className='w-5 h-4 bg-gray-100 hover:bg-amber-300 border border-black rounded text-[9px] flex items-center justify-center disabled:opacity-30 disabled:hover:bg-gray-100 cursor-pointer transition-all active:translate-y-0.5'>
+															▼
+														</button>
+													</div>
+												</div>
 											</td>
 											<td className='py-3 px-4 border-r border-gray-200'>
 												<div>
-													<span className='font-black text-black text-sm block'>
-														{MAPEL_DISPLAY_NAMES[item.id] || item.mapel}
-													</span>
-													<span className='text-[10px] font-mono text-gray-500'>Kode: {item.id}</span>
+													<div className='flex flex-wrap items-center gap-1.5'>
+														<span className='font-black text-black text-sm block'>
+															{MAPEL_DISPLAY_NAMES[item.id] || item.mapel}
+														</span>
+														{item.kelompok === 'Ekskul' ? (
+															<span className='px-2 py-0.5 bg-purple-100 text-purple-900 border border-purple-400 rounded-md text-[10px] font-black uppercase tracking-tight'>
+																⭐ Ciri Khas / Ekskul (Lbr 3)
+															</span>
+														) : item.kelompok === 'B' ? (
+															<span className='px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-400 rounded-md text-[10px] font-black uppercase tracking-tight'>
+																Mulok (B)
+															</span>
+														) : (
+															<span className='px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-md text-[10px] font-black uppercase tracking-tight'>
+																Intrakurikuler (A)
+															</span>
+														)}
+													</div>
+													<div className='flex items-center gap-2 mt-0.5'>
+														<span className='text-[10px] font-mono text-gray-500'>Kode: {item.id}</span>
+														{item.nama_resmi && item.nama_resmi !== item.mapel && (
+															<span className='text-[10px] text-gray-600 font-medium italic truncate max-w-xs' title={item.nama_resmi}>
+																• Rapor: {item.nama_resmi}
+															</span>
+														)}
+													</div>
+
+													{/* Checkbox / Toggle Jenjang Kelas */}
+													<div className='flex items-center gap-1 mt-2'>
+														<span className='text-[10px] font-black uppercase text-gray-500 mr-1'>
+															Jenjang:
+														</span>
+														{[7, 8, 9].map((g) => {
+															const curT = Array.isArray(item.tingkat) ? item.tingkat : [7, 8, 9];
+															const isChecked = curT.includes(g);
+															return (
+																<button
+																	key={g}
+																	type='button'
+																	onClick={() => handleToggleTingkat(item, g)}
+																	title={`Klik untuk ${isChecked ? 'nonaktifkan' : 'aktifkan'} Kelas ${g}`}
+																	className={`px-2 py-0.5 rounded text-[10px] font-black border transition-all cursor-pointer ${
+																		isChecked
+																			? 'bg-amber-300 border-black text-black shadow-[1px_1px_0px_#000]'
+																			: 'bg-gray-100 border-gray-300 text-gray-400 hover:bg-gray-200'
+																	}`}>
+																	{isChecked ? `✓ Kls ${g}` : `Kls ${g}`}
+																</button>
+															);
+														})}
+													</div>
 												</div>
 											</td>
 											<td className='py-3 px-3 text-center border-r border-gray-200'>{renderBadge(valVII)}</td>
@@ -813,16 +1000,111 @@ export default function KurikulumMapelPage() {
 						<form onSubmit={handleSaveMapel} className='space-y-4'>
 							<div>
 								<label className='block text-xs font-black uppercase text-black mb-1.5'>
-									Nama Mata Pelajaran <span className='text-rose-600'>*</span>
+									Nama Singkat Mata Pelajaran <span className='text-rose-600'>*</span>
 								</label>
 								<input
 									type='text'
 									value={mapelFormData.mapel}
 									onChange={(e) => setMapelFormData({ ...mapelFormData, mapel: e.target.value })}
 									required
-									placeholder='Contoh: Fiqih, Bahasa Arab, Robotika...'
+									placeholder='Contoh: Aswaja, Fiqih, IPA, Robotika...'
 									className='w-full px-3.5 py-2.5 border-2 border-black rounded-xl font-bold text-xs sm:text-sm bg-[#FFFDF0]'
 								/>
+							</div>
+
+							<div>
+								<label className='block text-xs font-black uppercase text-black mb-1.5'>
+									Nama Lengkap Resmi (Untuk Cetak Rapor)
+								</label>
+								<input
+									type='text'
+									value={mapelFormData.nama_resmi}
+									onChange={(e) => setMapelFormData({ ...mapelFormData, nama_resmi: e.target.value })}
+									placeholder='Contoh: Aswaja (Ke-NU-an), Ilmu Pengetahuan Alam...'
+									className='w-full px-3.5 py-2.5 border-2 border-black rounded-xl font-bold text-xs sm:text-sm bg-[#FFFDF0]'
+								/>
+								<p className='text-[10px] font-bold text-gray-500 mt-1'>
+									*Jika dikosongkan, nama resmi rapor akan otomatis mengikuti nama mapel di atas.
+								</p>
+							</div>
+
+							<div className='grid grid-cols-2 gap-3'>
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1.5'>
+										Urutan Tampil / Rapor <span className='text-rose-600'>*</span>
+									</label>
+									<input
+										type='number'
+										min={1}
+										value={mapelFormData.urutan}
+										onChange={(e) => setMapelFormData({ ...mapelFormData, urutan: e.target.value })}
+										required
+										className='w-full px-3.5 py-2.5 border-2 border-black rounded-xl font-bold text-xs sm:text-sm bg-[#FFFDF0]'
+									/>
+								</div>
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1.5'>
+										Kategori / Kelompok <span className='text-rose-600'>*</span>
+									</label>
+									<select
+										value={mapelFormData.kelompok}
+										onChange={(e) => setMapelFormData({ ...mapelFormData, kelompok: e.target.value })}
+										className='w-full px-3.5 py-2.5 border-2 border-black rounded-xl font-black text-xs sm:text-sm bg-white cursor-pointer'>
+										<option value='A'>Kelompok A (Umum - Lbr 1/2)</option>
+										<option value='B'>Kelompok B (Mulok - Lbr 1/2)</option>
+										<option value='Ekskul'>⭐ Ciri Khas Pesantren (Lbr 3)</option>
+									</select>
+								</div>
+							</div>
+
+							<div>
+								<div className='flex items-center justify-between mb-1.5'>
+									<label className='block text-xs font-black uppercase text-black'>
+										Target Jenjang Kelas yang Mengikuti <span className='text-rose-600'>*</span>
+									</label>
+									<button
+										type='button'
+										onClick={() => setMapelFormData({ ...mapelFormData, tingkat: [7, 8, 9] })}
+										className='text-[10px] font-black text-amber-700 underline hover:text-black cursor-pointer'>
+										Pilih Semua (7, 8, 9)
+									</button>
+								</div>
+								<div className='flex items-center gap-2 p-2 bg-gray-50 border-2 border-black rounded-xl'>
+									{[7, 8, 9].map((g) => {
+										const isChecked = (mapelFormData.tingkat || []).includes(g);
+										return (
+											<label
+												key={g}
+												className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border-2 border-black font-black text-xs cursor-pointer select-none transition-all ${
+													isChecked
+														? 'bg-amber-300 shadow-[2px_2px_0px_#000]'
+														: 'bg-white opacity-60 hover:opacity-100'
+												}`}>
+												<input
+													type='checkbox'
+													className='hidden'
+													checked={isChecked}
+													onChange={(e) => {
+														const cur = mapelFormData.tingkat || [];
+														const next = e.target.checked
+															? [...cur, g].sort((a, b) => a - b)
+															: cur.filter((n) => n !== g);
+														if (next.length === 0) {
+															Swal.fire('Peringatan', 'Minimal harus memilih 1 jenjang kelas!', 'warning');
+															return;
+														}
+														setMapelFormData({ ...mapelFormData, tingkat: next });
+													}}
+												/>
+												<span>{isChecked ? '✓' : '○'}</span>
+												<span>Kelas {g}</span>
+											</label>
+										);
+									})}
+								</div>
+								<p className='text-[10px] font-bold text-gray-500 mt-1'>
+									*Centang kelas mana saja yang mendapatkan mata pelajaran ini. Contoh: Aswaja hanya Kelas 9.
+								</p>
 							</div>
 
 							<div className='pt-3 border-t-2 border-black flex items-center justify-end gap-2.5'>

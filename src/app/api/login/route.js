@@ -34,7 +34,6 @@ export async function POST(req) {
 
 		if (profileError || !userProfile) {
 			console.error('Profile Fetch Error:', profileError?.message);
-			// Fallback log
 			return NextResponse.json({ error: 'Profil tidak ditemukan.' }, { status: 401 });
 		}
 
@@ -45,8 +44,6 @@ export async function POST(req) {
 			role: userProfile.role,
 		};
 
-		// Supabase Auth SSR mengatur cookies secara otomatis melalui metode setAll di server client
-		// Hapus legacy 'token' cookie agar tidak bentrok
 		const response = NextResponse.json(
 			{
 				message: 'Login sukses',
@@ -58,9 +55,6 @@ export async function POST(req) {
 		// Hapus legacy 'token' cookie agar tidak bentrok
 		response.cookies.set('token', '', { expires: new Date(0), path: '/' });
 
-		// Deteksi apakah request datang dari jaringan lokal (localhost / IP privat).
-		// Cookie dengan secure:true tidak dikirim via HTTP → menyebabkan /login?expired=1
-		// saat testing dari HP di jaringan yang sama via IP (mis. 192.168.x.x).
 		const host = req.headers.get('host') || '';
 		const isLocalNetwork = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(host);
 		const secureCookie = !isLocalNetwork && process.env.NODE_ENV === 'production';
@@ -75,7 +69,14 @@ export async function POST(req) {
 			maxAge: maxAge,
 		});
 
-		// Set client-accessible cookies agar role & nama tersedia instan tanpa flash
+		// Set client-accessible cookies agar role, id & nama tersedia instan tanpa flash
+		response.cookies.set('user_id', userProfile.id_user, {
+			httpOnly: false,
+			secure: secureCookie,
+			sameSite: 'lax',
+			path: '/',
+			maxAge: maxAge,
+		});
 		response.cookies.set('user_role', userProfile.role, {
 			httpOnly: false,
 			secure: secureCookie,

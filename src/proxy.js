@@ -81,6 +81,15 @@ export async function proxy(request) {
 
 	// Helper to attach user cookies
 	const attachUserCookies = (res, p) => {
+		if (p?.id) {
+			res.cookies.set('user_id', p.id, {
+				path: '/',
+				httpOnly: false,
+				sameSite: 'lax',
+				secure: process.env.NODE_ENV === 'production',
+				maxAge: 7 * 24 * 60 * 60,
+			});
+		}
 		if (p?.role) {
 			res.cookies.set('user_role', p.role, {
 				path: '/',
