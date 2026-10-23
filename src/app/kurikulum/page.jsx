@@ -207,146 +207,52 @@ export default function KurikulumDashboard() {
 			</div>
 
 			{/* RADAR KBM & JURNAL HARI INI */}
-			<div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-				<div className='lg:col-span-2 bg-white border-3 border-black rounded-2xl p-5 shadow-[4px_4px_0px_0px_#0D0D0D] space-y-4'>
-					<div className='flex items-center justify-between border-b-2 border-black pb-3'>
-						<div>
-							<h2 className='text-lg font-black flex items-center gap-2'>
-								<span>📡</span> Radar Keterisian Jurnal KBM Hari Ini ({hariIni})
-							</h2>
-							<p className='text-xs font-bold text-gray-600 mt-0.5'>
-								Monitoring real-time guru yang memiliki jadwal hari ini dan status pengisian bukti jurnal mengajar.
-							</p>
-						</div>
-						<span className='px-2.5 py-1 bg-yellow-200 border-2 border-black text-xs font-black rounded-lg shadow-[1px_1px_0px_0px_#0D0D0D]'>
-							{jurnalHariIni.length} Terisi Hari Ini
-						</span>
-					</div>
-
-					{guruJadwalHariIni.length === 0 ? (
-						<div className='p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl'>
-							<span className='text-3xl block mb-2'>🏖️</span>
-							<p className='font-black text-sm text-gray-700'>Tidak Ada Jadwal KBM Hari Ini</p>
-							<p className='text-xs text-gray-500 mt-0.5'>Tidak ada guru yang terjadwal mengajar pada hari {hariIni}.</p>
-						</div>
-					) : (
-						<div className='divide-y-2 divide-gray-100 max-h-80 overflow-y-auto pr-1'>
-							{guruJadwalHariIni.map((item) => {
-								const sudahIsi = guruSudahIsiJurnalIds.has(item.id_user);
-								return (
-									<div key={item.id_user} className='py-3 flex items-center justify-between gap-3'>
-										<div className='flex items-center gap-3'>
-											<div className={`w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center font-black text-xs shadow-[2px_2px_0px_0px_#0D0D0D] ${sudahIsi ? 'bg-emerald-300 text-black' : 'bg-rose-200 text-black'}`}>
-												{sudahIsi ? '✓' : '!'}
-											</div>
-											<div>
-												<p className='font-black text-sm text-black'>{item.nama_guru}</p>
-												<p className='text-xs font-bold text-gray-500'>
-													{item.sesiList.length} Sesi Terjadwal: {item.sesiList.map((s) => `${s.kelas} (${s.mapel})`).join(', ')}
-												</p>
-											</div>
-										</div>
-										<span className={`px-2.5 py-1 text-xs font-black rounded-lg border-2 border-black shadow-[1px_1px_0px_0px_#0D0D0D] uppercase ${sudahIsi ? 'bg-emerald-300 text-black' : 'bg-rose-400 text-white'}`}>
-											{sudahIsi ? 'Jurnal Terisi' : 'Belum Isi Jurnal'}
-										</span>
-									</div>
-								);
-							})}
-						</div>
-					)}
-				</div>
-
-				{/* AKSI CEPAT / MENU KURIKULUM */}
-				<div className='bg-[#FEF08A] border-3 border-black rounded-2xl p-5 shadow-[4px_4px_0px_0px_#0D0D0D] space-y-3 flex flex-col justify-between'>
+			<div className='bg-white border-3 border-black rounded-2xl p-5 shadow-[4px_4px_0px_0px_#0D0D0D] space-y-4'>
+				<div className='flex items-center justify-between border-b-2 border-black pb-3'>
 					<div>
-						<h2 className='text-lg font-black flex items-center gap-2 mb-1'>
-							<span>⚡</span> Aksi Cepat Kurikulum
+						<h2 className='text-lg font-black flex items-center gap-2'>
+							<span>📡</span> Radar Keterisian Jurnal KBM Hari Ini ({hariIni})
 						</h2>
-						<p className='text-xs font-bold text-black/70 mb-4'>
-							Pintasan cepat untuk mengelola modul kurikulum utama sekolah.
-						</p>
-
-						<div className='space-y-2.5'>
-							<Link
-								href='/kurikulum/kelas'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>🏫</span> Kelola Rombel Kelas
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/siswa'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>🎓</span> Kelola Data Peserta Didik
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/penugasan'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📋</span> Atur Penugasan Guru KBM
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/jadwal'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📅</span> Susun Jadwal Pelajaran
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/mapel'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📚</span> Kelola Mata Pelajaran
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/jurnal'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📖</span> Supervisi Jurnal Harian Guru
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/absensi'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📋</span> Monitoring Presensi Mapel Siswa
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-
-							<Link
-								href='/kurikulum/penilaian'
-								className='flex items-center justify-between p-3 bg-white border-2 border-black rounded-xl font-black text-xs hover:bg-yellow-100 shadow-[2px_2px_0px_0px_#0D0D0D] transition-all group'>
-								<span className='flex items-center gap-2'>
-									<span>📊</span> Audit Capaian & Leger Nilai
-								</span>
-								<span className='group-hover:translate-x-1 transition-transform'>→</span>
-							</Link>
-						</div>
-					</div>
-
-					<div className='pt-3 border-t-2 border-black/20'>
-						<p className='text-[11px] font-bold text-black/70 leading-snug'>
-							💡 <strong>Tips:</strong> Data penugasan KBM dan keaktifan jurnal secara otomatis diselaraskan dengan kalkulasi bisaroh oleh Bendahara.
+						<p className='text-xs font-bold text-gray-600 mt-0.5'>
+							Monitoring real-time guru yang memiliki jadwal hari ini dan status pengisian bukti jurnal mengajar.
 						</p>
 					</div>
+					<span className='px-2.5 py-1 bg-yellow-200 border-2 border-black text-xs font-black rounded-lg shadow-[1px_1px_0px_0px_#0D0D0D]'>
+						{jurnalHariIni.length} Terisi Hari Ini
+					</span>
 				</div>
+
+				{guruJadwalHariIni.length === 0 ? (
+					<div className='p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl'>
+						<span className='text-3xl block mb-2'>🏖️</span>
+						<p className='font-black text-sm text-gray-700'>Tidak Ada Jadwal KBM Hari Ini</p>
+						<p className='text-xs text-gray-500 mt-0.5'>Tidak ada guru yang terjadwal mengajar pada hari {hariIni}.</p>
+					</div>
+				) : (
+					<div className='divide-y-2 divide-gray-100 max-h-80 overflow-y-auto pr-1'>
+						{guruJadwalHariIni.map((item) => {
+							const sudahIsi = guruSudahIsiJurnalIds.has(item.id_user);
+							return (
+								<div key={item.id_user} className='py-3 flex items-center justify-between gap-3'>
+									<div className='flex items-center gap-3'>
+										<div className={`w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center font-black text-xs shadow-[2px_2px_0px_0px_#0D0D0D] ${sudahIsi ? 'bg-emerald-300 text-black' : 'bg-rose-200 text-black'}`}>
+											{sudahIsi ? '✓' : '!'}
+										</div>
+										<div>
+											<p className='font-black text-sm text-black'>{item.nama_guru}</p>
+											<p className='text-xs font-bold text-gray-500'>
+												{item.sesiList.length} Sesi Terjadwal: {item.sesiList.map((s) => `${s.kelas} (${s.mapel})`).join(', ')}
+											</p>
+										</div>
+									</div>
+									<span className={`px-2.5 py-1 text-xs font-black rounded-lg border-2 border-black shadow-[1px_1px_0px_0px_#0D0D0D] uppercase ${sudahIsi ? 'bg-emerald-300 text-black' : 'bg-rose-400 text-white'}`}>
+										{sudahIsi ? 'Jurnal Terisi' : 'Belum Isi Jurnal'}
+									</span>
+								</div>
+							);
+						})}
+					</div>
+				)}
 			</div>
 
 			{/* REKAP BEBAN MENGAJAR GURU (DISTRIBUSI KBM) */}
