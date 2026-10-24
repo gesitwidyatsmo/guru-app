@@ -73,24 +73,64 @@ export const getPlaceholderNarasiEkskul = (mapelIdOrName = '', predikat = 'Baik'
 	return 'Contoh: Perlu bimbingan dan keaktifan yang lebih konsisten dalam mengikuti kegiatan.';
 };
 
-// 2b. Nilai Default Tersimpan: Aswaja & Khot tidak diisi teks baku otomatis (dijadikan placeholder saja)
+// 2b. Nilai Default Tersimpan: Nilai narasi resmi bawaan berdasarkan predikat capaian
 export const getDefaultNarasiEkskul = (mapelIdOrName = '', predikat = 'Baik') => {
 	const str = String(mapelIdOrName || '').toUpperCase();
-	// Hapus template narasi otomatis untuk Aswaja dan Khot (dijadikan placeholder murni)
-	if (str === 'MP-ASW' || str === 'MP-KHOT' || str.includes('ASWAJA') || str.includes('KHOT') || str.includes('KALIGRAFI')) {
-		return '';
+	const pred = String(predikat || '').trim();
+
+	// A. Aswaja (Ke-NU-an)
+	if (str === 'MP-ASW' || str.includes('ASWAJA') || str.includes('KE-NU-AN')) {
+		if (pred === 'Sangat Baik' || pred === 'A') {
+			return 'Sangat aktif, tekun, dan istiqomah dalam mendalami keaswajaan serta amaliah keagamaan warga Nahdliyin.';
+		}
+		if (pred === 'Baik' || pred === 'B') {
+			return 'Aktif dan tertib mengikuti kegiatan keaswajaan dan pembiasaan amaliah keagamaan.';
+		}
+		if (pred === 'Cukup' || pred === 'C') {
+			return 'Cukup aktif dalam kegiatan keaswajaan, perlu meningkatkan kedisiplinan dan amaliah keagamaan.';
+		}
+		return 'Perlu pembinaan dan bimbingan lebih intensif dalam kegiatan keaswajaan dan amaliah ibadah.';
 	}
 
-	// Khusus Pramuka wajib memiliki narasi kepramukaan
+	// B. Khot (Kaligrafi)
+	if (str === 'MP-KHOT' || str.includes('KHOT') || str.includes('KHAT') || str.includes('KALIGRAFI')) {
+		if (pred === 'Sangat Baik' || pred === 'A') {
+			return 'Mampu menulis kaidah kaligrafi khat naskhi dan tulisan Arab dengan sangat rapi, proporsional, dan indah.';
+		}
+		if (pred === 'Baik' || pred === 'B') {
+			return 'Mampu menulis kaidah khat kaligrafi dengan baik, rapi, dan tekun.';
+		}
+		if (pred === 'Cukup' || pred === 'C') {
+			return 'Cukup mampu menulis kaligrafi khat, perlu lebih teliti pada ketepatan kaidah huruf dan harakat.';
+		}
+		return 'Perlu latihan intensif dalam memegang pena khat dan merangkai kaidah huruf kaligrafi.';
+	}
+
+	// C. Pramuka (Praja Muda Karana)
 	if (str.includes('PRAMUKA')) {
-		const pred = String(predikat || '').trim();
-		if (pred === 'Sangat Baik' || pred === 'A') return 'Sangat aktif, berdisiplin tinggi, dan berjiwa kepemimpinan dalam kegiatan kepramukaan.';
-		if (pred === 'Baik' || pred === 'B') return 'Aktif dan tertib mengikuti seluruh kegiatan kepramukaan mingguan.';
-		if (pred === 'Cukup' || pred === 'C') return 'Cukup aktif dalam kegiatan kepramukaan, perlu meningkatkan inisiatif dan kedisiplinan.';
+		if (pred === 'Sangat Baik' || pred === 'A') {
+			return 'Sangat aktif, berdisiplin tinggi, dan berjiwa kepemimpinan dalam kegiatan kepramukaan.';
+		}
+		if (pred === 'Baik' || pred === 'B') {
+			return 'Aktif dan tertib mengikuti seluruh kegiatan kepramukaan mingguan.';
+		}
+		if (pred === 'Cukup' || pred === 'C') {
+			return 'Cukup aktif dalam kegiatan kepramukaan, perlu meningkatkan inisiatif dan kedisiplinan.';
+		}
 		return 'Perlu dorongan dan kehadiran yang lebih aktif dalam latihan kepramukaan mingguan.';
 	}
 
-	return '';
+	// Fallback Default
+	if (pred === 'Sangat Baik' || pred === 'A') {
+		return 'Menunjukkan antusiasme, dedikasi, dan penguasaan materi kegiatan yang sangat memuaskan.';
+	}
+	if (pred === 'Baik' || pred === 'B') {
+		return 'Aktif berpartisipasi dan menyelesaikan seluruh agenda kegiatan dengan baik.';
+	}
+	if (pred === 'Cukup' || pred === 'C') {
+		return 'Cukup aktif berpartisipasi, perlu meningkatkan motivasi dan konsistensi kegiatan.';
+	}
+	return 'Perlu bimbingan dan keaktifan yang lebih konsisten dalam mengikuti kegiatan.';
 };
 
 // 3. Deteksi Apakah Suatu Mapel Termasuk Kategori Ekskul Wajib Pesantren (Opsi A: Database-driven via kelompok === 'Ekskul')
@@ -98,11 +138,11 @@ export const isEkskulMapel = (mapelIdOrName = '', mapelObj = null) => {
 	// A. Jika objek mapel langsung diteruskan atau parameter pertama berupa objek mapel
 	const obj = mapelObj || (typeof mapelIdOrName === 'object' && mapelIdOrName !== null ? mapelIdOrName : null);
 	if (obj && obj.kelompok !== undefined) {
-		return obj.kelompok === 'Ekskul';
+		if (obj.kelompok === 'Ekskul') return true;
 	}
 
 	// B. Fallback toleran string ID atau Nama
-	const str = String((obj ? obj.id || obj.mapel : mapelIdOrName) || '').toUpperCase();
+	const str = String((obj ? obj.id || obj.mapel || obj.nama_resmi : mapelIdOrName) || '').toUpperCase();
 	return (
 		str === 'MP-ASW' ||
 		str === 'MP-KHOT' ||
@@ -111,6 +151,43 @@ export const isEkskulMapel = (mapelIdOrName = '', mapelObj = null) => {
 		str.includes('KHAT') ||
 		str.includes('KALIGRAFI')
 	);
+};
+
+// 3b. Pencocokan Ketat: Apakah Nama Suatu Kegiatan Ekskul Cocok dengan Suatu Mapel Spesifik
+export const isMatchingEkskulMapel = (activityNameOrId = '', mapelObjOrId = '') => {
+	const actStr = String(
+		(typeof activityNameOrId === 'object' && activityNameOrId !== null
+			? activityNameOrId.nama_ekskul || activityNameOrId.nama_kegiatan || activityNameOrId.id || activityNameOrId.mapel
+			: activityNameOrId) || ''
+	).trim().toUpperCase();
+
+	const mapelStr = String(
+		(typeof mapelObjOrId === 'object' && mapelObjOrId !== null
+			? mapelObjOrId.id || mapelObjOrId.mapel || mapelObjOrId.nama_resmi
+			: mapelObjOrId) || ''
+	).trim().toUpperCase();
+
+	if (!actStr || !mapelStr) return false;
+
+	// 1. Exact match (case-insensitive)
+	if (actStr === mapelStr) return true;
+
+	// 2. Aswaja Match
+	const isActAswaja = actStr === 'MP-ASW' || actStr.includes('ASWAJA') || actStr.includes('KE-NU-AN');
+	const isMapelAswaja = mapelStr === 'MP-ASW' || mapelStr.includes('ASWAJA') || mapelStr.includes('KE-NU-AN');
+	if (isActAswaja && isMapelAswaja) return true;
+
+	// 3. Khot Match
+	const isActKhot = actStr === 'MP-KHOT' || actStr.includes('KHOT') || actStr.includes('KHAT') || actStr.includes('KALIGRAFI');
+	const isMapelKhot = mapelStr === 'MP-KHOT' || mapelStr.includes('KHOT') || mapelStr.includes('KHAT') || mapelStr.includes('KALIGRAFI');
+	if (isActKhot && isMapelKhot) return true;
+
+	// 4. Pramuka Match
+	const isActPramuka = actStr.includes('PRAMUKA');
+	const isMapelPramuka = mapelStr.includes('PRAMUKA');
+	if (isActPramuka && isMapelPramuka) return true;
+
+	return false;
 };
 
 // 4. Nama Resmi Ekskul untuk Rapor

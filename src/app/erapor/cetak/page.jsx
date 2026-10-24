@@ -690,6 +690,7 @@ export default function CetakRaporPage() {
 	const renderPage3 = (bundle) => {
 		const ekskulList = bundle.ekstrakurikuler || [];
 		const padCount = Math.max(0, 3 - ekskulList.length);
+		const studentTingkat = getTingkatKelas(bundle.siswa?.kelas || bundle.kelas?.nama_kelas || '');
 
 		return (
 			<div className='flex flex-col justify-between h-full'>
@@ -721,18 +722,35 @@ export default function CetakRaporPage() {
 										<tr>
 											<td className='border border-black p-1.5 text-center' style={{ width: '40px' }}>1.</td>
 											<td className='border border-black p-1.5 font-semibold' style={{ width: '220px' }}>Praja Muda Karana (Pramuka)</td>
-											<td className='border border-black p-1.5'><strong>Baik.</strong> Aktif dan tertib mengikuti kegiatan kepramukaan</td>
+											<td className='border border-black p-1.5'>-</td>
 										</tr>
-										<tr>
-											<td className='border border-black p-1.5 text-center'>2.</td>
-											<td className='border border-black p-1.5 font-semibold'>Aswaja (Ke-NU-an)</td>
-											<td className='border border-black p-1.5'><strong>Baik.</strong> Aktif dan tertib mengikuti kegiatan keaswajaan</td>
-										</tr>
-										<tr>
-											<td className='border border-black p-1.5 text-center'>3.</td>
-											<td className='border border-black p-1.5 font-semibold'>Khot (Kaligrafi)</td>
-											<td className='border border-black p-1.5'><strong>Baik.</strong> Mampu menulis kaligrafi khat dengan baik dan rapi</td>
-										</tr>
+										{studentTingkat === 9 ? (
+											<>
+												<tr>
+													<td className='border border-black p-1.5 text-center'>2.</td>
+													<td className='border border-black p-1.5 font-semibold'>Aswaja (Ke-NU-an)</td>
+													<td className='border border-black p-1.5'>-</td>
+												</tr>
+												<tr>
+													<td className='border border-black p-1.5 text-center'>3.</td>
+													<td className='border border-black p-1.5 font-semibold'>Khot (Kaligrafi)</td>
+													<td className='border border-black p-1.5'>-</td>
+												</tr>
+											</>
+										) : (
+											<>
+												<tr>
+													<td className='border border-black p-1.5 text-center'>2.</td>
+													<td className='border border-black p-1.5 font-semibold'>Khot (Kaligrafi)</td>
+													<td className='border border-black p-1.5'>-</td>
+												</tr>
+												<tr>
+													<td className='border border-black p-1.5 text-center'>3.</td>
+													<td className='border border-black p-1.5 font-semibold'>-</td>
+													<td className='border border-black p-1.5'>-</td>
+												</tr>
+											</>
+										)}
 									</>
 								) : (
 									<>
@@ -745,8 +763,14 @@ export default function CetakRaporPage() {
 													{e.nama_ekskul}
 												</td>
 												<td className='border border-black p-1.5'>
-													{e.predikat ? <strong>{e.predikat}. </strong> : ''}
-													{e.keterangan || '-'}
+													{e.predikat && e.predikat !== '-' ? (
+														<>
+															<strong>{e.predikat}. </strong>
+															{e.keterangan && e.keterangan !== '-' ? e.keterangan : ''}
+														</>
+													) : (
+														<span>{e.keterangan && e.keterangan !== '-' ? e.keterangan : '-'}</span>
+													)}
 												</td>
 											</tr>
 										))}

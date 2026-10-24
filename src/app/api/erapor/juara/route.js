@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
+import { isEkskulMapel } from '@/lib/eraporEkskulUtils';
 
 function detectTingkat(namaKelas = '') {
 	const raw = String(namaKelas || '').toUpperCase();
@@ -66,6 +67,22 @@ export async function GET(request) {
 		if (sErr) throw sErr;
 		const siswaList = siswaListRaw || [];
 
+		// Ambil master mapel untuk mengecualikan mapel kategori ekskul (Aswaja & Khot) dari perhitungan Juara Kelas
+		const { data: mapelList } = await supabase
+			.from('mapel')
+			.select('id, mapel, nama_resmi, kelompok');
+
+		const excludedMapelIds = new Set(
+			(mapelList || [])
+				.filter((m) => m.id === 'MP-ASW' || m.id === 'MP-KHOT' || m.kelompok === 'Ekskul' || isEkskulMapel(m.id, m))
+				.map((m) => m.id)
+		);
+		const excludedMapelNames = new Set(
+			(mapelList || [])
+				.filter((m) => m.id === 'MP-ASW' || m.id === 'MP-KHOT' || m.kelompok === 'Ekskul' || isEkskulMapel(m.id, m))
+				.map((m) => (m.mapel || '').toLowerCase())
+		);
+
 		// 4. Ambil nilai dari rapor_nilai_kuantitatif
 		let grades = [];
 		const { data: rGrades, error: gErr } = await supabase
@@ -108,6 +125,9 @@ export async function GET(request) {
 					const mapelName = row.nilai_tugas?.mapel;
 					const score = parseFloat(row.nilai);
 					if (sid && mapelName && !isNaN(score)) {
+						if (excludedMapelNames.has(String(mapelName).toLowerCase()) || isEkskulMapel(mapelName)) {
+							return;
+						}
 						if (!tempAccum[sid]) tempAccum[sid] = {};
 						if (!tempAccum[sid][mapelName]) tempAccum[sid][mapelName] = [];
 						tempAccum[sid][mapelName].push(score);
@@ -126,7 +146,7 @@ export async function GET(request) {
 			}
 		}
 
-		// 6. Hitung Total & Rata-Rata Nilai untuk Tiap Siswa
+		// 6. Hitung Total & Rata-Rata Nilai untuk Tiap Siswa (Mengecualikan Mapel Ekstrakurikuler)
 		const studentScores = siswaList.map((s) => {
 			const sGrades = gradeMap[s.id] || {};
 			const mapelKeys = Object.keys(sGrades);
@@ -134,6 +154,18 @@ export async function GET(request) {
 			let count = 0;
 
 			mapelKeys.forEach((mKey) => {
+				const mStr = String(mKey).toLowerCase();
+				// Jangan ikutkan nilai mapel ekstrakurikuler (Aswaja, Khot, dsb) ke dalam total & rata-rata ranking juara
+				if (
+					excludedMapelIds.has(mKey) ||
+					mKey === 'MP-ASW' ||
+					mKey === 'MP-KHOT' ||
+					excludedMapelNames.has(mStr) ||
+					isEkskulMapel(mKey)
+				) {
+					return;
+				}
+
 				const val = sGrades[mKey];
 				if (val !== undefined && val !== null && !isNaN(val)) {
 					total += val;

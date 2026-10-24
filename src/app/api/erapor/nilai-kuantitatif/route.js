@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/utils/supabase/admin';
 import { checkClassLock } from '@/utils/erapor';
 import {
 	isEkskulMapel,
+	isMatchingEkskulMapel,
 	getOfficialEkskulName,
 	getPredikatFromNilai,
 	getDefaultNarasiEkskul,
@@ -343,20 +344,23 @@ export async function POST(request) {
 					const pred = getPredikatFromNilai(numScore);
 					const ket = g.deskripsi?.trim() || getDefaultNarasiEkskul(mapel_id, pred) || '-';
 
-					const { data: existingEks } = await supabase
+					const { data: existingList } = await supabase
 						.from('rapor_ekstrakurikuler')
-						.select('id')
+						.select('id, nama_kegiatan')
 						.eq('siswa_id', g.siswa_id)
 						.eq('kelas_id', kelas_id)
 						.eq('semester', parseInt(semester, 10) || 1)
-						.eq('tahun_ajaran', tahun_ajaran)
-						.or(`nama_kegiatan.ilike.%${searchKeyword}%,nama_kegiatan.eq.${ekskulName}`)
-						.maybeSingle();
+						.eq('tahun_ajaran', tahun_ajaran);
+
+					const existingEks = (existingList || []).find((row) =>
+						isMatchingEkskulMapel(row.nama_kegiatan, mapelInfo || mapel_id)
+					);
 
 					if (existingEks) {
 						await supabase
 							.from('rapor_ekstrakurikuler')
 							.update({
+								nama_kegiatan: ekskulName,
 								predikat: pred,
 								keterangan: ket,
 								updated_at: new Date().toISOString(),

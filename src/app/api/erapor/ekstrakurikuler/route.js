@@ -7,7 +7,10 @@ import {
 	convertMapelScoreToEkskul,
 	getDefaultNarasiEkskul,
 	getOfficialEkskulName,
+	getPredikatFromNilai,
 	isEkskulApplicableForTingkat,
+	isEkskulMapel,
+	isMatchingEkskulMapel,
 } from '@/lib/eraporEkskulUtils';
 
 async function getAuthInfo(request, supabase) {
@@ -112,7 +115,7 @@ export async function GET(request) {
 		// Ambil seluruh mapel berkategori Ekskul / Ciri Khas (Opsi A)
 		const { data: ekskulMapels } = await supabase
 			.from('mapel')
-			.select('id, mapel, nama_resmi, kelompok')
+			.select('id, mapel, nama_resmi, kelompok, tingkat')
 			.or('kelompok.eq.Ekskul,id.in.("MP-ASW","MP-KHOT")');
 
 		const ekskulMapelIds = (ekskulMapels || []).map((m) => m.id);
@@ -183,38 +186,53 @@ export async function GET(request) {
 					predikat: e.predikat || 'Baik',
 					keterangan: e.keterangan || '',
 					is_auto_synced: false,
+					is_mapel_ekskul: isEkskulMapel(e.nama_kegiatan || e.nama_ekskul),
 				}));
 
 			// 1. Sinkronisasi otomatis dari seluruh mapel berkategori Ekskul / Ciri Khas (Opsi A)
 			(ekskulMapels || []).forEach((em) => {
-				if (!isEkskulApplicableForTingkat(em.id, tingkatKelas)) return;
+				if (!isEkskulApplicableForTingkat(em, tingkatKelas)) return;
 				const emName = em.nama_resmi || getOfficialEkskulName(em.id, em);
-				const emKeyword = (em.mapel || em.id || '').toLowerCase();
 
-				const hasItem = studentEkskuls.some((e) => {
-					const name = (e.nama_ekskul || e.nama_kegiatan || '').toLowerCase();
-					return name === emName.toLowerCase() || name.includes(emKeyword);
+				const existingIdx = studentEkskuls.findIndex((e) => {
+					const name = e.nama_ekskul || e.nama_kegiatan || '';
+					return isMatchingEkskulMapel(name, em);
 				});
 
-				if (!hasItem) {
-					const scoreObj = mapelScoreMap[s.id]?.[em.id];
-					if (scoreObj && scoreObj.nilai_akhir !== undefined && scoreObj.nilai_akhir !== null) {
-						studentEkskuls.push(
-							convertMapelScoreToEkskul(em.id, scoreObj.nilai_akhir, scoreObj.deskripsi)
-						);
-					} else {
-						studentEkskuls.push({
-							nama_ekskul: emName,
-							nama_kegiatan: emName,
-							predikat: 'Baik',
-							keterangan: getDefaultNarasiEkskul(em.id, 'Baik') || '-',
-							is_auto_synced: false,
-						});
-					}
+				const scoreObj = mapelScoreMap[s.id]?.[em.id];
+				const hasScore =
+					scoreObj &&
+					scoreObj.nilai_akhir !== undefined &&
+					scoreObj.nilai_akhir !== null &&
+					scoreObj.nilai_akhir !== '';
+				const numScore = hasScore ? parseFloat(scoreObj.nilai_akhir) : null;
+				const pred = hasScore
+					? getPredikatFromNilai(numScore)
+					: (existingIdx !== -1 && studentEkskuls[existingIdx].predikat ? studentEkskuls[existingIdx].predikat : '');
+				const descText =
+					(scoreObj?.deskripsi && scoreObj.deskripsi.trim()) ||
+					(existingIdx !== -1 && studentEkskuls[existingIdx].keterangan ? studentEkskuls[existingIdx].keterangan : '');
+
+				const mapelItem = {
+					id: existingIdx !== -1 ? studentEkskuls[existingIdx].id : undefined,
+					nama_ekskul: emName,
+					nama_kegiatan: emName,
+					predikat: pred,
+					keterangan: descText,
+					nilai_angka: numScore,
+					is_auto_synced: true,
+					is_mapel_ekskul: true,
+					is_graded_by_guru: hasScore,
+				};
+
+				if (existingIdx !== -1) {
+					studentEkskuls[existingIdx] = mapelItem;
+				} else {
+					studentEkskuls.push(mapelItem);
 				}
 			});
 
-			// 3. Tambahkan Pramuka sebagai ekskul wajib jika belum ada
+			// 2. Tambahkan Pramuka sebagai ekskul wajib jika belum ada
 			const hasPramuka = studentEkskuls.some((e) =>
 				(e.nama_ekskul || e.nama_kegiatan || '').toLowerCase().includes('pramuka')
 			);
@@ -222,9 +240,10 @@ export async function GET(request) {
 				studentEkskuls.unshift({
 					nama_ekskul: 'Praja Muda Karana (Pramuka)',
 					nama_kegiatan: 'Praja Muda Karana (Pramuka)',
-					predikat: 'Baik',
-					keterangan: getDefaultNarasiEkskul('PRAMUKA', 'Baik'),
+					predikat: '',
+					keterangan: '',
 					is_auto_synced: false,
+					is_mapel_ekskul: false,
 				});
 			}
 
@@ -297,35 +316,126 @@ export async function POST(request) {
 			}
 		}
 
+		// Ambil data mapel ekskul dan nilai guru mapel untuk memproteksi nilai & deskripsi asli
+		const [{ data: ekskulMapels }, { data: appSettingsRow }] = await Promise.all([
+			supabase
+				.from('mapel')
+				.select('id, mapel, nama_resmi, kelompok, tingkat')
+				.or('kelompok.eq.Ekskul,id.in.("MP-ASW","MP-KHOT")'),
+			supabase
+				.from('app_settings')
+				.select('value')
+				.eq('key', 'master_ekstrakurikuler')
+				.maybeSingle(),
+		]);
+
+		const targetMapelIds = (ekskulMapels || []).map((m) => m.id);
+		const mapelScoreMap = {};
+		if (targetMapelIds.length > 0) {
+			const [kuantRes, kualRes] = await Promise.all([
+				supabase
+					.from('rapor_nilai_kuantitatif')
+					.select('siswa_id, mapel_id, nilai_akhir')
+					.eq('kelas_id', kelas_id)
+					.in('mapel_id', targetMapelIds)
+					.eq('semester', parseInt(semester, 10) || 1)
+					.eq('tahun_ajaran', tahun_ajaran),
+				supabase
+					.from('rapor_nilai_kualitatif')
+					.select('siswa_id, mapel_id, deskripsi_tertinggi')
+					.eq('kelas_id', kelas_id)
+					.in('mapel_id', targetMapelIds)
+					.eq('semester', parseInt(semester, 10) || 1)
+					.eq('tahun_ajaran', tahun_ajaran),
+			]);
+
+			(kuantRes.data || []).forEach((row) => {
+				if (!mapelScoreMap[row.siswa_id]) mapelScoreMap[row.siswa_id] = {};
+				mapelScoreMap[row.siswa_id][row.mapel_id] = { nilai_akhir: row.nilai_akhir };
+			});
+			(kualRes.data || []).forEach((row) => {
+				if (!mapelScoreMap[row.siswa_id]) mapelScoreMap[row.siswa_id] = {};
+				if (!mapelScoreMap[row.siswa_id][row.mapel_id]) mapelScoreMap[row.siswa_id][row.mapel_id] = {};
+				mapelScoreMap[row.siswa_id][row.mapel_id].deskripsi = row.deskripsi_tertinggi;
+			});
+		}
+
+		let masterPresets = [];
+		try {
+			if (appSettingsRow?.value) {
+				masterPresets = Array.isArray(appSettingsRow.value) ? appSettingsRow.value : JSON.parse(appSettingsRow.value);
+			}
+		} catch (e) {
+			masterPresets = [];
+		}
+
 		// Hapus ekskul lama kelas ini di periode terkait untuk replace bersih
 		const { error: delErr } = await supabase
 			.from('rapor_ekstrakurikuler')
 			.delete()
 			.eq('kelas_id', kelas_id)
 			.eq('semester', parseInt(semester, 10) || 1)
-			.eq('tahun_ajaran', tahunAjaran);
+			.eq('tahun_ajaran', tahun_ajaran);
 
 		if (delErr) throw delErr;
 
-		// Kumpulkan baris baru
+		// Kumpulkan baris baru dengan proteksi nilai & deskripsi
 		const rowsToInsert = [];
 		payload.forEach((item) => {
 			const { siswa_id } = item;
 			const list = item.kegiatan || item.ekskul_list || [];
 			list.forEach((k) => {
 				const nama = (k.nama_kegiatan || k.nama_ekskul || '').trim();
-				if (nama) {
-					rowsToInsert.push({
-						siswa_id,
-						kelas_id,
-						semester: parseInt(semester, 10) || 1,
-						tahun_ajaran,
-						nama_kegiatan: nama,
-						predikat: (k.predikat || 'Baik').trim(),
-						keterangan: (k.keterangan || '').trim(),
-						updated_at: new Date().toISOString(),
-					});
+				if (!nama) return;
+
+				let predikat = (k.predikat || '').trim();
+				let keterangan = (k.keterangan || '').trim();
+
+				// Proteksi 1: Jika Mapel Ekskul (Aswaja, Khot), kunci nilai & narasi sesuai catatan Guru Mapel
+				const matchedMapel = (ekskulMapels || []).find(
+					(em) => isMatchingEkskulMapel(nama, em)
+				);
+
+				if (matchedMapel) {
+					const scoreObj = mapelScoreMap[siswa_id]?.[matchedMapel.id];
+					if (scoreObj && scoreObj.nilai_akhir !== undefined && scoreObj.nilai_akhir !== null && scoreObj.nilai_akhir !== '') {
+						predikat = getPredikatFromNilai(scoreObj.nilai_akhir);
+						keterangan = (scoreObj.deskripsi && scoreObj.deskripsi.trim()) || getDefaultNarasiEkskul(matchedMapel.id, predikat) || '-';
+					} else {
+						// Jika Guru Mapel belum mengisi nilai, jangan simpan nilai/deskripsi palsu
+						predikat = '';
+						keterangan = '';
+					}
+				} else {
+					// Untuk Ekskul Pilihan / Pramuka, Wali Kelas yang menentukan nilai & catatan capaian
+					if (predikat && predikat !== '-') {
+						if (!keterangan || keterangan === '-') {
+							const preset = masterPresets.find(
+								(p) => (p.nama_ekskul || '').toLowerCase() === nama.toLowerCase()
+							);
+							if (preset && preset.deskripsi_standar) {
+								keterangan = preset.deskripsi_standar;
+							} else {
+								keterangan = getDefaultNarasiEkskul(nama, predikat) || '-';
+							}
+						}
+					} else {
+						// Belum dinilai oleh Wali Kelas
+						predikat = '';
+						keterangan = '';
+					}
 				}
+
+				rowsToInsert.push({
+					siswa_id,
+					kelas_id,
+					semester: parseInt(semester, 10) || 1,
+					tahun_ajaran,
+					nama_kegiatan: matchedMapel?.nama_resmi || nama,
+					predikat: predikat || '',
+					keterangan: keterangan || '',
+					updated_at: new Date().toISOString(),
+				});
 			});
 		});
 

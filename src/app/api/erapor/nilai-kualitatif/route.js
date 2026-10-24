@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { extractTingkat, checkClassLock } from '@/utils/erapor';
-import { isEkskulMapel, getOfficialEkskulName } from '@/lib/eraporEkskulUtils';
+import { isEkskulMapel, isMatchingEkskulMapel, getOfficialEkskulName } from '@/lib/eraporEkskulUtils';
 
 async function getAuthInfo(request, supabase) {
 	let role = request.headers.get('x-user-role');
@@ -408,20 +408,23 @@ export async function POST(request) {
 			const ekskulKeyword = mapelInfo?.mapel || (String(mapel_id).toUpperCase().includes('ASW') ? 'aswaja' : 'khot');
 			for (const item of payload) {
 				if (item.deskripsi_tertinggi && item.deskripsi_tertinggi.trim()) {
-					const { data: existingEks } = await supabase
+					const { data: existingList } = await supabase
 						.from('rapor_ekstrakurikuler')
-						.select('id')
+						.select('id, nama_kegiatan')
 						.eq('siswa_id', item.siswa_id)
 						.eq('kelas_id', kelas_id)
 						.eq('semester', parseInt(semester, 10) || 1)
-						.eq('tahun_ajaran', tahun_ajaran)
-						.or(`nama_kegiatan.ilike.%${ekskulKeyword}%,nama_kegiatan.eq.${ekskulName}`)
-						.maybeSingle();
+						.eq('tahun_ajaran', tahun_ajaran);
+
+					const existingEks = (existingList || []).find((row) =>
+						isMatchingEkskulMapel(row.nama_kegiatan, mapelInfo || mapel_id)
+					);
 
 					if (existingEks) {
 						await supabase
 							.from('rapor_ekstrakurikuler')
 							.update({
+								nama_kegiatan: ekskulName,
 								keterangan: item.deskripsi_tertinggi.trim(),
 								updated_at: new Date().toISOString(),
 							})

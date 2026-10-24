@@ -8,6 +8,7 @@ import {
 	getDefaultNarasiEkskul,
 	getOfficialEkskulName,
 	isEkskulApplicableForTingkat,
+	isMatchingEkskulMapel,
 } from '@/lib/eraporEkskulUtils';
 
 async function getAuthInfo(request, supabase) {
@@ -199,7 +200,7 @@ export async function GET(request) {
 				.order('mapel', { ascending: true }),
 			supabase
 				.from('mapel')
-				.select('id, mapel, nama_resmi, kelompok')
+				.select('id, mapel, nama_resmi, kelompok, tingkat')
 				.or('kelompok.eq.Ekskul,id.in.("MP-ASW","MP-KHOT")'),
 		]);
 
@@ -373,28 +374,39 @@ export async function GET(request) {
 
 					// Sinkronkan otomatis dari seluruh mapel berkategori Ekskul (Opsi A)
 					(ekskulMapels || []).forEach((em) => {
-						if (!isEkskulApplicableForTingkat(em.id, tingkatSiswa)) return;
+						if (!isEkskulApplicableForTingkat(em, tingkatSiswa)) return;
 						const emName = em.nama_resmi || getOfficialEkskulName(em.id, em);
-						const emKeyword = (em.mapel || em.id || '').toLowerCase();
 
-						const hasItem = userEkskuls.some((e) => {
-							const name = (e.nama_ekskul || e.nama_kegiatan || '').toLowerCase();
-							return name === emName.toLowerCase() || name.includes(emKeyword);
+						const existingIdx = userEkskuls.findIndex((e) => {
+							const name = e.nama_ekskul || e.nama_kegiatan || '';
+							return isMatchingEkskulMapel(name, em);
 						});
 
-						if (!hasItem) {
-							const numScore = sNilaiKuantitatif[em.id];
-							const descText = sNilaiKualitatif[em.id]?.deskripsi_tertinggi || '';
-							if (numScore !== undefined && numScore !== null && numScore !== '') {
-								userEkskuls.push(convertMapelScoreToEkskul(em.id, numScore, descText));
-							} else {
-								userEkskuls.push({
+						const numScore = sNilaiKuantitatif[em.id];
+						const descText = sNilaiKualitatif[em.id]?.deskripsi_tertinggi || '';
+						const hasScore = numScore !== undefined && numScore !== null && numScore !== '' && !isNaN(numScore);
+						const syncedItem = hasScore
+							? convertMapelScoreToEkskul(em.id, numScore, descText)
+							: {
 									nama_ekskul: emName,
 									nama_kegiatan: emName,
-									predikat: 'Baik',
-									keterangan: getDefaultNarasiEkskul(em.id, 'Baik') || '-',
-								});
-							}
+									predikat: '-',
+									keterangan: '-',
+									nilai_angka: null,
+							  };
+
+						if (existingIdx !== -1) {
+							// Selalu utamakan nilai & narasi murni dari Guru Mapel
+							userEkskuls[existingIdx] = {
+								...userEkskuls[existingIdx],
+								nama_ekskul: emName,
+								nama_kegiatan: emName,
+								predikat: syncedItem.predikat,
+								keterangan: syncedItem.keterangan,
+								nilai_angka: syncedItem.nilai_angka,
+							};
+						} else {
+							userEkskuls.push(syncedItem);
 						}
 					});
 
@@ -405,8 +417,8 @@ export async function GET(request) {
 						userEkskuls.unshift({
 							nama_ekskul: 'Praja Muda Karana (Pramuka)',
 							nama_kegiatan: 'Praja Muda Karana (Pramuka)',
-							predikat: 'Baik',
-							keterangan: getDefaultNarasiEkskul('PRAMUKA', 'Baik'),
+							predikat: '-',
+							keterangan: '-',
 						});
 					}
 					return userEkskuls;
