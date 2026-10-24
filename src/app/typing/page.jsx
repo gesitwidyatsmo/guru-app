@@ -2,7 +2,7 @@ import React from 'react';
 import TypingGame from './TypingGame';
 
 export const metadata = {
-	title: 'Belajar Mengetik | Guru App',
+	title: 'Belajar Mengetik | SMP IT TBI 4',
 	description: 'Latihan mengetik 10 jari interaktif',
 };
 

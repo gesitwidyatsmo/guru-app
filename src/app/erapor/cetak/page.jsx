@@ -9,6 +9,12 @@ import {
 	CheckCircle2,
 	ChevronRight,
 	AlertCircle,
+	MapPin,
+	Calendar,
+	Edit2,
+	RotateCcw,
+	AlertTriangle,
+	Check,
 } from 'lucide-react';
 import Loader from '@/app/components/loading';
 
@@ -43,6 +49,11 @@ export default function CetakRaporPage() {
 
 	// Tampilan Halaman yang Dipilih: 'semua' | 'cover' | 'sekolah' | 'biodata' | 'semester' | 'nilai1' | 'nilai2' | 'ekskul'
 	const [activeSheet, setActiveSheet] = useState('semua');
+
+	// Penyesuaian Titimangsa Sesi Cetak (Override fleksibel)
+	const [customTanggalRapor, setCustomTanggalRapor] = useState('');
+	const [customTempatRapor, setCustomTempatRapor] = useState('');
+	const [isEditingTitimangsa, setIsEditingTitimangsa] = useState(false);
 
 	useEffect(() => {
 		async function fetchMaster() {
@@ -126,6 +137,11 @@ export default function CetakRaporPage() {
 			? students.filter((s) => s.siswa.id === selectedSiswaId)
 			: students.slice(0, 1);
 	const sekolah = bundleData?.sekolah || {};
+
+	// Titimangsa Aktif (Dukungan Smart Fallback & Override Sesi)
+	const tempatRaporDisplay = customTempatRapor || sekolah.tempat_rapor || 'Kuala Gading';
+	const tanggalRaporDisplay = customTanggalRapor || sekolah.tanggal_rapor || '';
+	const isOfficialDate = !customTanggalRapor && Boolean(bundleData?.sekolah?.is_titimangsa_official);
 
 	// Deteksi Kelas & Tingkat yang Sedang Aktif
 	const currentKelasObj =
@@ -523,7 +539,7 @@ export default function CetakRaporPage() {
 
 					<div className='text-center' style={{ width: '260px' }}>
 						<p className='text-[10pt] mb-1'>
-							{sekolah.tempat_rapor || 'Kuala Gading'}, {formatDateIndo(s.diterima_pada_tanggal) || sekolah.tanggal_rapor || '20 Desember 2026'}
+							{tempatRaporDisplay}, {formatDateIndo(s.diterima_pada_tanggal) || tanggalRaporDisplay}
 						</p>
 						<p className='text-[10pt] font-semibold mb-12'>Kepala Sekolah,</p>
 						<p className='text-[10.5pt] font-bold underline'>{sekolah.nama_kepsek || 'Mujib Kodar, S.Pd,I'}</p>
@@ -675,7 +691,7 @@ export default function CetakRaporPage() {
 		<div className='flex justify-end text-[10pt] font-sans mt-auto' style={{ paddingTop: '0.5rem' }}>
 			<div className='text-center' style={{ width: '250px' }}>
 				<p className='mb-0.5'>
-					{sekolah.tempat_rapor || 'Kuala Gading'}, {sekolah.tanggal_rapor || '21 Desember 2024'}
+					{tempatRaporDisplay}, {tanggalRaporDisplay}
 				</p>
 				<p className='font-semibold' style={{ marginBottom: '4.5rem' }}>
 					Wali Kelas,
@@ -855,7 +871,7 @@ export default function CetakRaporPage() {
 						</div>
 						<div className='text-center' style={{ width: '250px' }}>
 							<p className='mb-0.5'>
-								{sekolah.tempat_rapor || 'Kuala Gading'}, {sekolah.tanggal_rapor || '21 Desember 2024'}
+								{tempatRaporDisplay}, {tanggalRaporDisplay}
 							</p>
 							<p className='font-semibold mb-0.5'>Wali Kelas,</p>
 							<div style={{ height: '4.5rem' }} />
@@ -1148,6 +1164,94 @@ export default function CetakRaporPage() {
 							</button>
 						</div>
 					</div>
+
+					{/* Status Titimangsa & Kontrol Dinamis (Safeguard) */}
+					<div className='print:hidden p-3.5 sm:p-4 bg-white border-2 border-black rounded-2xl shadow-[3px_3px_0px_0px_#000] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3'>
+						<div className='flex items-center gap-2.5 flex-wrap'>
+							<div className='flex items-center gap-1.5 px-3 py-1 bg-gray-50 border-2 border-black rounded-xl text-xs font-bold shadow-[1.5px_1.5px_0px_#000]'>
+								<MapPin className='w-3.5 h-3.5 text-black shrink-0' />
+								<span>
+									Titimangsa: <strong>{tempatRaporDisplay}</strong>, <strong>{tanggalRaporDisplay || '-'}</strong>
+								</span>
+							</div>
+
+							{isOfficialDate ? (
+								<span className='px-2.5 py-1 bg-emerald-100 text-emerald-900 border-2 border-emerald-500 rounded-xl text-[11px] font-black uppercase flex items-center gap-1 shadow-[1.5px_1.5px_0px_#059669]'>
+									<Check className='w-3 h-3 text-emerald-700' />
+									<span>Resmi Disahkan Kurikulum</span>
+								</span>
+							) : (
+								<span className='px-2.5 py-1 bg-amber-100 text-amber-900 border-2 border-amber-500 rounded-xl text-[11px] font-black uppercase flex items-center gap-1 shadow-[1.5px_1.5px_0px_#D97706]' title='Tanggal ini dihitung otomatis dari kalender tahun ajar karena belum disahkan resmi di menu Manajemen Rapor Kurikulum.'>
+									<AlertTriangle className='w-3 h-3 text-amber-700' />
+									<span>Estimasi Kalender Otomatis</span>
+								</span>
+							)}
+
+							{customTanggalRapor && (
+								<span className='px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-400 rounded-lg text-[10px] font-bold'>
+									(Disesuaikan Sesi Ini)
+								</span>
+							)}
+						</div>
+
+						{/* Kontrol Cepat Ubah Tanggal Sesi Cetak */}
+						<div className='flex items-center gap-2 w-full sm:w-auto'>
+							{isEditingTitimangsa ? (
+								<div className='flex items-center gap-2 flex-wrap w-full sm:w-auto'>
+									<input
+										type='text'
+										value={customTempatRapor !== '' ? customTempatRapor : tempatRaporDisplay}
+										onChange={(e) => setCustomTempatRapor(e.target.value)}
+										placeholder='Kota / Desa'
+										className='px-2.5 py-1 bg-gray-50 border-2 border-black rounded-lg text-xs font-bold w-28'
+									/>
+									<input
+										type='text'
+										value={customTanggalRapor !== '' ? customTanggalRapor : tanggalRaporDisplay}
+										onChange={(e) => setCustomTanggalRapor(e.target.value)}
+										placeholder='Contoh: 20 Desember 2026'
+										className='px-2.5 py-1 bg-gray-50 border-2 border-black rounded-lg text-xs font-bold w-44'
+									/>
+									<button
+										type='button'
+										onClick={() => setIsEditingTitimangsa(false)}
+										className='px-2.5 py-1 bg-black text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-800 transition-colors'>
+										Simpan Sesi
+									</button>
+									<button
+										type='button'
+										onClick={() => {
+											setCustomTanggalRapor('');
+											setCustomTempatRapor('');
+											setIsEditingTitimangsa(false);
+										}}
+										className='px-2 py-1 text-gray-600 hover:text-black text-xs font-bold cursor-pointer'
+										title='Reset ke tanggal sistem'>
+										<RotateCcw className='w-3.5 h-3.5' />
+									</button>
+								</div>
+							) : (
+								<button
+									type='button'
+									onClick={() => setIsEditingTitimangsa(true)}
+									className='px-3 py-1 bg-gray-100 hover:bg-gray-200 text-black border border-black rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer'>
+									<Edit2 className='w-3 h-3' />
+									<span>Sesuaikan Titimangsa</span>
+								</button>
+							)}
+						</div>
+					</div>
+
+					{!isOfficialDate && (
+						<div className='print:hidden px-4 py-2.5 bg-amber-50 border-2 border-amber-400 rounded-2xl text-xs font-medium text-amber-900 flex items-center justify-between gap-2 shadow-[2px_2px_0px_#F59E0B]'>
+							<div className='flex items-center gap-2'>
+								<AlertTriangle className='w-4 h-4 text-amber-600 shrink-0' />
+								<span>
+									<strong>Perhatian:</strong> Tanggal rapor <strong>{tanggalRaporDisplay}</strong> dihitung secara otomatis berdasarkan kalender tahun ajar semester ini ({bundleData?.semester_label || semester}) karena Waka Kurikulum belum mengesahkan tanggal resmi di menu Manajemen Rapor.
+								</span>
+							</div>
+						</div>
+					)}
 
 					{/* Container Lembar Kertas Rapor (Format Cetak A4) */}
 					{kelasList.length === 0 ? (

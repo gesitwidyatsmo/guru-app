@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Guru App",
-  "short_name": "Guru App",
+  "name": "SMP IT TBI 4",
+  "short_name": "SMP IT TBI 4",
   "description": "Aplikasi manajemen KBM dan Jurnal Mengajar untuk Guru",
   "lang": "id",
   "start_url": "/",
@@ -15,28 +15,22 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/android/launchericon-48x48.png",
-      "sizes": "48x48",
+      "src": "/api/app-icon",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/android/launchericon-72x72.png",
-      "sizes": "72x72",
+      "src": "/api/app-icon",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/android/launchericon-96x96.png",
-      "sizes": "96x96",
+      "src": "/api/app-icon",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/android/launchericon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
+      "purpose": "maskable"
     },
     {
       "src": "/android/launchericon-192x192.png",
@@ -48,18 +42,6 @@
       "src": "/android/launchericon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -69,14 +51,14 @@
       "sizes": "390x844",
       "type": "image/jpeg",
       "form_factor": "narrow",
-      "label": "Dashboard Guru App di perangkat mobile"
+      "label": "Dashboard SMP IT TBI 4 di perangkat mobile"
     },
     {
       "src": "/screenshots/desktop.jpg",
       "sizes": "1280x720",
       "type": "image/jpeg",
       "form_factor": "wide",
-      "label": "Dashboard Guru App di perangkat desktop"
+      "label": "Dashboard SMP IT TBI 4 di perangkat desktop"
     }
   ]
 }

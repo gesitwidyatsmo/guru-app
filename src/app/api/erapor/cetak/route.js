@@ -147,17 +147,77 @@ export async function GET(request) {
 		const kepsekNama = setRapor.nama_kepsek || extraSet.nama_kepsek || profil.nama_kepsek || 'Mujib Kodar, S.Pd,I';
 		const kepsekNip = setRapor.nip_kepsek || extraSet.nip_kepsek || profil.nip_kepsek || '-';
 
-		// Ambil Pengaturan Titimangsa Rapor (Dinamis Sesuai Semester)
-		const tempatRapor = setRapor.tempat_rapor || extraSet.tempat_rapor || 'Kuala Gading';
-		let tanggalRapor = '20 Desember 2026';
+		// Ambil Pengaturan Titimangsa Rapor (Dinamis Sesuai Semester & Tahun Ajaran)
+		const formatIndoDate = (dateObj) => {
+			if (!dateObj || isNaN(dateObj.getTime())) return '';
+			const months = [
+				'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+				'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+			];
+			return `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+		};
+
+		const tempatRapor = setRapor.tempat_rapor || extraSet.tempat_rapor || profil.kota_kabupaten || 'Kuala Gading';
+		let tanggalRapor = '';
+		let isTitimangsaOfficial = false;
+
+		// 1. Cek dari rapor_pengaturan (Pengesahan resmi dari Waka Kurikulum)
 		if (semester === 2) {
-			tanggalRapor = setRapor.tanggal_rapor_genap || extraSet.tanggal_rapor_genap || '26 Juni 2027';
+			const rawDateGenap = setRapor.tanggal_rapor_genap || extraSet.tanggal_rapor_genap;
+			if (rawDateGenap && String(rawDateGenap).trim()) {
+				tanggalRapor = String(rawDateGenap).trim();
+				isTitimangsaOfficial = true;
+			}
 		} else {
-			tanggalRapor =
-				setRapor.tanggal_rapor_ganjil ||
-				setRapor.tanggal_rapor ||
-				extraSet.tanggal_rapor_ganjil ||
-				'20 Desember 2026';
+			const rawDateGanjil = setRapor.tanggal_rapor_ganjil || setRapor.tanggal_rapor || extraSet.tanggal_rapor_ganjil;
+			if (rawDateGanjil && String(rawDateGanjil).trim()) {
+				tanggalRapor = String(rawDateGanjil).trim();
+				isTitimangsaOfficial = true;
+			}
+		}
+
+		// 2. Jika belum disahkan di rapor_pengaturan, hitung secara dinamis dan aman
+		if (!tanggalRapor) {
+			// Coba ambil dari tanggal_selesai pada tabel tahun_ajar
+			let taRow = null;
+			if (tahunAjaran) {
+				const { data } = await supabase
+					.from('tahun_ajar')
+					.select('tanggal_selesai, nama, semester')
+					.eq('nama', tahunAjaran)
+					.eq('semester', semester)
+					.maybeSingle();
+				taRow = data;
+			}
+			if (!taRow) {
+				const { data } = await supabase
+					.from('tahun_ajar')
+					.select('tanggal_selesai, nama, semester')
+					.eq('is_aktif', true)
+					.maybeSingle();
+				taRow = data;
+			}
+
+			if (taRow?.tanggal_selesai) {
+				const d = new Date(taRow.tanggal_selesai);
+				if (!isNaN(d.getTime())) {
+					tanggalRapor = formatIndoDate(d);
+				}
+			}
+
+			// 3. Fallback dinamis: ekstrak tahun dari string tahunAjaran (contoh '2026/2027')
+			if (!tanggalRapor) {
+				const rawYearStr = String(tahunAjaran || taRow?.nama || '2026/2027');
+				const yearParts = rawYearStr.split('/').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+				const year1 = yearParts[0] || new Date().getFullYear();
+				const year2 = yearParts[1] || year1 + 1;
+
+				if (semester === 2) {
+					tanggalRapor = `26 Juni ${year2}`;
+				} else {
+					tanggalRapor = `20 Desember ${year1}`;
+				}
+			}
 		}
 
 		// 2. Ambil Siswa yang diminta
@@ -465,6 +525,7 @@ export async function GET(request) {
 				kementerian: profil.kementerian || 'KEMENTERIAN PENDIDIKAN DASAR DAN MENENGAH',
 				tempat_rapor: tempatRapor,
 				tanggal_rapor: tanggalRapor,
+				is_titimangsa_official: isTitimangsaOfficial,
 				nama_kepsek: kepsekNama,
 				kepsek: kepsekNama,
 				nip_kepsek: kepsekNip,

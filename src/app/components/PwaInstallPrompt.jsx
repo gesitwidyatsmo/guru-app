@@ -39,7 +39,40 @@ export default function PwaInstallPrompt() {
   // 'android' | 'ios' | null — tipe prompt yang ditampilkan
   const [promptType, setPromptType] = useState(null);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [appName, setAppName] = useState('SMP IT TBI 4');
+  const [appIcon, setAppIcon] = useState('/api/app-icon');
   const pathname = usePathname();
+
+  useEffect(() => {
+    // Sinkronkan nama dan logo sekolah dari cache lokal & database
+    if (typeof window !== 'undefined') {
+      const storedLogo = localStorage.getItem('school_logo');
+      const storedName = localStorage.getItem('school_name');
+      if (storedLogo) setAppIcon(storedLogo);
+      if (storedName) setAppName('SMP IT TBI 4');
+
+      fetch('/api/settings?key=profil_sekolah')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const val = data?.value;
+          const logo = val?.logo_kiri || val?.logo_kanan;
+          const name = val?.nama_sekolah;
+          if (logo) {
+            setAppIcon(logo);
+            localStorage.setItem('school_logo', logo);
+          } else {
+            setAppIcon('/logo gwa.png');
+          }
+          if (name) {
+            setAppName('SMP IT TBI 4');
+            localStorage.setItem('school_name', name);
+          } else {
+            setAppName('Guru App');
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     // Di mode development, bersihkan service worker lama dari build production agar tidak meng-intercept fetch
@@ -149,15 +182,16 @@ export default function PwaInstallPrompt() {
         {/* Header: ikon + judul */}
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-neo-white border-2 border-neo-black rounded-lg flex items-center justify-center overflow-hidden shrink-0 shadow-[2px_2px_0px_0px_#0D0D0D]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/android/launchericon-192x192.png"
-              alt="Guru App Icon"
-              className="w-full h-full object-cover"
-              onError={(e) => { e.target.style.display = 'none'; }}
+              src={appIcon}
+              alt={appName}
+              className="w-full h-full object-contain p-1"
+              onError={(e) => { e.target.src = '/logo gwa.png'; }}
             />
           </div>
           <div>
-            <h3 className="font-bold text-lg leading-tight">Install Guru App</h3>
+            <h3 className="font-bold text-lg leading-tight">Install {appName}</h3>
             <p className="text-sm font-medium mt-0.5 opacity-80">
               {promptType === 'android'
                 ? 'Akses lebih cepat & tampil penuh layar seperti app asli.'

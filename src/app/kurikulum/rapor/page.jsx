@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import Swal from 'sweetalert2';
 import {
 	Printer,
@@ -828,7 +829,14 @@ export default function KurikulumRaporManagementPage() {
 					</p>
 				</div>
 
-				<div className='flex items-center gap-2'>
+				<div className='flex items-center gap-2.5 flex-wrap'>
+					<Link
+						href='/kurikulum/rapor/cetak'
+						className='px-4 py-2 bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black shadow-[2.5px_2.5px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center gap-2 cursor-pointer'
+						title='Pratinjau / Cetak Dokumen Rapor Seluruh Rombel'>
+						<Printer className='w-4 h-4' />
+						<span>Pratinjau / Cetak Rapor Rombel</span>
+					</Link>
 					<span className='px-3.5 py-1.5 bg-white border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000]'>
 						{tahunAjaran} • Semester {semester}
 					</span>
@@ -909,14 +917,23 @@ export default function KurikulumRaporManagementPage() {
 			{/* ========================================================================= */}
 			{activeTab === 'titimangsa' && (
 				<div className='bg-white p-6 sm:p-8 border-3 border-black rounded-3xl shadow-[4px_4px_0px_0px_#000] space-y-6'>
-					<div className='space-y-1 border-b-2 border-black pb-4'>
-						<h2 className='text-lg sm:text-xl font-black text-black flex items-center gap-2'>
-							<MapPin className='w-5 h-5 text-black' />
-							<span>Identitas & Titimangsa Pencetakan Rapor</span>
-						</h2>
-						<p className='text-xs text-gray-600'>
-							Nilai di bawah ini otomatis tampil seragam pada seluruh lembar cetak rapor santri di semua rombel.
-						</p>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-black pb-4'>
+						<div className='space-y-1'>
+							<h2 className='text-lg sm:text-xl font-black text-black flex items-center gap-2'>
+								<MapPin className='w-5 h-5 text-black' />
+								<span>Identitas & Titimangsa Pencetakan Rapor</span>
+							</h2>
+							<p className='text-xs text-gray-600'>
+								Nilai di bawah ini otomatis tampil seragam pada seluruh lembar cetak rapor santri di semua rombel.
+							</p>
+						</div>
+						<Link
+							href='/kurikulum/rapor/cetak'
+							className='px-3.5 py-2 bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black shadow-[2px_2px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center gap-2 shrink-0 cursor-pointer'
+							title='Buka Pratinjau & Cetak Lembar Rapor Digital'>
+							<Printer className='w-4 h-4' />
+							<span>Buka Cetak Rapor →</span>
+						</Link>
 					</div>
 
 					<form onSubmit={handleSaveSettings} className='space-y-5 max-w-4xl'>

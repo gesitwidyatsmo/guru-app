@@ -47,6 +47,7 @@ export async function proxy(request) {
 		'/berkas',
 		'/api/berkas',
 		'/api/settings',
+		'/api/app-icon',
 		'/offline',        // PWA: halaman fallback saat offline harus bisa diakses tanpa login
 		'/manifest.json',  // PWA: manifest harus selalu bisa diakses
 	];

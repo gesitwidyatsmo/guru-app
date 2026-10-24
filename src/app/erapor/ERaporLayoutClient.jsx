@@ -215,7 +215,7 @@ export default function ERaporLayoutClient({
 								<Link
 									href='/'
 									className='w-8 h-8 sm:w-10 sm:h-10 shrink-0 bg-[#F5C518] hover:bg-[#E8451A] hover:text-white text-black border-2 border-black rounded-none shadow-[2px_2px_0px_0px_#0D0D0D] sm:shadow-[2.5px_2.5px_0px_0px_#0D0D0D] flex items-center justify-center transition-all cursor-pointer'
-									title='Kembali ke Beranda Utama Guru App'>
+									title='Kembali ke Beranda Utama'>
 									<ArrowLeft className='w-4 h-4 sm:w-5 sm:h-5 shrink-0' strokeWidth={2.5} />
 								</Link>
 
