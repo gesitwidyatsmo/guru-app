@@ -120,6 +120,7 @@ function AdminSiswaContent() {
 		setEditId(null);
 		setFormData({
 			nis: '',
+			nisn: '',
 			nama_lengkap: '',
 			kelas: filterKelas !== 'all' ? filterKelas : (kelasList[0]?.kelas || ''),
 			jenis_kelamin: 'Laki-laki',
@@ -134,6 +135,7 @@ function AdminSiswaContent() {
 		setEditId(item.id);
 		setFormData({
 			nis: item.nis || '',
+			nisn: item.nisn || '',
 			nama_lengkap: item.nama_lengkap || '',
 			kelas: item.kelas || '',
 			jenis_kelamin: item.jenis_kelamin || 'Laki-laki',
@@ -564,7 +566,7 @@ function AdminSiswaContent() {
 														{item.nama_lengkap}
 													</span>
 													<span className='text-[11px] font-mono font-bold text-gray-500'>
-														NIS: {item.nis || '-'}
+														NIS: {item.nis || '-'}{item.nisn ? ` | NISN: ${item.nisn}` : ''}
 													</span>
 												</div>
 											</div>
@@ -659,16 +661,29 @@ function AdminSiswaContent() {
 
 						{/* Form Content */}
 						<form onSubmit={handleSubmit} className='p-6 space-y-4'>
-							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+							<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
 								<div>
 									<label className='block text-xs font-black uppercase text-black mb-1.5'>
-										NIS (Nomor Induk Siswa)
+										NIS
 									</label>
 									<input
 										type='text'
 										placeholder='Contoh: 10452'
 										value={formData.nis}
 										onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
+										className='neo-input text-sm font-mono'
+									/>
+								</div>
+
+								<div>
+									<label className='block text-xs font-black uppercase text-black mb-1.5'>
+										NISN
+									</label>
+									<input
+										type='text'
+										placeholder='10 digit NISN'
+										value={formData.nisn}
+										onChange={(e) => setFormData({ ...formData, nisn: e.target.value })}
 										className='neo-input text-sm font-mono'
 									/>
 								</div>

@@ -182,6 +182,23 @@ export async function POST(request) {
 export async function PUT(request) {
 	try {
 		const supabase = await createClient();
+
+		let userRole = request.headers.get('x-user-role');
+		if (!userRole) {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (user) {
+				const { data: profile } = await supabaseAdmin.from('users').select('role').eq('auth_id', user.id).maybeSingle();
+				if (profile) userRole = profile.role;
+			}
+		}
+
+		if (userRole !== 'Admin' && userRole !== 'Kurikulum') {
+			return NextResponse.json(
+				{ error: 'Akses Ditolak: Hanya Administrator dan Kurikulum yang berwenang mengubah kelas.' },
+				{ status: 403 }
+			);
+		}
+
 		const body = await request.json();
 		const { id, nama_kelas, id_wali_kelas } = body;
 
@@ -211,6 +228,23 @@ export async function PUT(request) {
 export async function DELETE(request) {
 	try {
 		const supabase = await createClient();
+
+		let userRole = request.headers.get('x-user-role');
+		if (!userRole) {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (user) {
+				const { data: profile } = await supabaseAdmin.from('users').select('role').eq('auth_id', user.id).maybeSingle();
+				if (profile) userRole = profile.role;
+			}
+		}
+
+		if (userRole !== 'Admin' && userRole !== 'Kurikulum') {
+			return NextResponse.json(
+				{ error: 'Akses Ditolak: Hanya Administrator dan Kurikulum yang berwenang menghapus kelas.' },
+				{ status: 403 }
+			);
+		}
+
 		const { searchParams } = new URL(request.url);
 		const id = searchParams.get('id');
 

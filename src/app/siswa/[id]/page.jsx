@@ -37,7 +37,41 @@ const IconAward = ({ className }) => (
 
 // --- MODAL EDIT NEOBRUTALISM ---
 function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
-	const [formData, setFormData] = useState({ id: '', nis: '', nama_lengkap: '', kelas: '', jenis_kelamin: 'Laki-laki', status: 'Aktif' });
+	const [activeTab, setActiveTab] = useState('akademik');
+	const [formData, setFormData] = useState({
+		id: '',
+		nis: '',
+		nisn: '',
+		nik: '',
+		nama_lengkap: '',
+		kelas: '',
+		jenis_kelamin: 'Laki-laki',
+		status: 'Aktif',
+		tempat_lahir: '',
+		tanggal_lahir: '',
+		agama: 'Islam',
+		anak_ke: '',
+		jumlah_saudara: '',
+		sekolah_asal: '',
+		alamat: '',
+		rt: '',
+		rw: '',
+		dusun: '',
+		kelurahan: '',
+		kecamatan: '',
+		kode_pos: '',
+		jenis_tinggal: 'Bersama orang tua',
+		no_hp: '',
+		nama_ayah: '',
+		pendidikan_ayah: '',
+		pekerjaan_ayah: '',
+		nama_ibu: '',
+		pendidikan_ibu: '',
+		pekerjaan_ibu: '',
+		nama_wali: '',
+		pendidikan_wali: '',
+		pekerjaan_wali: '',
+	});
 	const [loading, setLoading] = useState(false);
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
@@ -50,11 +84,38 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 			setFormData({
 				id: initialData.id || '',
 				nis: initialData.nis || '',
+				nisn: initialData.nisn || '',
+				nik: initialData.nik || '',
 				nama_lengkap: initialData.nama_lengkap || '',
 				kelas: initialData.kelas || '',
 				jenis_kelamin: initialData.jenis_kelamin || 'Laki-laki',
 				status: initialData.status || 'Aktif',
+				tempat_lahir: initialData.tempat_lahir || '',
+				tanggal_lahir: initialData.tanggal_lahir ? String(initialData.tanggal_lahir).substring(0, 10) : '',
+				agama: initialData.agama || 'Islam',
+				anak_ke: initialData.anak_ke !== null && initialData.anak_ke !== undefined ? String(initialData.anak_ke) : '',
+				jumlah_saudara: initialData.jumlah_saudara !== null && initialData.jumlah_saudara !== undefined ? String(initialData.jumlah_saudara) : '',
+				sekolah_asal: initialData.sekolah_asal || '',
+				alamat: initialData.alamat || '',
+				rt: initialData.rt || '',
+				rw: initialData.rw || '',
+				dusun: initialData.dusun || '',
+				kelurahan: initialData.kelurahan || '',
+				kecamatan: initialData.kecamatan || '',
+				kode_pos: initialData.kode_pos || '',
+				jenis_tinggal: initialData.jenis_tinggal || 'Bersama orang tua',
+				no_hp: initialData.no_hp || '',
+				nama_ayah: initialData.nama_ayah || '',
+				pendidikan_ayah: initialData.pendidikan_ayah || '',
+				pekerjaan_ayah: initialData.pekerjaan_ayah || '',
+				nama_ibu: initialData.nama_ibu || '',
+				pendidikan_ibu: initialData.pendidikan_ibu || '',
+				pekerjaan_ibu: initialData.pekerjaan_ibu || '',
+				nama_wali: initialData.nama_wali || '',
+				pendidikan_wali: initialData.pendidikan_wali || '',
+				pekerjaan_wali: initialData.pekerjaan_wali || '',
 			});
+			setActiveTab('akademik');
 		}
 	}
 
@@ -79,16 +140,21 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 		}
 
 		setLoading(true);
-		await onSubmit(formData);
+		const payload = {
+			...formData,
+			anak_ke: formData.anak_ke ? parseInt(formData.anak_ke, 10) : null,
+			jumlah_saudara: formData.jumlah_saudara ? parseInt(formData.jumlah_saudara, 10) : null,
+		};
+		await onSubmit(payload);
 		setLoading(false);
 	};
 
 	return (
 		<div className='fixed inset-0 z-50 flex items-center justify-center bg-[#0D0D0D]/80 backdrop-blur-sm p-4'>
-			<div className='bg-white w-full max-w-lg border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden rounded-none transform transition-all flex flex-col max-h-[90vh]'>
-				<div className='bg-[#F5C518] px-6 py-5 border-b-[4px] border-[#0D0D0D] flex justify-between items-center'>
-					<h2 className='text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-2'>
-						<IconEdit className='w-6 h-6' /> EDIT DATA
+			<div className='bg-white w-full max-w-3xl border-[4px] border-[#0D0D0D] shadow-[12px_12px_0px_0px_#0D0D0D] overflow-hidden rounded-none transform transition-all flex flex-col max-h-[92vh]'>
+				<div className='bg-[#F5C518] px-6 py-4 border-b-[4px] border-[#0D0D0D] flex justify-between items-center'>
+					<h2 className='text-xl sm:text-2xl font-black text-[#0D0D0D] uppercase tracking-widest flex items-center gap-2'>
+						<IconEdit className='w-6 h-6' /> EDIT BIODATA LENGKAP SISWA
 					</h2>
 					<button
 						onClick={onClose}
@@ -97,83 +163,454 @@ function ModalEditSiswa({ isOpen, onClose, onSubmit, kelasList, initialData }) {
 					</button>
 				</div>
 
-				<form onSubmit={handleSubmit} className='p-6 space-y-6 bg-[#FFF5F0] overflow-y-auto'>
-					<div>
-						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Nama Lengkap <span className="text-[#E8451A] text-xl">*</span></label>
-						<input
-							type='text'
-							required
-							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none uppercase'
-							value={formData.nama_lengkap}
-							onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
-							placeholder='NAMA LENGKAP SISWA'
-						/>
-					</div>
-					<div>
-						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>NIS (Nomor Induk Siswa)</label>
-						<input
-							type='text'
-							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none uppercase'
-							value={formData.nis}
-							onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
-							placeholder='NOMOR INDUK SISWA'
-						/>
-					</div>
-					<div>
-						<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Kelas <span className="text-[#E8451A] text-xl">*</span></label>
-						<select
-							required
-							className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
-							value={formData.kelas}
-							onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
-							<option value='' disabled>-- PILIH KELAS --</option>
-							{kelasList.map((k) => (
-								<option key={k.id} value={k.kelas}>
-									{k.kelas}
-								</option>
-							))}
-						</select>
-					</div>
+				{/* Tabs Header Modal */}
+				<div className='flex border-b-[4px] border-[#0D0D0D] bg-white overflow-x-auto'>
+					{[
+						{ key: 'akademik', label: '📌 Identitas Pokok' },
+						{ key: 'kelahiran', label: '🎂 Kelahiran & Asal' },
+						{ key: 'domisili', label: '📍 Alamat & Kontak' },
+						{ key: 'orangtua', label: '👨‍👩‍👧 Orang Tua / Wali' },
+					].map((t) => (
+						<button
+							key={t.key}
+							type='button'
+							onClick={() => setActiveTab(t.key)}
+							className={`px-4 py-3 text-xs sm:text-sm font-black uppercase tracking-wider border-r-[3px] border-[#0D0D0D] transition-colors whitespace-nowrap ${
+								activeTab === t.key ? 'bg-[#FF90E8] text-[#0D0D0D]' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+							}`}>
+							{t.label}
+						</button>
+					))}
+				</div>
 
-					<div className='grid grid-cols-2 gap-4'>
-						<div>
-							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Jenis Kelamin</label>
-							<select
-								className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
-								value={formData.jenis_kelamin}
-								onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}>
-								<option value='Laki-laki'>LAKI-LAKI</option>
-								<option value='Perempuan'>PEREMPUAN</option>
-							</select>
-						</div>
-						<div>
-							<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Status</label>
-							<select
-								className='w-full px-5 py-4 h-[60px] bg-white border-[4px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-1 focus:shadow-[6px_6px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
-								value={formData.status}
-								onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
-								<option value='Aktif'>AKTIF</option>
-								<option value='Boyong'>BOYONG</option>
-								<option value='Lulus'>LULUS</option>
-								<option value='Pindah'>PINDAH</option>
-								<option value='Salah Kelas'>SALAH KELAS</option>
-								<option value='Non-Aktif'>NON-AKTIF</option>
-							</select>
-						</div>
-					</div>
+				<form onSubmit={handleSubmit} className='p-6 space-y-5 bg-[#FFF5F0] overflow-y-auto flex-1'>
+					{activeTab === 'akademik' && (
+						<div className='space-y-4'>
+							<div>
+								<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+									Nama Lengkap <span className="text-[#E8451A] text-lg">*</span>
+								</label>
+								<input
+									type='text'
+									required
+									className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none uppercase'
+									value={formData.nama_lengkap}
+									onChange={(e) => setFormData({ ...formData, nama_lengkap: e.target.value })}
+									placeholder='NAMA LENGKAP SISWA'
+								/>
+							</div>
 
-					<div className='pt-6 border-t-[4px] border-[#0D0D0D] flex justify-end gap-4'>
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										NIS (Lokal Sekolah)
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.nis}
+										onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
+										placeholder='Nomor Induk Sekolah'
+									/>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										NISN (Nomor Nasional Kemdikbud)
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.nisn}
+										onChange={(e) => setFormData({ ...formData, nisn: e.target.value })}
+										placeholder='10 digit NISN'
+									/>
+								</div>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										NIK (Nomor Induk Kependudukan)
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.nik}
+										onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+										placeholder='16 digit NIK'
+									/>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Agama
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.agama}
+										onChange={(e) => setFormData({ ...formData, agama: e.target.value })}
+										placeholder='Islam'
+									/>
+								</div>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Kelas <span className="text-[#E8451A] text-lg">*</span>
+									</label>
+									<select
+										required
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
+										value={formData.kelas}
+										onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}>
+										<option value='' disabled>-- PILIH KELAS --</option>
+										{kelasList.map((k) => (
+											<option key={k.id} value={k.kelas || k.nama_kelas}>
+												{k.kelas || k.nama_kelas}
+											</option>
+										))}
+									</select>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Jenis Kelamin
+									</label>
+									<select
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
+										value={formData.jenis_kelamin}
+										onChange={(e) => setFormData({ ...formData, jenis_kelamin: e.target.value })}>
+										<option value='Laki-laki'>LAKI-LAKI</option>
+										<option value='Perempuan'>PEREMPUAN</option>
+									</select>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Status
+									</label>
+									<select
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none cursor-pointer uppercase'
+										value={formData.status}
+										onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+										<option value='Aktif'>AKTIF</option>
+										<option value='Boyong'>BOYONG</option>
+										<option value='Lulus'>LULUS</option>
+										<option value='Pindah'>PINDAH</option>
+										<option value='Salah Kelas'>SALAH KELAS</option>
+										<option value='Non-Aktif'>NON-AKTIF</option>
+									</select>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'kelahiran' && (
+						<div className='space-y-4'>
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Tempat Lahir
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.tempat_lahir}
+										onChange={(e) => setFormData({ ...formData, tempat_lahir: e.target.value })}
+										placeholder='Kota / Kabupaten Kelahiran'
+									/>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Tanggal Lahir
+									</label>
+									<input
+										type='date'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.tanggal_lahir}
+										onChange={(e) => setFormData({ ...formData, tanggal_lahir: e.target.value })}
+									/>
+								</div>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Anak Ke-berapa
+									</label>
+									<input
+										type='number'
+										min='1'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.anak_ke}
+										onChange={(e) => setFormData({ ...formData, anak_ke: e.target.value })}
+										placeholder='1'
+									/>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Jumlah Saudara Kandung
+									</label>
+									<input
+										type='number'
+										min='0'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+										value={formData.jumlah_saudara}
+										onChange={(e) => setFormData({ ...formData, jumlah_saudara: e.target.value })}
+										placeholder='0'
+									/>
+								</div>
+							</div>
+
+							<div>
+								<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+									Sekolah Asal (SD / MI)
+								</label>
+								<input
+									type='text'
+									className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+									value={formData.sekolah_asal}
+									onChange={(e) => setFormData({ ...formData, sekolah_asal: e.target.value })}
+									placeholder='Nama Sekolah SD/MI Asal'
+								/>
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'domisili' && (
+						<div className='space-y-4'>
+							<div>
+								<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+									Alamat Lengkap (Jalan / Dusun)
+								</label>
+								<textarea
+									rows='2'
+									className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D] focus:outline-none focus:-translate-y-0.5 focus:shadow-[4px_4px_0px_0px_#0D0D0D] transition-all rounded-none'
+									value={formData.alamat}
+									onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+									placeholder='Jl. / Dusun ...'
+								/>
+							</div>
+
+							<div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
+								<div>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>RT</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.rt}
+										onChange={(e) => setFormData({ ...formData, rt: e.target.value })}
+									/>
+								</div>
+								<div>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>RW</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.rw}
+										onChange={(e) => setFormData({ ...formData, rw: e.target.value })}
+									/>
+								</div>
+								<div className='col-span-2'>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>Dusun</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.dusun}
+										onChange={(e) => setFormData({ ...formData, dusun: e.target.value })}
+									/>
+								</div>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+								<div>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>Kelurahan / Desa</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.kelurahan}
+										onChange={(e) => setFormData({ ...formData, kelurahan: e.target.value })}
+									/>
+								</div>
+								<div>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>Kecamatan</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.kecamatan}
+										onChange={(e) => setFormData({ ...formData, kecamatan: e.target.value })}
+									/>
+								</div>
+								<div>
+									<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-widest mb-1'>Kode Pos</label>
+									<input
+										type='text'
+										className='w-full px-3 py-2.5 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.kode_pos}
+										onChange={(e) => setFormData({ ...formData, kode_pos: e.target.value })}
+									/>
+								</div>
+							</div>
+
+							<div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										Jenis Tinggal
+									</label>
+									<select
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.jenis_tinggal}
+										onChange={(e) => setFormData({ ...formData, jenis_tinggal: e.target.value })}>
+										<option value='Bersama orang tua'>Bersama orang tua</option>
+										<option value='Asrama'>Asrama / Pesantren</option>
+										<option value='Kost'>Kost</option>
+										<option value='Wali'>Wali</option>
+										<option value='Lainnya'>Lainnya</option>
+									</select>
+								</div>
+								<div>
+									<label className='block text-xs sm:text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-1.5'>
+										No. HP / WhatsApp (Kontak Utama)
+									</label>
+									<input
+										type='text'
+										className='w-full px-4 py-3 bg-white border-[3px] border-[#0D0D0D] font-bold text-[#0D0D0D]'
+										value={formData.no_hp}
+										onChange={(e) => setFormData({ ...formData, no_hp: e.target.value })}
+										placeholder='08xxxxxxxxxx'
+									/>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'orangtua' && (
+						<div className='space-y-5'>
+							{/* Ayah */}
+							<div className='p-3.5 bg-amber-50 border-[3px] border-[#0D0D0D] space-y-3'>
+								<h3 className='font-black text-sm text-[#0D0D0D] uppercase tracking-wider flex items-center gap-1.5'>
+									👨 Data Ayah Kandung
+								</h3>
+								<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+									<div className='sm:col-span-1'>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Nama Ayah</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.nama_ayah}
+											onChange={(e) => setFormData({ ...formData, nama_ayah: e.target.value })}
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pendidikan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pendidikan_ayah}
+											onChange={(e) => setFormData({ ...formData, pendidikan_ayah: e.target.value })}
+											placeholder='SMA / S1 / dll'
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pekerjaan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pekerjaan_ayah}
+											onChange={(e) => setFormData({ ...formData, pekerjaan_ayah: e.target.value })}
+											placeholder='Petani / Wiraswasta'
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* Ibu */}
+							<div className='p-3.5 bg-pink-50 border-[3px] border-[#0D0D0D] space-y-3'>
+								<h3 className='font-black text-sm text-[#0D0D0D] uppercase tracking-wider flex items-center gap-1.5'>
+									👩 Data Ibu Kandung
+								</h3>
+								<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+									<div className='sm:col-span-1'>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Nama Ibu</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.nama_ibu}
+											onChange={(e) => setFormData({ ...formData, nama_ibu: e.target.value })}
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pendidikan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pendidikan_ibu}
+											onChange={(e) => setFormData({ ...formData, pendidikan_ibu: e.target.value })}
+											placeholder='SMA / S1 / dll'
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pekerjaan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pekerjaan_ibu}
+											onChange={(e) => setFormData({ ...formData, pekerjaan_ibu: e.target.value })}
+											placeholder='Ibu Rumah Tangga / dll'
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* Wali */}
+							<div className='p-3.5 bg-emerald-50 border-[3px] border-[#0D0D0D] space-y-3'>
+								<h3 className='font-black text-sm text-[#0D0D0D] uppercase tracking-wider flex items-center gap-1.5'>
+									🤝 Data Wali (Opsional)
+								</h3>
+								<div className='grid grid-cols-1 sm:grid-cols-3 gap-3'>
+									<div className='sm:col-span-1'>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Nama Wali</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.nama_wali}
+											onChange={(e) => setFormData({ ...formData, nama_wali: e.target.value })}
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pendidikan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pendidikan_wali}
+											onChange={(e) => setFormData({ ...formData, pendidikan_wali: e.target.value })}
+										/>
+									</div>
+									<div>
+										<label className='block text-[11px] font-black text-[#0D0D0D] uppercase mb-1'>Pekerjaan</label>
+										<input
+											type='text'
+											className='w-full px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-bold text-xs'
+											value={formData.pekerjaan_wali}
+											onChange={(e) => setFormData({ ...formData, pekerjaan_wali: e.target.value })}
+										/>
+									</div>
+								</div>
+							</div>
+						</div>
+					)}
+
+					<div className='pt-5 border-t-[4px] border-[#0D0D0D] flex justify-end gap-3'>
 						<button
 							type='button'
 							onClick={onClose}
-							className='px-6 py-4 bg-white border-[4px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-widest hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none'>
+							className='px-5 py-3 bg-white border-[3px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-wider hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none'>
 							BATAL
 						</button>
 						<button
 							type='submit'
 							disabled={loading}
-							className='px-8 py-4 bg-[#FF90E8] border-[4px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-widest hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none disabled:opacity-50'>
-							{loading ? 'MENYIMPAN...' : 'SIMPAN PERUBAHAN'}
+							className='px-6 py-3 bg-[#FF90E8] border-[3px] border-[#0D0D0D] font-black text-[#0D0D0D] uppercase tracking-wider hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_#0D0D0D] active:translate-y-0 active:shadow-none transition-all rounded-none disabled:opacity-50'>
+							{loading ? 'MENYIMPAN...' : 'SIMPAN BIODATA'}
 						</button>
 					</div>
 				</form>
@@ -195,6 +632,15 @@ export default function SiswaPage() {
 	const [currentUserId, setCurrentUserId] = useState(null);
 	const [isEditOpen, setIsEditOpen] = useState(false);
 	const [kelasList, setKelasList] = useState([]);
+	const [bioTab, setBioTab] = useState('identitas');
+
+	const cleanWa = useMemo(() => {
+		const raw = String(siswaData?.no_hp || '').replace(/[^0-9]/g, '');
+		if (!raw) return null;
+		if (raw.startsWith('0')) return '62' + raw.slice(1);
+		if (raw.startsWith('62')) return raw;
+		return '62' + raw;
+	}, [siswaData?.no_hp]);
 
 	const fetchSiswa = useCallback(async () => {
 		try {
@@ -636,6 +1082,220 @@ export default function SiswaPage() {
 								</div>
 							</div>
 						</div>
+					</div>
+				</div>
+
+				{/* SECTION: BIODATA LENGKAP SISWA */}
+				<div className='bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] rounded-none overflow-hidden'>
+					{/* Header Biodata */}
+					<div className='bg-[#F5C518] px-6 py-4 border-b-[4px] border-[#0D0D0D] flex flex-wrap items-center justify-between gap-3'>
+						<div className='flex items-center gap-2'>
+							<span className='text-2xl'>📑</span>
+							<h3 className='font-black text-lg sm:text-xl text-[#0D0D0D] uppercase tracking-widest'>
+								Biodata Lengkap Siswa
+							</h3>
+						</div>
+						{canManageSiswa && (
+							<button
+								onClick={handleOpenEdit}
+								className='px-3 py-1.5 bg-white border-[2px] border-[#0D0D0D] font-black text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5'>
+								<IconEdit className='w-4 h-4' /> Edit Biodata
+							</button>
+						)}
+					</div>
+
+					{/* Navigation Tabs Biodata */}
+					<div className='flex border-b-[4px] border-[#0D0D0D] bg-[#FFF5F0] overflow-x-auto'>
+						<button
+							onClick={() => setBioTab('identitas')}
+							className={`px-5 py-3 text-xs sm:text-sm font-black uppercase tracking-wider border-r-[3px] border-[#0D0D0D] transition-colors whitespace-nowrap ${
+								bioTab === 'identitas' ? 'bg-[#FF90E8] text-[#0D0D0D]' : 'bg-transparent hover:bg-white/60 text-[#0D0D0D]/70'
+							}`}>
+							📌 Identitas & Sekolah
+						</button>
+						<button
+							onClick={() => setBioTab('alamat')}
+							className={`px-5 py-3 text-xs sm:text-sm font-black uppercase tracking-wider border-r-[3px] border-[#0D0D0D] transition-colors whitespace-nowrap ${
+								bioTab === 'alamat' ? 'bg-[#A3E635] text-[#0D0D0D]' : 'bg-transparent hover:bg-white/60 text-[#0D0D0D]/70'
+							}`}>
+							📍 Alamat & Domisili
+						</button>
+						<button
+							onClick={() => setBioTab('ortu')}
+							className={`px-5 py-3 text-xs sm:text-sm font-black uppercase tracking-wider transition-colors whitespace-nowrap ${
+								bioTab === 'ortu' ? 'bg-[#00A693] text-white' : 'bg-transparent hover:bg-white/60 text-[#0D0D0D]/70'
+							}`}>
+							👨‍👩‍👧 Orang Tua / Wali & Kontak
+						</button>
+					</div>
+
+					{/* Tab Content */}
+					<div className='p-6 bg-white'>
+						{bioTab === 'identitas' && (
+							<div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs sm:text-sm'>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>NISN</p>
+									<p className='font-black text-[#0D0D0D] text-base mt-0.5'>{siswaData.nisn || '-'}</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>NIS Lokal</p>
+									<p className='font-black text-[#0D0D0D] text-base mt-0.5'>{siswaData.nis || '-'}</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>NIK (Kependudukan)</p>
+									<p className='font-black text-[#0D0D0D] text-base mt-0.5'>{siswaData.nik || '-'}</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Tempat, Tanggal Lahir</p>
+									<p className='font-bold text-[#0D0D0D] mt-0.5'>
+										{siswaData.tempat_lahir || '-'}
+										{siswaData.tanggal_lahir ? `, ${new Date(siswaData.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}
+									</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Agama</p>
+									<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.agama || 'Islam'}</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Urutan Anak</p>
+									<p className='font-bold text-[#0D0D0D] mt-0.5'>
+										Anak ke-{siswaData.anak_ke || '-'} dari {siswaData.jumlah_saudara !== null && siswaData.jumlah_saudara !== undefined ? siswaData.jumlah_saudara + 1 : '-'} bersaudara
+									</p>
+								</div>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D] sm:col-span-2 lg:col-span-3'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Sekolah Asal (SD / MI)</p>
+									<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.sekolah_asal || '-'}</p>
+								</div>
+							</div>
+						)}
+
+						{bioTab === 'alamat' && (
+							<div className='space-y-4 text-xs sm:text-sm'>
+								<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+									<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Alamat Jalan / Dusun</p>
+									<p className='font-bold text-[#0D0D0D] text-sm mt-0.5'>{siswaData.alamat || '-'}</p>
+								</div>
+
+								<div className='grid grid-cols-2 sm:grid-cols-4 gap-3'>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>RT / RW</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>RT {siswaData.rt || '-'} / RW {siswaData.rw || '-'}</p>
+									</div>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Dusun</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.dusun || '-'}</p>
+									</div>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Desa / Kelurahan</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.kelurahan || '-'}</p>
+									</div>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Kecamatan</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.kecamatan || '-'}</p>
+									</div>
+								</div>
+
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Kode Pos</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.kode_pos || '-'}</p>
+									</div>
+									<div className='p-3 bg-[#FFF5F0] border-[2px] border-[#0D0D0D]'>
+										<p className='font-black text-gray-500 uppercase text-[10px] tracking-wider'>Jenis Tempat Tinggal</p>
+										<p className='font-bold text-[#0D0D0D] mt-0.5'>{siswaData.jenis_tinggal || 'Bersama orang tua'}</p>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{bioTab === 'ortu' && (
+							<div className='space-y-4 text-xs sm:text-sm'>
+								{/* Kontak Utama Siswa / Wali */}
+								<div className='p-4 bg-emerald-50 border-[3px] border-[#0D0D0D] flex flex-wrap items-center justify-between gap-3'>
+									<div>
+										<p className='font-black text-emerald-900 uppercase text-[10px] tracking-wider'>No. Handphone / WhatsApp Utama</p>
+										<p className='font-black text-lg text-emerald-950 font-mono mt-0.5'>{siswaData.no_hp || '-'}</p>
+									</div>
+									{cleanWa && (
+										<a
+											href={`https://wa.me/${cleanWa}`}
+											target='_blank'
+											rel='noopener noreferrer'
+											className='px-4 py-2 bg-[#25D366] text-white font-black border-[2px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 active:translate-y-0 uppercase text-xs flex items-center gap-2'>
+											<span>💬</span> Chat WhatsApp Orang Tua
+										</a>
+									)}
+								</div>
+
+								{/* Grid Data Ortu */}
+								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+									{/* Ayah */}
+									<div className='p-4 bg-amber-50 border-[3px] border-[#0D0D0D] space-y-2'>
+										<h4 className='font-black text-amber-950 uppercase text-sm border-b-2 border-[#0D0D0D] pb-1 flex items-center gap-1.5'>
+											👨 Data Ayah Kandung
+										</h4>
+										<div>
+											<p className='text-[10px] font-black uppercase text-gray-500'>Nama Lengkap</p>
+											<p className='font-bold text-sm text-[#0D0D0D]'>{siswaData.nama_ayah || '-'}</p>
+										</div>
+										<div className='grid grid-cols-2 gap-2 pt-1'>
+											<div>
+												<p className='text-[10px] font-black uppercase text-gray-500'>Pendidikan</p>
+												<p className='font-bold text-[#0D0D0D]'>{siswaData.pendidikan_ayah || '-'}</p>
+											</div>
+											<div>
+												<p className='text-[10px] font-black uppercase text-gray-500'>Pekerjaan</p>
+												<p className='font-bold text-[#0D0D0D]'>{siswaData.pekerjaan_ayah || '-'}</p>
+											</div>
+										</div>
+									</div>
+
+									{/* Ibu */}
+									<div className='p-4 bg-pink-50 border-[3px] border-[#0D0D0D] space-y-2'>
+										<h4 className='font-black text-pink-950 uppercase text-sm border-b-2 border-[#0D0D0D] pb-1 flex items-center gap-1.5'>
+											👩 Data Ibu Kandung
+										</h4>
+										<div>
+											<p className='text-[10px] font-black uppercase text-gray-500'>Nama Lengkap</p>
+											<p className='font-bold text-sm text-[#0D0D0D]'>{siswaData.nama_ibu || '-'}</p>
+										</div>
+										<div className='grid grid-cols-2 gap-2 pt-1'>
+											<div>
+												<p className='text-[10px] font-black uppercase text-gray-500'>Pendidikan</p>
+												<p className='font-bold text-[#0D0D0D]'>{siswaData.pendidikan_ibu || '-'}</p>
+											</div>
+											<div>
+												<p className='text-[10px] font-black uppercase text-gray-500'>Pekerjaan</p>
+												<p className='font-bold text-[#0D0D0D]'>{siswaData.pekerjaan_ibu || '-'}</p>
+											</div>
+										</div>
+									</div>
+
+									{/* Wali */}
+									{siswaData.nama_wali && (
+										<div className='p-4 bg-cyan-50 border-[3px] border-[#0D0D0D] space-y-2 md:col-span-2'>
+											<h4 className='font-black text-cyan-950 uppercase text-sm border-b-2 border-[#0D0D0D] pb-1 flex items-center gap-1.5'>
+												🤝 Data Wali
+											</h4>
+											<div className='grid grid-cols-1 sm:grid-cols-3 gap-2'>
+												<div>
+													<p className='text-[10px] font-black uppercase text-gray-500'>Nama Wali</p>
+													<p className='font-bold text-[#0D0D0D]'>{siswaData.nama_wali}</p>
+												</div>
+												<div>
+													<p className='text-[10px] font-black uppercase text-gray-500'>Pendidikan</p>
+													<p className='font-bold text-[#0D0D0D]'>{siswaData.pendidikan_wali || '-'}</p>
+												</div>
+												<div>
+													<p className='text-[10px] font-black uppercase text-gray-500'>Pekerjaan</p>
+													<p className='font-bold text-[#0D0D0D]'>{siswaData.pekerjaan_wali || '-'}</p>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 

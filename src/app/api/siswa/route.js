@@ -70,14 +70,30 @@ export async function POST(request) {
 			}
 
 			const uniqueId = 'SIS-' + Date.now() + Math.floor(Math.random() * 100);
-			const { error } = await supabaseAdmin.from('siswa').insert({
+			const newStudent = {
 				id: uniqueId,
 				nis: nis || null,
 				nama_lengkap,
 				kelas,
 				jenis_kelamin: jenis_kelamin || 'Laki-laki',
 				status: status || 'Aktif',
+			};
+
+			const biodataFields = [
+				'nisn', 'nik', 'tempat_lahir', 'tanggal_lahir', 'agama', 'anak_ke', 'jumlah_saudara', 'sekolah_asal',
+				'alamat', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kode_pos', 'jenis_tinggal',
+				'no_hp', 'nama_ayah', 'pendidikan_ayah', 'pekerjaan_ayah',
+				'nama_ibu', 'pendidikan_ibu', 'pekerjaan_ibu',
+				'nama_wali', 'pendidikan_wali', 'pekerjaan_wali'
+			];
+
+			biodataFields.forEach((field) => {
+				if (body[field] !== undefined && body[field] !== '') {
+					newStudent[field] = body[field];
+				}
 			});
+
+			const { error } = await supabaseAdmin.from('siswa').insert(newStudent);
 
 			if (error) throw error;
 			return NextResponse.json({ success: true, message: 'Berhasil menambah siswa baru' });
@@ -202,11 +218,20 @@ export async function PUT(req) {
 		}
 
 		const updates = {};
-		if (nis !== undefined) updates.nis = nis;
-		if (nama_lengkap !== undefined) updates.nama_lengkap = nama_lengkap;
-		if (kelas !== undefined) updates.kelas = kelas;
-		if (jenis_kelamin !== undefined) updates.jenis_kelamin = jenis_kelamin;
-		if (status !== undefined) updates.status = status;
+		const allowedFields = [
+			'nis', 'nisn', 'nik', 'nama_lengkap', 'kelas', 'jenis_kelamin', 'status',
+			'tempat_lahir', 'tanggal_lahir', 'agama', 'anak_ke', 'jumlah_saudara', 'sekolah_asal',
+			'alamat', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kode_pos', 'jenis_tinggal',
+			'no_hp', 'nama_ayah', 'pendidikan_ayah', 'pekerjaan_ayah',
+			'nama_ibu', 'pendidikan_ibu', 'pekerjaan_ibu',
+			'nama_wali', 'pendidikan_wali', 'pekerjaan_wali'
+		];
+
+		allowedFields.forEach((field) => {
+			if (body[field] !== undefined) {
+				updates[field] = body[field] === '' ? null : body[field];
+			}
+		});
 
 		const { error } = await supabaseAdmin.from('siswa').update(updates).eq('id', id);
 		if (error) throw error;

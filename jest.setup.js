@@ -1,6 +1,12 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+// Polyfill standard Web APIs for Next.js App Router route testing in jsdom
+global.Request = global.Request || globalThis.Request;
+global.Response = global.Response || globalThis.Response;
+global.Headers = global.Headers || globalThis.Headers;
+global.fetch = global.fetch || globalThis.fetch;
+
 // Mock environment variables for testing
 process.env.GOOGLE_SHEET_ID = 'test-sheet-id';
 process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL = 'test@test.iam.gserviceaccount.com';

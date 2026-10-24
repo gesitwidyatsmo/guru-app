@@ -63,7 +63,12 @@ export default function KurikulumDashboard() {
 
 	// Jadwal Hari Ini
 	const jadwalHariIni = useMemo(() => {
-		return jadwalList.filter((j) => j.hari === hariIni);
+		const isSameHari = (h1, h2) => {
+			const s1 = String(h1 || '').trim().toLowerCase();
+			const s2 = String(h2 || '').trim().toLowerCase();
+			return s1 === s2 || ((s1 === 'minggu' || s1 === 'ahad') && (s2 === 'minggu' || s2 === 'ahad'));
+		};
+		return jadwalList.filter((j) => isSameHari(j.hari, hariIni));
 	}, [jadwalList, hariIni]);
 
 	// Guru yang memiliki jadwal hari ini

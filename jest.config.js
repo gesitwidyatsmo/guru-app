@@ -40,15 +40,15 @@ const customJestConfig = {
   
   // Test match patterns
   testMatch: [
-    '**/__tests__/**/*.[jt]s?(x)',
-    '**/?(*.)+(spec|test).[jt]s?(x)',
+    '<rootDir>/src/**/__tests__/**/*.test.[jt]s?(x)',
+    '<rootDir>/src/**/?(*.)+(spec|test).[jt]s?(x)',
   ],
   
   // Ignore patterns
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
-    '<rootDir>/tests/e2e/',
+    '<rootDir>/src/__tests__/utils/',
   ],
   
   // Transform ignore patterns

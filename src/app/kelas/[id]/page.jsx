@@ -133,6 +133,10 @@ export default function KelasDetail() {
 	}, [fetchSiswaData]);
 
 	const handleOpenEdit = () => {
+		if (!canManageKelasSettings) {
+			swalError('Akses Ditolak', 'Hanya Administrator dan Kurikulum yang berwenang mengubah profil kelas.');
+			return;
+		}
 		if (kelasDetail) {
 			setEditFormData({
 				kelas: kelasDetail.kelas,
@@ -168,6 +172,10 @@ export default function KelasDetail() {
 
 	// Handler: Hapus Kelas
 	const handleDeleteKelas = async () => {
+		if (!canManageKelasSettings) {
+			swalError('Akses Ditolak', 'Hanya Administrator dan Kurikulum yang berwenang menghapus kelas.');
+			return;
+		}
 		const confirm = await swalConfirmDelete('Hapus Kelas Ini?', 'Semua data siswa di kelas ini mungkin akan menjadi yatim piatu (tidak punya kelas).');
 
 		if (confirm.isConfirmed) {
@@ -190,6 +198,7 @@ export default function KelasDetail() {
 	}
 
 	const isWaliKelas = userRole !== 'Kepala Sekolah' && (kelasDetail?.wali_kelas === userName || userRole === 'Admin');
+	const canManageKelasSettings = userRole === 'Admin' || userRole === 'Kurikulum';
 
 	return (
 		<div className='min-h-screen pb-20 font-sans'>
@@ -595,7 +604,7 @@ export default function KelasDetail() {
 					{/* --- SETTINGS COLUMN --- */}
 					<div className='space-y-8 lg:col-span-1'>
 						{/* Pengaturan Column */}
-						{isWaliKelas && (
+						{canManageKelasSettings && (
 							<div className='flex flex-col gap-6'>
 								<section>
 									<h2 className='text-sm font-black uppercase tracking-wider text-black mb-4'>Pengaturan Kelas</h2>

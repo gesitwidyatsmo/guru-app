@@ -600,6 +600,11 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 					{/* Right: Quick CTA */}
 					<div className='flex flex-wrap items-center gap-2 self-start md:self-auto'>
 						<Link
+							href='/wali-kelas/biodata'
+							className='px-3.5 py-2 bg-yellow-300 text-black border-2 border-black rounded-xl text-xs sm:text-sm font-black uppercase tracking-wide shadow-[2px_2px_0_#000] hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-1.5'>
+							<span>📑 CRUD Biodata Siswa</span>
+						</Link>
+						<Link
 							href={`/kelas/${kelas.id}`}
 							className='neo-btn-outline !py-2 !px-3 bg-white text-black flex items-center gap-1.5 text-xs sm:text-sm font-bold'>
 							<span>Profil Rombel</span>
@@ -1646,6 +1651,13 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 								<FileText className='w-4 h-4' />
 								<span>Leger Nilai (Preview)</span>
 							</button>
+
+							<Link
+								href='/wali-kelas/biodata'
+								className='flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm uppercase tracking-wide transition-all bg-[#A3E635] hover:bg-[#8ee012] text-black border-2 border-black shadow-[2px_2px_0_#000] hover:-translate-y-0.5 ml-auto'>
+								<span>📑 CRUD Biodata Siswa Sekaligus</span>
+								<ExternalLink className='w-4 h-4' />
+							</Link>
 						</div>
 
 						{/* SUB-VIEW 1: BUKU INDUK SISWA */}
@@ -1660,15 +1672,23 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 									Total: {siswaList.length} siswa aktif terdaftar
 								</p>
 							</div>
-							<div className='relative w-full sm:w-72'>
-								<Search className='w-4 h-4 absolute left-3 top-3 text-gray-500' />
-								<input
-									type='text'
-									placeholder='Cari nama atau NIS...'
-									value={searchSiswa}
-									onChange={(e) => setSearchSiswa(e.target.value)}
-									className='neo-input !pl-9 text-xs sm:text-sm'
-								/>
+							<div className='flex flex-wrap items-center gap-3 w-full sm:w-auto'>
+								<div className='relative w-full sm:w-64'>
+									<Search className='w-4 h-4 absolute left-3 top-3 text-gray-500' />
+									<input
+										type='text'
+										placeholder='Cari nama atau NIS...'
+										value={searchSiswa}
+										onChange={(e) => setSearchSiswa(e.target.value)}
+										className='neo-input !pl-9 text-xs sm:text-sm'
+									/>
+								</div>
+								<Link
+									href='/wali-kelas/biodata'
+									className='px-3 py-2 bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black uppercase tracking-wide shadow-[2px_2px_0_#000] flex items-center gap-1.5 whitespace-nowrap hover:-translate-y-0.5 transition-all'>
+									<span>Buka Editor CRUD Sekaligus</span>
+									<ExternalLink className='w-3.5 h-3.5' />
+								</Link>
 							</div>
 						</div>
 

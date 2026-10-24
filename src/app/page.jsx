@@ -115,9 +115,14 @@ export default function Home() {
 				const siswaAktif = dataSiswa.filter((siswa) => siswa.status === 'Aktif');
 				setAllSiswa(siswaAktif);
 
-				// Filter jadwal hari ini
+				// Filter jadwal hari ini (toleran terhadap Minggu / Ahad)
+				const isSameHari = (h1, h2) => {
+					const s1 = String(h1 || '').trim().toLowerCase();
+					const s2 = String(h2 || '').trim().toLowerCase();
+					return s1 === s2 || ((s1 === 'minggu' || s1 === 'ahad') && (s2 === 'minggu' || s2 === 'ahad'));
+				};
 				const jadwalFiltered = dataJadwal
-					.filter((jadwal) => jadwal.hari === hariIni)
+					.filter((jadwal) => isSameHari(jadwal.hari, hariIni))
 					.sort((a, b) => {
 						const [hA, mA] = a.jam_mulai.split(':').map(Number);
 						const [hB, mB] = b.jam_mulai.split(':').map(Number);

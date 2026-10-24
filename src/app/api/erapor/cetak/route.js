@@ -412,6 +412,7 @@ export async function GET(request) {
 
 			return {
 				siswa: {
+					...siswa,
 					id: siswa.id,
 					nama_lengkap: siswa.nama_lengkap,
 					nis: siswa.nis || '-',
@@ -493,6 +494,7 @@ export async function GET(request) {
 				},
 				// Alias untuk fleksibilitas pemanggilan:
 				identitas_siswa: {
+					...siswa,
 					id: siswa.id,
 					nama: siswa.nama_lengkap,
 					nis: siswa.nis || '-',

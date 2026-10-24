@@ -119,10 +119,10 @@ export async function GET(req) {
 
 		const namaKelas = targetKelas.nama_kelas;
 
-		// 3. Ambil seluruh siswa aktif di kelas binaan ini
+		// 3. Ambil seluruh siswa aktif di kelas binaan ini beserta biodata lengkap
 		const { data: siswaRaw } = await supabaseAdmin
 			.from('siswa')
-			.select('id, nis, nama_lengkap, jenis_kelamin, status')
+			.select('*')
 			.eq('kelas', namaKelas)
 			.order('nama_lengkap', { ascending: true });
 
@@ -402,6 +402,7 @@ export async function GET(req) {
 				poin: poinStats,
 			},
 			siswaList,
+			allSiswa: siswaRaw || [],
 			siswaPerhatian,
 			siswaBolosList,
 			siswaMapelBreakdown,

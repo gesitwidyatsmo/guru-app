@@ -90,7 +90,12 @@ export default function JadwalPage() {
 	// Filter Logic
 	useEffect(() => {
 		if (selectedHari && allJadwal.length > 0) {
-			const hasil = allJadwal.filter((item) => item.hari?.toLowerCase() === selectedHari.toLowerCase());
+			const isSameHari = (h1, h2) => {
+				const s1 = String(h1 || '').trim().toLowerCase();
+				const s2 = String(h2 || '').trim().toLowerCase();
+				return s1 === s2 || ((s1 === 'minggu' || s1 === 'ahad') && (s2 === 'minggu' || s2 === 'ahad'));
+			};
+			const hasil = allJadwal.filter((item) => isSameHari(item.hari, selectedHari));
 			setFilteredJadwal(hasil);
 		} else {
 			setFilteredJadwal([]);

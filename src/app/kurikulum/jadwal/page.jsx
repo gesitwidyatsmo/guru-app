@@ -196,7 +196,12 @@ export default function KurikulumMasterJadwalPage() {
 	const filteredJadwal = useMemo(() => {
 		const q = searchQuery.toLowerCase().trim();
 		return jadwalList.filter((item) => {
-			const matchHari = selectedHari === 'all' || item.hari === selectedHari;
+			const isSameHari = (h1, h2) => {
+				const s1 = String(h1 || '').trim().toLowerCase();
+				const s2 = String(h2 || '').trim().toLowerCase();
+				return s1 === s2 || ((s1 === 'minggu' || s1 === 'ahad') && (s2 === 'minggu' || s2 === 'ahad'));
+			};
+			const matchHari = selectedHari === 'all' || isSameHari(item.hari, selectedHari);
 			const matchTarget =
 				selectedTarget === 'all' ||
 				(viewMode === 'kelas' ? item.kelas === selectedTarget : item.id_user === selectedTarget);
@@ -539,7 +544,7 @@ export default function KurikulumMasterJadwalPage() {
 
 			const kelasSet = new Set(kelasList.map((k) => k.nama_kelas.toLowerCase().trim()));
 			const mapelSet = new Set(mapelList.map((m) => m.mapel.toLowerCase().trim()));
-			const validHariSet = new Set(HARI_SEKOLAH.map((h) => h.toLowerCase()));
+			const validHariSet = new Set([...HARI_SEKOLAH.map((h) => h.toLowerCase()), 'ahad']);
 
 			// Tracking collision dalam berkas import itu sendiri
 			const inMemorySlots = [];
@@ -558,7 +563,8 @@ export default function KurikulumMasterJadwalPage() {
 				const rawNama = String(row['Nama Guru (Opsional)'] || row['Nama Guru'] || row['nama_guru'] || '').trim();
 
 				// Cari nama hari baku
-				const matchedHari = HARI_SEKOLAH.find((h) => h.toLowerCase() === rawHari.toLowerCase()) || rawHari;
+				const lookupHari = rawHari.toLowerCase() === 'ahad' ? 'minggu' : rawHari.toLowerCase();
+				const matchedHari = HARI_SEKOLAH.find((h) => h.toLowerCase() === lookupHari) || rawHari;
 
 				// Cari Guru
 				let matchedGuru = null;
