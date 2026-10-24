@@ -1,10 +1,21 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { calculateAttendanceSummary, findConflictingSession } from '@/lib/absensiUtils';
 import { verifyGeofence } from '@/lib/geofenceServer';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const normDate = (v) => String(v ?? '').slice(0, 10);
+
+/** Ambil tahun_ajar & semester aktif dari DB server-side. */
+async function getTAAktif(supabase) {
+	const { data, error } = await supabase
+		.from('tahun_ajar')
+		.select('nama, semester')
+		.eq('is_aktif', true)
+		.single();
+	if (error || !data) throw new Error('Tahun ajar aktif tidak ditemukan. Hubungi Admin untuk mengaktifkan tahun ajar.');
+	return { nama: data.nama, semester: data.semester };
+}
 
 // GET:
 export async function GET(req) {
@@ -240,6 +251,8 @@ export async function POST(req) {
 				await supabase.from('absensi_mapel').delete().in('sesi_id', duplicateIds);
 			}
 		} else {
+			// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
+			const taAktif = (!body.tahun_ajar || !body.semester) ? await getTAAktif(supabase) : null;
 			await supabase.from('absensi_mapel').insert({
 				sesi_id: sesiId,
 				guru_id: userId || null,
@@ -247,8 +260,8 @@ export async function POST(req) {
 				jam_ke: newJamKe,
 				kelas: kelas,
 				mapel: mapel,
-				tahun_ajar: body.tahun_ajar || '2026/2027',
-				semester: body.semester ? parseInt(body.semester) : 1,
+				tahun_ajar: body.tahun_ajar || taAktif.nama,
+				semester: body.semester ? parseInt(body.semester) : taAktif.semester,
 			});
 		}
 

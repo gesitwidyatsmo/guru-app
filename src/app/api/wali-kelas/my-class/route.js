@@ -317,7 +317,7 @@ export async function GET(req) {
 			})),
 		};
 
-		// 5. Ambil data poin perilaku kelas
+		// 5. Ambil data poin perilaku kelas (difilter per periode aktif)
 		let poinStats = {
 			totalPositif: 0,
 			totalNegatif: 0,
@@ -328,11 +328,17 @@ export async function GET(req) {
 		let siswaPerhatian = [];
 
 		if (siswaIds.length > 0) {
-			const { data: poinRows } = await supabaseAdmin
+			let poinQuery = supabaseAdmin
 				.from('poin')
 				.select('id, siswa_id, tipe, poin, aktifitas, tanggal, keterangan, created_at')
 				.in('siswa_id', siswaIds)
 				.order('tanggal', { ascending: false });
+
+			// Filter per periode akademik aktif agar tidak akumulasi lintas tahun ajar
+			if (activeTA?.nama) poinQuery = poinQuery.eq('tahun_ajar', activeTA.nama);
+			if (activeTA?.semester) poinQuery = poinQuery.eq('semester', activeTA.semester);
+
+			const { data: poinRows } = await poinQuery;
 
 			if (poinRows && poinRows.length > 0) {
 				let pos = 0;

@@ -1,8 +1,19 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 
 function generateId() {
 	return 'POIN-' + Date.now() + Math.floor(Math.random() * 1000);
+}
+
+/** Ambil tahun_ajar & semester aktif dari DB server-side. */
+async function getTAAktif(supabase) {
+	const { data, error } = await supabase
+		.from('tahun_ajar')
+		.select('nama, semester')
+		.eq('is_aktif', true)
+		.single();
+	if (error || !data) throw new Error('Tahun ajar aktif tidak ditemukan. Hubungi Admin untuk mengaktifkan tahun ajar.');
+	return { nama: data.nama, semester: data.semester };
 }
 
 // =====================
@@ -119,6 +130,9 @@ export async function POST(req) {
 		}
 
 		const supabase = await createClient();
+
+		// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
+		const taAktif = (!tahun_ajar || !semester) ? await getTAAktif(supabase) : null;
 		
 		const inserts = targetSiswa.map((id, index) => ({
 			id: generateId() + (index > 0 ? `-${index}` : ''),
@@ -130,8 +144,8 @@ export async function POST(req) {
 			aktifitas,
 			poin: parseInt(poin, 10),
 			keterangan: keterangan || '',
-			tahun_ajar: tahun_ajar || '2026/2027',
-			semester: semester ? parseInt(semester) : 1,
+			tahun_ajar: tahun_ajar || taAktif.nama,
+			semester: semester ? parseInt(semester) : taAktif.semester,
 		}));
 
 		const { error } = await supabase.from('poin').insert(inserts);

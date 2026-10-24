@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useERaporAuth } from './ERaporLayoutClient';
 import Loader from '@/app/components/loading';
+import { useAcademic } from '@/context/AcademicContext';
 
 export default function ERaporDashboard() {
 	const auth = useERaporAuth();
@@ -29,13 +30,18 @@ export default function ERaporDashboard() {
 	const isWaliKelas = auth?.isWaliKelas || false;
 	const isPrivileged = auth?.isPrivileged || false;
 
+	const { tahunAjar, semester } = useAcademic();
+
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
 		async function fetchStats() {
 			try {
-				const resStats = await fetch('/api/erapor/dashboard');
+				const params = new URLSearchParams();
+				if (tahunAjar) params.set('tahun_ajaran', tahunAjar);
+				if (semester) params.set('semester', String(semester));
+				const resStats = await fetch(`/api/erapor/dashboard?${params.toString()}`);
 				if (resStats.ok) {
 					const dataS = await resStats.json();
 					setStats(dataS);
@@ -46,8 +52,9 @@ export default function ERaporDashboard() {
 				setLoading(false);
 			}
 		}
+		setLoading(true);
 		fetchStats();
-	}, []);
+	}, [tahunAjar, semester]);
 
 	const kbmProgress = stats?.guru_kbm_progress || [];
 	const waliInfo = stats?.wali_kelas_info;

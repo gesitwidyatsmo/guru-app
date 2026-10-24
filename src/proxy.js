@@ -272,3 +272,5 @@ export async function proxy(request) {
 
 	return finalResponse;
 }
+
+export default proxy;

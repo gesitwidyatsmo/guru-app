@@ -62,9 +62,8 @@ export async function GET(request) {
 			if (taAktif) {
 				tahunAjaran = taAktif.nama;
 				semester = taAktif.semester;
-			} else {
-				tahunAjaran = '2026/2027';
 			}
+			// Jika benar-benar tidak ada TA aktif, biarkan null — query rapor tidak akan filter
 		}
 
 		// 1. Cek Wali Kelas Info
