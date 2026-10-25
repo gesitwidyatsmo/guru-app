@@ -6,6 +6,13 @@ import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
 import { createClient } from '@/utils/supabase/client';
 import { getTodayDateString } from '@/lib/dateUtils';
+import {
+	getTimeWIB,
+	calculateDurationMinutes,
+	formatDurationString,
+	getKBMStatusBadge,
+	determineKBMStatus,
+} from '@/lib/kbmRealtimeUtils';
 
 export default function JurnalKelasPage() {
 	const router = useRouter();
@@ -426,6 +433,21 @@ export default function JurnalKelasPage() {
 														<svg className='w-5 h-5 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg>
 														JAM KE-{journal.jam_ke}
 													</span>
+													{journal.jam_mulai && journal.jam_selesai && (
+														<span className='flex items-center gap-1.5 bg-[#FFF5F0] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-xs font-black text-[#0D0D0D]'>
+															<span>🕒</span> {journal.jam_mulai.slice(0, 5)} - {journal.jam_selesai.slice(0, 5)} ({formatDurationString(journal.durasi_menit || calculateDurationMinutes(journal.jam_mulai, journal.jam_selesai))})
+														</span>
+													)}
+													{journal.status_kehadiran && journal.status_kehadiran !== 'Normal' && (
+														(() => {
+															const badge = getKBMStatusBadge(journal.status_kehadiran);
+															return (
+																<span className={`flex items-center gap-1 px-2.5 py-1.5 border-[2px] ${badge.border} ${badge.bg} ${badge.text} text-[11px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#0D0D0D]`}>
+																	<span>{badge.icon}</span> {badge.label}
+																</span>
+															);
+														})()
+													)}
 													{userRole === 'Admin' && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
 												</div>
 											</div>

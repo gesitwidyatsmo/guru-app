@@ -315,7 +315,7 @@ export function exportJurnalPDFReport({
 	doc.text('C. RINCIAN CATATAN JURNAL PEMBELAJARAN (KBM)', margin, currentY);
 
 	const detailHead = [
-		['No', 'Tanggal', 'Jam', 'Guru Pengajar', 'Kelas', 'Mapel', 'Pert.', 'Materi & Metode Pembelajaran', 'Status', 'Catatan / Kendala'],
+		['No', 'Tanggal', 'Jam / Waktu Riil', 'Guru Pengajar', 'Kelas', 'Mapel', 'Pert.', 'Materi & Metode Pembelajaran', 'Status', 'Catatan / Kendala'],
 	];
 
 	const detailBody = journals.map((j, idx) => {
@@ -323,10 +323,15 @@ export function exportJurnalPDFReport({
 			? `${j.materi || '-'}\n[Metode: ${j.metode}]`
 			: (j.materi || '-');
 
+		const durasiVal = j.durasi_menit !== undefined && j.durasi_menit !== null ? `${j.durasi_menit}m` : '';
+		const jamWaktu = (j.jam_mulai && j.jam_selesai)
+			? `Jam ${j.jam_ke || '-'}\n${j.jam_mulai.slice(0, 5)}-${j.jam_selesai.slice(0, 5)}${durasiVal ? ` (${durasiVal})` : ''}`
+			: (j.jam_ke ? `Jam ${j.jam_ke}` : '-');
+
 		return [
 			idx + 1,
 			j.tanggal ? new Date(j.tanggal).toLocaleDateString('id-ID') : '-',
-			j.jam_ke || '-',
+			jamWaktu,
 			j.users?.nama_lengkap || j.nama_guru || '-',
 			j.kelas || '-',
 			j.mapel || '-',

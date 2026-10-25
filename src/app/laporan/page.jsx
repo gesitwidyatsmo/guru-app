@@ -13,6 +13,7 @@ import { hitungTotalPoinBersih, konversiPoinKeSikap } from '@/lib/poinUtils';
 import { drawKopSuratPDF, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
 import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
 import { normStatus, parseJamPelajaran, calculateHariAlfa } from '@/lib/absensiUtils';
+import { getTimeWIB, calculateDurationMinutes, formatDurationString, getKBMStatusBadge } from '@/lib/kbmRealtimeUtils';
 
 export default function LaporanPage() {
 	const router = useRouter();
@@ -118,10 +119,13 @@ export default function LaporanPage() {
 					console.error('Error parse JSON absensi', e);
 				}
 
+				const jamStr = item.created_at ? getTimeWIB(item.created_at) : '';
 				return {
 					id: item.id,
 					tanggal: item.tanggal,
 					jam_ke: item.jam_ke,
+					created_at: item.created_at,
+					jam: jamStr,
 					fullDate: new Date(item.tanggal),
 					label: `${new Date(item.tanggal).getDate()}/${new Date(item.tanggal).getMonth() + 1}`,
 					absensiData: parsedAbsenObject, // <--- SEKARANG SUDAH JADI OBJECT
@@ -491,7 +495,7 @@ export default function LaporanPage() {
 			// Export Absensi Mapel Pivot
 			const { kolomTanggal, barisSiswa } = pivotedAbsensi;
 			// Header 1: Judul Pertemuan
-			const header1 = ['No', 'NIS', 'Nama Siswa', ...kolomTanggal.map((p) => `${p.label} (${p.jam_ke})`), 'H', 'I', 'S', 'A', '%'];
+			const header1 = ['No', 'NIS', 'Nama Siswa', ...kolomTanggal.map((p) => p.jam ? `${p.label} (${p.jam_ke} • ${p.jam})` : `${p.label} (${p.jam_ke})`), 'H', 'I', 'S', 'A', '%'];
 			aoa.push(header1);
 			// Data Rows
 			barisSiswa.forEach((row, idx) => {
@@ -554,12 +558,31 @@ export default function LaporanPage() {
 				});
 			}
 		} else if (activeTab === 'jurnal' && dataRekap.data) {
-			aoa.push(['No', 'Tanggal', 'Jam', 'Pert.', 'Mapel', 'Materi', 'Kegiatan', 'Hambatan', 'Solusi', 'Tuntas']);
+			aoa.push([
+				'No',
+				'Tanggal',
+				'Jam Ke',
+				'Jam Mulai',
+				'Jam Selesai',
+				'Durasi (Menit)',
+				'Status Kehadiran',
+				'Pert.',
+				'Mapel',
+				'Materi',
+				'Kegiatan',
+				'Hambatan',
+				'Solusi',
+				'Tuntas',
+			]);
 			dataRekap.data.forEach((item, index) => {
 				aoa.push([
 					index + 1,
 					new Date(item.tanggal).toLocaleDateString('id-ID'),
 					item.jam_ke || '',
+					item.jam_mulai ? item.jam_mulai.slice(0, 5) : '',
+					item.jam_selesai ? item.jam_selesai.slice(0, 5) : '',
+					item.durasi_menit ?? (item.jam_mulai && item.jam_selesai ? calculateDurationMinutes(item.jam_mulai, item.jam_selesai) : ''),
+					item.status_kehadiran || 'Normal',
 					item.pertemuan_ke || '',
 					item.mapel || '',
 					item.materi || '',
@@ -597,7 +620,7 @@ export default function LaporanPage() {
 			doc.setTextColor(71, 85, 105);
 			doc.text(`Mata Pelajaran: ${selectedMapel}  •  Periode: ${bulan === 'all' ? 'Semua Bulan' : bulan}/${tahun}`, pWidth / 2, startY + 8, { align: 'center' });
 
-			const head = [['No', 'Nama Siswa', ...pivotedAbsensi.kolomTanggal.map(p => p.label), 'H', 'I', 'S', 'A', '%']];
+			const head = [['No', 'Nama Siswa', ...pivotedAbsensi.kolomTanggal.map(p => p.jam ? `${p.label}\n(${p.jam})` : p.label), 'H', 'I', 'S', 'A', '%']];
 			const body = pivotedAbsensi.barisSiswa.map((row, idx) => [
 				idx + 1,
 				row.nama,
@@ -999,9 +1022,14 @@ export default function LaporanPage() {
 													{pivotedAbsensi.kolomTanggal.map((p) => (
 														<th
 															key={p.id}
-															className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black min-w-[60px]'>
+															className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black min-w-[70px]'>
 															<div>{p.label}</div>
 															<div className='text-[10px]'>{p.jam_ke}</div>
+															{p.jam && (
+																<div className='text-[9px] font-mono text-gray-800 bg-white/80 rounded px-1 mt-0.5 border border-black/30 font-bold'>
+																	{p.jam}
+																</div>
+															)}
 														</th>
 													))}
 													<th className='px-2 py-3 text-center text-sm font-black text-black border-r-[3px] border-black bg-[#C4F0EB]'>H</th>
@@ -1450,7 +1478,27 @@ export default function LaporanPage() {
 										{dataRekap.data.map((row, i) => (
 											<tr key={i} className='hover:bg-gray-100 transition-colors'>
 												<td className='px-4 py-3 text-center text-sm font-black text-black border-r-[3px] border-black'>{i + 1}</td>
-												<td className='px-6 py-3 text-sm font-black text-black border-r-[3px] border-black w-32'>{new Date(row.tanggal).toLocaleDateString('id-ID')}</td>
+												<td className='px-6 py-3 text-sm font-black text-black border-r-[3px] border-black w-48'>
+													<div>{new Date(row.tanggal).toLocaleDateString('id-ID')}</div>
+													<div className='text-[10px] font-mono text-gray-600 font-bold mt-0.5'>
+														Jam ke-{row.jam_ke || '-'}
+													</div>
+													{row.jam_mulai && row.jam_selesai && (
+														<div className='text-[10px] font-black text-[#007A6C] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-400 mt-1 w-fit'>
+															🕒 {row.jam_mulai.slice(0, 5)} - {row.jam_selesai.slice(0, 5)} ({formatDurationString(row.durasi_menit || calculateDurationMinutes(row.jam_mulai, row.jam_selesai))})
+														</div>
+													)}
+													{row.status_kehadiran && row.status_kehadiran !== 'Normal' && (
+														(() => {
+															const b = getKBMStatusBadge(row.status_kehadiran);
+															return (
+																<span className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded border mt-1 ${b.border} ${b.bg} ${b.text}`}>
+																	{b.icon} {b.label}
+																</span>
+															);
+														})()
+													)}
+												</td>
 												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black'>{row.materi}</td>
 												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black'>{row.kegiatan}</td>
 												<td className='px-6 py-3 text-sm font-bold text-black border-r-[3px] border-black max-w-[200px] truncate' title={row.hambatan}>{row.hambatan || '-'}</td>

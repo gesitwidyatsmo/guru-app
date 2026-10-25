@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import Loader from '../../../components/loading';
 import SectionHeader from '../../../components/SectionHeader';
 import { createClient } from '@/utils/supabase/client';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 export default function RiwayatAbsensiMapelPage() {
 	const params = useParams();
@@ -75,7 +76,7 @@ export default function RiwayatAbsensiMapelPage() {
 		try {
 			setLoadingSesi(true);
 			const supabase = createClient();
-			const { data } = await supabase.from('absensi_mapel').select('tanggal, jam_ke').eq('kelas', namaKelas).eq('mapel', selectedMapel);
+			const { data } = await supabase.from('absensi_mapel').select('tanggal, jam_ke, created_at').eq('kelas', namaKelas).eq('mapel', selectedMapel);
 			
 			if (data) {
 				const sesiMap = new Map();
@@ -84,7 +85,7 @@ export default function RiwayatAbsensiMapelPage() {
 					const jam = item.jam_ke || '-';
 					const key = `${tgl}|${jam}`;
 					if (tgl) {
-						sesiMap.set(key, { tanggal: tgl, jam_ke: jam });
+						sesiMap.set(key, { tanggal: tgl, jam_ke: jam, created_at: item.created_at });
 					}
 				});
 
@@ -404,7 +405,14 @@ export default function RiwayatAbsensiMapelPage() {
 																<div className={`font-black text-lg ${isSelected ? 'text-white' : 'text-black'}`}>
 																	{new Date(item.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
 																</div>
-																<div className={`text-xs mt-0.5 font-bold uppercase tracking-widest ${isSelected ? 'text-white/90' : 'text-gray-700'}`}>Jam Ke- {item.jam_ke}</div>
+																<div className={`text-xs mt-0.5 font-bold uppercase tracking-widest flex items-center gap-1.5 flex-wrap ${isSelected ? 'text-white/90' : 'text-gray-700'}`}>
+																	<span>Jam Ke- {item.jam_ke}</span>
+																	{item.created_at && (
+																		<span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border font-bold ${isSelected ? 'border-white bg-white/20 text-white' : 'border-black bg-yellow-100 text-black'}`}>
+																			🕒 {getTimeWIB(item.created_at)} WIB
+																		</span>
+																	)}
+																</div>
 															</div>
 														</div>
 													</div>

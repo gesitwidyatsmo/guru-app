@@ -1,6 +1,7 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { haversine } from '@/lib/haversine';
+import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -133,6 +134,45 @@ export async function POST(req) {
 		// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
 		const taAktif = (!tahun_ajar || !semester) ? await getTAAktif(supabase) : null;
 
+		// Otomatis sinkronisasi kehadiran KBM real-time dari absensi siswa
+		let finalJamMulai = body.jam_mulai || null;
+		let finalSesiAbsensiId = body.sesi_absensi_id || null;
+		const nowWib = getTimeWIB(new Date());
+		let finalJamSelesai = body.jam_selesai || nowWib;
+
+		if (!finalJamMulai && tanggal && kelas && mapel) {
+			try {
+				let absensiQuery = supabase
+					.from('absensi_mapel')
+					.select('sesi_id, created_at, jam_ke')
+					.eq('kelas', kelas)
+					.eq('mapel', mapel)
+					.eq('tanggal', tanggal);
+				if (userId) absensiQuery = absensiQuery.eq('guru_id', userId);
+				const { data: matchedSessions } = await absensiQuery.order('created_at', { ascending: false });
+
+				if (matchedSessions && matchedSessions.length > 0) {
+					const exactMatch = matchedSessions.find((s) => s.jam_ke === jam_ke);
+					const chosen = exactMatch || matchedSessions[0];
+					if (chosen.created_at) {
+						finalJamMulai = getTimeWIB(chosen.created_at);
+						finalSesiAbsensiId = chosen.sesi_id;
+					}
+				}
+			} catch (errAbs) {
+				console.warn('Gagal lookup absensi_mapel:', errAbs);
+			}
+		}
+
+		const finalDurasi = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
+		const finalStatus = body.status_kehadiran || determineKBMStatus({
+			jamMulai: finalJamMulai,
+			jamSelesai: finalJamSelesai,
+			durasiMenit: finalDurasi,
+			tanggal,
+			jamKe: jam_ke,
+		});
+
 		const insertPayload = {
 			id,
 			guru_id: userId || null,
@@ -150,14 +190,24 @@ export async function POST(req) {
 			semester: semester ? parseInt(semester) : taAktif.semester,
 		};
 		if (metode) insertPayload.metode = metode;
+		if (finalJamMulai) insertPayload.jam_mulai = finalJamMulai;
+		if (finalJamSelesai) insertPayload.jam_selesai = finalJamSelesai;
+		if (finalDurasi !== undefined) insertPayload.durasi_menit = finalDurasi;
+		if (finalSesiAbsensiId) insertPayload.sesi_absensi_id = finalSesiAbsensiId;
+		if (finalStatus) insertPayload.status_kehadiran = finalStatus;
 
 		let { error } = await supabase.from('jurnal').insert(insertPayload);
 
-		// Fallback jika kolom metode belum ada di tabel Supabase
-		if (error && error.code === 'PGRST204' && insertPayload.metode) {
+		// Fallback jika kolom baru belum ada di tabel Supabase
+		if (error && error.code === 'PGRST204') {
 			const fallbackPayload = { ...insertPayload };
 			delete fallbackPayload.metode;
-			if (!fallbackPayload.kegiatan.includes('[Metode:')) {
+			delete fallbackPayload.jam_mulai;
+			delete fallbackPayload.jam_selesai;
+			delete fallbackPayload.durasi_menit;
+			delete fallbackPayload.sesi_absensi_id;
+			delete fallbackPayload.status_kehadiran;
+			if (insertPayload.metode && !fallbackPayload.kegiatan.includes('[Metode:')) {
 				fallbackPayload.kegiatan = `[Metode: ${insertPayload.metode}] ${fallbackPayload.kegiatan}`.trim();
 			}
 			const retry = await supabase.from('jurnal').insert(fallbackPayload);
@@ -209,10 +259,15 @@ export async function PUT(req) {
 
 		let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
 
-		// Fallback jika kolom metode belum ada di tabel Supabase
-		if (error && error.code === 'PGRST204' && updates.metode) {
+		// Fallback jika kolom baru belum ada di tabel Supabase
+		if (error && error.code === 'PGRST204') {
 			const fallbackUpdates = { ...updates };
 			delete fallbackUpdates.metode;
+			delete fallbackUpdates.jam_mulai;
+			delete fallbackUpdates.jam_selesai;
+			delete fallbackUpdates.durasi_menit;
+			delete fallbackUpdates.sesi_absensi_id;
+			delete fallbackUpdates.status_kehadiran;
 			const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
 			error = retry.error;
 		}

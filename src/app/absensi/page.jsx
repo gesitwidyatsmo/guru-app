@@ -16,6 +16,7 @@ import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJa
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 export default function AbsensiMapelPage() {
 	const router = useRouter();
@@ -747,11 +748,14 @@ export default function AbsensiMapelPage() {
 				{ align: 'center' }
 			);
 
+			const matchingSesi = (sesiHariIni || []).find((s) => String(s.jam_ke).trim() === String(jamKe).trim());
+			const jamWaktuStr = matchingSesi?.created_at ? `   •   Waktu: ${getTimeWIB(matchingSesi.created_at)} WIB` : '';
+
 			doc.setFont('helvetica', 'normal');
 			doc.setFontSize(8.5);
 			doc.setTextColor(71, 85, 105);
 			doc.text(
-				`Kelas: ${selectedKelas}   •   Mapel: ${selectedMapel}   •   Tanggal: ${tanggal} (Jam ke-${jamKe || '-'})`,
+				`Kelas: ${selectedKelas}   •   Mapel: ${selectedMapel}   •   Tanggal: ${tanggal} (Jam ke-${jamKe || '-'})${jamWaktuStr}`,
 				doc.internal.pageSize.getWidth() / 2,
 				endKop + 9,
 				{ align: 'center' }
@@ -1143,6 +1147,11 @@ export default function AbsensiMapelPage() {
 													: 'bg-[#FFF5F0] hover:bg-[#F5C518] text-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5'
 											}`}>
 											<span className='font-black'>🕒 Jam {sesi.jam_ke}</span>
+											{sesi.created_at && (
+												<span className='text-[10px] font-mono text-gray-800 bg-yellow-200 px-1.5 py-0.5 rounded border border-[#0D0D0D] font-bold'>
+													{getTimeWIB(sesi.created_at)} WIB
+												</span>
+											)}
 											<span className='px-1.5 py-0.5 rounded bg-white text-[#0D0D0D] border border-[#0D0D0D] text-[10px] font-mono font-bold'>
 												H:{sesi.summary?.hadir ?? 0} S:{sesi.summary?.sakit ?? 0} I:{sesi.summary?.izin ?? 0} A:{sesi.summary?.alfa ?? 0}
 											</span>
@@ -1239,8 +1248,19 @@ export default function AbsensiMapelPage() {
 								<div className='px-6 py-5 border-b-4 border-[#0D0D0D] flex flex-col sm:flex-row justify-between sm:items-center items-start gap-4 bg-[#F5C518]'>
 									<div>
 										<h2 className='font-black text-[#0D0D0D] text-xl uppercase tracking-tight'>Rekapitulasi Kehadiran</h2>
-										<p className='text-sm font-bold text-[#0D0D0D]'>
-											{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}
+										<p className='text-sm font-bold text-[#0D0D0D] flex items-center gap-2 flex-wrap'>
+											<span>{selectedKelas} • {selectedMapel} • Jam ke-{jamKe}</span>
+											{(() => {
+												const matchingSesi = (sesiHariIni || []).find((s) => String(s.jam_ke).trim() === String(jamKe).trim());
+												if (matchingSesi?.created_at) {
+													return (
+														<span className='bg-white px-2 py-0.5 border-2 border-[#0D0D0D] text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
+															🕒 {getTimeWIB(matchingSesi.created_at)} WIB
+														</span>
+													);
+												}
+												return null;
+											})()}
 										</p>
 									</div>
 									<div className='flex flex-wrap gap-3'>

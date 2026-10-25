@@ -11,6 +11,7 @@ import {
 	DEFAULT_PROFIL_SEKOLAH,
 	drawKopSuratPDF,
 } from '@/lib/pdfKopSurat';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 export default function KepsekAbsensiPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
@@ -188,7 +189,7 @@ export default function KepsekAbsensiPage() {
 				return [
 					idx + 1,
 					s.tanggal || '-',
-					s.jam_ke || '-',
+					s.created_at ? `Jam ${s.jam_ke || '-'}\n(${getTimeWIB(s.created_at)})` : (s.jam_ke || '-'),
 					s.users?.nama_lengkap || '-',
 					s.kelas || '-',
 					s.mapel || '-',
@@ -251,6 +252,7 @@ export default function KepsekAbsensiPage() {
 		const headers = [
 			'Tanggal',
 			'Jam Ke',
+			'Waktu Riil',
 			'Guru Pengampu',
 			'Kelas',
 			'Mata Pelajaran',
@@ -277,6 +279,7 @@ export default function KepsekAbsensiPage() {
 			return [
 				s.tanggal || '',
 				s.jam_ke || '',
+				s.created_at ? getTimeWIB(s.created_at) : '',
 				`"${(s.users?.nama_lengkap || '').replace(/"/g, '""')}"`,
 				`"${(s.kelas || '').replace(/"/g, '""')}"`,
 				`"${(s.mapel || '').replace(/"/g, '""')}"`,
@@ -559,6 +562,11 @@ export default function KepsekAbsensiPage() {
 												<span className='inline-block text-[11px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-black/20 mt-1'>
 													Jam Ke-{s.jam_ke || '-'}
 												</span>
+												{s.created_at && (
+													<span className='block text-[10px] font-mono font-bold text-gray-800 bg-yellow-200 px-1.5 py-0.5 rounded border border-black/30 mt-1 w-fit'>
+														🕒 {getTimeWIB(s.created_at)} WIB
+													</span>
+												)}
 											</td>
 
 											{/* Guru */}

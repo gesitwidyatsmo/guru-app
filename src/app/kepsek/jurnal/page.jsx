@@ -13,6 +13,7 @@ import {
 } from '@/lib/pdfKopSurat';
 import { exportJurnalPDFReport } from '@/lib/pdfJurnalReport';
 import { getTodayDateString } from '@/lib/dateUtils';
+import { getKBMStatusBadge, formatDurationString, calculateDurationMinutes } from '@/lib/kbmRealtimeUtils';
 
 export default function KepsekJurnalPage() {
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
@@ -534,6 +535,21 @@ export default function KepsekJurnalPage() {
 											<span className='inline-block text-[11px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded border border-black/20 mt-1'>
 												Jam Ke-{j.jam_ke || '-'}
 											</span>
+											{j.jam_mulai && j.jam_selesai && (
+												<span className='block text-[10px] font-black text-[#007A6C] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300 mt-1 w-fit'>
+													🕒 {j.jam_mulai.slice(0, 5)} - {j.jam_selesai.slice(0, 5)} ({formatDurationString(j.durasi_menit || calculateDurationMinutes(j.jam_mulai, j.jam_selesai))})
+												</span>
+											)}
+											{j.status_kehadiran && j.status_kehadiran !== 'Normal' && (
+												(() => {
+													const b = getKBMStatusBadge(j.status_kehadiran);
+													return (
+														<span className={`block text-[9px] font-black px-1.5 py-0.5 rounded border mt-1 w-fit ${b.border} ${b.bg} ${b.text}`}>
+															{b.icon} {b.label}
+														</span>
+													);
+												})()
+											)}
 										</td>
 
 										{/* Guru Pengajar */}

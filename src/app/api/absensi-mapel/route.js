@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { calculateAttendanceSummary, findConflictingSession } from '@/lib/absensiUtils';
 import { verifyGeofence } from '@/lib/geofenceServer';
@@ -47,7 +47,7 @@ export async function GET(req) {
 				const supabase = await createClient();
 				let query = supabase
 					.from('absensi_mapel')
-					.select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel, absensi_mapel_siswa(id, status, keterangan)')
+					.select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel, created_at, absensi_mapel_siswa(id, status, keterangan)')
 					.order('tanggal', { ascending: false });
 
 				if (kelas) query = query.eq('kelas', kelas);
@@ -69,6 +69,7 @@ export async function GET(req) {
 						guru_id: r.guru_id || '',
 						tanggal: normDate(r.tanggal),
 						jam_ke: r.jam_ke,
+						created_at: r.created_at,
 						kelas: r.kelas,
 						mapel: r.mapel,
 						data_absensi: details,
@@ -85,7 +86,7 @@ export async function GET(req) {
 		const supabase = await createClient();
 		const tahunAjar = searchParams.get('tahun_ajar');
 		const semester = searchParams.get('semester');
-		let query = supabase.from('absensi_mapel').select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel').eq('kelas', kelas).eq('mapel', mapel);
+		let query = supabase.from('absensi_mapel').select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel, created_at').eq('kelas', kelas).eq('mapel', mapel);
 
 		if (tahunAjar) query = query.eq('tahun_ajar', tahunAjar);
 		if (semester) query = query.eq('semester', parseInt(semester));
@@ -147,6 +148,7 @@ export async function GET(req) {
 				guru_id: r.guru_id || '',
 				tanggal: normDate(r.tanggal),
 				jam_ke: r.jam_ke,
+				created_at: r.created_at,
 				kelas: r.kelas,
 				mapel: r.mapel,
 				data_absensi: detailsForSession,

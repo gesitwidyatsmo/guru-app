@@ -10,6 +10,13 @@ import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeri
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
 import { getTodayDateString } from '@/lib/dateUtils';
+import {
+	getTimeWIB,
+	calculateDurationMinutes,
+	determineKBMStatus,
+	getKBMStatusBadge,
+	formatDurationString,
+} from '@/lib/kbmRealtimeUtils';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -34,6 +41,11 @@ export default function JurnalPage() {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
 	const [saving, setSaving] = useState(false);
+
+	// State Kehadiran KBM Real-Time
+	const [matchedAbsensi, setMatchedAbsensi] = useState(null);
+	const [checkingAbsensi, setCheckingAbsensi] = useState(false);
+	const [currentTimeStr, setCurrentTimeStr] = useState(() => getTimeWIB(new Date()));
 
 	// Data Master
 	const [kelasList, setKelasList] = useState([]);
@@ -64,6 +76,11 @@ export default function JurnalPage() {
 		solusi: '',
 		dokumentasi: null,
 		tuntas: false,
+		jam_mulai: '',
+		jam_selesai: '',
+		durasi_menit: 0,
+		sesi_absensi_id: '',
+		status_kehadiran: 'Normal',
 	};
 	const [formData, setFormData] = useState(initialForm);
 
@@ -268,6 +285,65 @@ export default function JurnalPage() {
 		}
 	}, [formData, isModalOpen, isEditing]);
 
+	// --- CLOCK TIMER UNTUK WAKTU KBM REAL-TIME ---
+	useEffect(() => {
+		if (!isModalOpen) return;
+		setCurrentTimeStr(getTimeWIB(new Date()));
+		const timer = setInterval(() => {
+			setCurrentTimeStr(getTimeWIB(new Date()));
+		}, 10000);
+		return () => clearInterval(timer);
+	}, [isModalOpen]);
+
+	// --- AUTO-LOOKUP PRESENSI SISWA (JAM MULAI KBM) ---
+	useEffect(() => {
+		if (!isModalOpen || isEditing || !formData.kelas || !formData.mapel || !formData.tanggal) {
+			if (!isEditing) setMatchedAbsensi(null);
+			return;
+		}
+
+		let isCancelled = false;
+		const checkAbsensi = async () => {
+			setCheckingAbsensi(true);
+			try {
+				const supabase = createClient();
+				let query = supabase
+					.from('absensi_mapel')
+					.select('sesi_id, created_at, jam_ke, tanggal')
+					.eq('kelas', formData.kelas)
+					.eq('mapel', formData.mapel)
+					.eq('tanggal', formData.tanggal);
+
+				if (userId) query = query.eq('guru_id', userId);
+
+				const { data, error } = await query.order('created_at', { ascending: false });
+				if (!isCancelled && !error && data && data.length > 0) {
+					const exact = formData.jam_ke ? data.find((s) => String(s.jam_ke).trim() === String(formData.jam_ke).trim()) : null;
+					const chosen = exact || data[0];
+					const jamMulaiWIB = getTimeWIB(chosen.created_at);
+					setMatchedAbsensi({
+						sesi_id: chosen.sesi_id,
+						created_at: chosen.created_at,
+						jam_mulai: jamMulaiWIB,
+						jam_ke: chosen.jam_ke,
+					});
+				} else if (!isCancelled) {
+					setMatchedAbsensi(null);
+				}
+			} catch (err) {
+				console.warn('Gagal cek presensi siswa:', err);
+			} finally {
+				if (!isCancelled) setCheckingAbsensi(false);
+			}
+		};
+
+		checkAbsensi();
+
+		return () => {
+			isCancelled = true;
+		};
+	}, [isModalOpen, isEditing, formData.kelas, formData.mapel, formData.tanggal, formData.jam_ke, userId]);
+
 	// --- LOGIC AUTO-SUGGEST PERTEMUAN ---
 	const calculateMeeting = (cls, mpl) => {
 		// Hanya jalankan jika mode tambah baru (bukan edit)
@@ -398,10 +474,29 @@ export default function JurnalPage() {
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
-			setFormData({ ...initialForm, ...journal, metode: journal.metode || 'Ceramah' });
+			setFormData({
+				...initialForm,
+				...journal,
+				metode: journal.metode || 'Ceramah',
+				jam_mulai: journal.jam_mulai || '',
+				jam_selesai: journal.jam_selesai || '',
+				durasi_menit: journal.durasi_menit || 0,
+				sesi_absensi_id: journal.sesi_absensi_id || '',
+				status_kehadiran: journal.status_kehadiran || 'Normal',
+			});
+			if (journal.jam_mulai) {
+				setMatchedAbsensi({
+					sesi_id: journal.sesi_absensi_id || '',
+					jam_mulai: journal.jam_mulai.slice(0, 5),
+					jam_ke: journal.jam_ke,
+				});
+			} else {
+				setMatchedAbsensi(null);
+			}
 		} else {
 			// Mode Tambah Baru
 			setIsEditing(false);
+			setMatchedAbsensi(null);
 			// Cek apakah ada draft lokal
 			const savedDraft = localStorage.getItem('draft_jurnal_baru');
 			if (savedDraft) {
@@ -534,15 +629,31 @@ export default function JurnalPage() {
 				if (formData.metode) updates.metode = formData.metode;
 				
 				let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
-				if (error && error.code === 'PGRST204' && updates.metode) {
+				if (error && error.code === 'PGRST204') {
 					const fallback = { ...updates };
 					delete fallback.metode;
+					delete fallback.jam_mulai;
+					delete fallback.jam_selesai;
+					delete fallback.durasi_menit;
+					delete fallback.sesi_absensi_id;
+					delete fallback.status_kehadiran;
 					const retry = await supabase.from('jurnal').update(fallback).eq('id', id);
 					error = retry.error;
 				}
 				if (error) throw error;
 			} else {
 				const newId = Math.random().toString(36).substring(2, 11);
+				const finalJamMulai = matchedAbsensi?.jam_mulai || formData.jam_mulai || null;
+				const finalJamSelesai = getTimeWIB(new Date());
+				const finalDurasi = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
+				const finalStatus = determineKBMStatus({
+					jamMulai: finalJamMulai,
+					jamSelesai: finalJamSelesai,
+					durasiMenit: finalDurasi,
+					tanggal: formData.tanggal,
+					jamKe: formData.jam_ke,
+				});
+
 				const insertData = {
 					id: newId,
 					guru_id: userId || null,
@@ -559,12 +670,22 @@ export default function JurnalPage() {
 					tuntas: !!formData.tuntas,
 					tahun_ajar: tahunAjarAktif,
 					semester: semesterAktif,
+					jam_mulai: finalJamMulai,
+					jam_selesai: finalJamSelesai,
+					durasi_menit: finalDurasi,
+					sesi_absensi_id: matchedAbsensi?.sesi_id || null,
+					status_kehadiran: finalStatus,
 				};
 				let { error } = await supabase.from('jurnal').insert(insertData);
-				if (error && error.code === 'PGRST204' && insertData.metode) {
+				if (error && error.code === 'PGRST204') {
 					const fallback = { ...insertData };
 					delete fallback.metode;
-					if (!fallback.kegiatan.includes('[Metode:')) {
+					delete fallback.jam_mulai;
+					delete fallback.jam_selesai;
+					delete fallback.durasi_menit;
+					delete fallback.sesi_absensi_id;
+					delete fallback.status_kehadiran;
+					if (insertData.metode && !fallback.kegiatan.includes('[Metode:')) {
 						fallback.kegiatan = `[Metode: ${insertData.metode}] ${fallback.kegiatan}`.trim();
 					}
 					const retry = await supabase.from('jurnal').insert(fallback);
@@ -810,6 +931,21 @@ export default function JurnalPage() {
 														<svg className='w-5 h-5 text-[#E8451A]' fill='none' stroke='currentColor' strokeWidth={4} viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path></svg>
 														JAM KE-{journal.jam_ke}
 													</span>
+													{journal.jam_mulai && journal.jam_selesai && (
+														<span className='flex items-center gap-1.5 bg-[#FFF5F0] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-xs font-black text-[#0D0D0D]'>
+															<span>🕒</span> {journal.jam_mulai.slice(0, 5)} - {journal.jam_selesai.slice(0, 5)} ({formatDurationString(journal.durasi_menit || calculateDurationMinutes(journal.jam_mulai, journal.jam_selesai))})
+														</span>
+													)}
+													{journal.status_kehadiran && journal.status_kehadiran !== 'Normal' && (
+														(() => {
+															const badge = getKBMStatusBadge(journal.status_kehadiran);
+															return (
+																<span className={`flex items-center gap-1 px-2.5 py-1.5 border-[2px] ${badge.border} ${badge.bg} ${badge.text} text-[11px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_#0D0D0D]`}>
+																	<span>{badge.icon}</span> {badge.label}
+																</span>
+															);
+														})()
+													)}
 													{(userRole === 'Admin' || userRole === 'Kepala Sekolah') && <span className='text-[10px] font-black uppercase text-white bg-[#0D0D0D] px-3 py-1.5 border-[3px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>ID Guru: {journal.guru_id || 'UNKNOWN'}</span>}
 												</div>
 											</div>
@@ -984,6 +1120,84 @@ export default function JurnalPage() {
 											className='neo-input w-full px-4 py-3 bg-[#E8E8E8] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-white outline-none rounded-none'
 										/>
 									</div>
+								</div>
+
+								{/* Waktu KBM Real-Time Card */}
+								<div className='bg-white p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] space-y-3'>
+									<div className='flex items-center justify-between border-b-[2px] border-dashed border-[#0D0D0D] pb-2'>
+										<div className='flex items-center gap-2'>
+											<span className='text-base'>⏱️</span>
+											<span className='text-xs font-black uppercase tracking-wider text-[#0D0D0D]'>Kehadiran KBM Real-Time</span>
+										</div>
+										<span className='text-[10px] font-black uppercase bg-[#0D0D0D] text-white px-2 py-0.5'>Server Timestamp</span>
+									</div>
+
+									<div className='grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1'>
+										{/* Jam Mulai */}
+										<div className='bg-[#FFF5F0] p-2.5 border-[2px] border-[#0D0D0D]'>
+											<div className='text-[10px] font-black text-gray-600 uppercase flex items-center gap-1 mb-1'>
+												<span>🟢</span> Mulai (Presensi Siswa)
+											</div>
+											<div className='font-black text-sm text-[#0D0D0D]'>
+												{checkingAbsensi ? (
+													<span className='text-xs text-gray-500 animate-pulse'>Memeriksa...</span>
+												) : (matchedAbsensi?.jam_mulai || (isEditing && formData.jam_mulai)) ? (
+													<span className='text-[#00A693] font-black'>{matchedAbsensi?.jam_mulai || formData.jam_mulai?.slice(0, 5)} WIB</span>
+												) : (
+													<span className='text-xs text-red-600 font-bold'>Belum Tercatat</span>
+												)}
+											</div>
+										</div>
+
+										{/* Jam Selesai */}
+										<div className='bg-[#FFF5F0] p-2.5 border-[2px] border-[#0D0D0D]'>
+											<div className='text-[10px] font-black text-gray-600 uppercase flex items-center gap-1 mb-1'>
+												<span>🏁</span> Selesai (Simpan Jurnal)
+											</div>
+											<div className='font-black text-sm text-[#0D0D0D]'>
+												{isEditing && formData.jam_selesai ? (
+													<span>{formData.jam_selesai?.slice(0, 5)} WIB</span>
+												) : (
+													<span className='text-[#2F80ED]'>{currentTimeStr} WIB <span className='text-[9px] font-bold text-gray-500'>(Sekarang)</span></span>
+												)}
+											</div>
+										</div>
+
+										{/* Estimasi Durasi */}
+										<div className='bg-[#FFF5F0] p-2.5 border-[2px] border-[#0D0D0D]'>
+											<div className='text-[10px] font-black text-gray-600 uppercase flex items-center gap-1 mb-1'>
+												<span>⏳</span> Durasi KBM
+											</div>
+											<div className='font-black text-sm text-[#0D0D0D]'>
+												{(() => {
+													const start = matchedAbsensi?.jam_mulai || (isEditing && formData.jam_mulai) || null;
+													const end = (isEditing && formData.jam_selesai) || currentTimeStr;
+													if (!start) return <span className='text-xs text-gray-500'>-</span>;
+													const dur = calculateDurationMinutes(start, end);
+													return <span className={dur < 20 ? 'text-[#E8451A]' : 'text-[#00A693]'}>{formatDurationString(dur, false)}</span>;
+												})()}
+											</div>
+										</div>
+									</div>
+
+									{/* Notifikasi Presensi Siswa Belum Diisi */}
+									{!isEditing && !checkingAbsensi && !matchedAbsensi && formData.kelas && formData.mapel && (
+										<div className='bg-amber-50 border-[2px] border-[#F5C518] p-2.5 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
+											<div className='flex items-center gap-2'>
+												<span className='text-base'>💡</span>
+												<span>Presensi siswa untuk kelas & mapel ini belum tersimpan hari ini.</span>
+											</div>
+											<button
+												type='button'
+												onClick={() => {
+													const url = `/absensi?kelas=${encodeURIComponent(formData.kelas || '')}&mapel=${encodeURIComponent(formData.mapel || '')}&jam_ke=${encodeURIComponent(formData.jam_ke || '')}&tanggal=${encodeURIComponent(formData.tanggal || '')}`;
+													window.open(url, '_blank');
+												}}
+												className='bg-[#0D0D0D] text-white px-3 py-1 font-black text-[11px] uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-[#F5C518] hover:text-[#0D0D0D] transition-colors shrink-0 text-center cursor-pointer'>
+												Buka Presensi Siswa ↗
+											</button>
+										</div>
+									)}
 								</div>
 
 								{/* Materi */}

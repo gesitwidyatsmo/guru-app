@@ -8,6 +8,7 @@ import Swal from 'sweetalert2';
 import { DEFAULT_PROFIL_SEKOLAH, fetchSchoolProfile } from '@/lib/pdfKopSurat';
 import { exportJurnalPDFReport, getJPFromJamKe } from '@/lib/pdfJurnalReport';
 import { getTodayDateString } from '@/lib/dateUtils';
+import { getKBMStatusBadge, formatDurationString, calculateDurationMinutes } from '@/lib/kbmRealtimeUtils';
 import AcademicPeriodChip from '@/app/components/AcademicPeriodChip';
 
 export default function KurikulumJurnalPage() {
@@ -242,6 +243,10 @@ export default function KurikulumJurnalPage() {
 			'No',
 			'Tanggal',
 			'Jam Ke',
+			'Jam Mulai',
+			'Jam Selesai',
+			'Durasi (Menit)',
+			'Status Kehadiran',
 			'Guru Pengajar',
 			'Username',
 			'Kelas',
@@ -259,6 +264,10 @@ export default function KurikulumJurnalPage() {
 			idx + 1,
 			j.tanggal || '',
 			j.jam_ke || '',
+			j.jam_mulai || '',
+			j.jam_selesai || '',
+			j.durasi_menit ?? (j.jam_mulai && j.jam_selesai ? calculateDurationMinutes(j.jam_mulai, j.jam_selesai) : ''),
+			`"${(j.status_kehadiran || 'Normal').replace(/"/g, '""')}"`,
 			`"${(j.users?.nama_lengkap || j.nama_guru || '').replace(/"/g, '""')}"`,
 			`"${(j.users?.username || '').replace(/"/g, '""')}"`,
 			`"${(j.kelas || '').replace(/"/g, '""')}"`,
@@ -567,6 +576,21 @@ export default function KurikulumJurnalPage() {
 													<span className='text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-300 inline-block mt-0.5'>
 														Jam ke-{j.jam_ke || '-'} ({getJPFromJamKe(j.jam_ke)} JP)
 													</span>
+													{j.jam_mulai && j.jam_selesai && (
+														<span className='text-[10px] font-black text-[#007A6C] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-300 block mt-1 w-fit'>
+															🕒 {j.jam_mulai.slice(0, 5)} - {j.jam_selesai.slice(0, 5)} ({formatDurationString(j.durasi_menit || calculateDurationMinutes(j.jam_mulai, j.jam_selesai))})
+														</span>
+													)}
+													{j.status_kehadiran && j.status_kehadiran !== 'Normal' && (
+														(() => {
+															const b = getKBMStatusBadge(j.status_kehadiran);
+															return (
+																<span className={`text-[9px] font-black px-1.5 py-0.5 rounded border block mt-1 w-fit ${b.border} ${b.bg} ${b.text}`}>
+																	{b.icon} {b.label}
+																</span>
+															);
+														})()
+													)}
 												</td>
 												<td className='py-3 px-3'>
 													<span className='font-black text-black block'>{j.users?.nama_lengkap || 'Guru Pengajar'}</span>
