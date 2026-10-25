@@ -12,6 +12,7 @@ import {
 	formatDurationString,
 	getKBMStatusBadge,
 	determineKBMStatus,
+	getExpectedScheduleTimes,
 } from '@/lib/kbmRealtimeUtils';
 
 export default function JurnalKelasPage() {
@@ -302,7 +303,15 @@ export default function JurnalKelasPage() {
 					cleanUpdates.sesi_absensi_id = null;
 				}
 
-				if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
+				if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
+					cleanUpdates.status_kehadiran = determineKBMStatus({
+						jamMulai: cleanUpdates.jam_mulai,
+						jamSelesai: cleanUpdates.jam_selesai,
+						durasiMenit: cleanUpdates.durasi_menit,
+						tanggal: cleanUpdates.tanggal,
+						jamKe: cleanUpdates.jam_ke,
+					});
+				} else if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
 					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
 				} else {
 					cleanUpdates.status_kehadiran = 'Normal';
@@ -390,7 +399,13 @@ export default function JurnalKelasPage() {
 					jam_selesai: formData.jam_selesai && String(formData.jam_selesai).trim() !== '' ? String(formData.jam_selesai).trim().slice(0, 8) : null,
 					durasi_menit: formData.durasi_menit || 0,
 					sesi_absensi_id: formData.sesi_absensi_id || null,
-					status_kehadiran: formData.status_kehadiran || 'Normal',
+					status_kehadiran: determineKBMStatus({
+						jamMulai: formData.jam_mulai,
+						jamSelesai: formData.jam_selesai,
+						durasiMenit: formData.durasi_menit,
+						tanggal: formData.tanggal,
+						jamKe: formData.jam_ke,
+					}),
 				};
 
 				let insertSuccess = false;

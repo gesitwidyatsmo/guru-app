@@ -165,13 +165,14 @@ export async function POST(req) {
 		}
 
 		const finalDurasi = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
-		const finalStatus = body.status_kehadiran || determineKBMStatus({
+		const computedStatus = determineKBMStatus({
 			jamMulai: finalJamMulai,
 			jamSelesai: finalJamSelesai,
 			durasiMenit: finalDurasi,
 			tanggal,
 			jamKe: jam_ke,
 		});
+		const finalStatus = (body.status_kehadiran && body.status_kehadiran !== 'Normal') ? body.status_kehadiran : computedStatus;
 
 		const insertPayload = {
 			id,
@@ -266,7 +267,15 @@ export async function PUT(req) {
 		if (updates.durasi_menit !== undefined) {
 			updates.durasi_menit = !isNaN(Number(updates.durasi_menit)) ? Number(updates.durasi_menit) : 0;
 		}
-		if (updates.status_kehadiran !== undefined) {
+		if (updates.jam_mulai && updates.jam_selesai) {
+			updates.status_kehadiran = determineKBMStatus({
+				jamMulai: updates.jam_mulai,
+				jamSelesai: updates.jam_selesai,
+				durasiMenit: updates.durasi_menit,
+				tanggal: updates.tanggal,
+				jamKe: updates.jam_ke,
+			});
+		} else if (updates.status_kehadiran !== undefined) {
 			updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
 		}
 

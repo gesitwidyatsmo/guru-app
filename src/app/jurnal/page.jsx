@@ -16,6 +16,7 @@ import {
 	determineKBMStatus,
 	getKBMStatusBadge,
 	formatDurationString,
+	getExpectedScheduleTimes,
 } from '@/lib/kbmRealtimeUtils';
 
 export default function JurnalPage() {
@@ -664,7 +665,15 @@ export default function JurnalPage() {
 					cleanUpdates.sesi_absensi_id = null;
 				}
 
-				if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
+				if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
+					cleanUpdates.status_kehadiran = determineKBMStatus({
+						jamMulai: cleanUpdates.jam_mulai,
+						jamSelesai: cleanUpdates.jam_selesai,
+						durasiMenit: cleanUpdates.durasi_menit,
+						tanggal: cleanUpdates.tanggal,
+						jamKe: cleanUpdates.jam_ke,
+					});
+				} else if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
 					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
 				} else {
 					cleanUpdates.status_kehadiran = 'Normal';
@@ -1328,6 +1337,38 @@ export default function JurnalPage() {
 											</div>
 										</div>
 									</div>
+
+									{/* Status Audit & Jadwal Benchmark Real-Time */}
+									{(() => {
+										const start = matchedAbsensi?.jam_mulai || (isEditing && formData.jam_mulai) || null;
+										const end = (isEditing && formData.jam_selesai) || currentTimeStr;
+										const dur = calculateDurationMinutes(start, end);
+										const liveStatus = determineKBMStatus({
+											jamMulai: start,
+											jamSelesai: end,
+											durasiMenit: dur,
+											tanggal: formData.tanggal,
+											jamKe: formData.jam_ke,
+										});
+										const badge = getKBMStatusBadge(liveStatus);
+										const sched = getExpectedScheduleTimes(formData.jam_ke, formData.tanggal);
+
+										return (
+											<div className={`p-2.5 border-[2px] ${badge.border} ${badge.bg} flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs`}>
+												<div className='flex items-center gap-2'>
+													<span className='font-bold text-gray-700'>Status Audit KBM:</span>
+													<span className={`font-black ${badge.text} flex items-center gap-1.5`}>
+														<span>{badge.icon}</span> {badge.label}
+													</span>
+												</div>
+												{sched && (
+													<div className='text-[11px] font-semibold text-gray-600'>
+														Alokasi Jadwal ({sched.isAhadSenin ? 'Ahad / Senin' : 'Reguler'}): <span className='font-bold text-[#0D0D0D]'>{sched.start} - {sched.end} WIB</span>
+													</div>
+												)}
+											</div>
+										);
+									})()}
 
 									{/* Notifikasi Presensi Siswa Belum Diisi */}
 									{!isEditing && !checkingAbsensi && !matchedAbsensi && formData.kelas && formData.mapel && (
