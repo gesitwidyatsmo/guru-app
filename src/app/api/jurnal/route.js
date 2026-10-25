@@ -242,12 +242,9 @@ export async function PUT(req) {
 		const supabase = await createClient();
 
 		// Verifikasi kepemilikan jika Guru
-		if (role === 'Guru') {
-			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).single();
-			if (!existingData) {
-				return NextResponse.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
-			}
-			if (existingData.guru_id !== userId) {
+		if (role === 'Guru' && userId) {
+			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).maybeSingle();
+			if (existingData && existingData.guru_id && existingData.guru_id !== userId) {
 				return NextResponse.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
 			}
 		}
@@ -257,19 +254,43 @@ export async function PUT(req) {
 		if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
 		if (metode !== undefined) updates.metode = metode;
 
+		if (updates.jam_mulai !== undefined) {
+			updates.jam_mulai = updates.jam_mulai && String(updates.jam_mulai).trim() !== '' ? String(updates.jam_mulai).trim().slice(0, 8) : null;
+		}
+		if (updates.jam_selesai !== undefined) {
+			updates.jam_selesai = updates.jam_selesai && String(updates.jam_selesai).trim() !== '' ? String(updates.jam_selesai).trim().slice(0, 8) : null;
+		}
+		if (updates.sesi_absensi_id !== undefined) {
+			updates.sesi_absensi_id = updates.sesi_absensi_id && String(updates.sesi_absensi_id).trim() !== '' ? String(updates.sesi_absensi_id).trim() : null;
+		}
+		if (updates.durasi_menit !== undefined) {
+			updates.durasi_menit = !isNaN(Number(updates.durasi_menit)) ? Number(updates.durasi_menit) : 0;
+		}
+		if (updates.status_kehadiran !== undefined) {
+			updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
+		}
+
 		let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
 
 		// Fallback jika kolom baru belum ada di tabel Supabase
-		if (error && error.code === 'PGRST204') {
-			const fallbackUpdates = { ...updates };
-			delete fallbackUpdates.metode;
-			delete fallbackUpdates.jam_mulai;
-			delete fallbackUpdates.jam_selesai;
-			delete fallbackUpdates.durasi_menit;
-			delete fallbackUpdates.sesi_absensi_id;
-			delete fallbackUpdates.status_kehadiran;
-			const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
-			error = retry.error;
+		if (error) {
+			const isMissingCol =
+				error.code === 'PGRST204' ||
+				error.code === '42703' ||
+				String(error.message || '').toLowerCase().includes('column') ||
+				String(error.message || '').toLowerCase().includes('schema cache');
+
+			if (isMissingCol) {
+				const fallbackUpdates = { ...updates };
+				delete fallbackUpdates.metode;
+				delete fallbackUpdates.jam_mulai;
+				delete fallbackUpdates.jam_selesai;
+				delete fallbackUpdates.durasi_menit;
+				delete fallbackUpdates.sesi_absensi_id;
+				delete fallbackUpdates.status_kehadiran;
+				const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
+				error = retry.error;
+			}
 		}
 
 		if (error) throw error;

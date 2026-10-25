@@ -622,25 +622,117 @@ export default function JurnalPage() {
 			const supabase = createClient();
 			
 			if (isEditing) {
-				const { id, pertemuan_ke, ...others } = formData;
-				const updates = { ...others };
-				if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
-				if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
-				if (formData.metode) updates.metode = formData.metode;
-				
-				let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
-				if (error && error.code === 'PGRST204') {
-					const fallback = { ...updates };
-					delete fallback.metode;
-					delete fallback.jam_mulai;
-					delete fallback.jam_selesai;
-					delete fallback.durasi_menit;
-					delete fallback.sesi_absensi_id;
-					delete fallback.status_kehadiran;
-					const retry = await supabase.from('jurnal').update(fallback).eq('id', id);
-					error = retry.error;
+				const id = formData.id;
+				if (!id) throw new Error('ID Jurnal tidak ditemukan untuk diperbarui');
+
+				const cleanUpdates = {
+					tanggal: formData.tanggal,
+					jam_ke: formData.jam_ke || '',
+					pertemuan_ke: formData.pertemuan_ke || '',
+					kelas: formData.kelas,
+					mapel: formData.mapel,
+					materi: formData.materi,
+					kegiatan: formData.kegiatan || '',
+					hambatan: formData.hambatan || '',
+					solusi: formData.solusi || '',
+					tuntas: !!formData.tuntas,
+				};
+				if (formData.metode) cleanUpdates.metode = formData.metode;
+
+				// Pastikan nilai kolom realtime valid (bukan string kosong "" ke kolom TIME!)
+				if (formData.jam_mulai && String(formData.jam_mulai).trim() !== '') {
+					cleanUpdates.jam_mulai = String(formData.jam_mulai).trim().slice(0, 8);
+				} else {
+					cleanUpdates.jam_mulai = null;
 				}
-				if (error) throw error;
+
+				if (formData.jam_selesai && String(formData.jam_selesai).trim() !== '') {
+					cleanUpdates.jam_selesai = String(formData.jam_selesai).trim().slice(0, 8);
+				} else {
+					cleanUpdates.jam_selesai = null;
+				}
+
+				if (formData.durasi_menit !== undefined && formData.durasi_menit !== '' && !isNaN(Number(formData.durasi_menit))) {
+					cleanUpdates.durasi_menit = Number(formData.durasi_menit);
+				} else {
+					cleanUpdates.durasi_menit = 0;
+				}
+
+				if (formData.sesi_absensi_id && String(formData.sesi_absensi_id).trim() !== '') {
+					cleanUpdates.sesi_absensi_id = String(formData.sesi_absensi_id).trim();
+				} else {
+					cleanUpdates.sesi_absensi_id = null;
+				}
+
+				if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
+					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
+				} else {
+					cleanUpdates.status_kehadiran = 'Normal';
+				}
+				
+				let updateSuccess = false;
+				let lastError = null;
+
+				// 1. Coba update via Supabase client langsung
+				try {
+					let { error } = await supabase.from('jurnal').update(cleanUpdates).eq('id', id);
+					if (error) {
+						const isMissingCol =
+							error.code === 'PGRST204' ||
+							error.code === '42703' ||
+							String(error.message || '').toLowerCase().includes('column') ||
+							String(error.message || '').toLowerCase().includes('schema cache') ||
+							String(error.details || '').toLowerCase().includes('column');
+
+						if (isMissingCol) {
+							console.warn('Kolom realtime belum ada di Supabase, fallback update tanpa kolom realtime:', error.message);
+							const fallback = { ...cleanUpdates };
+							delete fallback.metode;
+							delete fallback.jam_mulai;
+							delete fallback.jam_selesai;
+							delete fallback.durasi_menit;
+							delete fallback.sesi_absensi_id;
+							delete fallback.status_kehadiran;
+
+							if (cleanUpdates.metode && !fallback.kegiatan.includes('[Metode:')) {
+								fallback.kegiatan = `[Metode: ${cleanUpdates.metode}] ${fallback.kegiatan}`.trim();
+							}
+
+							const retry = await supabase.from('jurnal').update(fallback).eq('id', id);
+							error = retry.error;
+						}
+					}
+					if (error) throw error;
+					updateSuccess = true;
+				} catch (clientErr) {
+					console.warn('Direct Supabase update gagal, mencoba fallback via /api/jurnal:', clientErr);
+					lastError = clientErr;
+				}
+
+				// 2. Fallback via internal API route jika direct client gagal
+				if (!updateSuccess) {
+					try {
+						const res = await fetch('/api/jurnal', {
+							method: 'PUT',
+							headers: {
+								'Content-Type': 'application/json',
+								'x-user-id': userId || '',
+								'x-user-role': userRole || '',
+							},
+							body: JSON.stringify({ id, ...cleanUpdates }),
+						});
+
+						if (res.ok) {
+							updateSuccess = true;
+						} else {
+							const resData = await res.json().catch(() => ({}));
+							throw new Error(resData.error || `HTTP ${res.status}`);
+						}
+					} catch (apiErr) {
+						console.error('Fallback /api/jurnal juga gagal:', apiErr);
+						throw lastError || apiErr;
+					}
+				}
 			} else {
 				const newId = Math.random().toString(36).substring(2, 11);
 				const finalJamMulai = matchedAbsensi?.jam_mulai || formData.jam_mulai || null;
@@ -670,28 +762,73 @@ export default function JurnalPage() {
 					tuntas: !!formData.tuntas,
 					tahun_ajar: tahunAjarAktif,
 					semester: semesterAktif,
-					jam_mulai: finalJamMulai,
-					jam_selesai: finalJamSelesai,
-					durasi_menit: finalDurasi,
+					jam_mulai: finalJamMulai && String(finalJamMulai).trim() !== '' ? String(finalJamMulai).trim().slice(0, 8) : null,
+					jam_selesai: finalJamSelesai && String(finalJamSelesai).trim() !== '' ? String(finalJamSelesai).trim().slice(0, 8) : null,
+					durasi_menit: finalDurasi || 0,
 					sesi_absensi_id: matchedAbsensi?.sesi_id || null,
-					status_kehadiran: finalStatus,
+					status_kehadiran: finalStatus || 'Normal',
 				};
-				let { error } = await supabase.from('jurnal').insert(insertData);
-				if (error && error.code === 'PGRST204') {
-					const fallback = { ...insertData };
-					delete fallback.metode;
-					delete fallback.jam_mulai;
-					delete fallback.jam_selesai;
-					delete fallback.durasi_menit;
-					delete fallback.sesi_absensi_id;
-					delete fallback.status_kehadiran;
-					if (insertData.metode && !fallback.kegiatan.includes('[Metode:')) {
-						fallback.kegiatan = `[Metode: ${insertData.metode}] ${fallback.kegiatan}`.trim();
+
+				let insertSuccess = false;
+				let lastInsertError = null;
+
+				// 1. Coba insert via Supabase client langsung
+				try {
+					let { error } = await supabase.from('jurnal').insert(insertData);
+					if (error) {
+						const isMissingCol =
+							error.code === 'PGRST204' ||
+							error.code === '42703' ||
+							String(error.message || '').toLowerCase().includes('column') ||
+							String(error.message || '').toLowerCase().includes('schema cache') ||
+							String(error.details || '').toLowerCase().includes('column');
+
+						if (isMissingCol) {
+							console.warn('Kolom realtime belum ada di Supabase, fallback insert tanpa kolom realtime:', error.message);
+							const fallback = { ...insertData };
+							delete fallback.metode;
+							delete fallback.jam_mulai;
+							delete fallback.jam_selesai;
+							delete fallback.durasi_menit;
+							delete fallback.sesi_absensi_id;
+							delete fallback.status_kehadiran;
+							if (insertData.metode && !fallback.kegiatan.includes('[Metode:')) {
+								fallback.kegiatan = `[Metode: ${insertData.metode}] ${fallback.kegiatan}`.trim();
+							}
+							const retry = await supabase.from('jurnal').insert(fallback);
+							error = retry.error;
+						}
 					}
-					const retry = await supabase.from('jurnal').insert(fallback);
-					error = retry.error;
+					if (error) throw error;
+					insertSuccess = true;
+				} catch (clientErr) {
+					console.warn('Direct Supabase insert gagal, mencoba fallback via /api/jurnal:', clientErr);
+					lastInsertError = clientErr;
 				}
-				if (error) throw error;
+
+				// 2. Fallback via internal API jika direct client gagal
+				if (!insertSuccess) {
+					try {
+						const res = await fetch('/api/jurnal', {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+								'x-user-id': userId || '',
+								'x-user-role': userRole || '',
+							},
+							body: JSON.stringify(insertData),
+						});
+						if (res.ok) {
+							insertSuccess = true;
+						} else {
+							const resData = await res.json().catch(() => ({}));
+							throw new Error(resData.error || `HTTP ${res.status}`);
+						}
+					} catch (apiErr) {
+						console.error('Fallback insert /api/jurnal juga gagal:', apiErr);
+						throw lastInsertError || apiErr;
+					}
+				}
 			}
 
 			// Bersihkan draft jika mode tambah baru berhasil
@@ -712,7 +849,19 @@ export default function JurnalPage() {
 			setIsModalOpen(false);
 			refreshJurnal();
 		} catch (err) {
-			Swal.fire('Error', 'Gagal menyimpan data jurnal.', 'error');
+			console.error('Error simpan jurnal:', err);
+			const isNetworkErr =
+				err?.name === 'TypeError' &&
+				String(err?.message || '').toLowerCase().includes('fetch');
+
+			Swal.fire({
+				icon: 'error',
+				title: 'Gagal Menyimpan Jurnal',
+				text: isNetworkErr
+					? 'Koneksi ke server database (Supabase) terputus atau timeout. Pastikan koneksi internet stabil lalu coba tekan "Simpan Jurnal" kembali.'
+					: err?.message || 'Gagal menyimpan data jurnal.',
+				confirmButtonColor: '#E8451A',
+			});
 		} finally {
 			setSaving(false);
 		}
