@@ -53,6 +53,7 @@ export default function AbsensiMapelPage() {
 	// Surat Izin Pos Keamanan
 	const [suratKeamananHariIni, setSuratKeamananHariIni] = useState([]);
 	const [loadingSuratKeamanan, setLoadingSuratKeamanan] = useState(false);
+	const [previousAbsensiBeforeSurat, setPreviousAbsensiBeforeSurat] = useState(null);
 
 	// MODE: 'input' (Form Input), 'edit' (Form Edit), 'rekap' (Tampilan Tabel Hasil)
 	const [mode, setMode] = useState('input');
@@ -168,6 +169,14 @@ export default function AbsensiMapelPage() {
 		if (!jamKe || !jamKe.trim() || sesiHariIni.length === 0) return null;
 		return findConflictingSession(sesiHariIni, jamKe, existingId);
 	}, [jamKe, sesiHariIni, existingId]);
+
+	// Cek apakah ada santri di kelas ini yang status/keterangannya sedang diterapkan dari surat izin satpam
+	const isAnyLetterApplied = useMemo(() => {
+		return siswaKelasIni.some((s) => {
+			const ket = absensi[s.id]?.keterangan || '';
+			return ket.startsWith('[Surat Satpam:');
+		});
+	}, [siswaKelasIni, absensi]);
 
 	// 2. Fetch Riwayat Seluruh Sesi pada Tanggal Terpilih (Sesi Hari Ini)
 	const fetchSesiHariIni = useCallback(async () => {
@@ -350,6 +359,7 @@ export default function AbsensiMapelPage() {
 		setJamKe('');
 		setExistingId(null);
 		setMode('input');
+		setPreviousAbsensiBeforeSurat(null);
 		const init = {};
 		siswaKelasIni.forEach((s) => {
 			const matchingLetter = suratKeamananHariIni.find(
@@ -368,11 +378,12 @@ export default function AbsensiMapelPage() {
 		setAbsensi(init);
 	};
 
-	// Handler terapkan surat keamanan secara manual ke form
+	// Handler terapkan seluruh surat keamanan yang cocok ke form
 	const handleTerapkanSuratKeamanan = () => {
 		if (suratKeamananHariIni.length === 0) return;
 		let appliedCount = 0;
 		setAbsensi((prev) => {
+			setPreviousAbsensiBeforeSurat(JSON.parse(JSON.stringify(prev)));
 			const updated = { ...prev };
 			siswaKelasIni.forEach((s) => {
 				const matchingLetter = suratKeamananHariIni.find(
@@ -387,6 +398,10 @@ export default function AbsensiMapelPage() {
 					appliedCount++;
 				}
 			});
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
 			return updated;
 		});
 
@@ -396,6 +411,108 @@ export default function AbsensiMapelPage() {
 			text: `${appliedCount || suratKeamananHariIni.length} siswa disesuaikan dengan surat izin pos keamanan.`,
 			timer: 1500,
 			showConfirmButton: false,
+		});
+	};
+
+	// Handler batalkan penerapan surat keamanan secara global (kembalikan ke Hadir / semula)
+	const handleBatalTerapkanSuratKeamanan = () => {
+		if (suratKeamananHariIni.length === 0) return;
+		let revertedCount = 0;
+		setAbsensi((prev) => {
+			const updated = { ...prev };
+			siswaKelasIni.forEach((s) => {
+				const hasSurat = suratKeamananHariIni.some(
+					(surat) => String(surat.siswa_id).trim() === String(s.id).trim()
+				);
+				const currentKet = updated[s.id]?.keterangan || '';
+				const isAppliedFromSurat = currentKet.startsWith('[Surat Satpam:') || hasSurat;
+
+				if (isAppliedFromSurat) {
+					const prevData = previousAbsensiBeforeSurat?.[s.id];
+					const fallbackStatus =
+						prevData?.status && !prevData?.keterangan?.startsWith('[Surat Satpam:')
+							? prevData.status
+							: statusList[0]?.label || 'Hadir';
+					const fallbackKet =
+						prevData?.keterangan && !prevData?.keterangan?.startsWith('[Surat Satpam:')
+							? prevData.keterangan
+							: '';
+
+					updated[s.id] = {
+						status: fallbackStatus,
+						keterangan: fallbackKet,
+					};
+					revertedCount++;
+				}
+			});
+
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
+			return updated;
+		});
+
+		Swal.fire({
+			icon: 'info',
+			title: 'Penerapan Dibatalkan',
+			text: `${revertedCount} siswa dikembalikan ke status Hadir & catatan surat dibersihkan.`,
+			timer: 1500,
+			showConfirmButton: false,
+		});
+	};
+
+	// Handler terapkan surat keamanan untuk 1 siswa spesifik
+	const handleTerapkanSiswaTunggal = (siswaId, surat) => {
+		if (!surat) return;
+		const targetStatus = getLetterTargetStatus(surat);
+		setAbsensi((prev) => {
+			if (!previousAbsensiBeforeSurat?.[siswaId]) {
+				setPreviousAbsensiBeforeSurat((old) => ({
+					...(old || {}),
+					[siswaId]: prev[siswaId] || { status: statusList[0]?.label || 'Hadir', keterangan: '' },
+				}));
+			}
+			const updated = {
+				...prev,
+				[siswaId]: {
+					status: targetStatus,
+					keterangan: `[Surat Satpam: ${surat.nomor_surat}] ${surat.alasan}`,
+				},
+			};
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
+			return updated;
+		});
+	};
+
+	// Handler batalkan surat keamanan untuk 1 siswa spesifik
+	const handleBatalSiswaTunggal = (siswaId) => {
+		setAbsensi((prev) => {
+			const prevData = previousAbsensiBeforeSurat?.[siswaId];
+			const fallbackStatus =
+				prevData?.status && !prevData?.keterangan?.startsWith('[Surat Satpam:')
+					? prevData.status
+					: statusList[0]?.label || 'Hadir';
+			const fallbackKet =
+				prevData?.keterangan && !prevData?.keterangan?.startsWith('[Surat Satpam:')
+					? prevData.keterangan
+					: '';
+
+			const updated = {
+				...prev,
+				[siswaId]: {
+					status: fallbackStatus,
+					keterangan: fallbackKet,
+				},
+			};
+			if (selectedKelas && selectedMapel && tanggal && jamKe) {
+				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${jamKe}`;
+				localStorage.setItem(draftKey, JSON.stringify(updated));
+			}
+			return updated;
 		});
 	};
 
@@ -996,12 +1113,24 @@ export default function AbsensiMapelPage() {
 									</div>
 								</div>
 								{mode !== 'rekap' && userRole !== 'Kepala Sekolah' && (
-									<button
-										type='button'
-										onClick={handleTerapkanSuratKeamanan}
-										className='px-2.5 py-1 bg-[#00A693] hover:bg-emerald-600 text-white rounded-lg border border-[#0D0D0D] text-[11px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all shrink-0 flex items-center gap-1 cursor-pointer'>
-										<span>⚡ Terapkan Otomatis ke Form</span>
-									</button>
+									<div className='flex items-center gap-1.5 flex-wrap shrink-0'>
+										<button
+											type='button'
+											onClick={handleTerapkanSuratKeamanan}
+											className='px-2.5 py-1 bg-[#00A693] hover:bg-emerald-600 text-white rounded-lg border border-[#0D0D0D] text-[11px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all shrink-0 flex items-center gap-1 cursor-pointer'
+											title='Terapkan seluruh surat izin pos keamanan ke form absensi'>
+											<span>⚡ Terapkan ke Form</span>
+										</button>
+										{isAnyLetterApplied && (
+											<button
+												type='button'
+												onClick={handleBatalTerapkanSuratKeamanan}
+												className='px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-900 rounded-lg border border-[#0D0D0D] text-[11px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all shrink-0 flex items-center gap-1 cursor-pointer'
+												title='Batalkan penerapan seluruh surat izin satpam dan kembalikan ke Hadir'>
+												<span>↩️ Batal Terapkan</span>
+											</button>
+										)}
+									</div>
 								)}
 							</div>
 
@@ -1395,19 +1524,51 @@ export default function AbsensiMapelPage() {
 
 											{/* Indikator Surat Satpam Aktif di Kartu Siswa */}
 											{siswaLetter && (
-												<div className='flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-100 border-2 border-orange-500 text-orange-950 text-xs font-bold shadow-[2px_2px_0px_0px_#0D0D0D]'>
-													<div className='flex items-center gap-1.5 overflow-hidden'>
-														<span className='text-sm shrink-0'>👮‍♂️</span>
-														<div className='overflow-hidden'>
-															<span className='font-black uppercase text-[10px] text-orange-900 block'>
-																Surat Satpam ({siswaLetter.tipe_surat === 'terlambat' ? 'Terlambat' : siswaLetter.tipe_surat === 'izin_keluar' ? 'Izin Keluar' : siswaLetter.tipe_surat === 'pulang_cepat' ? 'Pulang Cepat' : siswaLetter.tipe_surat === 'izin_uks' ? 'Di UKS' : 'Titip Izin'}):
+												<div className='flex flex-col gap-1.5 px-2.5 py-2 rounded-xl bg-orange-100 border-2 border-orange-500 text-orange-950 text-xs font-bold shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													<div className='flex items-center justify-between gap-1.5 overflow-hidden'>
+														<div className='flex items-center gap-1.5 overflow-hidden min-w-0'>
+															<span className='text-sm shrink-0'>👮‍♂️</span>
+															<span className='font-black uppercase text-[10px] text-orange-900 truncate'>
+																Surat Satpam ({siswaLetter.tipe_surat === 'terlambat' ? 'Terlambat' : siswaLetter.tipe_surat === 'izin_keluar' ? 'Izin Keluar' : siswaLetter.tipe_surat === 'pulang_cepat' ? 'Pulang Cepat' : siswaLetter.tipe_surat === 'izin_uks' ? 'Di UKS' : 'Titip Izin'})
 															</span>
-															<span className='line-clamp-1 text-[11px]'>{siswaLetter.alasan}</span>
 														</div>
+														<span className='px-1.5 py-0.5 rounded bg-white text-black text-[10px] font-mono font-bold border border-orange-300 shrink-0'>
+															{siswaLetter.berlaku_seharian ? (siswaLetter.tanggal_selesai && siswaLetter.tanggal_selesai !== siswaLetter.tanggal ? `🗓️ s/d ${siswaLetter.tanggal_selesai}` : 'Seharian') : `Jam ${siswaLetter.jam_ke_mulai || '1'}-${siswaLetter.jam_ke_selesai || '1'}`}
+														</span>
 													</div>
-													<span className='px-1.5 py-0.5 rounded bg-white text-black text-[10px] font-mono font-bold border border-orange-300 shrink-0'>
-														{siswaLetter.berlaku_seharian ? (siswaLetter.tanggal_selesai && siswaLetter.tanggal_selesai !== siswaLetter.tanggal ? `🗓️ s/d ${siswaLetter.tanggal_selesai}` : 'Seharian') : `Jam ${siswaLetter.jam_ke_mulai || '1'}-${siswaLetter.jam_ke_selesai || '1'}`}
-													</span>
+													<p className='text-[11px] font-medium italic text-orange-950 pl-5 line-clamp-2'>
+														&ldquo;{siswaLetter.alasan}&rdquo;
+													</p>
+													{mode !== 'rekap' && userRole !== 'Kepala Sekolah' && (
+														<div className='flex items-center justify-between pt-1 border-t border-orange-300/70 text-[10px]'>
+															<span className='text-orange-900 font-semibold'>
+																{(absensi[siswa.id]?.keterangan || '').startsWith('[Surat Satpam:') ? (
+																	<span className='text-emerald-800 font-bold flex items-center gap-1'>
+																		<span>✓</span> Diterapkan di Form
+																	</span>
+																) : (
+																	<span className='text-gray-600 italic'>Belum diterapkan</span>
+																)}
+															</span>
+															{(absensi[siswa.id]?.keterangan || '').startsWith('[Surat Satpam:') ? (
+																<button
+																	type='button'
+																	onClick={() => handleBatalSiswaTunggal(siswa.id)}
+																	className='px-2 py-0.5 bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-900 border border-black rounded text-[10px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all cursor-pointer flex items-center gap-1'
+																	title='Batalkan penerapan izin satpam untuk siswa ini'>
+																	<span>↩️ Batal</span>
+																</button>
+															) : (
+																<button
+																	type='button'
+																	onClick={() => handleTerapkanSiswaTunggal(siswa.id, siswaLetter)}
+																	className='px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-black rounded text-[10px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D] transition-all cursor-pointer flex items-center gap-1'
+																	title='Terapkan izin satpam khusus siswa ini'>
+																	<span>⚡ Terapkan</span>
+																</button>
+															)}
+														</div>
+													)}
 												</div>
 											)}
 

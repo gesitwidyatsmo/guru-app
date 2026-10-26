@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { useLogout } from '@/hooks/useLogout';
@@ -9,7 +9,24 @@ import Link from 'next/link';
 
 export default function KeamananDashboard() {
 	const { handleLogout } = useLogout();
-	const [userProfile, setUserProfile] = useState({ nama: 'Petugas Keamanan', role: 'Keamanan' });
+
+	// Baca role & nama dari cookie/storage secara sinkron agar zero-flicker (langsung Putra/Putri tanpa sempat flash Umum)
+	const [userProfile, setUserProfile] = useState(() => {
+		if (typeof window !== 'undefined') {
+			const matchRole = document.cookie.match(/(?:^|;\s*)user_role=([^;]*)/);
+			const cookieRole = matchRole ? decodeURIComponent(matchRole[1]) : (localStorage.getItem('user_role') || '');
+			const matchName = document.cookie.match(/(?:^|;\s*)user_name=([^;]*)/);
+			const cookieName = matchName ? decodeURIComponent(matchName[1]) : (localStorage.getItem('user_name') || '');
+			if (cookieRole) {
+				return {
+					nama: cookieName || 'Petugas Keamanan',
+					role: cookieRole,
+				};
+			}
+		}
+		return { nama: 'Petugas Keamanan', role: '' };
+	});
+
 	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [suratList, setSuratList] = useState([]);
 	const [tableReady, setTableReady] = useState(true);
@@ -17,7 +34,15 @@ export default function KeamananDashboard() {
 	const [loading, setLoading] = useState(true);
 
 	// Filter Gender (untuk Admin / Kepsek / Keamanan Umum)
-	const [selectedGenderFilter, setSelectedGenderFilter] = useState('all'); // 'all' | 'Laki-laki' | 'Perempuan'
+	const [selectedGenderFilter, setSelectedGenderFilter] = useState(() => {
+		if (typeof window !== 'undefined') {
+			const matchRole = document.cookie.match(/(?:^|;\s*)user_role=([^;]*)/);
+			const cookieRole = matchRole ? decodeURIComponent(matchRole[1]) : localStorage.getItem('user_role');
+			if (cookieRole === 'Keamanan Putra') return 'Laki-laki';
+			if (cookieRole === 'Keamanan Putri') return 'Perempuan';
+		}
+		return 'all';
+	});
 
 	// Master Siswa & Kelas untuk Autocomplete
 	const [kelasList, setKelasList] = useState([]);
@@ -29,8 +54,11 @@ export default function KeamananDashboard() {
 	// State Modal Tambah Surat
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
+	const [modalKelas, setModalKelas] = useState('');
 	const [modalSearchSiswa, setModalSearchSiswa] = useState('');
 	const [selectedSiswaObj, setSelectedSiswaObj] = useState(null);
+	const [isComboboxOpen, setIsComboboxOpen] = useState(false);
+	const comboboxRef = useRef(null);
 
 	const [formData, setFormData] = useState({
 		tipe_surat: 'terlambat', // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'izin_uks' | 'tidak_masuk'
@@ -162,12 +190,32 @@ export default function KeamananDashboard() {
 		fetchSuratList();
 	}, [fetchSuratList]);
 
-	// Filter Siswa untuk Modal (Otomatis Segregasi Gender)
-	const filteredSiswaModal = useMemo(() => {
-		if (!modalSearchSiswa.trim()) return [];
-		const q = modalSearchSiswa.toLowerCase().trim();
+	// Listener tutup combobox saat klik di luar
+	useEffect(() => {
+		const handleClickOutside = (e) => {
+			if (comboboxRef.current && !comboboxRef.current.contains(e.target)) {
+				setIsComboboxOpen(false);
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
-		let pool = siswaList;
+	// Master daftar kelas yang tersedia untuk form modal (terurut rapi)
+	const availableKelasList = useMemo(() => {
+		const setFromKelas = new Set(
+			kelasList.map((k) => k.kelas || k.nama_kelas).filter(Boolean)
+		);
+		siswaList.forEach((s) => {
+			if (s.kelas) setFromKelas.add(s.kelas);
+		});
+		return Array.from(setFromKelas).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+	}, [kelasList, siswaList]);
+
+	// Daftar siswa di kelas terpilih (dengan segregasi gender Putra/Putri)
+	const siswaDiKelasTerpilih = useMemo(() => {
+		if (!modalKelas) return [];
+		let pool = siswaList.filter((s) => String(s.kelas).trim() === String(modalKelas).trim());
 		if (isPutra) {
 			pool = pool.filter((s) => s.jenis_kelamin === 'Laki-laki');
 		} else if (isPutri) {
@@ -175,16 +223,20 @@ export default function KeamananDashboard() {
 		} else if (selectedGenderFilter && selectedGenderFilter !== 'all') {
 			pool = pool.filter((s) => s.jenis_kelamin === selectedGenderFilter);
 		}
+		return pool.sort((a, b) => (a.nama_lengkap || '').localeCompare(b.nama_lengkap || ''));
+	}, [siswaList, modalKelas, isPutra, isPutri, selectedGenderFilter]);
 
-		return pool
-			.filter(
-				(s) =>
-					(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
-					(s.nis && String(s.nis).includes(q)) ||
-					(s.kelas && s.kelas.toLowerCase().includes(q))
-			)
-			.slice(0, 8);
-	}, [siswaList, modalSearchSiswa, isPutra, isPutri, selectedGenderFilter]);
+	// Filter pencarian combobox siswa di dalam kelas terpilih
+	const filteredSiswaCombobox = useMemo(() => {
+		if (!modalKelas) return [];
+		if (!modalSearchSiswa.trim()) return siswaDiKelasTerpilih;
+		const q = modalSearchSiswa.toLowerCase().trim();
+		return siswaDiKelasTerpilih.filter(
+			(s) =>
+				(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
+				(s.nis && String(s.nis).toLowerCase().includes(q))
+		);
+	}, [modalKelas, modalSearchSiswa, siswaDiKelasTerpilih]);
 
 	// Statistik Ringkas
 	const stats = useMemo(() => {
@@ -229,6 +281,8 @@ export default function KeamananDashboard() {
 	const handleOpenModal = (tipe = 'terlambat') => {
 		setSelectedSiswaObj(null);
 		setModalSearchSiswa('');
+		setModalKelas('');
+		setIsComboboxOpen(false);
 
 		let defaultAbsensi = 'Izin';
 		let startJam = '1';
@@ -280,14 +334,20 @@ export default function KeamananDashboard() {
 		}
 
 		setSelectedSiswaObj(siswa);
-		setModalSearchSiswa(`${siswa.nama_lengkap} (${siswa.kelas}) - ${siswa.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'}`);
+		setModalSearchSiswa(siswa.nama_lengkap);
+		if (siswa.kelas) setModalKelas(siswa.kelas);
+		setIsComboboxOpen(false);
 	};
 
 	// Kirim Formulir Surat Baru
 	const handleSubmitSurat = async (e) => {
 		e.preventDefault();
+		if (!modalKelas) {
+			Swal.fire('Perhatian', 'Silakan pilih kelas santri terlebih dahulu.', 'warning');
+			return;
+		}
 		if (!selectedSiswaObj) {
-			Swal.fire('Perhatian', 'Silakan pilih siswa terlebih dahulu dari daftar pencarian.', 'warning');
+			Swal.fire('Perhatian', 'Silakan pilih santri terlebih dahulu dari daftar combobox siswa.', 'warning');
 			return;
 		}
 		if (!formData.alasan.trim()) {
@@ -490,7 +550,7 @@ export default function KeamananDashboard() {
 		: isPutri
 		? 'Pos Keamanan Santriwati Putri'
 		: 'Pos Keamanan & Surat Izin Digital';
-	const topBadgeText = isPutra ? 'Bani (Putra)' : isPutri ? 'Banat (Putri)' : 'Gerbang Digital';
+	const topBadgeText = isPutra ? 'Santri Putra' : isPutri ? 'Santri Putri' : 'Gerbang Terpadu';
 	const topBadgeBg = isPutra ? 'bg-sky-700 text-white' : isPutri ? 'bg-pink-700 text-white' : 'bg-[#00A693] text-white';
 
 	return (
@@ -936,66 +996,170 @@ export default function KeamananDashboard() {
 						</div>
 
 						<form onSubmit={handleSubmitSurat} className='space-y-4'>
-							{/* 1. Pilih Siswa dengan Autocomplete Cepat */}
-							<div className='space-y-1.5 relative'>
+							{/* 1. Pilih Kelas Terlebih Dahulu */}
+							<div className='space-y-1.5'>
 								<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
-									Pilih Siswa <span className='text-rose-600'>*</span>{' '}
-									<span className='font-normal text-[10px] text-gray-500'>
-										{isPutra ? '(Khusus Santri Putra)' : isPutri ? '(Khusus Santriwati Putri)' : ''}
-									</span>
+									Pilih Kelas Santri <span className='text-rose-600'>*</span>
 								</label>
-								<input
-									type='text'
-									placeholder={isPutra ? 'Ketik Nama Santri Putra atau NIS...' : isPutri ? 'Ketik Nama Santriwati Putri atau NIS...' : 'Ketik Nama Siswa atau NIS...'}
-									value={modalSearchSiswa}
+								<select
+									value={modalKelas}
 									onChange={(e) => {
-										setModalSearchSiswa(e.target.value);
+										const val = e.target.value;
+										setModalKelas(val);
 										setSelectedSiswaObj(null);
+										setModalSearchSiswa('');
+										setIsComboboxOpen(false);
 									}}
-									className='neo-input text-sm font-bold bg-[#FFF5F0]'
-								/>
+									className='neo-input text-sm font-bold bg-[#FFF5F0] w-full cursor-pointer'>
+									<option value=''>-- Pilih Kelas Santri --</option>
+									{availableKelasList.map((k) => (
+										<option key={k} value={k}>
+											Kelas {k}
+										</option>
+									))}
+								</select>
+							</div>
 
-								{/* Autocomplete Dropdown List */}
-								{!selectedSiswaObj && filteredSiswaModal.length > 0 && (
-									<div className='absolute left-0 right-0 top-full mt-1 bg-white border-3 border-[#0D0D0D] rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] z-30 max-h-48 overflow-y-auto divide-y-2 divide-gray-100'>
-										{filteredSiswaModal.map((s) => (
-											<button
-												key={s.id}
-												type='button'
-												onClick={() => handleSelectSiswa(s)}
-												className='w-full text-left px-3.5 py-2.5 hover:bg-yellow-100 flex items-center justify-between text-xs font-bold transition-colors'>
-												<div>
-													<p className='text-[#0D0D0D] font-black flex items-center gap-1.5'>
-														<span>{s.nama_lengkap}</span>
-														<span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
-															s.jenis_kelamin === 'Laki-laki' ? 'bg-sky-200 text-sky-900' : 'bg-pink-200 text-pink-900'
-														}`}>
-															{s.jenis_kelamin === 'Laki-laki' ? '👦 L' : '👧 P'}
-														</span>
-													</p>
-													<p className='text-[10px] text-gray-500 font-mono'>NIS: {s.nis || '-'}</p>
-												</div>
-												<span className='px-2 py-0.5 rounded bg-black text-white text-[10px] font-bold'>
-													Kelas {s.kelas}
-												</span>
-											</button>
-										))}
+							{/* 2. Pilih Santri di Kelas Tersebut (Combobox) */}
+							<div className='space-y-1.5 relative' ref={comboboxRef}>
+								<div className='flex items-center justify-between'>
+									<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
+										Pilih Santri <span className='text-rose-600'>*</span>{' '}
+										<span className='font-normal text-[10px] text-gray-500'>
+											{isPutra ? '(Khusus Santri Putra)' : isPutri ? '(Khusus Santriwati Putri)' : ''}
+										</span>
+									</label>
+									{modalKelas && (
+										<span className='text-[10px] font-bold text-gray-500'>
+											{siswaDiKelasTerpilih.length} santri terdata di kelas {modalKelas}
+										</span>
+									)}
+								</div>
+
+								{!modalKelas ? (
+									<div className='neo-input text-sm font-medium bg-gray-100 text-gray-400 cursor-not-allowed flex items-center justify-between'>
+										<span>Pilih kelas santri terlebih dahulu di atas...</span>
+										<span className='text-xs'>🔒</span>
+									</div>
+								) : (
+									<div className='relative'>
+										<div className='relative flex items-center'>
+											<input
+												type='text'
+												placeholder={
+													isPutra
+														? `Ketik nama santri putra kelas ${modalKelas}...`
+														: isPutri
+														? `Ketik nama santriwati putri kelas ${modalKelas}...`
+														: `Ketik nama santri kelas ${modalKelas}...`
+												}
+												value={modalSearchSiswa}
+												onFocus={() => setIsComboboxOpen(true)}
+												onChange={(e) => {
+													setModalSearchSiswa(e.target.value);
+													setIsComboboxOpen(true);
+													if (selectedSiswaObj && e.target.value !== selectedSiswaObj.nama_lengkap) {
+														setSelectedSiswaObj(null);
+													}
+												}}
+												className='neo-input text-sm font-bold bg-[#FFF5F0] w-full pr-16'
+											/>
+											<div className='absolute right-2 flex items-center gap-1'>
+												{modalSearchSiswa && (
+													<button
+														type='button'
+														onClick={() => {
+															setModalSearchSiswa('');
+															setSelectedSiswaObj(null);
+															setIsComboboxOpen(true);
+														}}
+														className='text-gray-400 hover:text-black font-black text-xs px-1.5 py-0.5 rounded cursor-pointer'>
+														✕
+													</button>
+												)}
+												<button
+													type='button'
+													onClick={() => setIsComboboxOpen((prev) => !prev)}
+													className='text-[#0D0D0D] p-1 rounded hover:bg-gray-200 transition-colors cursor-pointer'
+													title='Buka/Tutup daftar santri'>
+													<svg
+														className={`w-4 h-4 transition-transform ${isComboboxOpen ? 'rotate-180' : ''}`}
+														fill='none'
+														stroke='currentColor'
+														viewBox='0 0 24 24'>
+														<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2.5} d='M19 9l-7 7-7-7' />
+													</svg>
+												</button>
+											</div>
+										</div>
+
+										{/* Combobox Dropdown List */}
+										{isComboboxOpen && (
+											<div className='absolute left-0 right-0 top-full mt-1.5 bg-white border-3 border-[#0D0D0D] rounded-xl shadow-[4px_4px_0px_0px_#0D0D0D] z-30 max-h-52 overflow-y-auto divide-y-2 divide-gray-100'>
+												{filteredSiswaCombobox.length === 0 ? (
+													<div className='p-3 text-center text-xs font-bold text-gray-500'>
+														Tidak ada santri yang cocok dengan &ldquo;{modalSearchSiswa}&rdquo; di kelas {modalKelas}
+													</div>
+												) : (
+													filteredSiswaCombobox.map((s) => {
+														const isSelected = selectedSiswaObj?.id === s.id;
+														return (
+															<button
+																key={s.id}
+																type='button'
+																onClick={() => {
+																	handleSelectSiswa(s);
+																	setIsComboboxOpen(false);
+																}}
+																className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer ${
+																	isSelected ? 'bg-emerald-100 text-emerald-950 font-black' : 'hover:bg-amber-100'
+																}`}>
+																<div>
+																	<p className='text-[#0D0D0D] font-black flex items-center gap-1.5'>
+																		<span>{s.nama_lengkap}</span>
+																		<span
+																			className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
+																				s.jenis_kelamin === 'Laki-laki'
+																					? 'bg-sky-200 text-sky-900'
+																					: 'bg-pink-200 text-pink-900'
+																			}`}>
+																			{s.jenis_kelamin === 'Laki-laki' ? '👦 L' : '👧 P'}
+																		</span>
+																	</p>
+																	<p className='text-[10px] text-gray-500 font-mono'>NIS: {s.nis || '-'}</p>
+																</div>
+																<div className='flex items-center gap-2'>
+																	<span className='px-2 py-0.5 rounded bg-black text-white text-[10px] font-bold'>
+																		Kelas {s.kelas}
+																	</span>
+																	{isSelected && <span className='text-emerald-700 font-black'>✓</span>}
+																</div>
+															</button>
+														);
+													})
+												)}
+											</div>
+										)}
 									</div>
 								)}
 
 								{selectedSiswaObj && (
-									<div className='flex items-center justify-between bg-emerald-100 border-2 border-[#0D0D0D] p-2.5 rounded-xl text-xs font-bold text-emerald-950'>
-										<span>
-											✓ Siswa Terpilih: <b>{selectedSiswaObj.nama_lengkap}</b> &bull; Kelas{' '}
-											<b>{selectedSiswaObj.kelas}</b> ({selectedSiswaObj.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'})
+									<div className='flex items-center justify-between bg-emerald-100 border-2 border-[#0D0D0D] p-2.5 rounded-xl text-xs font-bold text-emerald-950 mt-1 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<span className='flex items-center gap-1.5'>
+											<span className='text-base'>✓</span>
+											<span>
+												Santri Terpilih: <b>{selectedSiswaObj.nama_lengkap}</b> &bull; Kelas{' '}
+												<b>{selectedSiswaObj.kelas}</b> ({selectedSiswaObj.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'})
+											</span>
 										</span>
 										<button
 											type='button'
 											onClick={() => {
 												setSelectedSiswaObj(null);
 												setModalSearchSiswa('');
+												setIsComboboxOpen(true);
 											}}
-											className='text-xs text-rose-600 hover:underline font-black'>
+											className='text-xs text-rose-700 hover:text-rose-900 hover:underline font-black px-2 py-0.5 rounded border border-rose-400 bg-white shadow-[1px_1px_0px_0px_#0D0D0D] cursor-pointer'>
 											Ganti
 										</button>
 									</div>
