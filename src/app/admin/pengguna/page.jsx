@@ -134,6 +134,8 @@ export default function PenggunaPage() {
 					? true
 					: roleFilter === 'Wali Kelas'
 					? isWali
+					: roleFilter === 'Keamanan'
+					? (u.role === 'Keamanan' || u.role === 'Keamanan Putra' || u.role === 'Keamanan Putri')
 					: u.role === roleFilter;
 
 			const q = searchQuery.toLowerCase().trim();
@@ -156,6 +158,8 @@ export default function PenggunaPage() {
 	const bendaharaCount = useMemo(() => users.filter((u) => u.role === 'Bendahara').length, [users]);
 	const kesiswaanCount = useMemo(() => users.filter((u) => u.role === 'Kesiswaan').length, [users]);
 	const keamananCount = useMemo(() => users.filter((u) => u.role === 'Keamanan').length, [users]);
+	const keamananPutraCount = useMemo(() => users.filter((u) => u.role === 'Keamanan Putra').length, [users]);
+	const keamananPutriCount = useMemo(() => users.filter((u) => u.role === 'Keamanan Putri').length, [users]);
 	const adminCount = useMemo(() => users.filter((u) => u.role === 'Admin').length, [users]);
 
 	const openCreateModal = () => {
@@ -819,7 +823,8 @@ export default function PenggunaPage() {
 				<div className='bg-orange-50 border-2 border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] flex items-center justify-between'>
 					<div>
 						<p className='text-xs font-black uppercase text-orange-800'>Keamanan</p>
-						<p className='text-2xl font-black text-orange-950 mt-0.5'>{keamananCount}</p>
+						<p className='text-2xl font-black text-orange-950 mt-0.5'>{keamananPutraCount + keamananPutriCount + keamananCount}</p>
+						<p className='text-[10px] font-bold text-orange-800 mt-0.5'>{keamananPutraCount} Putra • {keamananPutriCount} Putri{keamananCount > 0 ? ` • ${keamananCount} Umum` : ''}</p>
 					</div>
 					<span className='w-10 h-10 bg-orange-300 border-2 border-black rounded-xl flex items-center justify-center font-black shadow-[2px_2px_0px_0px_#0D0D0D]'>
 						👮‍♂️
@@ -912,7 +917,10 @@ export default function PenggunaPage() {
 									const isBendahara = u.role === 'Bendahara';
 									const isKesiswaan = u.role === 'Kesiswaan';
 									const isKurikulum = u.role === 'Kurikulum';
-									const isKeamanan = u.role === 'Keamanan';
+									const isKeamananPutra = u.role === 'Keamanan Putra';
+									const isKeamananPutri = u.role === 'Keamanan Putri';
+									const isKeamananUmum = u.role === 'Keamanan';
+									const isKeamanan = isKeamananPutra || isKeamananPutri || isKeamananUmum;
 									const waliClasses = getWaliKelas(u);
 									const isWali = waliClasses.length > 0;
 									return (
@@ -922,7 +930,25 @@ export default function PenggunaPage() {
 											{/* Name & Avatar */}
 											<td className='px-6 py-4'>
 												<div className='flex items-center gap-3'>
-													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${isAdmin ? 'bg-rose-400 text-white' : isKepsek ? 'bg-indigo-300 text-black' : isKurikulum ? 'bg-amber-300 text-black' : isBendahara ? 'bg-teal-300 text-black' : isKesiswaan ? 'bg-violet-300 text-black' : isKeamanan ? 'bg-orange-300 text-black' : 'bg-emerald-300 text-black'}`}>
+													<div className={`w-10 h-10 rounded-xl border-2 border-black flex items-center justify-center font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] ${
+														isAdmin
+															? 'bg-rose-400 text-white'
+															: isKepsek
+															? 'bg-indigo-300 text-black'
+															: isKurikulum
+															? 'bg-amber-300 text-black'
+															: isBendahara
+															? 'bg-teal-300 text-black'
+															: isKesiswaan
+															? 'bg-violet-300 text-black'
+															: isKeamananPutra
+															? 'bg-sky-300 text-sky-950'
+															: isKeamananPutri
+															? 'bg-pink-300 text-pink-950'
+															: isKeamananUmum
+															? 'bg-orange-300 text-black'
+															: 'bg-emerald-300 text-black'
+													}`}>
 														{initial}
 													</div>
 													<div>
@@ -951,7 +977,11 @@ export default function PenggunaPage() {
 																	? 'Pengelola Keuangan & Bisaroh Guru'
 																	: isKesiswaan
 																	? 'Ketertiban, Poin, & Prestasi Siswa'
-																	: isKeamanan
+																	: isKeamananPutra
+																	? 'Pos Keamanan Santri Putra & Surat Izin Digital'
+																	: isKeamananPutri
+																	? 'Pos Keamanan Santriwati Putri & Surat Izin Digital'
+																	: isKeamananUmum
 																	? 'Petugas Pos Keamanan & Surat Izin Digital'
 																	: isWali
 																	? `Wali Kelas ${waliClasses.join(', ')} • Tenaga Pendidik`
@@ -976,13 +1006,17 @@ export default function PenggunaPage() {
 															? 'bg-teal-300 text-black'
 															: isKesiswaan
 															? 'bg-violet-300 text-black'
-															: isKeamanan
+															: isKeamananPutra
+															? 'bg-sky-300 text-sky-950'
+															: isKeamananPutri
+															? 'bg-pink-300 text-pink-950'
+															: isKeamananUmum
 															? 'bg-orange-300 text-black'
 															: isWali
 															? 'bg-emerald-300 text-black'
 															: 'bg-emerald-200 text-black'
 													}`}>
-													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isKurikulum ? '📐' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : isKeamanan ? '👮‍♂️' : isWali ? '🏫' : '👨‍🏫'}</span>
+													<span>{isAdmin ? '👑' : isKepsek ? '🎓' : isKurikulum ? '📐' : isBendahara ? '💼' : isKesiswaan ? '🛡️' : isKeamananPutra ? '👮‍♂️' : isKeamananPutri ? '🧕' : isKeamananUmum ? '👮‍♂️' : isWali ? '🏫' : '👨‍🏫'}</span>
 													<span>{isWali ? `Guru & Wali Kelas ${waliClasses.join(', ')}` : u.role}</span>
 												</span>
 											</td>
@@ -1133,7 +1167,9 @@ export default function PenggunaPage() {
 											<option value='Kurikulum'>📐 Kurikulum (Akademik & Jadwal)</option>
 											<option value='Kepala Sekolah'>🎓 Kepala Sekolah (Monitoring)</option>
 											<option value='Bendahara'>💼 Bendahara (Keuangan & Bisaroh)</option>
-											<option value='Keamanan'>👮‍♂️ Keamanan (Pos Gerbang & Surat Izin)</option>
+											<option value='Keamanan Putra'>👮‍♂️ Keamanan Putra (Pos Santri Putra)</option>
+											<option value='Keamanan Putri'>🧕 Keamanan Putri (Pos Santriwati Putri)</option>
+											<option value='Keamanan'>🚨 Keamanan Terpadu (Gerbang Utama)</option>
 											<option value='Admin'>👑 Admin (Super Master)</option>
 										</select>
 									</div>

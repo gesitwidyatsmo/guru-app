@@ -253,6 +253,7 @@ export default function AbsensiMapelPage() {
 
 	const getLetterTargetStatus = useCallback((letter) => {
 		if (!letter) return 'Hadir';
+		if (letter.tipe_surat === 'izin_uks') return 'Sakit';
 		if (letter.status_absensi) return letter.status_absensi;
 		if (letter.tipe_surat === 'pulang_cepat') {
 			return String(letter.alasan || '').toLowerCase().includes('sakit') ? 'Sakit' : 'Izin';
@@ -1021,12 +1022,12 @@ export default function AbsensiMapelPage() {
 											</div>
 											<p className='text-[11px] text-gray-700 font-bold'>
 												<span className='text-orange-900'>
-													{surat.tipe_surat === 'terlambat' ? '🕒 Terlambat' : surat.tipe_surat === 'izin_keluar' ? '🚪 Keluar' : surat.tipe_surat === 'pulang_cepat' ? '🏠 Pulang Cepat' : '📋 Titip Izin'}:
+													{surat.tipe_surat === 'terlambat' ? '🕒 Terlambat' : surat.tipe_surat === 'izin_keluar' ? '🚪 Keluar' : surat.tipe_surat === 'pulang_cepat' ? '🏠 Pulang Cepat' : surat.tipe_surat === 'izin_uks' ? '🏥 Di UKS' : '📋 Titip Izin'}:
 												</span>{' '}
 												<span className='font-normal italic'>{surat.alasan}</span>
 											</p>
 											<div className='flex items-center justify-between text-[10px] text-gray-500 font-mono pt-1 border-t border-gray-100'>
-												<span>{surat.berlaku_seharian ? 'Seharian' : `Jam ${surat.jam_ke_mulai || '1'}-${surat.jam_ke_selesai || '1'}`}</span>
+												<span>{surat.berlaku_seharian ? (surat.tanggal_selesai && surat.tanggal_selesai !== surat.tanggal ? `🗓️ s/d ${surat.tanggal_selesai}` : 'Seharian') : `Jam ${surat.jam_ke_mulai || '1'}-${surat.jam_ke_selesai || '1'}`}</span>
 												{isMatchingThisJam ? (
 													<span className='text-emerald-700 font-sans font-black'>✓ Cocok Jam Ini</span>
 												) : (
@@ -1399,13 +1400,13 @@ export default function AbsensiMapelPage() {
 														<span className='text-sm shrink-0'>👮‍♂️</span>
 														<div className='overflow-hidden'>
 															<span className='font-black uppercase text-[10px] text-orange-900 block'>
-																Surat Satpam ({siswaLetter.tipe_surat === 'terlambat' ? 'Terlambat' : siswaLetter.tipe_surat === 'izin_keluar' ? 'Izin Keluar' : siswaLetter.tipe_surat === 'pulang_cepat' ? 'Pulang Cepat' : 'Titip Izin'}):
+																Surat Satpam ({siswaLetter.tipe_surat === 'terlambat' ? 'Terlambat' : siswaLetter.tipe_surat === 'izin_keluar' ? 'Izin Keluar' : siswaLetter.tipe_surat === 'pulang_cepat' ? 'Pulang Cepat' : siswaLetter.tipe_surat === 'izin_uks' ? 'Di UKS' : 'Titip Izin'}):
 															</span>
 															<span className='line-clamp-1 text-[11px]'>{siswaLetter.alasan}</span>
 														</div>
 													</div>
 													<span className='px-1.5 py-0.5 rounded bg-white text-black text-[10px] font-mono font-bold border border-orange-300 shrink-0'>
-														{siswaLetter.berlaku_seharian ? 'Seharian' : `Jam ${siswaLetter.jam_ke_mulai || '1'}-${siswaLetter.jam_ke_selesai || '1'}`}
+														{siswaLetter.berlaku_seharian ? (siswaLetter.tanggal_selesai && siswaLetter.tanggal_selesai !== siswaLetter.tanggal ? `🗓️ s/d ${siswaLetter.tanggal_selesai}` : 'Seharian') : `Jam ${siswaLetter.jam_ke_mulai || '1'}-${siswaLetter.jam_ke_selesai || '1'}`}
 													</span>
 												</div>
 											)}

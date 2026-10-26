@@ -9,6 +9,7 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const kelas = searchParams.get('kelas');
 		const status = searchParams.get('status');
+		const genderParam = searchParams.get('gender') || searchParams.get('jenis_kelamin');
 		const role = req.headers.get('x-user-role');
 		const userId = req.headers.get('x-user-id');
 
@@ -26,8 +27,15 @@ export async function GET(req) {
 			allowedClasses = [...new Set([...kbmClasses, ...waliClasses])];
 		}
 
-		// Gunakan supabaseAdmin untuk Kesiswaan, Admin, Kepala Sekolah, Kurikulum, atau akses internal
-		const isPrivileged = role === 'Admin' || role === 'Kepala Sekolah' || role === 'Kesiswaan' || role === 'Kurikulum';
+		// Gunakan supabaseAdmin untuk Kesiswaan, Admin, Kepala Sekolah, Kurikulum, Keamanan, atau akses internal
+		const isPrivileged =
+			role === 'Admin' ||
+			role === 'Kepala Sekolah' ||
+			role === 'Kesiswaan' ||
+			role === 'Kurikulum' ||
+			role === 'Keamanan' ||
+			role === 'Keamanan Putra' ||
+			role === 'Keamanan Putri';
 		const supabaseClient = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
 		let query = supabaseClient.from('siswa').select('*').order('nama_lengkap', { ascending: true });
@@ -39,6 +47,15 @@ export async function GET(req) {
 		
 		if (kelas) query = query.eq('kelas', kelas);
 		if (status) query = query.eq('status', status);
+
+		// Filter gender otomatis berbasis role Keamanan atau parameter
+		if (role === 'Keamanan Putra') {
+			query = query.eq('jenis_kelamin', 'Laki-laki');
+		} else if (role === 'Keamanan Putri') {
+			query = query.eq('jenis_kelamin', 'Perempuan');
+		} else if (genderParam && genderParam !== 'all') {
+			query = query.eq('jenis_kelamin', genderParam);
+		}
 
 		const { data: siswaList, error } = await query;
 		if (error) throw error;

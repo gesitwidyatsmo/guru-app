@@ -114,6 +114,7 @@ export async function proxy(request) {
 
 	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard masing-masing
 	if (pathname === '/login' && payload) {
+		const isRoleKeamanan = payload.role === 'Keamanan' || payload.role === 'Keamanan Putra' || payload.role === 'Keamanan Putri';
 		const destination = payload.role === 'Kepala Sekolah'
 			? '/kepsek'
 			: payload.role === 'Bendahara'
@@ -122,7 +123,7 @@ export async function proxy(request) {
 			? '/kesiswaan'
 			: payload.role === 'Kurikulum'
 			? '/kurikulum'
-			: payload.role === 'Keamanan'
+			: isRoleKeamanan
 			? '/keamanan'
 			: payload.role === 'Admin'
 			? '/admin'
@@ -147,7 +148,7 @@ export async function proxy(request) {
 		finalResponse = NextResponse.redirect(new URL('/kurikulum', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
-	else if (pathname === '/' && payload?.role === 'Keamanan') {
+	else if (pathname === '/' && (payload?.role === 'Keamanan' || payload?.role === 'Keamanan Putra' || payload?.role === 'Keamanan Putri')) {
 		finalResponse = NextResponse.redirect(new URL('/keamanan', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
@@ -172,12 +173,20 @@ export async function proxy(request) {
 		finalResponse = NextResponse.redirect(new URL('/kurikulum', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
-	else if (pathname === '/admin' && payload?.role === 'Keamanan') {
+	else if (pathname === '/admin' && (payload?.role === 'Keamanan' || payload?.role === 'Keamanan Putra' || payload?.role === 'Keamanan Putri')) {
 		finalResponse = NextResponse.redirect(new URL('/keamanan', request.url));
 		attachUserCookies(finalResponse, payload);
 	}
-	// Area keamanan: bisa diakses oleh Keamanan, Admin, dan Kepala Sekolah (monitoring)
-	else if (pathname.startsWith('/keamanan') && payload?.role !== 'Keamanan' && payload?.role !== 'Admin' && payload?.role !== 'Kepala Sekolah') {
+	// Area keamanan: bisa diakses oleh Keamanan, Keamanan Putra, Keamanan Putri, Admin, Kepala Sekolah, dan Kesiswaan (monitoring)
+	else if (
+		pathname.startsWith('/keamanan') &&
+		payload?.role !== 'Keamanan' &&
+		payload?.role !== 'Keamanan Putra' &&
+		payload?.role !== 'Keamanan Putri' &&
+		payload?.role !== 'Admin' &&
+		payload?.role !== 'Kepala Sekolah' &&
+		payload?.role !== 'Kesiswaan'
+	) {
 		if (!payload) {
 			finalResponse = NextResponse.redirect(new URL('/login', request.url));
 		} else {

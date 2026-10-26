@@ -103,7 +103,7 @@ export default function Home() {
 					} else if (role === 'Kurikulum') {
 						router.replace('/kurikulum');
 						return;
-					} else if (role === 'Keamanan') {
+					} else if (role === 'Keamanan' || role === 'Keamanan Putra' || role === 'Keamanan Putri') {
 						router.replace('/keamanan');
 						return;
 					} else if (role === 'Admin') {

@@ -16,12 +16,15 @@ export default function KeamananDashboard() {
 	const [tableMessage, setTableMessage] = useState('');
 	const [loading, setLoading] = useState(true);
 
+	// Filter Gender (untuk Admin / Kepsek / Keamanan Umum)
+	const [selectedGenderFilter, setSelectedGenderFilter] = useState('all'); // 'all' | 'Laki-laki' | 'Perempuan'
+
 	// Master Siswa & Kelas untuk Autocomplete
 	const [kelasList, setKelasList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [selectedKelasFilter, setSelectedKelasFilter] = useState('Semua');
 	const [searchQuery, setSearchQuery] = useState('');
-	const [filterTab, setFilterTab] = useState('semua'); // 'semua' | 'aktif' | 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'tidak_masuk'
+	const [filterTab, setFilterTab] = useState('semua'); // 'semua' | 'aktif' | 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'izin_uks' | 'tidak_masuk'
 
 	// State Modal Tambah Surat
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -30,22 +33,61 @@ export default function KeamananDashboard() {
 	const [selectedSiswaObj, setSelectedSiswaObj] = useState(null);
 
 	const [formData, setFormData] = useState({
-		tipe_surat: 'terlambat', // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'tidak_masuk'
+		tipe_surat: 'terlambat', // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'izin_uks' | 'tidak_masuk'
 		status_absensi: 'Izin',
+		tanggal_mulai: '',
+		tanggal_selesai: '',
+		is_rentang_tanggal: false,
 		berlaku_seharian: false,
 		jam_ke_mulai: '1',
 		jam_ke_selesai: '1',
 		alasan: '',
 		penjemput: '',
+		relasi_penjemput: '',
+		no_telp_penjemput: '',
 		catatan: '',
 	});
 
-	// Quick chips saran alasan
+	// Deteksi Mode Role
+	const isPutra = userProfile.role === 'Keamanan Putra';
+	const isPutri = userProfile.role === 'Keamanan Putri';
+	const isSupervisor = userProfile.role === 'Admin' || userProfile.role === 'Kepala Sekolah' || userProfile.role === 'Keamanan';
+
+	// Quick chips saran alasan khas Pesantren & Asrama Santri
 	const quickReasons = {
-		terlambat: ['Ban motor bocor', 'Macet perjalanan', 'Bangun kesiangan', 'Keperluan keluarga pagi hari', 'Hujan lebat'],
-		izin_keluar: ['Mengambil buku/tugas tertinggal', 'Beli perlengkapan KBM / ATK', 'Urusan administrasi perbankan', 'Fotokopi modul pelajaran'],
-		pulang_cepat: ['Sakit demam / pusing di UKS', 'Sakit perut / lemas', 'Dijemput orang tua (ada acara keluarga)', 'Takziyah keluarga'],
-		tidak_masuk: ['Surat dokter / sakit rawat jalan', 'Izin urusan keluarga penting', 'Konfirmasi telepon orang tua'],
+		terlambat: [
+			'Antre MCK / Mandi asrama pagi',
+			'Menuntaskan setoran hafalan / diniyah pagi',
+			'Piket kebersihan kamar / ro\'an asrama',
+			'Panggilan ustadz / pembina asrama',
+			'Piket dapur / ambil sarapan pondok',
+			'Baru tiba dari izin kepulangan / luar pondok',
+		],
+		izin_keluar: [
+			'Beli kitab / alat tulis ke toko luar pondok',
+			'Urusan perbankan / tarik uang saku di ATM',
+			'Periksa kesehatan ke puskesmas / klinik luar',
+			'Fotokopi materi pelajaran / modul diniyah',
+		],
+		pulang_cepat: [
+			'Dijemput orang tua (kepentingan keluarga penting)',
+			'Rujukan sakit rawat inap / periksa dokter spesialis',
+			'Takziyah keluarga kandung',
+			'Izin acara keluarga besar (ada konfirmasi wali)',
+		],
+		izin_uks: [
+			'Demam / menggigil saat KBM',
+			'Sakit kepala / pusing berat',
+			'Sakit maag / perut melilit',
+			'Lemas & observasi Poskestren / UKS',
+			'Cedera olahraga / luka ringan',
+		],
+		tidak_masuk: [
+			'Istirahat di kamar asrama (rekomendasi Poskestren)',
+			'Izin kepulangan resmi pondok (ada surat pengasuh)',
+			'Rawat inap di rumah sakit',
+			'Konfirmasi izin dari orang tua / pengasuh',
+		],
 	};
 
 	// 1. Ambil Profil User
@@ -54,10 +96,16 @@ export default function KeamananDashboard() {
 			.then((res) => (res.ok ? res.json() : null))
 			.then((data) => {
 				if (data?.user) {
+					const role = data.user.role || 'Keamanan';
 					setUserProfile({
 						nama: data.user.nama_lengkap || 'Petugas Keamanan',
-						role: data.user.role || 'Keamanan',
+						role: role,
 					});
+					if (role === 'Keamanan Putra') {
+						setSelectedGenderFilter('Laki-laki');
+					} else if (role === 'Keamanan Putri') {
+						setSelectedGenderFilter('Perempuan');
+					}
 				}
 			})
 			.catch(() => {});
@@ -85,6 +133,15 @@ export default function KeamananDashboard() {
 				params.append('kelas', selectedKelasFilter);
 			}
 
+			// Gender filtering logic
+			if (isPutra) {
+				params.append('gender', 'Laki-laki');
+			} else if (isPutri) {
+				params.append('gender', 'Perempuan');
+			} else if (selectedGenderFilter && selectedGenderFilter !== 'all') {
+				params.append('gender', selectedGenderFilter);
+			}
+
 			const res = await fetch(`/api/keamanan/surat?${params.toString()}`);
 			if (res.ok) {
 				const json = await res.json();
@@ -99,17 +156,27 @@ export default function KeamananDashboard() {
 		} finally {
 			setLoading(false);
 		}
-	}, [tanggal, selectedKelasFilter]);
+	}, [tanggal, selectedKelasFilter, isPutra, isPutri, selectedGenderFilter]);
 
 	useEffect(() => {
 		fetchSuratList();
 	}, [fetchSuratList]);
 
-	// Filter Siswa untuk Modal
+	// Filter Siswa untuk Modal (Otomatis Segregasi Gender)
 	const filteredSiswaModal = useMemo(() => {
 		if (!modalSearchSiswa.trim()) return [];
 		const q = modalSearchSiswa.toLowerCase().trim();
-		return siswaList
+
+		let pool = siswaList;
+		if (isPutra) {
+			pool = pool.filter((s) => s.jenis_kelamin === 'Laki-laki');
+		} else if (isPutri) {
+			pool = pool.filter((s) => s.jenis_kelamin === 'Perempuan');
+		} else if (selectedGenderFilter && selectedGenderFilter !== 'all') {
+			pool = pool.filter((s) => s.jenis_kelamin === selectedGenderFilter);
+		}
+
+		return pool
 			.filter(
 				(s) =>
 					(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
@@ -117,7 +184,7 @@ export default function KeamananDashboard() {
 					(s.kelas && s.kelas.toLowerCase().includes(q))
 			)
 			.slice(0, 8);
-	}, [siswaList, modalSearchSiswa]);
+	}, [siswaList, modalSearchSiswa, isPutra, isPutri, selectedGenderFilter]);
 
 	// Statistik Ringkas
 	const stats = useMemo(() => {
@@ -126,8 +193,10 @@ export default function KeamananDashboard() {
 		const izinKeluar = suratList.filter((s) => s.tipe_surat === 'izin_keluar').length;
 		const izinKeluarBelumKembali = suratList.filter((s) => s.tipe_surat === 'izin_keluar' && s.status_surat === 'aktif').length;
 		const pulangCepat = suratList.filter((s) => s.tipe_surat === 'pulang_cepat').length;
+		const izinUks = suratList.filter((s) => s.tipe_surat === 'izin_uks').length;
+		const izinUksAktif = suratList.filter((s) => s.tipe_surat === 'izin_uks' && s.status_surat === 'aktif').length;
 		const tidakMasuk = suratList.filter((s) => s.tipe_surat === 'tidak_masuk').length;
-		return { total, terlambat, izinKeluar, izinKeluarBelumKembali, pulangCepat, tidakMasuk };
+		return { total, terlambat, izinKeluar, izinKeluarBelumKembali, pulangCepat, izinUks, izinUksAktif, tidakMasuk };
 	}, [suratList]);
 
 	// Filter Tampilan Tabel
@@ -138,6 +207,7 @@ export default function KeamananDashboard() {
 			if (filterTab === 'terlambat' && item.tipe_surat !== 'terlambat') return false;
 			if (filterTab === 'izin_keluar' && item.tipe_surat !== 'izin_keluar') return false;
 			if (filterTab === 'pulang_cepat' && item.tipe_surat !== 'pulang_cepat') return false;
+			if (filterTab === 'izin_uks' && item.tipe_surat !== 'izin_uks') return false;
 			if (filterTab === 'tidak_masuk' && item.tipe_surat !== 'tidak_masuk') return false;
 
 			// Search Query
@@ -159,14 +229,39 @@ export default function KeamananDashboard() {
 	const handleOpenModal = (tipe = 'terlambat') => {
 		setSelectedSiswaObj(null);
 		setModalSearchSiswa('');
+
+		let defaultAbsensi = 'Izin';
+		let startJam = '1';
+		let endJam = '1';
+
+		if (tipe === 'pulang_cepat' || tipe === 'tidak_masuk' || tipe === 'izin_uks') {
+			defaultAbsensi = 'Sakit';
+		}
+
+		if (tipe === 'terlambat') {
+			startJam = '1';
+			endJam = '1';
+		} else if (tipe === 'izin_uks') {
+			startJam = '3';
+			endJam = '4';
+		} else {
+			startJam = '3';
+			endJam = '4';
+		}
+
 		setFormData({
 			tipe_surat: tipe,
-			status_absensi: tipe === 'pulang_cepat' || tipe === 'tidak_masuk' ? 'Sakit' : 'Izin',
+			status_absensi: defaultAbsensi,
+			tanggal_mulai: tanggal || getTodayDateString(),
+			tanggal_selesai: tanggal || getTodayDateString(),
+			is_rentang_tanggal: false,
 			berlaku_seharian: tipe === 'tidak_masuk',
-			jam_ke_mulai: tipe === 'terlambat' ? '1' : '3',
-			jam_ke_selesai: tipe === 'terlambat' ? '1' : '4',
+			jam_ke_mulai: startJam,
+			jam_ke_selesai: endJam,
 			alasan: '',
 			penjemput: '',
+			relasi_penjemput: '',
+			no_telp_penjemput: '',
 			catatan: '',
 		});
 		setIsModalOpen(true);
@@ -174,8 +269,18 @@ export default function KeamananDashboard() {
 
 	// Pilih Siswa di Modal
 	const handleSelectSiswa = (siswa) => {
+		// Validasi Gender saat pemilihan
+		if (isPutra && siswa.jenis_kelamin === 'Perempuan') {
+			Swal.fire('Perhatian', 'Petugas Keamanan Putra hanya dapat menerbitkan izin untuk santri putra (Laki-laki).', 'warning');
+			return;
+		}
+		if (isPutri && siswa.jenis_kelamin === 'Laki-laki') {
+			Swal.fire('Perhatian', 'Petugas Keamanan Putri hanya dapat menerbitkan izin untuk santriwati putri (Perempuan).', 'warning');
+			return;
+		}
+
 		setSelectedSiswaObj(siswa);
-		setModalSearchSiswa(`${siswa.nama_lengkap} (${siswa.kelas})`);
+		setModalSearchSiswa(`${siswa.nama_lengkap} (${siswa.kelas}) - ${siswa.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'}`);
 	};
 
 	// Kirim Formulir Surat Baru
@@ -190,21 +295,38 @@ export default function KeamananDashboard() {
 			return;
 		}
 
+		// Validasi Mahram untuk Santriwati Putri yang Pulang Cepat
+		const isTargetPerempuan = selectedSiswaObj.jenis_kelamin === 'Perempuan';
+		if (isTargetPerempuan && formData.tipe_surat === 'pulang_cepat') {
+			if (!formData.penjemput.trim()) {
+				Swal.fire('Verifikasi Mahram Wajib', 'Untuk santriwati putri yang pulang cepat, nama penjemput wajib dicatat.', 'warning');
+				return;
+			}
+		}
+
 		try {
 			setSubmitting(true);
+			const tglMulai = formData.tanggal_mulai || tanggal;
+			const tglSelesai = formData.is_rentang_tanggal ? (formData.tanggal_selesai || tglMulai) : tglMulai;
+			const isMultiDay = formData.is_rentang_tanggal && tglSelesai !== tglMulai;
+
 			const payload = {
 				siswa_id: selectedSiswaObj.id,
 				nama_siswa: selectedSiswaObj.nama_lengkap,
 				nis: selectedSiswaObj.nis || '',
 				kelas: selectedSiswaObj.kelas,
-				tanggal: tanggal,
+				tanggal: tglMulai,
+				tanggal_selesai: tglSelesai,
+				jenis_kelamin: selectedSiswaObj.jenis_kelamin || 'Laki-laki',
 				tipe_surat: formData.tipe_surat,
 				status_absensi: formData.status_absensi,
-				jam_ke_mulai: formData.berlaku_seharian ? null : formData.jam_ke_mulai,
-				jam_ke_selesai: formData.berlaku_seharian ? null : formData.jam_ke_selesai,
-				berlaku_seharian: formData.berlaku_seharian,
+				jam_ke_mulai: (isMultiDay || formData.berlaku_seharian) ? null : formData.jam_ke_mulai,
+				jam_ke_selesai: (isMultiDay || formData.berlaku_seharian) ? null : formData.jam_ke_selesai,
+				berlaku_seharian: Boolean(isMultiDay || formData.berlaku_seharian),
 				alasan: formData.alasan,
 				penjemput: formData.penjemput || null,
+				relasi_penjemput: formData.relasi_penjemput || null,
+				no_telp_penjemput: formData.no_telp_penjemput || null,
 				catatan: formData.catatan || null,
 			};
 
@@ -225,7 +347,8 @@ export default function KeamananDashboard() {
 				html: `
 					<div class="text-left text-sm space-y-1.5 font-sans">
 						<p><b>Nomor Surat:</b> <span class="font-mono text-[#00A693]">${result.data?.nomor_surat}</span></p>
-						<p><b>Siswa:</b> ${result.data?.nama_siswa} (${result.data?.kelas})</p>
+						<p><b>Siswa:</b> ${result.data?.nama_siswa} (${result.data?.kelas}) &bull; ${result.data?.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'}</p>
+						<p><b>Jenis Izin:</b> <span class="font-bold uppercase">${result.data?.tipe_surat === 'izin_uks' ? '🏥 Istirahat di UKS' : result.data?.tipe_surat}</span></p>
 						<p><b>Status Absensi Mapel:</b> Terhubung otomatis ke presensi guru di kelas.</p>
 					</div>
 				`,
@@ -250,12 +373,17 @@ export default function KeamananDashboard() {
 			hour12: false,
 		}).replace('.', ':');
 
+		const isUks = item.tipe_surat === 'izin_uks';
+		const confirmPrompt = isUks
+			? `Tandai bahwa <b>${item.nama_siswa}</b> telah selesai beristirahat di UKS dan kembali masuk ke kelas pada pukul <b>${nowWib} WIB</b>?`
+			: `Tandai bahwa <b>${item.nama_siswa}</b> telah kembali masuk ke lingkungan sekolah pada pukul <b>${nowWib} WIB</b>?`;
+
 		const result = await Swal.fire({
-			title: 'Konfirmasi Siswa Kembali',
-			html: `Tandai bahwa <b>${item.nama_siswa}</b> telah kembali masuk ke lingkungan sekolah pada pukul <b>${nowWib} WIB</b>?`,
+			title: isUks ? 'Konfirmasi Kembali ke Kelas' : 'Konfirmasi Siswa Kembali',
+			html: confirmPrompt,
 			icon: 'question',
 			showCancelButton: true,
-			confirmButtonText: 'Ya, Tandai Kembali',
+			confirmButtonText: isUks ? 'Ya, Kembali ke Kelas' : 'Ya, Tandai Kembali',
 			cancelButtonText: 'Batal',
 			confirmButtonColor: '#00A693',
 		});
@@ -339,6 +467,12 @@ export default function KeamananDashboard() {
 						<span>🏠</span> Pulang Cepat
 					</span>
 				);
+			case 'izin_uks':
+				return (
+					<span className='px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-emerald-300 text-black border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] inline-flex items-center gap-1'>
+						<span>🏥</span> Istirahat di UKS
+					</span>
+				);
 			default:
 				return (
 					<span className='px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-300 text-black border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] inline-flex items-center gap-1'>
@@ -348,22 +482,33 @@ export default function KeamananDashboard() {
 		}
 	};
 
+	// Styling Top Bar Berdasarkan Role
+	const topBgColor = isPutra ? 'bg-sky-50' : isPutri ? 'bg-pink-50' : 'bg-white';
+	const topIconBg = isPutra ? 'bg-sky-400 text-white' : isPutri ? 'bg-pink-400 text-white' : 'bg-orange-400 text-black';
+	const topRoleLabel = isPutra
+		? 'Pos Keamanan Santri Putra'
+		: isPutri
+		? 'Pos Keamanan Santriwati Putri'
+		: 'Pos Keamanan & Surat Izin Digital';
+	const topBadgeText = isPutra ? 'Bani (Putra)' : isPutri ? 'Banat (Putri)' : 'Gerbang Digital';
+	const topBadgeBg = isPutra ? 'bg-sky-700 text-white' : isPutri ? 'bg-pink-700 text-white' : 'bg-[#00A693] text-white';
+
 	return (
 		<div className='min-h-screen bg-[var(--background)] pb-24 font-sans'>
 			{/* --- TOP NAVBAR POS KEAMANAN --- */}
-			<div className='bg-white border-b-4 border-[#0D0D0D] shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)] sticky top-0 z-30'>
+			<div className={`${topBgColor} border-b-4 border-[#0D0D0D] shadow-[0px_4px_0px_0px_rgba(0,0,0,0.05)] sticky top-0 z-30 transition-colors`}>
 				<div className='max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3'>
 					<div className='flex items-center gap-3'>
-						<div className='w-11 h-11 bg-orange-400 border-2 border-[#0D0D0D] rounded-xl flex items-center justify-center text-2xl shadow-[3px_3px_0px_0px_#0D0D0D] shrink-0'>
-							👮‍♂️
+						<div className={`w-11 h-11 ${topIconBg} border-2 border-[#0D0D0D] rounded-xl flex items-center justify-center text-2xl shadow-[3px_3px_0px_0px_#0D0D0D] shrink-0`}>
+							{isPutri ? '🧕' : '👮‍♂️'}
 						</div>
 						<div>
 							<div className='flex items-center gap-2'>
 								<h1 className='text-lg sm:text-xl font-black text-[#0D0D0D] uppercase tracking-tight'>
-									Pos Keamanan & Surat Izin
+									{topRoleLabel}
 								</h1>
-								<span className='px-2 py-0.5 rounded text-[10px] font-black uppercase bg-[#00A693] text-white border border-[#0D0D0D]'>
-									Digital Gerbang
+								<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${topBadgeBg} border border-[#0D0D0D]`}>
+									{topBadgeText}
 								</span>
 							</div>
 							<p className='text-xs font-bold text-gray-600'>
@@ -396,9 +541,9 @@ export default function KeamananDashboard() {
 						<div className='flex items-center gap-3'>
 							<span className='text-3xl'>⚠️</span>
 							<div>
-								<h4 className='font-black text-sm text-[#0D0D0D] uppercase'>Tabel Database Belum Dibuat</h4>
+								<h4 className='font-black text-sm text-[#0D0D0D] uppercase'>Tabel Database Belum Siap</h4>
 								<p className='text-xs font-bold text-amber-900'>
-									Jalankan skrip migrasi <code className='bg-white px-1.5 py-0.5 rounded border border-black font-mono font-bold text-black'>migrations/add_role_keamanan_and_surat_izin.sql</code> di SQL Editor Supabase agar data tersimpan permanen.
+									Jalankan skrip migrasi <code className='bg-white px-1.5 py-0.5 rounded border border-black font-mono font-bold text-black'>migrations/update_role_keamanan_putra_putri_and_uks.sql</code> di SQL Editor Supabase agar data tersimpan permanen.
 								</p>
 							</div>
 						</div>
@@ -408,7 +553,7 @@ export default function KeamananDashboard() {
 				{/* --- FILTER CONTROL BAR --- */}
 				<div className='bg-white border-3 border-[#0D0D0D] rounded-2xl p-4 shadow-[4px_4px_0px_0px_#0D0D0D] space-y-4'>
 					<div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
-						{/* Tanggal & Kelas Filter */}
+						{/* Tanggal, Gender Switcher & Kelas Filter */}
 						<div className='flex flex-wrap items-center gap-2.5'>
 							<div className='flex items-center gap-1.5 bg-[#FFF5F0] border-2 border-[#0D0D0D] px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D]'>
 								<span className='text-sm font-bold text-gray-700'>📅 Tanggal:</span>
@@ -419,6 +564,39 @@ export default function KeamananDashboard() {
 									className='font-bold text-xs bg-transparent outline-none cursor-pointer text-[#0D0D0D]'
 								/>
 							</div>
+
+							{/* Dual Gender Switcher (Hanya tampil untuk Admin / Kepsek / Keamanan Umum) */}
+							{isSupervisor && (
+								<div className='flex items-center gap-1 bg-yellow-100 p-1 border-2 border-[#0D0D0D] rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									<button
+										onClick={() => setSelectedGenderFilter('all')}
+										className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg transition-all ${
+											selectedGenderFilter === 'all'
+												? 'bg-black text-white'
+												: 'text-black hover:bg-yellow-200'
+										}`}>
+										Semua
+									</button>
+									<button
+										onClick={() => setSelectedGenderFilter('Laki-laki')}
+										className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg transition-all ${
+											selectedGenderFilter === 'Laki-laki'
+												? 'bg-sky-600 text-white'
+												: 'text-sky-950 hover:bg-sky-200'
+										}`}>
+										👦 Putra
+									</button>
+									<button
+										onClick={() => setSelectedGenderFilter('Perempuan')}
+										className={`px-2.5 py-1 text-[11px] font-black uppercase rounded-lg transition-all ${
+											selectedGenderFilter === 'Perempuan'
+												? 'bg-pink-600 text-white'
+												: 'text-pink-950 hover:bg-pink-200'
+										}`}>
+										👧 Putri
+									</button>
+								</div>
+							)}
 
 							<div className='relative'>
 								<select
@@ -453,11 +631,16 @@ export default function KeamananDashboard() {
 								className='px-3 py-1.5 bg-rose-200 hover:bg-rose-300 border-2 border-[#0D0D0D] rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] transition-all hover:-translate-y-0.5'>
 								🏠 + Pulang Cepat
 							</button>
+							<button
+								onClick={() => handleOpenModal('izin_uks')}
+								className='px-3 py-1.5 bg-emerald-200 hover:bg-emerald-300 border-2 border-[#0D0D0D] rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] transition-all hover:-translate-y-0.5'>
+								🏥 + Izin UKS
+							</button>
 						</div>
 					</div>
 
 					{/* --- STAT CARDS --- */}
-					<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t-2 border-[#0D0D0D]'>
+					<div className='grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t-2 border-[#0D0D0D]'>
 						<div
 							onClick={() => setFilterTab('terlambat')}
 							className={`p-3 rounded-xl border-2 border-[#0D0D0D] cursor-pointer transition-all ${
@@ -487,7 +670,19 @@ export default function KeamananDashboard() {
 							}`}>
 							<p className='text-[11px] font-black uppercase text-rose-900'>🏠 Pulang Cepat</p>
 							<p className='text-2xl font-black text-[#0D0D0D] mt-0.5'>{stats.pulangCepat}</p>
-							<span className='text-[10px] text-gray-600 font-bold'>Sakit / Ortu jemput</span>
+							<span className='text-[10px] text-gray-600 font-bold'>Dijemput orang tua</span>
+						</div>
+
+						<div
+							onClick={() => setFilterTab('izin_uks')}
+							className={`p-3 rounded-xl border-2 border-[#0D0D0D] cursor-pointer transition-all ${
+								filterTab === 'izin_uks' ? 'bg-emerald-300 shadow-none translate-x-[2px] translate-y-[2px]' : 'bg-emerald-50 hover:bg-emerald-100 shadow-[3px_3px_0px_0px_#0D0D0D]'
+							}`}>
+							<p className='text-[11px] font-black uppercase text-emerald-900'>🏥 Istirahat di UKS</p>
+							<p className='text-2xl font-black text-[#0D0D0D] mt-0.5'>{stats.izinUks}</p>
+							<span className={`text-[10px] font-bold ${stats.izinUksAktif > 0 ? 'text-emerald-800 font-black' : 'text-gray-600'}`}>
+								{stats.izinUksAktif > 0 ? `🏥 ${stats.izinUksAktif} sedang di UKS` : 'Tidak ada di UKS'}
+							</span>
 						</div>
 
 						<div
@@ -497,7 +692,7 @@ export default function KeamananDashboard() {
 							}`}>
 							<p className='text-[11px] font-black uppercase text-purple-900'>📋 Titip Izin/Sakit</p>
 							<p className='text-2xl font-black text-[#0D0D0D] mt-0.5'>{stats.tidakMasuk}</p>
-							<span className='text-[10px] text-gray-600 font-bold'>Surat dokter/wali</span>
+							<span className='text-[10px] text-gray-600 font-bold'>Surat dokter / wali</span>
 						</div>
 					</div>
 				</div>
@@ -507,7 +702,7 @@ export default function KeamananDashboard() {
 					<div className='relative flex-1'>
 						<input
 							type='text'
-							placeholder='Cari nama siswa, NIS, kelas, atau nomor surat...'
+							placeholder='Cari nama santri, NIS, kelas, atau nomor surat...'
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							className='w-full pl-9 pr-8 py-2 bg-transparent text-[#0D0D0D] font-bold text-xs sm:text-sm outline-none placeholder:text-gray-400'
@@ -525,10 +720,11 @@ export default function KeamananDashboard() {
 					<div className='flex flex-wrap items-center gap-1.5 shrink-0 bg-[#FFF5F0] p-1 rounded-xl border border-[#0D0D0D]'>
 						{[
 							{ id: 'semua', label: `Semua (${stats.total})` },
-							{ id: 'aktif', label: 'Belum Kembali' },
+							{ id: 'aktif', label: 'Aktif / Belum Kembali' },
 							{ id: 'terlambat', label: 'Terlambat' },
 							{ id: 'izin_keluar', label: 'Izin Keluar' },
 							{ id: 'pulang_cepat', label: 'Pulang Cepat' },
+							{ id: 'izin_uks', label: 'Di UKS' },
 							{ id: 'tidak_masuk', label: 'Titip Izin' },
 						].map((tab) => (
 							<button
@@ -567,18 +763,34 @@ export default function KeamananDashboard() {
 					<div className='space-y-3.5'>
 						{filteredSurat.map((item) => {
 							const isKeluarAktif = item.tipe_surat === 'izin_keluar' && item.status_surat === 'aktif';
+							const isUksAktif = item.tipe_surat === 'izin_uks' && item.status_surat === 'aktif';
 							const isDibatalkan = item.status_surat === 'dibatalkan';
+							const isSantriPutra = item.jenis_kelamin === 'Laki-laki';
 
 							return (
 								<div
 									key={item.id}
 									className={`bg-white border-3 border-[#0D0D0D] rounded-2xl p-4 sm:p-5 shadow-[4px_4px_0px_0px_#0D0D0D] transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-										isKeluarAktif ? 'border-l-8 border-l-blue-500 bg-blue-50/30' : isDibatalkan ? 'opacity-60 bg-gray-50' : ''
+										isKeluarAktif
+											? 'border-l-8 border-l-blue-500 bg-blue-50/30'
+											: isUksAktif
+											? 'border-l-8 border-l-emerald-500 bg-emerald-50/30'
+											: isDibatalkan
+											? 'opacity-60 bg-gray-50'
+											: ''
 									}`}>
 									{/* Detail Siswa & Surat */}
 									<div className='space-y-2 flex-1'>
 										<div className='flex flex-wrap items-center gap-2'>
 											{renderBadgeTipe(item.tipe_surat)}
+
+											{/* Badge Gender Santri */}
+											<span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border border-black ${
+												isSantriPutra ? 'bg-sky-200 text-sky-950' : 'bg-pink-200 text-pink-950'
+											}`}>
+												{isSantriPutra ? '👦 Putra' : '👧 Putri'}
+											</span>
+
 											<span className='font-mono text-xs font-black text-gray-600 bg-gray-100 px-2 py-0.5 rounded border border-gray-300'>
 												{item.nomor_surat}
 											</span>
@@ -595,6 +807,12 @@ export default function KeamananDashboard() {
 											{isKeluarAktif && (
 												<span className='px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-500 text-white animate-pulse'>
 													⚠️ Belum Kembali
+												</span>
+											)}
+
+											{isUksAktif && (
+												<span className='px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-600 text-white animate-pulse'>
+													🏥 Sedang di UKS
 												</span>
 											)}
 
@@ -627,21 +845,33 @@ export default function KeamananDashboard() {
 												<span className='text-gray-500'>Keperluan/Alasan:</span> {item.alasan}
 											</p>
 											<div className='flex flex-wrap items-center gap-4 text-[11px] text-gray-600 font-normal'>
-												<span>
-													🕒 <b>Jam Berlaku:</b>{' '}
-													{item.berlaku_seharian
-														? 'Seharian Penuh'
-														: item.jam_ke_mulai === item.jam_ke_selesai
-														? `Jam ke-${item.jam_ke_mulai}`
-														: `Jam ke-${item.jam_ke_mulai} s/d ${item.jam_ke_selesai}`}
-												</span>
+												{item.tanggal_selesai && item.tanggal_selesai !== item.tanggal ? (
+													<span className='font-bold text-indigo-950 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-400'>
+														🗓️ <b>Rentang Izin:</b> {item.tanggal} s/d {item.tanggal_selesai} (Seharian Penuh)
+													</span>
+												) : (
+													<span>
+														🕒 <b>Jam Berlaku:</b>{' '}
+														{item.berlaku_seharian
+															? 'Seharian Penuh'
+															: item.jam_ke_mulai === item.jam_ke_selesai
+															? `Jam ke-${item.jam_ke_mulai}`
+															: `Jam ke-${item.jam_ke_mulai} s/d ${item.jam_ke_selesai}`}
+													</span>
+												)}
 												{item.penjemput && (
 													<span>
-														👤 <b>Dijemput oleh:</b> {item.penjemput}
+														👤 <b>Dijemput oleh:</b> {item.penjemput}{' '}
+														{item.relasi_penjemput ? `(${item.relasi_penjemput})` : ''}
+													</span>
+												)}
+												{item.no_telp_penjemput && (
+													<span>
+														📞 <b>Kontak:</b> {item.no_telp_penjemput}
 													</span>
 												)}
 												<span>
-													👮‍♂️ <b>Petugas:</b> {item.petugas_nama || 'Satpam'}
+													👮 <b>Petugas:</b> {item.petugas_nama || 'Satpam'}
 												</span>
 											</div>
 										</div>
@@ -654,6 +884,14 @@ export default function KeamananDashboard() {
 												onClick={() => handleTandaiKembali(item)}
 												className='px-3.5 py-2 bg-[#00A693] hover:bg-emerald-600 text-white border-2 border-[#0D0D0D] rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] transition-all flex items-center gap-1.5'>
 												<span>✅</span> Tandai Kembali
+											</button>
+										)}
+
+										{isUksAktif && (
+											<button
+												onClick={() => handleTandaiKembali(item)}
+												className='px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white border-2 border-[#0D0D0D] rounded-xl text-xs font-black shadow-[2px_2px_0px_0px_#0D0D0D] transition-all flex items-center gap-1.5'>
+												<span>🏥</span> Kembali ke Kelas
 											</button>
 										)}
 
@@ -677,13 +915,17 @@ export default function KeamananDashboard() {
 			{/* ============================================================ */}
 			{isModalOpen && (
 				<div className='fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto'>
-					<div className='bg-white border-4 border-[#0D0D0D] rounded-3xl w-full max-w-xl p-5 sm:p-6 shadow-[8px_8px_0px_0px_#0D0D0D] my-8'>
+					<div className='bg-white border-4 border-[#0D0D0D] rounded-3xl w-full max-w-xl p-5 sm:p-6 shadow-[8px_8px_0px_0px_#0D0D0D] my-8 max-h-[90vh] overflow-y-auto'>
 						<div className='flex items-center justify-between border-b-2 border-[#0D0D0D] pb-3 mb-4'>
 							<div className='flex items-center gap-2.5'>
-								<span className='text-2xl'>👮‍♂️</span>
+								<span className='text-2xl'>{isPutri ? '🧕' : '👮‍♂️'}</span>
 								<div>
-									<h2 className='text-lg font-black text-[#0D0D0D] uppercase'>Terbitkan Surat Izin Digital</h2>
-									<p className='text-xs font-bold text-gray-500'>Pos Gerbang Keamanan Sekolah</p>
+									<h2 className='text-lg font-black text-[#0D0D0D] uppercase'>
+										Terbitkan Surat Izin Digital
+									</h2>
+									<p className='text-xs font-bold text-gray-500'>
+										{isPutra ? 'Pos Keamanan Santri Putra (Bani)' : isPutri ? 'Pos Keamanan Santriwati Putri (Banat)' : 'Pos Gerbang Keamanan'}
+									</p>
 								</div>
 							</div>
 							<button
@@ -697,11 +939,14 @@ export default function KeamananDashboard() {
 							{/* 1. Pilih Siswa dengan Autocomplete Cepat */}
 							<div className='space-y-1.5 relative'>
 								<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
-									Pilih Siswa <span className='text-rose-600'>*</span>
+									Pilih Siswa <span className='text-rose-600'>*</span>{' '}
+									<span className='font-normal text-[10px] text-gray-500'>
+										{isPutra ? '(Khusus Santri Putra)' : isPutri ? '(Khusus Santriwati Putri)' : ''}
+									</span>
 								</label>
 								<input
 									type='text'
-									placeholder='Ketik Nama Siswa atau NIS...'
+									placeholder={isPutra ? 'Ketik Nama Santri Putra atau NIS...' : isPutri ? 'Ketik Nama Santriwati Putri atau NIS...' : 'Ketik Nama Siswa atau NIS...'}
 									value={modalSearchSiswa}
 									onChange={(e) => {
 										setModalSearchSiswa(e.target.value);
@@ -720,7 +965,14 @@ export default function KeamananDashboard() {
 												onClick={() => handleSelectSiswa(s)}
 												className='w-full text-left px-3.5 py-2.5 hover:bg-yellow-100 flex items-center justify-between text-xs font-bold transition-colors'>
 												<div>
-													<p className='text-[#0D0D0D] font-black'>{s.nama_lengkap}</p>
+													<p className='text-[#0D0D0D] font-black flex items-center gap-1.5'>
+														<span>{s.nama_lengkap}</span>
+														<span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
+															s.jenis_kelamin === 'Laki-laki' ? 'bg-sky-200 text-sky-900' : 'bg-pink-200 text-pink-900'
+														}`}>
+															{s.jenis_kelamin === 'Laki-laki' ? '👦 L' : '👧 P'}
+														</span>
+													</p>
 													<p className='text-[10px] text-gray-500 font-mono'>NIS: {s.nis || '-'}</p>
 												</div>
 												<span className='px-2 py-0.5 rounded bg-black text-white text-[10px] font-bold'>
@@ -735,7 +987,7 @@ export default function KeamananDashboard() {
 									<div className='flex items-center justify-between bg-emerald-100 border-2 border-[#0D0D0D] p-2.5 rounded-xl text-xs font-bold text-emerald-950'>
 										<span>
 											✓ Siswa Terpilih: <b>{selectedSiswaObj.nama_lengkap}</b> &bull; Kelas{' '}
-											<b>{selectedSiswaObj.kelas}</b>
+											<b>{selectedSiswaObj.kelas}</b> ({selectedSiswaObj.jenis_kelamin === 'Laki-laki' ? '👦 Putra' : '👧 Putri'})
 										</span>
 										<button
 											type='button'
@@ -750,16 +1002,17 @@ export default function KeamananDashboard() {
 								)}
 							</div>
 
-							{/* 2. Pilihan Jenis Surat */}
+							{/* 2. Pilihan Jenis Surat (Termasuk izin_uks) */}
 							<div className='space-y-1.5'>
 								<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
 									Jenis Surat Izin <span className='text-rose-600'>*</span>
 								</label>
-								<div className='grid grid-cols-2 gap-2'>
+								<div className='grid grid-cols-2 sm:grid-cols-3 gap-2'>
 									{[
-										{ id: 'terlambat', label: '🕒 Terlambat Masuk', absensi: 'Izin' },
+										{ id: 'terlambat', label: '🕒 Terlambat', absensi: 'Izin' },
 										{ id: 'izin_keluar', label: '🚪 Izin Keluar', absensi: 'Izin' },
 										{ id: 'pulang_cepat', label: '🏠 Pulang Cepat', absensi: 'Sakit' },
+										{ id: 'izin_uks', label: '🏥 Istirahat UKS', absensi: 'Sakit' },
 										{ id: 'tidak_masuk', label: '📋 Titip Izin/Sakit', absensi: 'Izin' },
 									].map((opt) => (
 										<button
@@ -773,7 +1026,7 @@ export default function KeamananDashboard() {
 													berlaku_seharian: opt.id === 'tidak_masuk',
 												})
 											}
-											className={`p-2.5 rounded-xl border-2 border-[#0D0D0D] text-xs font-black uppercase text-center transition-all ${
+											className={`p-2 rounded-xl border-2 border-[#0D0D0D] text-xs font-black uppercase text-center transition-all ${
 												formData.tipe_surat === opt.id
 													? 'bg-[#F5C518] text-[#0D0D0D] shadow-none translate-x-[2px] translate-y-[2px]'
 													: 'bg-white hover:bg-gray-50 text-gray-700 shadow-[2px_2px_0px_0px_#0D0D0D]'
@@ -782,9 +1035,95 @@ export default function KeamananDashboard() {
 										</button>
 									))}
 								</div>
+								{formData.tipe_surat === 'izin_uks' && (
+									<p className='text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 p-2 rounded-lg'>
+										🏥 <b>Catatan UKS:</b> Santri tetap berada di lingkungan sekolah/pondok. Presensi jam pelajaran di kelas otomatis diberi dispensasi <b>Sakit</b> tanpa dianggap alpa.
+									</p>
+								)}
 							</div>
 
-							{/* 3. Status Absensi & Jam Berlaku */}
+							{/* 3. Rentang Tanggal Izin */}
+							<div className='p-3 bg-indigo-50/70 border-2 border-[#0D0D0D] rounded-xl space-y-2.5'>
+								<div className='flex items-center justify-between gap-2'>
+									<label className='block text-xs font-black uppercase text-indigo-950'>
+										🗓️ Periode / Tanggal Izin <span className='text-rose-600'>*</span>
+									</label>
+									<label className='flex items-center gap-1.5 text-xs font-bold text-indigo-900 cursor-pointer select-none'>
+										<input
+											type='checkbox'
+											checked={formData.is_rentang_tanggal}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													is_rentang_tanggal: e.target.checked,
+													berlaku_seharian: e.target.checked ? true : formData.berlaku_seharian,
+												})
+											}
+											className='cursor-pointer w-3.5 h-3.5'
+										/>
+										<span>Izin Berhari-hari (Rentang Tanggal)</span>
+									</label>
+								</div>
+
+								{formData.is_rentang_tanggal ? (
+									<div className='space-y-2'>
+										<div className='grid grid-cols-2 gap-2'>
+											<div>
+												<span className='block text-[10px] font-bold text-gray-600 mb-0.5'>Tanggal Mulai</span>
+												<input
+													type='date'
+													value={formData.tanggal_mulai}
+													onChange={(e) => {
+														const newStart = e.target.value;
+														setFormData({
+															...formData,
+															tanggal_mulai: newStart,
+															tanggal_selesai: formData.tanggal_selesai < newStart ? newStart : formData.tanggal_selesai,
+														});
+													}}
+													className='neo-input text-xs font-bold bg-white w-full'
+												/>
+											</div>
+											<div>
+												<span className='block text-[10px] font-bold text-gray-600 mb-0.5'>Tanggal Selesai</span>
+												<input
+													type='date'
+													min={formData.tanggal_mulai}
+													value={formData.tanggal_selesai}
+													onChange={(e) => setFormData({ ...formData, tanggal_selesai: e.target.value })}
+													className='neo-input text-xs font-bold bg-white w-full'
+												/>
+											</div>
+										</div>
+										<div className='p-2 bg-indigo-100 rounded-lg border border-indigo-300 text-[11px] font-bold text-indigo-950 flex items-center justify-between'>
+											<span>
+												✓ <b>Durasi:</b>{' '}
+												{Math.max(1, Math.round((new Date(formData.tanggal_selesai) - new Date(formData.tanggal_mulai)) / (1000 * 60 * 60 * 24)) + 1)}{' '}
+												Hari (Otomatis berlaku seharian penuh di presensi mapel kelas)
+											</span>
+										</div>
+									</div>
+								) : (
+									<div className='flex items-center gap-2'>
+										<span className='text-xs font-bold text-gray-700'>Tanggal:</span>
+										<input
+											type='date'
+											value={formData.tanggal_mulai}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													tanggal_mulai: e.target.value,
+													tanggal_selesai: e.target.value,
+												})
+											}
+											className='neo-input text-xs font-bold bg-white !py-1'
+										/>
+										<span className='text-[10px] text-gray-500 font-bold'>(1 Hari)</span>
+									</div>
+								)}
+							</div>
+
+							{/* 4. Status Absensi & Jam Berlaku */}
 							<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
 								<div>
 									<label className='block text-xs font-black uppercase text-[#0D0D0D] mb-1'>
@@ -800,50 +1139,57 @@ export default function KeamananDashboard() {
 									</select>
 								</div>
 
-								<div className='space-y-1'>
-									<div className='flex items-center justify-between mb-1'>
-										<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
-											Jam Ke Berapa?
-										</label>
-										<label className='flex items-center gap-1 text-[11px] font-bold text-gray-700 cursor-pointer'>
-											<input
-												type='checkbox'
-												checked={formData.berlaku_seharian}
-												onChange={(e) => setFormData({ ...formData, berlaku_seharian: e.target.checked })}
-												className='cursor-pointer'
-											/>
-											<span>Seharian Penuh</span>
-										</label>
-									</div>
+								{!formData.is_rentang_tanggal ? (
+									<div className='space-y-1'>
+										<div className='flex items-center justify-between mb-1'>
+											<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
+												Jam Ke Berapa?
+											</label>
+											<label className='flex items-center gap-1 text-[11px] font-bold text-gray-700 cursor-pointer'>
+												<input
+													type='checkbox'
+													checked={formData.berlaku_seharian}
+													onChange={(e) => setFormData({ ...formData, berlaku_seharian: e.target.checked })}
+													className='cursor-pointer'
+												/>
+												<span>Seharian Penuh</span>
+											</label>
+										</div>
 
-									{!formData.berlaku_seharian ? (
-										<div className='flex items-center gap-2'>
-											<input
-												type='number'
-												min='1'
-												max='12'
-												placeholder='Mulai'
-												value={formData.jam_ke_mulai}
-												onChange={(e) => setFormData({ ...formData, jam_ke_mulai: e.target.value })}
-												className='neo-input text-xs font-mono font-bold text-center'
-											/>
-											<span className='font-bold text-xs'>s/d</span>
-											<input
-												type='number'
-												min='1'
-												max='12'
-												placeholder='Selesai'
-												value={formData.jam_ke_selesai}
-												onChange={(e) => setFormData({ ...formData, jam_ke_selesai: e.target.value })}
-												className='neo-input text-xs font-mono font-bold text-center'
-											/>
-										</div>
-									) : (
-										<div className='py-2 px-3 bg-purple-100 border border-[#0D0D0D] rounded-xl text-xs font-bold text-purple-900'>
-											✓ Berlaku untuk seluruh jam pelajaran
-										</div>
-									)}
-								</div>
+										{!formData.berlaku_seharian ? (
+											<div className='flex items-center gap-2'>
+												<input
+													type='number'
+													min='1'
+													max='12'
+													placeholder='Mulai'
+													value={formData.jam_ke_mulai}
+													onChange={(e) => setFormData({ ...formData, jam_ke_mulai: e.target.value })}
+													className='neo-input text-xs font-mono font-bold text-center'
+												/>
+												<span className='font-bold text-xs'>s/d</span>
+												<input
+													type='number'
+													min='1'
+													max='12'
+													placeholder='Selesai'
+													value={formData.jam_ke_selesai}
+													onChange={(e) => setFormData({ ...formData, jam_ke_selesai: e.target.value })}
+													className='neo-input text-xs font-mono font-bold text-center'
+												/>
+											</div>
+										) : (
+											<div className='py-2 px-3 bg-purple-100 border border-[#0D0D0D] rounded-xl text-xs font-bold text-purple-900'>
+												✓ Berlaku untuk seluruh jam pelajaran hari ini
+											</div>
+										)}
+									</div>
+								) : (
+									<div className='flex flex-col justify-center p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950'>
+										<span>✓ Izin Multi-Hari</span>
+										<span className='text-[10px] text-emerald-800 font-normal'>Otomatis berlaku seharian penuh pada tanggal-tanggal tersebut.</span>
+									</div>
+								)}
 							</div>
 
 							{/* 4. Alasan / Keperluan + Quick Chips */}
@@ -874,19 +1220,54 @@ export default function KeamananDashboard() {
 								</div>
 							</div>
 
-							{/* 5. Nama Penjemput (Khusus Pulang Cepat) */}
-							{formData.tipe_surat === 'pulang_cepat' && (
-								<div className='space-y-1'>
-									<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
-										Dijemput Oleh (Orang Tua / Wali)
-									</label>
-									<input
-										type='text'
-										placeholder='Contoh: Ibu Kandung (Ibu Siti) / Sendiri'
-										value={formData.penjemput}
-										onChange={(e) => setFormData({ ...formData, penjemput: e.target.value })}
-										className='neo-input text-xs font-bold'
-									/>
+							{/* 5. Nama Penjemput & Status Mahram (Khusus Pulang Cepat & Izin Keluar) */}
+							{(formData.tipe_surat === 'pulang_cepat' || formData.tipe_surat === 'izin_keluar') && (
+								<div className='p-3 bg-yellow-50 border-2 border-black rounded-xl space-y-2.5'>
+									<div className='space-y-1'>
+										<label className='block text-xs font-black uppercase text-[#0D0D0D]'>
+											Nama Penjemput / Pendamping {formData.tipe_surat === 'pulang_cepat' && <span className='text-rose-600'>*</span>}
+										</label>
+										<input
+											type='text'
+											placeholder='Contoh: Bapak Ahmad Fauzi / Sendiri'
+											value={formData.penjemput}
+											onChange={(e) => setFormData({ ...formData, penjemput: e.target.value })}
+											className='neo-input text-xs font-bold bg-white'
+										/>
+									</div>
+
+									{/* Status Mahram & Hubungan (Sangat penting untuk Santriwati Putri) */}
+									<div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+										<div>
+											<label className='block text-[11px] font-bold uppercase text-gray-700 mb-1'>
+												Hubungan / Status Mahram
+											</label>
+											<select
+												value={formData.relasi_penjemput}
+												onChange={(e) => setFormData({ ...formData, relasi_penjemput: e.target.value })}
+												className='neo-input text-xs font-bold bg-white'>
+												<option value=''>-- Pilih Relasi --</option>
+												<option value='Ayah Kandung (Mahram)'>Ayah Kandung (Mahram)</option>
+												<option value='Ibu Kandung'>Ibu Kandung</option>
+												<option value='Kakak/Adik Kandung Laki-laki (Mahram)'>Kakak/Adik Kandung Laki-laki (Mahram)</option>
+												<option value='Paman / Kakek Kandung (Mahram)'>Paman / Kakek Kandung (Mahram)</option>
+												<option value='Wali Resmi Surat Kuasa'>Wali Resmi (Surat Kuasa)</option>
+												<option value='Sendiri / Mandiri'>Sendiri / Mandiri</option>
+											</select>
+										</div>
+										<div>
+											<label className='block text-[11px] font-bold uppercase text-gray-700 mb-1'>
+												No. WhatsApp / HP Penjemput
+											</label>
+											<input
+												type='tel'
+												placeholder='0812xxxxxxxx'
+												value={formData.no_telp_penjemput}
+												onChange={(e) => setFormData({ ...formData, no_telp_penjemput: e.target.value })}
+												className='neo-input text-xs font-mono font-bold bg-white'
+											/>
+										</div>
+									</div>
 								</div>
 							)}
 

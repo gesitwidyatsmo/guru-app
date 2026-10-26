@@ -9,14 +9,19 @@ function generateNomorSurat(tanggal) {
 	return `SRT-KM/${cleanDate}/${randomSuffix}`;
 }
 
+const isSecurityRole = (role) => ['Admin', 'Keamanan', 'Keamanan Putra', 'Keamanan Putri'].includes(role);
+
 // GET: Ambil daftar surat izin keamanan
 export async function GET(req) {
 	try {
+		const role = req.headers.get('x-user-role');
 		const { searchParams } = new URL(req.url);
 		const tanggal = searchParams.get('tanggal');
 		const kelas = searchParams.get('kelas');
 		const siswaId = searchParams.get('siswa_id');
 		const statusSurat = searchParams.get('status_surat'); // 'aktif', 'selesai', 'dibatalkan', or null (all)
+		const tipeSurat = searchParams.get('tipe_surat');
+		const genderParam = searchParams.get('gender') || searchParams.get('jenis_kelamin');
 
 		let query = supabaseAdmin
 			.from('keamanan_surat_izin')
@@ -24,7 +29,10 @@ export async function GET(req) {
 			.order('created_at', { ascending: false });
 
 		if (tanggal) {
-			query = query.eq('tanggal', tanggal);
+			// Mendukung rentang tanggal: tanggal <= targetDate AND tanggal_selesai >= targetDate
+			query = query.or(
+				`and(tanggal.lte.${tanggal},tanggal_selesai.gte.${tanggal}),and(tanggal.eq.${tanggal},tanggal_selesai.is.null)`
+			);
 		}
 		if (kelas) {
 			query = query.eq('kelas', kelas);
@@ -35,6 +43,18 @@ export async function GET(req) {
 		if (statusSurat && statusSurat !== 'all') {
 			query = query.eq('status_surat', statusSurat);
 		}
+		if (tipeSurat && tipeSurat !== 'all') {
+			query = query.eq('tipe_surat', tipeSurat);
+		}
+
+		// Isolasi data gender berbasis role / parameter
+		if (role === 'Keamanan Putra') {
+			query = query.eq('jenis_kelamin', 'Laki-laki');
+		} else if (role === 'Keamanan Putri') {
+			query = query.eq('jenis_kelamin', 'Perempuan');
+		} else if (genderParam && genderParam !== 'all') {
+			query = query.eq('jenis_kelamin', genderParam);
+		}
 
 		const { data, error } = await query;
 
@@ -44,7 +64,7 @@ export async function GET(req) {
 				return NextResponse.json({
 					data: [],
 					tableReady: false,
-					message: 'Tabel keamanan_surat_izin belum dibuat. Jalankan migrations/add_role_keamanan_and_surat_izin.sql di SQL Editor Supabase.',
+					message: 'Tabel keamanan_surat_izin belum dibuat atau kolom belum lengkap. Jalankan migrations/update_role_keamanan_putra_putri_and_uks.sql di SQL Editor Supabase.',
 				});
 			}
 			throw error;
@@ -67,7 +87,7 @@ export async function POST(req) {
 		const userId = req.headers.get('x-user-id');
 		const userName = req.headers.get('x-user-name') ? decodeURIComponent(req.headers.get('x-user-name')) : 'Petugas Keamanan';
 
-		if (role !== 'Admin' && role !== 'Keamanan') {
+		if (!isSecurityRole(role)) {
 			return NextResponse.json(
 				{ error: 'Akses Ditolak: Hanya Petugas Keamanan atau Admin yang dapat menerbitkan surat izin.' },
 				{ status: 403 }
@@ -81,13 +101,16 @@ export async function POST(req) {
 			nis,
 			kelas,
 			tanggal,
-			tipe_surat,
+			tanggal_selesai,
+			tipe_surat, // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'tidak_masuk' | 'izin_uks'
 			status_absensi,
 			jam_ke_mulai,
 			jam_ke_selesai,
 			berlaku_seharian,
 			alasan,
 			penjemput,
+			relasi_penjemput,
+			no_telp_penjemput,
 			waktu_surat,
 			catatan,
 		} = body;
@@ -99,7 +122,31 @@ export async function POST(req) {
 			);
 		}
 
+		// Validasi & pastikan jenis kelamin siswa
+		let studentGender = body.jenis_kelamin;
+		if (!studentGender && siswa_id) {
+			const { data: s } = await supabaseAdmin.from('siswa').select('jenis_kelamin').eq('id', siswa_id).maybeSingle();
+			studentGender = s?.jenis_kelamin || 'Laki-laki';
+		}
+
+		// Server-side segregation validation
+		if (role === 'Keamanan Putra' && studentGender === 'Perempuan') {
+			return NextResponse.json(
+				{ error: 'Akses Dibatasi: Petugas Keamanan Putra hanya berwenang menerbitkan izin untuk santri putra (Laki-laki).' },
+				{ status: 403 }
+			);
+		}
+
+		if (role === 'Keamanan Putri' && studentGender === 'Laki-laki') {
+			return NextResponse.json(
+				{ error: 'Akses Dibatasi: Petugas Keamanan Putri hanya berwenang menerbitkan izin untuk santriwati putri (Perempuan).' },
+				{ status: 403 }
+			);
+		}
+
 		const tgl = tanggal || getTodayDateString();
+		const tglSelesai = tanggal_selesai || tgl;
+		const isMultiDay = tglSelesai !== tgl;
 		const nomorSurat = generateNomorSurat(tgl);
 
 		// Dapatkan waktu jam WIB saat ini (HH:mm)
@@ -109,6 +156,18 @@ export async function POST(req) {
 			hour12: false,
 		}).replace('.', ':');
 
+		// Status absensi default
+		let finalStatusAbsensi = status_absensi;
+		if (!finalStatusAbsensi) {
+			if (tipe_surat === 'izin_uks') {
+				finalStatusAbsensi = 'Sakit';
+			} else if (tipe_surat === 'pulang_cepat' && String(alasan).toLowerCase().includes('sakit')) {
+				finalStatusAbsensi = 'Sakit';
+			} else {
+				finalStatusAbsensi = 'Izin';
+			}
+		}
+
 		const rowToInsert = {
 			nomor_surat: nomorSurat,
 			siswa_id,
@@ -116,13 +175,17 @@ export async function POST(req) {
 			nis: nis || null,
 			kelas,
 			tanggal: tgl,
-			tipe_surat, // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'tidak_masuk'
-			status_absensi: status_absensi || (tipe_surat === 'pulang_cepat' && String(alasan).toLowerCase().includes('sakit') ? 'Sakit' : 'Izin'),
-			jam_ke_mulai: berlaku_seharian ? null : (jam_ke_mulai || null),
-			jam_ke_selesai: berlaku_seharian ? null : (jam_ke_selesai || jam_ke_mulai || null),
-			berlaku_seharian: Boolean(berlaku_seharian),
+			tanggal_selesai: tglSelesai,
+			jenis_kelamin: studentGender || 'Laki-laki',
+			tipe_surat, // 'terlambat' | 'izin_keluar' | 'pulang_cepat' | 'tidak_masuk' | 'izin_uks'
+			status_absensi: finalStatusAbsensi,
+			jam_ke_mulai: (isMultiDay || berlaku_seharian) ? null : (jam_ke_mulai || null),
+			jam_ke_selesai: (isMultiDay || berlaku_seharian) ? null : (jam_ke_selesai || jam_ke_mulai || null),
+			berlaku_seharian: Boolean(isMultiDay || berlaku_seharian),
 			alasan,
 			penjemput: penjemput || null,
+			relasi_penjemput: relasi_penjemput || null,
+			no_telp_penjemput: no_telp_penjemput || null,
 			waktu_surat: waktu_surat || nowWib,
 			status_surat: 'aktif',
 			petugas_id: userId || null,
@@ -139,7 +202,7 @@ export async function POST(req) {
 		if (error) {
 			if (error.code === 'PGRST205' || String(error.message).includes('keamanan_surat_izin')) {
 				return NextResponse.json({
-					error: 'Tabel keamanan_surat_izin belum dibuat di Supabase. Silakan jalankan file migrations/add_role_keamanan_and_surat_izin.sql di SQL Editor Supabase terlebih dahulu.',
+					error: 'Tabel keamanan_surat_izin belum siap di Supabase. Silakan jalankan file migrations/update_role_keamanan_putra_putri_and_uks.sql di SQL Editor Supabase terlebih dahulu.',
 					tableReady: false,
 				}, { status: 400 });
 			}
@@ -157,11 +220,11 @@ export async function POST(req) {
 	}
 }
 
-// PATCH: Perbarui status surat (misal siswa kembali ke sekolah, atau dibatalkan)
+// PATCH: Perbarui status surat (misal siswa kembali ke sekolah/kelas, atau dibatalkan)
 export async function PATCH(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin' && role !== 'Keamanan') {
+		if (!isSecurityRole(role)) {
 			return NextResponse.json(
 				{ error: 'Akses Ditolak: Hanya Petugas Keamanan atau Admin yang dapat memperbarui status surat.' },
 				{ status: 403 }
@@ -207,9 +270,9 @@ export async function PATCH(req) {
 export async function DELETE(req) {
 	try {
 		const role = req.headers.get('x-user-role');
-		if (role !== 'Admin' && role !== 'Keamanan') {
+		if (role !== 'Admin') {
 			return NextResponse.json(
-				{ error: 'Akses Ditolak: Hanya Petugas Keamanan atau Admin yang dapat menghapus surat.' },
+				{ error: 'Akses Ditolak: Demi integritas audit pos keamanan, hanya Administrator yang berwenang menghapus permanen surat izin.' },
 				{ status: 403 }
 			);
 		}
