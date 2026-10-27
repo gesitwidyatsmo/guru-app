@@ -357,6 +357,26 @@ export const getKBMStatusBadge = (status) => {
 		};
 	}
 
+	if (s.includes('kegiatan sekolah') || s.includes('hari santri') || s.includes('event')) {
+		return {
+			label: 'Kegiatan Sekolah',
+			bg: 'bg-purple-50',
+			text: 'text-purple-900',
+			border: 'border-purple-500',
+			icon: '🎪',
+		};
+	}
+
+	if (s.includes('tugas luar') || s.includes('dinas luar') || s.includes('dinas')) {
+		return {
+			label: 'Tugas Luar / Dinas',
+			bg: 'bg-blue-50',
+			text: 'text-blue-900',
+			border: 'border-blue-500',
+			icon: '✈️',
+		};
+	}
+
 	if (s.includes('tepat') || s === 'hadir penuh' || s === 'normal') {
 		return {
 			label: 'Tepat Waktu',

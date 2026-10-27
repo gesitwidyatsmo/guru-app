@@ -9,12 +9,14 @@ import { haversine, formatDistance } from '@/lib/haversine';
  * @param {number|string|null} options.userLng Koordinat longitude dari perangkat user
  * @param {string} [options.moduleName='absensi'] Nama modul ('jurnal' atau 'absensi')
  * @param {string} [options.role] Peran pengguna (Admin dilewati dari validasi)
+ * @param {boolean} [options.isTugasLuar=false] Apakah pengguna bertugas di luar sekolah
+ * @param {boolean} [options.isKegiatanSekolah=false] Apakah kegiatan sekolah (Hari Santri, event, dll)
  * @returns {Promise<{ allowed: boolean, status?: number, error?: string, distance?: number }>}
  */
-export async function verifyGeofence({ supabase, userLat, userLng, moduleName = 'absensi', role }) {
-	// Administrator dikecualikan dari batasan geofencing
-	if (role === 'Admin') {
-		return { allowed: true };
+export async function verifyGeofence({ supabase, userLat, userLng, moduleName = 'absensi', role, isTugasLuar = false, isKegiatanSekolah = false }) {
+	// Administrator, Guru bertugas luar, atau Kegiatan Sekolah dikecualikan dari batasan geofencing
+	if (role === 'Admin' || isTugasLuar || isKegiatanSekolah) {
+		return { allowed: true, isTugasLuar: !!isTugasLuar, isKegiatanSekolah: !!isKegiatanSekolah };
 	}
 
 	try {

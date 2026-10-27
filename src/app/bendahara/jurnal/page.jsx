@@ -611,7 +611,27 @@ export default function BendaharaJurnalPage() {
 
 											{/* Status Presensi Siswa */}
 											<td className='px-4 py-3.5 text-center align-middle whitespace-nowrap'>
-												{validation.isValid ? (
+												{validation.status === 'tugas_luar' ? (
+													<div className='inline-flex flex-col items-center gap-0.5'>
+														<span className='px-2.5 py-1 bg-blue-100 border border-blue-600 text-blue-950 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-xs'>
+															<span>✈️</span>
+															<span>Tugas Luar</span>
+														</span>
+														<span className='text-[9px] text-blue-800 font-bold mt-0.5'>
+															Dispensasi Siswa
+														</span>
+													</div>
+												) : validation.status === 'kegiatan_sekolah' ? (
+													<div className='inline-flex flex-col items-center gap-0.5'>
+														<span className='px-2.5 py-1 bg-purple-100 border border-purple-600 text-purple-950 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-xs'>
+															<span>🎪</span>
+															<span>Kegiatan Sekolah</span>
+														</span>
+														<span className='text-[9px] text-purple-800 font-bold mt-0.5'>
+															Dispensasi Siswa
+														</span>
+													</div>
+												) : validation.isValid ? (
 													<div className='inline-flex flex-col items-center gap-0.5'>
 														<span className='px-2.5 py-1 bg-emerald-100 border border-emerald-600 text-emerald-950 rounded-lg text-xs font-black inline-flex items-center gap-1 shadow-xs'>
 															<span>✓</span>
@@ -790,23 +810,61 @@ export default function BendaharaJurnalPage() {
 
 							{/* Status Integritas Presensi Siswa */}
 							<div className={`p-4 rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_#0D0D0D] ${
-								selectedValidation?.isValid ? 'bg-emerald-100' : 'bg-amber-100'
+								selectedValidation?.status === 'tugas_luar'
+									? 'bg-blue-100'
+									: selectedValidation?.status === 'kegiatan_sekolah'
+									? 'bg-purple-100'
+									: selectedValidation?.isValid
+									? 'bg-emerald-100'
+									: 'bg-amber-100'
 							}`}>
 								<div className='flex items-center justify-between gap-2'>
 									<div className='flex items-center gap-2'>
-										<span className='text-base'>{selectedValidation?.isValid ? '🟢' : '🟡'}</span>
+										<span className='text-base'>
+											{selectedValidation?.status === 'tugas_luar'
+												? '✈️'
+												: selectedValidation?.status === 'kegiatan_sekolah'
+												? '🎪'
+												: selectedValidation?.isValid
+												? '🟢'
+												: '🟡'}
+										</span>
 										<span className='text-xs sm:text-sm font-black uppercase text-black'>
-											{selectedValidation?.isValid
+											{selectedValidation?.status === 'tugas_luar'
+												? 'Tugas Luar Sekolah / Dinas Resmi'
+												: selectedValidation?.status === 'kegiatan_sekolah'
+												? 'Kegiatan Sekolah (Hari Santri / Event)'
+												: selectedValidation?.isValid
 												? 'Presensi Siswa Lengkap & Terverifikasi'
 												: 'Presensi Siswa Belum Diisi'}
 										</span>
 									</div>
-									<span className='text-xs font-mono font-black px-2.5 py-1 bg-white border-2 border-black rounded-lg shadow-xs'>
-										{selectedValidation?.studentCount || 0} Siswa
+									<span className={`text-xs font-mono font-black px-2.5 py-1 bg-white border-2 border-black rounded-lg shadow-xs ${
+										selectedValidation?.status === 'tugas_luar'
+											? 'text-blue-900'
+											: selectedValidation?.status === 'kegiatan_sekolah'
+											? 'text-purple-900'
+											: ''
+									}`}>
+										{selectedValidation?.status === 'tugas_luar' || selectedValidation?.status === 'kegiatan_sekolah'
+											? 'Dispensasi Siswa'
+											: `${selectedValidation?.studentCount || 0} Siswa`}
 									</span>
 								</div>
 
-								{selectedValidation?.isValid ? (
+								{selectedValidation?.status === 'tugas_luar' ? (
+									<div className='mt-2.5 bg-white/90 border border-blue-400 p-2.5 rounded-lg'>
+										<p className='text-xs font-bold text-blue-950 leading-relaxed'>
+											Guru bertugas di luar sekolah atas nama dinas/sekolah. Kewajiban presensi kehadiran siswa dibebaskan, dan jam mengajar (JP) tetap diakui sah dan lengkap untuk perhitungan bisaroh.
+										</p>
+									</div>
+								) : selectedValidation?.status === 'kegiatan_sekolah' ? (
+									<div className='mt-2.5 bg-white/90 border border-purple-400 p-2.5 rounded-lg'>
+										<p className='text-xs font-bold text-purple-950 leading-relaxed'>
+											Guru mendampingi / mengikuti agenda resmi kegiatan sekolah (Hari Santri, Upacara, Pawai, PHBI/PHBN, dll). Kewajiban presensi mata pelajaran dibebaskan, dan jam kegiatan (JP) tetap diakui sah dan lengkap untuk perhitungan bisaroh.
+										</p>
+									</div>
+								) : selectedValidation?.isValid ? (
 									<div className='mt-3'>
 										<div className='grid grid-cols-4 gap-2 text-center text-xs font-black'>
 											<div className='bg-white border-2 border-black p-2 rounded-xl'>

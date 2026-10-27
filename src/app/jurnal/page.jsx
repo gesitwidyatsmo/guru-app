@@ -87,6 +87,9 @@ export default function JurnalPage() {
 		durasi_menit: 0,
 		sesi_absensi_id: '',
 		status_kehadiran: 'Normal',
+		tipe_agenda: 'reguler', // 'reguler' | 'tugas_luar' | 'kegiatan_sekolah'
+		is_tugas_luar: false,
+		is_kegiatan_sekolah: false,
 	};
 	const [formData, setFormData] = useState(initialForm);
 
@@ -526,6 +529,15 @@ export default function JurnalPage() {
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
+			const isTL =
+				journal.status_kehadiran === 'Tugas Luar' ||
+				String(journal.kegiatan || '').includes('[Tugas Luar');
+
+			const isKS =
+				journal.status_kehadiran === 'Kegiatan Sekolah' ||
+				String(journal.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+				String(journal.kegiatan || '').includes('[Kegiatan Sekolah');
+
 			setFormData({
 				...initialForm,
 				...journal,
@@ -534,7 +546,10 @@ export default function JurnalPage() {
 				jam_selesai: journal.jam_selesai || '',
 				durasi_menit: journal.durasi_menit || 0,
 				sesi_absensi_id: journal.sesi_absensi_id || '',
-				status_kehadiran: journal.status_kehadiran || 'Normal',
+				status_kehadiran: isKS ? 'Kegiatan Sekolah' : (isTL ? 'Tugas Luar' : (journal.status_kehadiran || 'Normal')),
+				tipe_agenda: isKS ? 'kegiatan_sekolah' : (isTL ? 'tugas_luar' : 'reguler'),
+				is_tugas_luar: isTL,
+				is_kegiatan_sekolah: isKS,
 			});
 			if (journal.jam_mulai) {
 				setMatchedAbsensi({
@@ -623,8 +638,8 @@ export default function JurnalPage() {
 			return;
 		}
 
-		// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin dan user bukan Admin)
-		if (geofenceSettings?.enabled && userRole !== 'Admin') {
+		// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin, user bukan Admin, dan BUKAN Tugas Luar / Kegiatan Sekolah)
+		if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah) {
 			try {
 				const coords = await getPosition();
 				const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
@@ -641,7 +656,7 @@ export default function JurnalPage() {
 									<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
 									<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
 								</div>
-								<p class="text-xs text-gray-600 font-medium">Jurnal mengajar hanya dapat disimpan saat Anda berada di lingkungan sekolah.</p>
+								<p class="text-xs text-gray-600 font-medium">Jurnal mengajar reguler hanya dapat disimpan saat Anda berada di lingkungan sekolah. Jika Anda sedang bertugas di luar sekolah atau mengikuti agenda khusus, pilih opsi agenda yang sesuai.</p>
 							</div>
 						`,
 						confirmButtonColor: '#E8451A',
@@ -665,6 +680,16 @@ export default function JurnalPage() {
 					confirmButtonText: 'Mengerti',
 				});
 				return;
+			}
+		} else if (formData.is_tugas_luar || formData.is_kegiatan_sekolah) {
+			// Jika Tugas Luar atau Kegiatan Sekolah, rekam koordinat GPS aktual jika tersedia tanpa memblokir radius
+			try {
+				const coords = await getPosition();
+				if (coords?.lat && coords?.lng) {
+					setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng });
+				}
+			} catch {
+				// Jangan memblokir jika GPS gagal saat tugas luar
 			}
 		}
 
@@ -750,7 +775,17 @@ export default function JurnalPage() {
 					cleanUpdates.sesi_absensi_id = null;
 				}
 
-				if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
+				if (formData.is_kegiatan_sekolah) {
+					cleanUpdates.status_kehadiran = 'Kegiatan Sekolah';
+					if (!cleanUpdates.kegiatan?.includes('[Kegiatan Sekolah')) {
+						cleanUpdates.kegiatan = `[Kegiatan Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+					}
+				} else if (formData.is_tugas_luar) {
+					cleanUpdates.status_kehadiran = 'Tugas Luar';
+					if (!cleanUpdates.kegiatan?.includes('[Tugas Luar')) {
+						cleanUpdates.kegiatan = `[Tugas Luar / Dinas Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+					}
+				} else if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
 					cleanUpdates.status_kehadiran = determineKBMStatus({
 						jamMulai: cleanUpdates.jam_mulai,
 						jamSelesai: cleanUpdates.jam_selesai,
@@ -813,7 +848,15 @@ export default function JurnalPage() {
 								'x-user-id': userId || '',
 								'x-user-role': userRole || '',
 							},
-							body: JSON.stringify({ id, ...cleanUpdates }),
+							body: JSON.stringify({
+								id,
+								...cleanUpdates,
+								is_tugas_luar: formData.is_tugas_luar,
+								is_kegiatan_sekolah: formData.is_kegiatan_sekolah,
+								tipe_agenda: formData.tipe_agenda,
+								user_lat: userLocationStatus?.userLat,
+								user_lng: userLocationStatus?.userLng,
+							}),
 						});
 
 						if (res.ok) {
@@ -832,13 +875,26 @@ export default function JurnalPage() {
 				const finalJamMulai = matchedAbsensi?.jam_mulai || formData.jam_mulai || null;
 				const finalJamSelesai = getTimeWIB(new Date());
 				const finalDurasi = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
-				const finalStatus = determineKBMStatus({
-					jamMulai: finalJamMulai,
-					jamSelesai: finalJamSelesai,
-					durasiMenit: finalDurasi,
-					tanggal: formData.tanggal,
-					jamKe: formData.jam_ke,
-				});
+				const isTL = !!formData.is_tugas_luar;
+				const isKS = !!formData.is_kegiatan_sekolah;
+				let finalKegiatan = formData.kegiatan || '';
+				if (isKS && !finalKegiatan.includes('[Kegiatan Sekolah')) {
+					finalKegiatan = `[Kegiatan Sekolah] ${finalKegiatan}`.trim();
+				} else if (isTL && !finalKegiatan.includes('[Tugas Luar')) {
+					finalKegiatan = `[Tugas Luar / Dinas Sekolah] ${finalKegiatan}`.trim();
+				}
+
+				const finalStatus = isKS
+					? 'Kegiatan Sekolah'
+					: isTL
+					? 'Tugas Luar'
+					: determineKBMStatus({
+							jamMulai: finalJamMulai,
+							jamSelesai: finalJamSelesai,
+							durasiMenit: finalDurasi,
+							tanggal: formData.tanggal,
+							jamKe: formData.jam_ke,
+					  });
 
 				const insertData = {
 					id: newId,
@@ -850,7 +906,7 @@ export default function JurnalPage() {
 					mapel: formData.mapel,
 					metode: formData.metode || 'Ceramah',
 					materi: formData.materi,
-					kegiatan: formData.kegiatan || '',
+					kegiatan: finalKegiatan,
 					hambatan: formData.hambatan || '',
 					solusi: formData.solusi || '',
 					tuntas: !!formData.tuntas,
@@ -860,7 +916,7 @@ export default function JurnalPage() {
 					jam_selesai: finalJamSelesai && String(finalJamSelesai).trim() !== '' ? String(finalJamSelesai).trim().slice(0, 8) : null,
 					durasi_menit: finalDurasi || 0,
 					sesi_absensi_id: matchedAbsensi?.sesi_id || null,
-					status_kehadiran: finalStatus || 'Normal',
+					status_kehadiran: finalStatus || (isTL ? 'Tugas Luar' : 'Normal'),
 				};
 
 				let insertSuccess = false;
@@ -910,7 +966,14 @@ export default function JurnalPage() {
 								'x-user-id': userId || '',
 								'x-user-role': userRole || '',
 							},
-							body: JSON.stringify(insertData),
+							body: JSON.stringify({
+								...insertData,
+								is_tugas_luar: formData.is_tugas_luar,
+								is_kegiatan_sekolah: formData.is_kegiatan_sekolah,
+								tipe_agenda: formData.tipe_agenda,
+								user_lat: userLocationStatus?.userLat,
+								user_lng: userLocationStatus?.userLng,
+							}),
 						});
 						if (res.ok) {
 							insertSuccess = true;
@@ -1282,6 +1345,124 @@ export default function JurnalPage() {
 							</div>
 
 							<div className='p-8 space-y-6 bg-[#FFF5F0]'>
+								{/* Card Pilihan Tipe Agenda / Format Kegiatan */}
+								<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] space-y-3'>
+									<div className='flex items-center justify-between flex-wrap gap-2'>
+										<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-wider'>
+											Tipe Agenda / Format Kegiatan
+										</label>
+										{(formData.is_tugas_luar || formData.is_kegiatan_sekolah) && (
+											<span className={`text-[10px] font-black uppercase px-2 py-0.5 border border-[#0D0D0D] ${
+												formData.is_kegiatan_sekolah ? 'bg-purple-600 text-white' : 'bg-[#2F80ED] text-white'
+											}`}>
+												Dispensasi Presensi Siswa
+											</span>
+										)}
+									</div>
+
+									<div className='grid grid-cols-1 sm:grid-cols-3 gap-2.5'>
+										{/* 1. Reguler */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'reguler',
+													is_tugas_luar: false,
+													is_kegiatan_sekolah: false,
+													status_kehadiran: 'Normal',
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												!formData.is_tugas_luar && !formData.is_kegiatan_sekolah
+													? 'bg-[#F5C518] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>🏫</span>
+												{!formData.is_tugas_luar && !formData.is_kegiatan_sekolah && (
+													<span className='w-2.5 h-2.5 bg-[#0D0D0D] rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													KBM di Kelas
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Tatap muka reguler, wajib presensi siswa
+												</div>
+											</div>
+										</button>
+
+										{/* 2. Tugas Luar */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'tugas_luar',
+													is_tugas_luar: true,
+													is_kegiatan_sekolah: false,
+													status_kehadiran: 'Tugas Luar',
+													metode: prev.metode === 'Ceramah' ? 'Penugasan' : prev.metode,
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												formData.is_tugas_luar
+													? 'bg-[#EBF5FF] border-[#2F80ED] shadow-[3px_3px_0px_0px_#2F80ED] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>✈️</span>
+												{formData.is_tugas_luar && (
+													<span className='w-2.5 h-2.5 bg-[#2F80ED] rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													Tugas Luar / Dinas
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Rapat dinas, workshop, lomba santri
+												</div>
+											</div>
+										</button>
+
+										{/* 3. Kegiatan Sekolah */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'kegiatan_sekolah',
+													is_tugas_luar: false,
+													is_kegiatan_sekolah: true,
+													status_kehadiran: 'Kegiatan Sekolah',
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												formData.is_kegiatan_sekolah
+													? 'bg-[#F3E8FF] border-purple-600 shadow-[3px_3px_0px_0px_#9333EA] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>🎪</span>
+												{formData.is_kegiatan_sekolah && (
+													<span className='w-2.5 h-2.5 bg-purple-600 rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													Kegiatan Sekolah
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Hari Santri, Upacara, Event PHBI/PHBN
+												</div>
+											</div>
+										</button>
+									</div>
+								</div>
+
 								{/* Baris 1: Kelas & Mapel (Pemicu Hitung Pertemuan) */}
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 									<div>
@@ -1445,13 +1626,17 @@ export default function JurnalPage() {
 										const start = matchedAbsensi?.jam_mulai || (isEditing && formData.jam_mulai) || null;
 										const end = (isEditing && formData.jam_selesai) || currentTimeStr;
 										const dur = calculateDurationMinutes(start, end);
-										const liveStatus = determineKBMStatus({
-											jamMulai: start,
-											jamSelesai: end,
-											durasiMenit: dur,
-											tanggal: formData.tanggal,
-											jamKe: formData.jam_ke,
-										});
+										const liveStatus = formData.is_kegiatan_sekolah
+											? 'Kegiatan Sekolah'
+											: formData.is_tugas_luar
+											? 'Tugas Luar'
+											: determineKBMStatus({
+													jamMulai: start,
+													jamSelesai: end,
+													durasiMenit: dur,
+													tanggal: formData.tanggal,
+													jamKe: formData.jam_ke,
+											  });
 										const badge = getKBMStatusBadge(liveStatus);
 										const sched = getExpectedScheduleTimes(formData.jam_ke, formData.tanggal);
 
@@ -1472,8 +1657,22 @@ export default function JurnalPage() {
 										);
 									})()}
 
-									{/* Notifikasi Presensi Siswa Belum Diisi */}
-									{!isEditing && !checkingAbsensi && !matchedAbsensi && formData.kelas && formData.mapel && (
+									{/* Notifikasi Presensi Siswa Belum Diisi / Info Tugas Luar / Kegiatan Sekolah */}
+									{formData.is_kegiatan_sekolah ? (
+										<div className='bg-purple-50 border-[2px] border-purple-500 p-2.5 text-xs text-purple-950 flex items-center gap-2'>
+											<span className='text-base'>🎪</span>
+											<span className='font-bold leading-tight'>
+												Dispensasi Presensi Siswa: Anda sedang mengikuti / mendampingi agenda Kegiatan Sekolah (Hari Santri, Event, Upacara, dll). Presensi mata pelajaran dibebaskan.
+											</span>
+										</div>
+									) : formData.is_tugas_luar ? (
+										<div className='bg-blue-50 border-[2px] border-blue-500 p-2.5 text-xs text-blue-950 flex items-center gap-2'>
+											<span className='text-base'>✈️</span>
+											<span className='font-bold leading-tight'>
+												Dispensasi Presensi Siswa: Anda sedang bertugas di luar sekolah. Presensi kehadiran siswa di kelas tidak wajib diisi.
+											</span>
+										</div>
+									) : !isEditing && !checkingAbsensi && !matchedAbsensi && formData.kelas && formData.mapel && (
 										<div className='bg-amber-50 border-[2px] border-[#F5C518] p-2.5 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
 											<div className='flex items-center gap-2'>
 												<span className='text-base'>💡</span>
@@ -1602,7 +1801,11 @@ export default function JurnalPage() {
 								{/* Geofence Status Badge */}
 								{geofenceSettings?.enabled && (
 									<div className={`p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-										!userLocationStatus?.checked
+										formData.is_kegiatan_sekolah
+											? 'bg-purple-100 text-purple-950 border-purple-600'
+											: formData.is_tugas_luar
+											? 'bg-blue-100 text-blue-950 border-blue-600'
+											: !userLocationStatus?.checked
 											? 'bg-yellow-100 text-[#0D0D0D]'
 											: userLocationStatus?.isInside
 											? 'bg-emerald-100 text-emerald-950'
@@ -1610,18 +1813,26 @@ export default function JurnalPage() {
 									}`}>
 										<div className='flex items-center gap-3'>
 											<span className='text-2xl'>
-												{!userLocationStatus?.checked ? '📍' : userLocationStatus?.isInside ? '✅' : '🚫'}
+												{formData.is_kegiatan_sekolah ? '🎪' : formData.is_tugas_luar ? '✈️' : !userLocationStatus?.checked ? '📍' : userLocationStatus?.isInside ? '✅' : '🚫'}
 											</span>
 											<div>
 												<p className='text-xs font-black uppercase tracking-wider'>
-													{!userLocationStatus?.checked
+													{formData.is_kegiatan_sekolah
+														? 'Mode Kegiatan Sekolah: Batasan Radius Sekolah Dibebaskan'
+														: formData.is_tugas_luar
+														? 'Mode Tugas Luar: Batasan Radius Sekolah Dibebaskan'
+														: !userLocationStatus?.checked
 														? `Validasi Lokasi: ${geofenceSettings.nama_lokasi || 'Area Sekolah'}`
 														: userLocationStatus?.isInside
 														? `Lokasi Terverifikasi (${formatDistance(userLocationStatus.distance)})`
 														: `Di Luar Area Sekolah (${formatDistance(userLocationStatus.distance || 0)})`}
 												</p>
 												<p className='text-[11px] font-medium opacity-85'>
-													{!userLocationStatus?.checked
+													{formData.is_kegiatan_sekolah
+														? 'Anda sedang mengikuti agenda resmi kegiatan sekolah (Hari Santri / Pawai / Upacara / Event). Radius geofence dinonaktifkan.'
+														: formData.is_tugas_luar
+														? 'Anda sedang berdinas di luar sekolah. Koordinat posisi GPS Anda tetap dicatat untuk keperluan verifikasi laporan dinas.'
+														: !userLocationStatus?.checked
 														? `Wajib berada dalam radius ${geofenceSettings.radius}m dari sekolah. Lokasi diverifikasi saat menyimpan.`
 														: userLocationStatus?.isInside
 														? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m).`
@@ -1629,7 +1840,7 @@ export default function JurnalPage() {
 												</p>
 											</div>
 										</div>
-										{!userLocationStatus?.isInside && (
+										{!formData.is_tugas_luar && !formData.is_kegiatan_sekolah && !userLocationStatus?.isInside && (
 											<button
 												type='button'
 												onClick={async () => {

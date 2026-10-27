@@ -65,6 +65,9 @@ export default function JurnalKelasPage() {
 		solusi: '',
 		dokumentasi: null,
 		tuntas: false,
+		tipe_agenda: 'reguler', // 'reguler' | 'tugas_luar' | 'kegiatan_sekolah'
+		is_tugas_luar: false,
+		is_kegiatan_sekolah: false,
 	};
 	const [formData, setFormData] = useState(initialForm);
 
@@ -264,9 +267,22 @@ export default function JurnalKelasPage() {
 		if (journal) {
 			// Mode Edit
 			setIsEditing(true);
+			const isTL =
+				journal.status_kehadiran === 'Tugas Luar' ||
+				String(journal.kegiatan || '').includes('[Tugas Luar');
+
+			const isKS =
+				journal.status_kehadiran === 'Kegiatan Sekolah' ||
+				String(journal.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+				String(journal.kegiatan || '').includes('[Kegiatan Sekolah');
+
 			setFormData({
 				...journal,
 				metode: journal.metode || 'Ceramah',
+				tipe_agenda: isKS ? 'kegiatan_sekolah' : (isTL ? 'tugas_luar' : 'reguler'),
+				is_tugas_luar: isTL,
+				is_kegiatan_sekolah: isKS,
+				status_kehadiran: isKS ? 'Kegiatan Sekolah' : (isTL ? 'Tugas Luar' : (journal.status_kehadiran || 'Normal')),
 			});
 		} else {
 			// Mode Tambah Baru
@@ -389,7 +405,17 @@ export default function JurnalKelasPage() {
 					cleanUpdates.sesi_absensi_id = null;
 				}
 
-				if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
+				if (formData.is_kegiatan_sekolah) {
+					cleanUpdates.status_kehadiran = 'Kegiatan Sekolah';
+					if (!cleanUpdates.kegiatan?.includes('[Kegiatan Sekolah')) {
+						cleanUpdates.kegiatan = `[Kegiatan Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+					}
+				} else if (formData.is_tugas_luar) {
+					cleanUpdates.status_kehadiran = 'Tugas Luar';
+					if (!cleanUpdates.kegiatan?.includes('[Tugas Luar')) {
+						cleanUpdates.kegiatan = `[Tugas Luar / Dinas Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+					}
+				} else if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
 					cleanUpdates.status_kehadiran = determineKBMStatus({
 						jamMulai: cleanUpdates.jam_mulai,
 						jamSelesai: cleanUpdates.jam_selesai,
@@ -451,7 +477,13 @@ export default function JurnalKelasPage() {
 								'x-user-id': userId || '',
 								'x-user-role': userRole || '',
 							},
-							body: JSON.stringify({ id, ...cleanUpdates }),
+							body: JSON.stringify({
+								id,
+								...cleanUpdates,
+								is_tugas_luar: formData.is_tugas_luar,
+								is_kegiatan_sekolah: formData.is_kegiatan_sekolah,
+								tipe_agenda: formData.tipe_agenda,
+							}),
 						});
 
 						if (res.ok) {
@@ -467,6 +499,27 @@ export default function JurnalKelasPage() {
 				}
 			} else {
 				const newId = Math.random().toString(36).substring(2, 11);
+				const isTL = !!formData.is_tugas_luar;
+				const isKS = !!formData.is_kegiatan_sekolah;
+				let finalKegiatan = formData.kegiatan || '';
+				if (isKS && !finalKegiatan.includes('[Kegiatan Sekolah')) {
+					finalKegiatan = `[Kegiatan Sekolah] ${finalKegiatan}`.trim();
+				} else if (isTL && !finalKegiatan.includes('[Tugas Luar')) {
+					finalKegiatan = `[Tugas Luar / Dinas Sekolah] ${finalKegiatan}`.trim();
+				}
+
+				const finalStatus = isKS
+					? 'Kegiatan Sekolah'
+					: isTL
+					? 'Tugas Luar'
+					: determineKBMStatus({
+							jamMulai: formData.jam_mulai,
+							jamSelesai: formData.jam_selesai,
+							durasiMenit: formData.durasi_menit,
+							tanggal: formData.tanggal,
+							jamKe: formData.jam_ke,
+					  });
+
 				const insertData = {
 					id: newId,
 					guru_id: userId || null,
@@ -477,7 +530,7 @@ export default function JurnalKelasPage() {
 					mapel: formData.mapel,
 					metode: formData.metode || 'Ceramah',
 					materi: formData.materi,
-					kegiatan: formData.kegiatan || '',
+					kegiatan: finalKegiatan,
 					hambatan: formData.hambatan || '',
 					solusi: formData.solusi || '',
 					tuntas: !!formData.tuntas,
@@ -485,13 +538,7 @@ export default function JurnalKelasPage() {
 					jam_selesai: formData.jam_selesai && String(formData.jam_selesai).trim() !== '' ? String(formData.jam_selesai).trim().slice(0, 8) : null,
 					durasi_menit: formData.durasi_menit || 0,
 					sesi_absensi_id: formData.sesi_absensi_id || null,
-					status_kehadiran: determineKBMStatus({
-						jamMulai: formData.jam_mulai,
-						jamSelesai: formData.jam_selesai,
-						durasiMenit: formData.durasi_menit,
-						tanggal: formData.tanggal,
-						jamKe: formData.jam_ke,
-					}),
+					status_kehadiran: finalStatus || (isTL ? 'Tugas Luar' : 'Normal'),
 				};
 
 				let insertSuccess = false;
@@ -540,7 +587,12 @@ export default function JurnalKelasPage() {
 								'x-user-id': userId || '',
 								'x-user-role': userRole || '',
 							},
-							body: JSON.stringify(insertData),
+							body: JSON.stringify({
+								...insertData,
+								is_tugas_luar: formData.is_tugas_luar,
+								is_kegiatan_sekolah: formData.is_kegiatan_sekolah,
+								tipe_agenda: formData.tipe_agenda,
+							}),
 						});
 						if (res.ok) {
 							insertSuccess = true;
@@ -793,6 +845,124 @@ export default function JurnalKelasPage() {
 							</div>
 
 							<div className='p-8 space-y-6 bg-[#FFF5F0]'>
+								{/* Card Pilihan Tipe Agenda / Format Kegiatan */}
+								<div className='p-4 bg-white border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] space-y-3'>
+									<div className='flex items-center justify-between flex-wrap gap-2'>
+										<label className='block text-xs font-black text-[#0D0D0D] uppercase tracking-wider'>
+											Tipe Agenda / Format Kegiatan
+										</label>
+										{(formData.is_tugas_luar || formData.is_kegiatan_sekolah) && (
+											<span className={`text-[10px] font-black uppercase px-2 py-0.5 border border-[#0D0D0D] ${
+												formData.is_kegiatan_sekolah ? 'bg-purple-600 text-white' : 'bg-[#2F80ED] text-white'
+											}`}>
+												Dispensasi Presensi Siswa
+											</span>
+										)}
+									</div>
+
+									<div className='grid grid-cols-1 sm:grid-cols-3 gap-2.5'>
+										{/* 1. Reguler */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'reguler',
+													is_tugas_luar: false,
+													is_kegiatan_sekolah: false,
+													status_kehadiran: 'Normal',
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												!formData.is_tugas_luar && !formData.is_kegiatan_sekolah
+													? 'bg-[#F5C518] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>🏫</span>
+												{!formData.is_tugas_luar && !formData.is_kegiatan_sekolah && (
+													<span className='w-2.5 h-2.5 bg-[#0D0D0D] rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													KBM di Kelas
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Tatap muka reguler di kelas
+												</div>
+											</div>
+										</button>
+
+										{/* 2. Tugas Luar */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'tugas_luar',
+													is_tugas_luar: true,
+													is_kegiatan_sekolah: false,
+													status_kehadiran: 'Tugas Luar',
+													metode: prev.metode === 'Ceramah' ? 'Penugasan' : prev.metode,
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												formData.is_tugas_luar
+													? 'bg-[#EBF5FF] border-[#2F80ED] shadow-[3px_3px_0px_0px_#2F80ED] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>✈️</span>
+												{formData.is_tugas_luar && (
+													<span className='w-2.5 h-2.5 bg-[#2F80ED] rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													Tugas Luar / Dinas
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Rapat dinas, workshop, lomba
+												</div>
+											</div>
+										</button>
+
+										{/* 3. Kegiatan Sekolah */}
+										<button
+											type='button'
+											onClick={() => {
+												setFormData((prev) => ({
+													...prev,
+													tipe_agenda: 'kegiatan_sekolah',
+													is_tugas_luar: false,
+													is_kegiatan_sekolah: true,
+													status_kehadiran: 'Kegiatan Sekolah',
+												}));
+											}}
+											className={`p-3 border-[3px] text-left transition-all rounded-none flex flex-col justify-between gap-1.5 cursor-pointer ${
+												formData.is_kegiatan_sekolah
+													? 'bg-[#F3E8FF] border-purple-600 shadow-[3px_3px_0px_0px_#9333EA] translate-x-[-1px] translate-y-[-1px]'
+													: 'bg-white border-[#0D0D0D]/40 hover:border-[#0D0D0D] hover:bg-gray-50'
+											}`}>
+											<div className='flex items-center justify-between'>
+												<span className='text-xl'>🎪</span>
+												{formData.is_kegiatan_sekolah && (
+													<span className='w-2.5 h-2.5 bg-purple-600 rounded-full'></span>
+												)}
+											</div>
+											<div>
+												<div className='text-xs font-black uppercase tracking-tight text-[#0D0D0D]'>
+													Kegiatan Sekolah
+												</div>
+												<div className='text-[10px] font-medium text-gray-700 leading-tight mt-0.5'>
+													Hari Santri, Upacara, Event, dll
+												</div>
+											</div>
+										</button>
+									</div>
+								</div>
+
 								{/* Baris 1: Mapel (Satu-satunya Dropdown) */}
 								<div>
 									<label className='block text-sm font-black text-[#0D0D0D] uppercase tracking-widest mb-2'>Mata Pelajaran</label>

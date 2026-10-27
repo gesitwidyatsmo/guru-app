@@ -107,7 +107,22 @@ export async function POST(req) {
 
 		const supabase = await createClient();
 
-		// Verifikasi Geofence jika diaktifkan oleh Admin
+		const isTugasLuar =
+			body.is_tugas_luar === true ||
+			body.tipe_agenda === 'tugas_luar' ||
+			String(body.status_kehadiran || '').toLowerCase().includes('tugas luar') ||
+			String(body.kegiatan || '').toLowerCase().includes('[tugas luar') ||
+			String(body.materi || '').toLowerCase().includes('[tugas luar');
+
+		const isKegiatanSekolah =
+			body.is_kegiatan_sekolah === true ||
+			body.tipe_agenda === 'kegiatan_sekolah' ||
+			String(body.status_kehadiran || '').toLowerCase().includes('kegiatan sekolah') ||
+			String(body.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+			String(body.kegiatan || '').toLowerCase().includes('[kegiatan sekolah') ||
+			String(body.materi || '').toLowerCase().includes('[kegiatan sekolah');
+
+		// Verifikasi Geofence jika diaktifkan oleh Admin (Kecualikan jika Guru Tugas Luar, Kegiatan Sekolah, atau Admin)
 		try {
 			const { data: geofenceSetting } = await supabase
 				.from('app_settings')
@@ -116,7 +131,7 @@ export async function POST(req) {
 				.maybeSingle();
 
 			const geofence = geofenceSetting?.value;
-			if (geofence?.enabled) {
+			if (geofence?.enabled && !isTugasLuar && !isKegiatanSekolah && role !== 'Admin') {
 				if (user_lat === undefined || user_lng === undefined || user_lat === null || user_lng === null) {
 					return NextResponse.json(
 						{
@@ -136,7 +151,7 @@ export async function POST(req) {
 								distance
 							)} meter dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${
 								geofence.radius
-							}m). Jurnal hanya dapat diisi dari lingkungan sekolah.`,
+							}m). Jurnal hanya dapat diisi dari lingkungan sekolah. Jika Anda bertugas di luar sekolah atau mengikuti kegiatan sekolah, pilih opsi agenda yang sesuai.`,
 						},
 						{ status: 403 }
 					);
@@ -211,14 +226,32 @@ export async function POST(req) {
 		}
 
 		const finalDurasi = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
-		const computedStatus = determineKBMStatus({
-			jamMulai: finalJamMulai,
-			jamSelesai: finalJamSelesai,
-			durasiMenit: finalDurasi,
-			tanggal,
-			jamKe: jam_ke,
-		});
-		const finalStatus = (body.status_kehadiran && body.status_kehadiran !== 'Normal') ? body.status_kehadiran : computedStatus;
+		const computedStatus = isKegiatanSekolah
+			? 'Kegiatan Sekolah'
+			: isTugasLuar
+			? 'Tugas Luar'
+			: determineKBMStatus({
+					jamMulai: finalJamMulai,
+					jamSelesai: finalJamSelesai,
+					durasiMenit: finalDurasi,
+					tanggal,
+					jamKe: jam_ke,
+			  });
+		const finalStatus = isKegiatanSekolah
+			? 'Kegiatan Sekolah'
+			: isTugasLuar
+			? 'Tugas Luar'
+			: (body.status_kehadiran && body.status_kehadiran !== 'Normal')
+			? body.status_kehadiran
+			: computedStatus;
+
+		let finalKegiatan = kegiatan || '';
+		if (isKegiatanSekolah && !finalKegiatan.includes('[Kegiatan Sekolah')) {
+			finalKegiatan = `[Kegiatan Sekolah] ${finalKegiatan}`.trim();
+		} else if (isTugasLuar && !finalKegiatan.includes('[Tugas Luar')) {
+			const locInfo = user_lat && user_lng ? ` (GPS: ${Number(user_lat).toFixed(4)}, ${Number(user_lng).toFixed(4)})` : '';
+			finalKegiatan = `[Tugas Luar / Dinas Sekolah${locInfo}] ${finalKegiatan}`.trim();
+		}
 
 		const insertPayload = {
 			id,
@@ -229,7 +262,7 @@ export async function POST(req) {
 			kelas,
 			mapel,
 			materi,
-			kegiatan: kegiatan || '',
+			kegiatan: finalKegiatan,
 			hambatan: hambatan || '',
 			solusi: solusi || '',
 			tuntas: !!tuntas,
@@ -352,7 +385,24 @@ export async function PUT(req) {
 		if (updates.durasi_menit !== undefined) {
 			updates.durasi_menit = !isNaN(Number(updates.durasi_menit)) ? Number(updates.durasi_menit) : 0;
 		}
-		if (updates.jam_mulai && updates.jam_selesai) {
+		const isTugasLuar =
+			body.is_tugas_luar === true ||
+			body.tipe_agenda === 'tugas_luar' ||
+			String(body.status_kehadiran || '').toLowerCase().includes('tugas luar') ||
+			String(updates.kegiatan || '').toLowerCase().includes('[tugas luar');
+
+		const isKegiatanSekolah =
+			body.is_kegiatan_sekolah === true ||
+			body.tipe_agenda === 'kegiatan_sekolah' ||
+			String(body.status_kehadiran || '').toLowerCase().includes('kegiatan sekolah') ||
+			String(body.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+			String(updates.kegiatan || '').toLowerCase().includes('[kegiatan sekolah');
+
+		if (isKegiatanSekolah) {
+			updates.status_kehadiran = 'Kegiatan Sekolah';
+		} else if (isTugasLuar) {
+			updates.status_kehadiran = 'Tugas Luar';
+		} else if (updates.jam_mulai && updates.jam_selesai) {
 			updates.status_kehadiran = determineKBMStatus({
 				jamMulai: updates.jam_mulai,
 				jamSelesai: updates.jam_selesai,
@@ -363,6 +413,9 @@ export async function PUT(req) {
 		} else if (updates.status_kehadiran !== undefined) {
 			updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
 		}
+		delete updates.is_tugas_luar;
+		delete updates.is_kegiatan_sekolah;
+		delete updates.tipe_agenda;
 
 		let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
 

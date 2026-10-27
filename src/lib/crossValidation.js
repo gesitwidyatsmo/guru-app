@@ -102,6 +102,41 @@ export const validateJurnalWithAbsensi = (jurnal, crossMap) => {
 		};
 	}
 
+	// Pengecualian Khusus: Guru Bertugas di Luar Sekolah (Tugas Luar / Dinas Luar)
+	const isTugasLuar =
+		String(jurnal.status_kehadiran || '').toLowerCase().includes('tugas luar') ||
+		String(jurnal.kegiatan || '').toLowerCase().includes('[tugas luar') ||
+		String(jurnal.materi || '').toLowerCase().includes('[tugas luar');
+
+	if (isTugasLuar) {
+		return {
+			isValid: true,
+			status: 'tugas_luar',
+			session: null,
+			summary: { hadir: 0, sakit: 0, izin: 0, alfa: 0, total: 0 },
+			studentCount: 0,
+			label: 'Tugas Luar (Dispensasi Absensi)',
+		};
+	}
+
+	// Pengecualian Khusus: Agenda / Kegiatan Sekolah (Hari Santri, Upacara, Event PHBI/PHBN, dsb.)
+	const isKegiatanSekolah =
+		String(jurnal.status_kehadiran || '').toLowerCase().includes('kegiatan sekolah') ||
+		String(jurnal.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+		String(jurnal.kegiatan || '').toLowerCase().includes('[kegiatan sekolah') ||
+		String(jurnal.materi || '').toLowerCase().includes('[kegiatan sekolah');
+
+	if (isKegiatanSekolah) {
+		return {
+			isValid: true,
+			status: 'kegiatan_sekolah',
+			session: null,
+			summary: { hadir: 0, sakit: 0, izin: 0, alfa: 0, total: 0 },
+			studentCount: 0,
+			label: 'Kegiatan Sekolah (Dispensasi Absensi)',
+		};
+	}
+
 	const key = getCrossMatchKey(jurnal.tanggal, jurnal.kelas, jurnal.mapel);
 	const candidates = crossMap.get(key) || [];
 
