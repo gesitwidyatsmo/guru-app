@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { haversine } from '@/lib/haversine';
 import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
+import { findConflictingSession } from '@/lib/absensiUtils';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -29,8 +30,23 @@ export async function GET(req) {
 		const mapel = searchParams.get('mapel');
 		const tahunAjar = searchParams.get('tahun_ajar');
 		const semester = searchParams.get('semester');
+		const tanggalParam = searchParams.get('tanggal');
+		const checkConflict = searchParams.get('check_conflict') === 'true';
 
 		const supabase = await createClient();
+
+		// Mode Cek Konflik Jam Pelajaran (Tingkat Kelas - Opsi 1)
+		if (checkConflict && kelas && tanggalParam) {
+			const { data: conflictJournals, error: conflictErr } = await supabase
+				.from('jurnal')
+				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap, username)')
+				.eq('kelas', kelas)
+				.eq('tanggal', tanggalParam);
+
+			if (conflictErr) throw conflictErr;
+			return NextResponse.json(conflictJournals || [], { status: 200 });
+		}
+
 		let query = supabase
 			.from('jurnal')
 			.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
@@ -129,6 +145,36 @@ export async function POST(req) {
 		} catch (geoErr) {
 			console.warn('Geofence verification skipped or table missing:', geoErr.message);
 		}
+
+		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
+		if (tanggal && kelas && jam_ke) {
+			const { data: existingJournals } = await supabase
+				.from('jurnal')
+				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
+				.eq('kelas', kelas)
+				.eq('tanggal', tanggal);
+
+			const conflict = findConflictingSession(existingJournals || [], jam_ke);
+			if (conflict) {
+				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+				const mapelExisting = conflict.session.mapel || 'Mapel lain';
+				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
+				return NextResponse.json(
+					{
+						error: `Konflik Jam Mengajar: Jam ke-${jam_ke} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${kelas} tanggal ${tanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
+						conflict: {
+							existingJamKe: conflict.session.jam_ke,
+							conflicts: conflict.conflicts,
+							existingMapel: mapelExisting,
+							existingGuru: guruExisting,
+							existingId: conflict.session.id,
+						},
+					},
+					{ status: 409 }
+				);
+			}
+		}
+
 		const id = generateId();
 
 		// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
@@ -242,11 +288,50 @@ export async function PUT(req) {
 
 		const supabase = await createClient();
 
+		// Ambil data jurnal eksisting untuk verifikasi kepemilikan dan data tanggal/kelas
+		const { data: existingData } = await supabase
+			.from('jurnal')
+			.select('guru_id, kelas, tanggal, jam_ke')
+			.eq('id', id)
+			.maybeSingle();
+
 		// Verifikasi kepemilikan jika Guru
 		if (role === 'Guru' && userId) {
-			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).maybeSingle();
 			if (existingData && existingData.guru_id && existingData.guru_id !== userId) {
 				return NextResponse.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
+			}
+		}
+
+		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1) saat edit
+		const targetTanggal = others.tanggal || existingData?.tanggal;
+		const targetKelas = others.kelas || existingData?.kelas;
+		const targetJamKe = others.jam_ke !== undefined ? others.jam_ke : existingData?.jam_ke;
+
+		if (targetTanggal && targetKelas && targetJamKe) {
+			const { data: existingJournals } = await supabase
+				.from('jurnal')
+				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
+				.eq('kelas', targetKelas)
+				.eq('tanggal', targetTanggal);
+
+			const conflict = findConflictingSession(existingJournals || [], targetJamKe, id);
+			if (conflict) {
+				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+				const mapelExisting = conflict.session.mapel || 'Mapel lain';
+				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
+				return NextResponse.json(
+					{
+						error: `Konflik Jam Mengajar: Jam ke-${targetJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${targetKelas} tanggal ${targetTanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
+						conflict: {
+							existingJamKe: conflict.session.jam_ke,
+							conflicts: conflict.conflicts,
+							existingMapel: mapelExisting,
+							existingGuru: guruExisting,
+							existingId: conflict.session.id,
+						},
+					},
+					{ status: 409 }
+				);
 			}
 		}
 
