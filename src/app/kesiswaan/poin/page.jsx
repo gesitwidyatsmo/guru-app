@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import Link from 'next/link';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
-import { konversiPoinKeSikap } from '@/lib/poinUtils';
+import { konversiPoinKeSikap, isPoinPositif } from '@/lib/poinUtils';
 import { fetchSchoolProfile, DEFAULT_PROFIL_SEKOLAH } from '@/lib/pdfKopSurat';
 import { getTodayDateString } from '@/lib/dateUtils';
 
@@ -153,7 +153,7 @@ export default function KesiswaanPoinPage() {
 
 			if (filterKelas !== 'Semua' && sKelas !== filterKelas) return false;
 
-			const isPos = item.tipe === 'positif' || item.poin > 0;
+			const isPos = isPoinPositif(item);
 			if (filterTipe === 'positif' && !isPos) return false;
 			if (filterTipe === 'negatif' && isPos) return false;
 
@@ -194,7 +194,7 @@ export default function KesiswaanPoinPage() {
 		poinList.forEach((p) => {
 			if (map[p.siswa_id]) {
 				const val = Math.abs(parseInt(p.poin || 0, 10));
-				const isPos = p.tipe === 'positif' || p.poin > 0;
+				const isPos = isPoinPositif(p);
 				if (isPos) {
 					map[p.siswa_id].positif += val;
 					map[p.siswa_id].countPositif += 1;
@@ -272,7 +272,7 @@ export default function KesiswaanPoinPage() {
 	const handleOpenEditModal = (item) => {
 		setIsEditing(true);
 		const s = siswaMap[item.siswa_id];
-		const isPos = item.tipe === 'positif' || item.poin > 0;
+		const isPos = isPoinPositif(item);
 		setFormData({
 			id: item.id,
 			tanggal: item.tanggal,
@@ -677,7 +677,7 @@ export default function KesiswaanPoinPage() {
 									<tbody className='divide-y divide-gray-200 font-bold'>
 										{filteredPoinList.map((item, idx) => {
 											const s = siswaMap[item.siswa_id];
-											const isPos = item.tipe === 'positif' || item.poin > 0;
+											const isPos = isPoinPositif(item);
 											const valPoin = Math.abs(item.poin || 0);
 
 											return (
@@ -1182,7 +1182,7 @@ export default function KesiswaanPoinPage() {
 							) : (
 								<div className='space-y-2 max-h-64 overflow-y-auto divide-y divide-gray-100'>
 									{selectedDetailSiswa.items.map((it) => {
-										const isPos = it.tipe === 'positif' || it.poin > 0;
+										const isPos = isPoinPositif(it);
 										const val = Math.abs(it.poin || 0);
 										return (
 											<div key={it.id} className='p-2.5 flex items-start justify-between gap-3'>

@@ -347,7 +347,7 @@ export async function GET(req) {
 
 				poinRows.forEach((p) => {
 					const val = Math.abs(parseInt(p.poin || '0', 10));
-					if (p.tipe === 'Positif') {
+					if (String(p.tipe || '').toLowerCase() === 'positif') {
 						pos += val;
 						siswaPoinMap[p.siswa_id] = (siswaPoinMap[p.siswa_id] || 0) + val;
 					} else {

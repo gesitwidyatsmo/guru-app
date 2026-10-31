@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
-import { hitungTotalPoinBersih, konversiPoinKeSikap } from '@/lib/poinUtils';
+import { hitungTotalPoinBersih, konversiPoinKeSikap, isPoinPositif } from '@/lib/poinUtils';
 import { useAcademic } from '@/context/AcademicContext';
 import Swal from 'sweetalert2';
 import { jsPDF } from 'jspdf';
@@ -75,7 +75,7 @@ export default function KepsekPoinPage() {
 		return poinList.filter((p) => {
 			const sKelas = p.siswa?.kelas || '';
 			const matchKelas = filterKelas === 'Semua' || sKelas === filterKelas;
-			const isPos = p.tipe === 'Positif' || p.poin > 0;
+			const isPos = isPoinPositif(p);
 			const matchTipe =
 				filterTipe === 'Semua' ||
 				(filterTipe === 'Positif' && isPos) ||
@@ -127,7 +127,7 @@ export default function KepsekPoinPage() {
 		let posCount = 0;
 		let negCount = 0;
 		poinList.forEach((p) => {
-			if (p.tipe === 'Positif' || p.poin > 0) posCount += Math.abs(p.poin || 0);
+			if (isPoinPositif(p)) posCount += Math.abs(p.poin || 0);
 			else negCount += Math.abs(p.poin || 0);
 		});
 
@@ -190,7 +190,7 @@ export default function KepsekPoinPage() {
 			];
 
 			const tableBody = filteredPoin.map((p, idx) => {
-				const isPos = p.tipe === 'Positif' || p.poin > 0;
+				const isPos = isPoinPositif(p);
 				return [
 					idx + 1,
 					p.tanggal || '-',
@@ -275,7 +275,7 @@ export default function KepsekPoinPage() {
 		];
 
 		const rows = filteredPoin.map((p) => {
-			const isPos = p.tipe === 'Positif' || p.poin > 0;
+			const isPos = isPoinPositif(p);
 			return [
 				p.tanggal || '',
 				`"${(p.siswa?.nama_lengkap || '').replace(/"/g, '""')}"`,
@@ -592,7 +592,7 @@ export default function KepsekPoinPage() {
 								</tr>
 							) : (
 								paginatedPoin.map((p, idx) => {
-									const isPositive = p.tipe === 'Positif' || p.poin > 0;
+									const isPositive = isPoinPositif(p);
 									return (
 										<tr
 											key={p.id || idx}

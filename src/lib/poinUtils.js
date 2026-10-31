@@ -4,6 +4,20 @@
  */
 
 /**
+ * Memeriksa apakah suatu catatan poin tergolong positif (prestasi) atau negatif (pelanggaran).
+ * Memperhitungkan ejaan casing serta menjaga kompatibilitas bila field tipe kosong.
+ * @param {{ tipe?: string, poin?: number|string }} item
+ * @returns {boolean} true jika positif, false jika negatif
+ */
+export function isPoinPositif(item) {
+	if (!item) return true;
+	const tipe = String(item.tipe || '').trim().toLowerCase();
+	if (tipe === 'negatif') return false;
+	if (tipe === 'positif') return true;
+	return parseInt(item.poin || 0, 10) > 0;
+}
+
+/**
  * Menghitung total poin bersih (net points) dari daftar poin seorang siswa
  * @param {Array<{ tipe: string, poin: number|string }>} poinList
  * @returns {number} Poin bersih (positif - negatif)
@@ -11,9 +25,9 @@
 export function hitungTotalPoinBersih(poinList = []) {
 	if (!Array.isArray(poinList) || poinList.length === 0) return 0;
 	return poinList.reduce((acc, item) => {
-		const val = parseInt(item.poin || 0, 10);
+		const val = Math.abs(parseInt(item.poin || 0, 10));
 		if (Number.isNaN(val)) return acc;
-		return item.tipe === 'positif' ? acc + val : acc - val;
+		return isPoinPositif(item) ? acc + val : acc - val;
 	}, 0);
 }
 

@@ -1571,17 +1571,19 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 						{/* Log list */}
 						{poinStats.recentLogs && poinStats.recentLogs.length > 0 ? (
 							<div className='space-y-3'>
-								{poinStats.recentLogs.map((item) => (
+								{poinStats.recentLogs.map((item) => {
+									const isPos = String(item.tipe || '').toLowerCase() === 'positif';
+									return (
 									<div
 										key={item.id}
 										className={`p-4 border-2 border-black rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-											item.tipe === 'Positif' ? 'bg-emerald-50' : 'bg-rose-50'
+											isPos ? 'bg-emerald-50' : 'bg-rose-50'
 										}`}>
 										<div className='space-y-1'>
 											<div className='flex items-center gap-2'>
 												<span
 													className={`px-2 py-0.5 text-[10px] font-black uppercase rounded border border-black ${
-														item.tipe === 'Positif'
+														isPos
 															? 'bg-emerald-200 text-emerald-950'
 															: 'bg-rose-200 text-rose-950'
 													}`}>
@@ -1599,18 +1601,19 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 										<div className='flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 shrink-0'>
 											<span
 												className={`text-base font-black px-3 py-1 rounded-lg border-2 border-black ${
-													item.tipe === 'Positif'
+													isPos
 														? 'bg-emerald-400 text-black'
 														: 'bg-rose-400 text-white'
 												}`}>
-												{item.tipe === 'Positif' ? `+${item.poin}` : `-${item.poin}`}
+												{isPos ? `+${item.poin}` : `-${item.poin}`}
 											</span>
 											<span className='text-[11px] font-bold text-gray-500 font-mono'>
 												{item.tanggal}
 											</span>
 										</div>
 									</div>
-								))}
+								);
+								})}
 							</div>
 						) : (
 							<p className='text-xs font-bold text-gray-500 italic p-6 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl'>

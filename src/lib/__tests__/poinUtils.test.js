@@ -1,6 +1,20 @@
-import { hitungTotalPoinBersih, konversiPoinKeSikap, konversiPoinKeBonus } from '../poinUtils';
+import { hitungTotalPoinBersih, konversiPoinKeSikap, konversiPoinKeBonus, isPoinPositif } from '../poinUtils';
 
 describe('poinUtils', () => {
+	describe('isPoinPositif', () => {
+		it('mengidentifikasi tipe positif dan negatif dengan benar tanpa terpengaruh nilai poin absolut', () => {
+			expect(isPoinPositif({ tipe: 'positif', poin: 20 })).toBe(true);
+			expect(isPoinPositif({ tipe: 'Positif', poin: 20 })).toBe(true);
+			expect(isPoinPositif({ tipe: 'negatif', poin: 10 })).toBe(false);
+			expect(isPoinPositif({ tipe: 'Negatif', poin: 5 })).toBe(false);
+		});
+
+		it('menggunakan fallback poin > 0 jika tipe kosong/null', () => {
+			expect(isPoinPositif({ poin: 15 })).toBe(true);
+			expect(isPoinPositif({ poin: -5 })).toBe(false);
+			expect(isPoinPositif(null)).toBe(true);
+		});
+	});
 	describe('hitungTotalPoinBersih', () => {
 		it('mengembalikan 0 untuk list kosong atau input null', () => {
 			expect(hitungTotalPoinBersih([])).toBe(0);
