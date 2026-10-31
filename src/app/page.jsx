@@ -14,6 +14,7 @@ import JadwalWidget from './components/dashboard/JadwalWidget';
 import NotificationBell from './components/dashboard/NotificationBell';
 import DashboardCharts from './components/dashboard/DashboardCharts';
 import AcademicPeriodChip from './components/AcademicPeriodChip';
+import { getTodayDateString } from '@/lib/dateUtils';
 
 export default function Home() {
 	const [stat, setStat] = useState({
@@ -28,6 +29,7 @@ export default function Home() {
 	const [waliKelasData, setWaliKelasData] = useState(null);
 
 	const [jadwalHariIni, setJadwalHariIni] = useState([]);
+	const [jurnalHariIni, setJurnalHariIni] = useState([]);
 	const [leaderboard, setLeaderboard] = useState({
 		topPositif: [],
 		topNegatif: [],
@@ -158,6 +160,10 @@ export default function Home() {
 					.sort((a, b) => b.poinNegatif - a.poinNegatif)
 					.filter((s) => s.poinNegatif > 0)
 					.slice(0, 5);
+
+				const todayStr = getTodayDateString();
+				const jurnalToday = (dataJurnal || []).filter((j) => j.tanggal === todayStr);
+				setJurnalHariIni(jurnalToday);
 
 				setLeaderboard({ topPositif, topNegatif });
 				setJadwalHariIni(jadwalFiltered);
@@ -797,6 +803,7 @@ export default function Home() {
 				<JadwalWidget
 					jadwalHariIni={jadwalHariIni}
 					hariIni={hariIni}
+					jurnalHariIni={jurnalHariIni}
 				/>
 			</div>
 		</main>
