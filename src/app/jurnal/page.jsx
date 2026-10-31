@@ -627,109 +627,111 @@ export default function JurnalPage() {
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 
-		// Pengecekan offline
-		if (typeof window !== 'undefined' && !window.navigator.onLine) {
-			Swal.fire({
-				icon: 'info',
-				title: 'Anda Sedang Offline',
-				text: 'Internet terputus. Data Anda sudah otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan Jurnal" kembali saat koneksi internet sudah aktif.',
-				confirmButtonColor: '#E8451A',
-			});
-			return;
-		}
-
-		// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin, user bukan Admin, dan BUKAN Tugas Luar / Kegiatan Sekolah)
-		if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah) {
-			try {
-				const coords = await getPosition();
-				const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
-				setUserLocationStatus({ ...check, checked: true, userLat: coords.lat, userLng: coords.lng });
-
-				if (!check.isInside) {
-					await Swal.fire({
-						icon: 'error',
-						title: 'Di Luar Area Sekolah',
-						html: `
-							<div class="text-left text-sm space-y-2">
-								<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
-								<div class="bg-red-50 p-3 rounded border border-red-200">
-									<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
-									<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
-								</div>
-								<p class="text-xs text-gray-600 font-medium">Jurnal mengajar reguler hanya dapat disimpan saat Anda berada di lingkungan sekolah. Jika Anda sedang bertugas di luar sekolah atau mengikuti agenda khusus, pilih opsi agenda yang sesuai.</p>
-							</div>
-						`,
-						confirmButtonColor: '#E8451A',
-						confirmButtonText: 'Tutup',
-					});
-					return;
-				}
-			} catch (gpsErr) {
-				setUserLocationStatus({ isInside: false, error: gpsErr.message, checked: true });
-				await Swal.fire({
-					icon: 'warning',
-					title: 'Akses Lokasi Wajib',
-					html: `
-						<div class="text-left text-sm space-y-2">
-							<p>Sekolah mewajibkan verifikasi lokasi untuk mengisi jurnal harian.</p>
-							<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
-							<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di pengaturan browser perangkat Anda.</p>
-						</div>
-					`,
-					confirmButtonColor: '#E8451A',
-					confirmButtonText: 'Mengerti',
-				});
-				return;
-			}
-		} else if (formData.is_tugas_luar || formData.is_kegiatan_sekolah) {
-			// Jika Tugas Luar atau Kegiatan Sekolah, rekam koordinat GPS aktual jika tersedia tanpa memblokir radius
-			try {
-				const coords = await getPosition();
-				if (coords?.lat && coords?.lng) {
-					setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng });
-				}
-			} catch {
-				// Jangan memblokir jika GPS gagal saat tugas luar
-			}
-		}
-
-		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
-		try {
-			const checkRes = await fetch(
-				`/api/jurnal?check_conflict=true&kelas=${encodeURIComponent(formData.kelas)}&tanggal=${encodeURIComponent(formData.tanggal)}`
-			);
-			const latestJournals = checkRes.ok ? await checkRes.json() : existingJournalsToday;
-			const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null);
-
-			if (conflict) {
-				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
-				const mapelExisting = conflict.session.mapel || 'Mapel lain';
-				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
-
-				await Swal.fire({
-					title: 'Konflik Jam Mengajar!',
-					html: `
-						<div class="text-left text-sm space-y-2">
-							<p>Jam <b>ke-${formData.jam_ke}</b> bertabrakan dengan jadwal <b>${mapelExisting}</b> oleh <b>${guruExisting}</b> (Jam <b>${conflict.session.jam_ke}</b>)${conflictDetail} pada kelas <b>${formData.kelas}</b> tanggal <b>${formData.tanggal}</b>.</p>
-							<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
-								<p class="font-bold text-[#E8451A]">Satu kelas tidak boleh memiliki kegiatan belajar mengajar ganda pada jam yang sama.</p>
-								<p class="text-gray-600 mt-1">Silakan pilih jam mengajar lain yang belum terisi.</p>
-							</div>
-						</div>
-					`,
-					icon: 'error',
-					confirmButtonColor: '#E8451A',
-					confirmButtonText: 'Tutup & Ganti Jam',
-				});
-				return;
-			}
-		} catch (checkErr) {
-			console.warn('Gagal cek bentrok jurnal pra-submit:', checkErr);
-		}
-
+		// Pencegahan Double Submit Instan
+		if (saving) return;
 		setSaving(true);
 
 		try {
+			// Pengecekan offline
+			if (typeof window !== 'undefined' && !window.navigator.onLine) {
+				await Swal.fire({
+					icon: 'info',
+					title: 'Anda Sedang Offline',
+					text: 'Internet terputus. Data Anda sudah otomatis tersimpan sebagai draft di perangkat ini. Silakan tekan "Simpan Jurnal" kembali saat koneksi internet sudah aktif.',
+					confirmButtonColor: '#E8451A',
+				});
+				return;
+			}
+
+			// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin, user bukan Admin, dan BUKAN Tugas Luar / Kegiatan Sekolah)
+			if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah) {
+				try {
+					const coords = await getPosition();
+					const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
+					setUserLocationStatus({ ...check, checked: true, userLat: coords.lat, userLng: coords.lng });
+
+					if (!check.isInside) {
+						await Swal.fire({
+							icon: 'error',
+							title: 'Di Luar Area Sekolah',
+							html: `
+								<div class="text-left text-sm space-y-2">
+									<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
+									<div class="bg-red-50 p-3 rounded border border-red-200">
+										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
+										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+									</div>
+									<p class="text-xs text-gray-600 font-medium">Jurnal mengajar reguler hanya dapat disimpan saat Anda berada di lingkungan sekolah. Jika Anda sedang bertugas di luar sekolah atau mengikuti agenda khusus, pilih opsi agenda yang sesuai.</p>
+								</div>
+							`,
+							confirmButtonColor: '#E8451A',
+							confirmButtonText: 'Tutup',
+						});
+						return;
+					}
+				} catch (gpsErr) {
+					setUserLocationStatus({ isInside: false, error: gpsErr.message, checked: true });
+					await Swal.fire({
+						icon: 'warning',
+						title: 'Akses Lokasi Wajib',
+						html: `
+							<div class="text-left text-sm space-y-2">
+								<p>Sekolah mewajibkan verifikasi lokasi untuk mengisi jurnal harian.</p>
+								<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
+								<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di pengaturan browser perangkat Anda.</p>
+							</div>
+						`,
+						confirmButtonColor: '#E8451A',
+						confirmButtonText: 'Mengerti',
+					});
+					return;
+				}
+			} else if (formData.is_tugas_luar || formData.is_kegiatan_sekolah) {
+				// Jika Tugas Luar atau Kegiatan Sekolah, rekam koordinat GPS aktual jika tersedia tanpa memblokir radius
+				try {
+					const coords = await getPosition();
+					if (coords?.lat && coords?.lng) {
+						setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng });
+					}
+				} catch {
+					// Jangan memblokir jika GPS gagal saat tugas luar
+				}
+			}
+
+			// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
+			try {
+				const checkRes = await fetch(
+					`/api/jurnal?check_conflict=true&kelas=${encodeURIComponent(formData.kelas)}&tanggal=${encodeURIComponent(formData.tanggal)}`
+				);
+				const latestJournals = checkRes.ok ? await checkRes.json() : existingJournalsToday;
+				const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null);
+
+				if (conflict) {
+					const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+					const mapelExisting = conflict.session.mapel || 'Mapel lain';
+					const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
+
+					await Swal.fire({
+						title: 'Konflik Jam Mengajar!',
+						html: `
+							<div class="text-left text-sm space-y-2">
+								<p>Jam <b>ke-${formData.jam_ke}</b> bertabrakan dengan jadwal <b>${mapelExisting}</b> oleh <b>${guruExisting}</b> (Jam <b>${conflict.session.jam_ke}</b>)${conflictDetail} pada kelas <b>${formData.kelas}</b> tanggal <b>${formData.tanggal}</b>.</p>
+								<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
+									<p class="font-bold text-[#E8451A]">Satu kelas tidak boleh memiliki kegiatan belajar mengajar ganda pada jam yang sama.</p>
+									<p class="text-gray-600 mt-1">Silakan pilih jam mengajar lain yang belum terisi.</p>
+								</div>
+							</div>
+						`,
+						icon: 'error',
+						confirmButtonColor: '#E8451A',
+						confirmButtonText: 'Tutup & Ganti Jam',
+					});
+					return;
+				}
+			} catch (checkErr) {
+				console.warn('Gagal cek bentrok jurnal pra-submit:', checkErr);
+			}
+
 			const supabase = createClient();
 			
 			if (isEditing) {

@@ -321,45 +321,48 @@ export default function JurnalKelasPage() {
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
-		const namaKelas = kelasInfo?.kelas || kelasInfo?.nama_kelas;
 
-		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
-		try {
-			const checkRes = await fetch(
-				`/api/jurnal?check_conflict=true&kelas=${encodeURIComponent(namaKelas || '')}&tanggal=${encodeURIComponent(formData.tanggal)}`
-			);
-			const latestJournals = checkRes.ok ? await checkRes.json() : existingJournalsToday;
-			const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null);
-
-			if (conflict) {
-				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
-				const mapelExisting = conflict.session.mapel || 'Mapel lain';
-				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
-
-				await Swal.fire({
-					title: 'Konflik Jam Mengajar!',
-					html: `
-						<div class="text-left text-sm space-y-2">
-							<p>Jam <b>ke-${formData.jam_ke}</b> bertabrakan dengan jadwal <b>${mapelExisting}</b> oleh <b>${guruExisting}</b> (Jam <b>${conflict.session.jam_ke}</b>)${conflictDetail} pada kelas <b>${namaKelas}</b> tanggal <b>${formData.tanggal}</b>.</p>
-							<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
-								<p class="font-bold text-[#E8451A]">Satu kelas tidak boleh memiliki kegiatan belajar mengajar ganda pada jam yang sama.</p>
-								<p class="text-gray-600 mt-1">Silakan pilih jam mengajar lain yang belum terisi.</p>
-							</div>
-						</div>
-					`,
-					icon: 'error',
-					confirmButtonColor: '#E8451A',
-					confirmButtonText: 'Tutup & Ganti Jam',
-				});
-				return;
-			}
-		} catch (checkErr) {
-			console.warn('Gagal cek bentrok jurnal pra-submit:', checkErr);
-		}
-
+		// Pencegahan Double Submit Instan
+		if (saving) return;
 		setSaving(true);
 
+		const namaKelas = kelasInfo?.kelas || kelasInfo?.nama_kelas;
+
 		try {
+			// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
+			try {
+				const checkRes = await fetch(
+					`/api/jurnal?check_conflict=true&kelas=${encodeURIComponent(namaKelas || '')}&tanggal=${encodeURIComponent(formData.tanggal)}`
+				);
+				const latestJournals = checkRes.ok ? await checkRes.json() : existingJournalsToday;
+				const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null);
+
+				if (conflict) {
+					const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+					const mapelExisting = conflict.session.mapel || 'Mapel lain';
+					const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
+
+					await Swal.fire({
+						title: 'Konflik Jam Mengajar!',
+						html: `
+							<div class="text-left text-sm space-y-2">
+								<p>Jam <b>ke-${formData.jam_ke}</b> bertabrakan dengan jadwal <b>${mapelExisting}</b> oleh <b>${guruExisting}</b> (Jam <b>${conflict.session.jam_ke}</b>)${conflictDetail} pada kelas <b>${namaKelas}</b> tanggal <b>${formData.tanggal}</b>.</p>
+								<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
+									<p class="font-bold text-[#E8451A]">Satu kelas tidak boleh memiliki kegiatan belajar mengajar ganda pada jam yang sama.</p>
+									<p class="text-gray-600 mt-1">Silakan pilih jam mengajar lain yang belum terisi.</p>
+								</div>
+							</div>
+						`,
+						icon: 'error',
+						confirmButtonColor: '#E8451A',
+						confirmButtonText: 'Tutup & Ganti Jam',
+					});
+					return;
+				}
+			} catch (checkErr) {
+				console.warn('Gagal cek bentrok jurnal pra-submit:', checkErr);
+			}
+
 			const supabase = createClient();
 			
 			if (isEditing) {
