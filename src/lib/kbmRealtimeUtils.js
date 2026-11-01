@@ -218,6 +218,7 @@ export const getExpectedScheduleTimes = (jamKeStr, tanggalOrHari = null) => {
  * @param {string} [params.jamKe] - "1-2"
  * @param {string} [params.jadwalJamMulai] - Jam mulai jadwal eksplisit (opsional)
  * @param {string} [params.jadwalJamSelesai] - Jam selesai jadwal eksplisit (opsional)
+ * @param {boolean} [params.skipSusulanCheck=false] - Lewati pengecekan susulan tanggal jika mengaudit/mengedit jurnal lama
  * @returns {string} Status audit: 'Tepat Waktu' | 'Selesai Terlalu Cepat' | 'Terlambat Masuk' | 'Ditutup Terlambat' | 'Terlambat Masuk & Ditutup Terlambat' | 'Susulan / Tanpa Presensi' | 'Input Susulan'
  */
 export const determineKBMStatus = ({
@@ -228,11 +229,12 @@ export const determineKBMStatus = ({
 	jamKe,
 	jadwalJamMulai,
 	jadwalJamSelesai,
+	skipSusulanCheck = false,
 }) => {
 	const todayStr = getTodayDateString();
 
 	// 1. Jika tanggal jurnal bukan hari ini, artinya diisi susulan di hari lain
-	if (tanggal && tanggal !== todayStr) {
+	if (!skipSusulanCheck && tanggal && tanggal !== todayStr) {
 		return 'Input Susulan';
 	}
 
@@ -259,8 +261,8 @@ export const determineKBMStatus = ({
 	if (schedStart) {
 		const actualStartMins = parseTimeToMinutes(jamMulai);
 		const schedStartMins = parseTimeToMinutes(schedStart);
-		// Toleransi keterlambatan masuk: 15 menit dari jam mulai jadwal
-		if (actualStartMins > schedStartMins + 15) {
+		// Toleransi keterlambatan masuk: 20 menit dari jam mulai jadwal
+		if (actualStartMins > schedStartMins + 20) {
 			isLateStart = true;
 		}
 	}
@@ -309,7 +311,7 @@ export const getKBMStatusBadge = (status) => {
 
 	if (s.includes('terlambat masuk') || (s.includes('terlambat') && !s.includes('tutup'))) {
 		return {
-			label: 'Terlambat Masuk (> 15m)',
+			label: 'Terlambat Masuk (> 20m)',
 			bg: 'bg-amber-50',
 			text: 'text-amber-900',
 			border: 'border-[#F5C518]',

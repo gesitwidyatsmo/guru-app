@@ -425,6 +425,7 @@ export default function JurnalKelasPage() {
 						durasiMenit: cleanUpdates.durasi_menit,
 						tanggal: cleanUpdates.tanggal,
 						jamKe: cleanUpdates.jam_ke,
+						skipSusulanCheck: !formData.status_kehadiran?.includes('Susulan'),
 					});
 				} else if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
 					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();

@@ -794,6 +794,7 @@ export default function JurnalPage() {
 						durasiMenit: cleanUpdates.durasi_menit,
 						tanggal: cleanUpdates.tanggal,
 						jamKe: cleanUpdates.jam_ke,
+						skipSusulanCheck: !formData.status_kehadiran?.includes('Susulan'),
 					});
 				} else if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
 					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
@@ -1638,6 +1639,7 @@ export default function JurnalPage() {
 													durasiMenit: dur,
 													tanggal: formData.tanggal,
 													jamKe: formData.jam_ke,
+													skipSusulanCheck: isEditing && !formData.status_kehadiran?.includes('Susulan'),
 											  });
 										const badge = getKBMStatusBadge(liveStatus);
 										const sched = getExpectedScheduleTimes(formData.jam_ke, formData.tanggal);
