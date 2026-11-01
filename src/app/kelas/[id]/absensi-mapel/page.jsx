@@ -7,10 +7,11 @@ import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 import ButtonBack from '@/app/components/button/ButtonBack';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap } from '@/lib/absensiUtils';
+import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran } from '@/lib/absensiUtils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
+import ModalSplitSesi from '@/app/components/ModalSplitSesi';
 
 export default function KelasAbsensiMapelPage() {
 	const params = useParams();
@@ -44,6 +45,7 @@ export default function KelasAbsensiMapelPage() {
 	const [existingId, setExistingId] = useState(null);
 	const [sesiHariIni, setSesiHariIni] = useState([]);
 	const [loadingSesiHariIni, setLoadingSesiHariIni] = useState(false);
+	const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
 
 	// MODE: 'input' (Form Input), 'edit' (Form Edit), 'rekap' (Tampilan Tabel Hasil)
 	const [mode, setMode] = useState('input');
@@ -257,6 +259,15 @@ export default function KelasAbsensiMapelPage() {
 	const handlePilihSesi = (sesi) => {
 		setJamKe(sesi.jam_ke);
 		muatDetailSesi(sesi.jam_ke);
+	};
+
+	// Handler sukses pecah sesi 1-klik
+	const handleSplitSuccess = async (result) => {
+		await fetchSesiHariIni();
+		if (result.sesi_2_jam) {
+			setJamKe(result.sesi_2_jam);
+			muatDetailSesi(result.sesi_2_jam);
+		}
 	};
 
 	// Handler mulai input jam baru (reset form ke input mode fresh)
@@ -888,6 +899,15 @@ export default function KelasAbsensiMapelPage() {
 											<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path strokeLinecap='round' strokeLinejoin='round' strokeWidth={3} d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/></svg>
 											<span className='hidden sm:inline'>Riwayat</span>
 										</button>
+										{userRole !== 'Kepala Sekolah' && parseJamPelajaran(jamKe).length > 1 && (
+											<button
+												onClick={() => setIsSplitModalOpen(true)}
+												className='neo-btn-outline bg-[#F5C518] text-[#0D0D0D] hover:bg-yellow-300 flex items-center gap-1.5 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-black text-sm cursor-pointer'
+												title='Pecah sesi multi-jam ini jika ada siswa yang keluar/bolos di tengah jam pelajaran'>
+												<span>✂️</span>
+												<span className='hidden sm:inline'>Pecah Sesi</span>
+											</button>
+										)}
 										<button
 											onClick={() => setMode('edit')}
 											className='neo-btn-outline bg-[#00A693] text-white hover:bg-white hover:text-[#00A693] flex items-center gap-1 border-2 border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] py-1.5 px-3 rounded-xl font-bold text-sm'>
@@ -1017,15 +1037,40 @@ export default function KelasAbsensiMapelPage() {
 
 			{/* --- Floating Save Button (Hanya Muncul di Mode Input/Edit) --- */}
 			{siswaKelasIni.length > 0 && mode !== 'rekap' && (
-				<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex justify-end shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
+				<div className='fixed bottom-0 left-0 right-0 p-4 bg-[#FFF5F0] border-t-4 border-[#0D0D0D] z-30 flex items-center justify-between gap-3 shadow-[0px_-4px_0px_0px_rgba(0,0,0,0.05)]'>
+					<div>
+						{mode === 'edit' && parseJamPelajaran(jamKe).length > 1 && (
+							<button
+								type='button'
+								onClick={() => setIsSplitModalOpen(true)}
+								className='neo-btn-outline bg-[#F5C518] hover:bg-yellow-300 text-[#0D0D0D] py-2.5 px-4 rounded-xl text-xs font-black uppercase border-2 border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1.5 cursor-pointer'>
+								<span>✂️</span>
+								<span>Pecah Sesi ({jamKe})</span>
+							</button>
+						)}
+					</div>
 					<button
 						onClick={handleSimpan}
 						disabled={saving}
-						className='w-full md:w-auto neo-btn-primary bg-[#0D0D0D] text-white py-3 px-10 text-lg uppercase tracking-wider flex items-center justify-center gap-2'>
+						className='w-full sm:w-auto neo-btn-primary bg-[#0D0D0D] text-white py-3 px-10 text-lg uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer'>
 						{saving ? 'Menyimpan...' : 'Simpan'}
 					</button>
 				</div>
 			)}
+
+			{/* Modal Pecah Sesi 1-Klik */}
+			<ModalSplitSesi
+				isOpen={isSplitModalOpen}
+				onClose={() => setIsSplitModalOpen(false)}
+				jamKe={jamKe}
+				selectedKelas={selectedKelas}
+				selectedMapel={selectedMapel}
+				tanggal={tanggal}
+				siswaList={siswaKelasIni}
+				absensi={absensi}
+				userCoords={locationStatus?.userLat ? { lat: locationStatus.userLat, lng: locationStatus.userLng } : null}
+				onSuccess={handleSplitSuccess}
+			/>
 		</div>
 	);
 }

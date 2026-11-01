@@ -278,3 +278,84 @@ export const evaluateDailyAttendance = (sessions = []) => {
 	};
 };
 
+/**
+ * Memformat array nomor jam menjadi format string yang rapi.
+ * Contoh: [1] -> "1", [1, 2, 3] -> "1-3", [2, 3] -> "2-3", [1, 3] -> "1, 3"
+ * @param {number[]} hours 
+ * @returns {string}
+ */
+export const formatJamPelajaran = (hours = []) => {
+	if (!Array.isArray(hours) || hours.length === 0) return '';
+	const sorted = [...new Set(hours.map((n) => parseInt(n, 10)).filter((n) => !isNaN(n)))].sort((a, b) => a - b);
+	if (sorted.length === 0) return '';
+	if (sorted.length === 1) return String(sorted[0]);
+
+	// Cek apakah berurutan (kontigu)
+	let isConsecutive = true;
+	for (let i = 1; i < sorted.length; i++) {
+		if (sorted[i] !== sorted[i - 1] + 1) {
+			isConsecutive = false;
+			break;
+		}
+	}
+
+	if (isConsecutive) {
+		return `${sorted[0]}-${sorted[sorted.length - 1]}`;
+	}
+	return sorted.join(', ');
+};
+
+/**
+ * Menghitung opsi titik pemecahan (split) untuk sesi multi-jam.
+ * Contoh: jamVal = "1-3" (hours [1, 2, 3])
+ * Menghasilkan:
+ * [
+ *   {
+ *     splitIndex: 1,
+ *     part1: "1",
+ *     part2: "2-3",
+ *     startHourLeft: 2,
+ *     hoursPart1: [1],
+ *     hoursPart2: [2, 3],
+ *     label: "Keluar mulai Jam ke-2 (Sesi 1: Jam 1 • Sesi 2: Jam 2-3)"
+ *   },
+ *   {
+ *     splitIndex: 2,
+ *     part1: "1-2",
+ *     part2: "3",
+ *     startHourLeft: 3,
+ *     hoursPart1: [1, 2],
+ *     hoursPart2: [3],
+ *     label: "Keluar mulai Jam ke-3 (Sesi 1: Jam 1-2 • Sesi 2: Jam 3)"
+ *   }
+ * ]
+ * @param {string|number} jamVal 
+ * @returns {Array<Object>}
+ */
+export const getPossibleSplits = (jamVal) => {
+	const parsed = parseJamPelajaran(jamVal);
+	if (!parsed || parsed.length < 2) return [];
+
+	const options = [];
+	for (let i = 1; i < parsed.length; i++) {
+		const part1 = parsed.slice(0, i);
+		const part2 = parsed.slice(i);
+		const part1Str = formatJamPelajaran(part1);
+		const part2Str = formatJamPelajaran(part2);
+		const startHourLeft = part2[0];
+
+		options.push({
+			splitIndex: i,
+			part1: part1Str,
+			part2: part2Str,
+			startHourLeft,
+			hoursPart1: part1,
+			hoursPart2: part2,
+			label: `Keluar mulai Jam ke-${startHourLeft} (Sesi 1: Jam ${part1Str} • Sesi 2: Jam ${part2Str})`,
+		});
+	}
+
+	return options;
+};
+
+

@@ -8,6 +8,8 @@ import {
 	calculateAttendanceSummary,
 	parseJamPelajaran,
 	checkJamOverlap,
+	formatJamPelajaran,
+	getPossibleSplits,
 } from '../absensiUtils';
 
 describe('Unit Test: absensiUtils', () => {
@@ -123,6 +125,39 @@ describe('Unit Test: absensiUtils', () => {
 			const check = checkJamOverlap('1-2', '3-4');
 			expect(check.isOverlap).toBe(false);
 			expect(check.conflicts).toEqual([]);
+		});
+	});
+
+	// =========================================================================
+	// 5. Uji Format & Pecah Sesi Jam (formatJamPelajaran & getPossibleSplits)
+	// =========================================================================
+	describe('formatJamPelajaran & getPossibleSplits', () => {
+		it('harus memformat array jam berurutan menjadi string range', () => {
+			expect(formatJamPelajaran([1, 2, 3])).toBe('1-3');
+			expect(formatJamPelajaran([2, 3])).toBe('2-3');
+			expect(formatJamPelajaran([1])).toBe('1');
+			expect(formatJamPelajaran([1, 3])).toBe('1, 3');
+			expect(formatJamPelajaran([])).toBe('');
+		});
+
+		it('harus menghasilkan opsi pemecahan sesi yang tepat untuk Jam 1-3', () => {
+			const splits = getPossibleSplits('1-3');
+			expect(splits).toHaveLength(2);
+
+			// Opsi 1: Keluar di jam ke-2 -> Sesi 1 (Jam 1), Sesi 2 (Jam 2-3)
+			expect(splits[0].part1).toBe('1');
+			expect(splits[0].part2).toBe('2-3');
+			expect(splits[0].startHourLeft).toBe(2);
+
+			// Opsi 2: Keluar di jam ke-3 -> Sesi 1 (Jam 1-2), Sesi 2 (Jam 3)
+			expect(splits[1].part1).toBe('1-2');
+			expect(splits[1].part2).toBe('3');
+			expect(splits[1].startHourLeft).toBe(3);
+		});
+
+		it('harus mengembalikan array kosong untuk sesi 1 jam (tidak dapat dipecah)', () => {
+			expect(getPossibleSplits('1')).toEqual([]);
+			expect(getPossibleSplits('')).toEqual([]);
 		});
 	});
 });
