@@ -44,12 +44,15 @@ export async function GET(request) {
 		let querySesi = supabase.from('absensi_mapel').select('sesi_id, tanggal, jam_ke').eq('kelas', kelas).eq('mapel', mapel);
 
 		if (bulan !== 'all') {
-			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
-			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			const b = parseInt(bulan, 10);
+			const y = parseInt(tahun, 10);
+			const startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+			const lastDay = new Date(y, b, 0).getDate();
+			const endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 		} else {
-			const startDate = new Date(tahun, 0, 1).toISOString();
-			const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+			const startDate = `${tahun}-01-01`;
+			const endDate = `${tahun}-12-31`;
 			querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 

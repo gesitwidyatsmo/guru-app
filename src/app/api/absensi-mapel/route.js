@@ -96,8 +96,11 @@ export async function GET(req) {
 		}
 
 		if (bulan && tahun) {
-			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
-			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			const b = parseInt(bulan, 10);
+			const y = parseInt(tahun, 10);
+			const startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+			const lastDay = new Date(y, b, 0).getDate();
+			const endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 			query = query.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 
@@ -185,6 +188,10 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'parameter wajib tidak lengkap' }, { status: 400 });
 		}
 
+		if (!data_absensi || !Array.isArray(data_absensi) || data_absensi.length === 0) {
+			return NextResponse.json({ error: 'Data absensi siswa tidak boleh kosong' }, { status: 400 });
+		}
+
 		const supabase = await createClient();
 
 		// Verifikasi Geofence jika diaktifkan oleh Admin
@@ -242,9 +249,11 @@ export async function POST(req) {
 			if (oldJamKe !== newJamKe) updates.jam_ke = newJamKe;
 			
 			if (Object.keys(updates).length > 0) {
-				await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
+				const { error: updErr } = await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
+				if (updErr) throw updErr;
 			}
-			await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			const { error: delErr } = await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			if (delErr) throw delErr;
 
 			// Bersihkan sisa sesi duplikat jika pernah ada sebelumnya
 			if (existingSesiList.length > 1) {
@@ -255,7 +264,7 @@ export async function POST(req) {
 		} else {
 			// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
 			const taAktif = (!body.tahun_ajar || !body.semester) ? await getTAAktif(supabase) : null;
-			await supabase.from('absensi_mapel').insert({
+			const { error: insErr } = await supabase.from('absensi_mapel').insert({
 				sesi_id: sesiId,
 				guru_id: userId || null,
 				tanggal: newTanggal,
@@ -265,22 +274,22 @@ export async function POST(req) {
 				tahun_ajar: body.tahun_ajar || taAktif.nama,
 				semester: body.semester ? parseInt(body.semester) : taAktif.semester,
 			});
+			if (insErr) throw insErr;
 		}
 
-		if (data_absensi && data_absensi.length > 0) {
-			const rowsToInsert = data_absensi.map(item => ({
-				sesi_id: sesiId,
-				siswa_id: item.siswa_id,
-				status: item.status,
-				keterangan: item.keterangan || ''
-			}));
-			await supabase.from('absensi_mapel_siswa').insert(rowsToInsert);
-		}
+		const rowsToInsert = data_absensi.map(item => ({
+			sesi_id: sesiId,
+			siswa_id: item.siswa_id,
+			status: item.status,
+			keterangan: item.keterangan || ''
+		}));
+		const { error: insDetailsErr } = await supabase.from('absensi_mapel_siswa').insert(rowsToInsert);
+		if (insDetailsErr) throw insDetailsErr;
 
 		return NextResponse.json({ success: true, id: sesiId, mode: existingSesi ? 'update' : 'insert' });
 	} catch (error) {
 		console.error('POST /absensi-mapel Error:', error);
-		return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+		return NextResponse.json({ error: error?.message || 'Internal Server Error' }, { status: 500 });
 	}
 }
 

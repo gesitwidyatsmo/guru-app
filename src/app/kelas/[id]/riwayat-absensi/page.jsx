@@ -165,23 +165,25 @@ export default function RiwayatAbsensiPage() {
 		try {
 			const supabase = createClient();
 			
-			const { data: existingSesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).single();
+			const { data: existingSesi, error: findErr } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).maybeSingle();
+			if (findErr) throw findErr;
 			if (!existingSesi) throw new Error('Sesi tidak ditemukan');
 
 			let sesiId = existingSesi.sesi_id;
 
 			if (selectedTanggal !== tanggalEdit) {
 				// Check if new date already exists
-				const { data: checkNew } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggalEdit).single();
+				const { data: checkNew } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggalEdit).maybeSingle();
 				if (checkNew) {
 					throw new Error('Sesi untuk tanggal tersebut sudah ada');
 				}
-				await supabase.from('absensi_harian').update({ tanggal: tanggalEdit }).eq('sesi_id', sesiId);
+				const { error: updDateErr } = await supabase.from('absensi_harian').update({ tanggal: tanggalEdit }).eq('sesi_id', sesiId);
+				if (updDateErr) throw updDateErr;
 			}
 
 			// Update details
-			// easiest is delete and reinsert
-			await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
+			const { error: delErr } = await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
+			if (delErr) throw delErr;
 			
 			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
 				sesi_id: sesiId,
@@ -190,8 +192,9 @@ export default function RiwayatAbsensiPage() {
 				keterangan: absensiMap[siswaId].keterangan || '',
 			}));
 			
-			if(absensiList.length > 0) {
-				await supabase.from('absensi_harian_siswa').insert(absensiList);
+			if (absensiList.length > 0) {
+				const { error: insErr } = await supabase.from('absensi_harian_siswa').insert(absensiList);
+				if (insErr) throw insErr;
 			}
 
 			Swal.fire({

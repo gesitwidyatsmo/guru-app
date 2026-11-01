@@ -31,8 +31,11 @@ export async function GET(req) {
 		if (mapel) query = query.eq('absensi_mapel.mapel', mapel);
 
 		if (bulan && tahun) {
-			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
-			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			const b = parseInt(bulan, 10);
+			const y = parseInt(tahun, 10);
+			const startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+			const lastDay = new Date(y, b, 0).getDate();
+			const endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 			query = query.gte('absensi_mapel.tanggal', startDate).lte('absensi_mapel.tanggal', endDate);
 		}
 

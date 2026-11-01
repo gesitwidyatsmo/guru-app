@@ -51,8 +51,11 @@ export async function GET(req) {
 
 		// Filter bulan & tahun
 		if (bulan && tahun) {
-			const startDate = new Date(tahun, bulan - 1, 1).toISOString();
-			const endDate = new Date(tahun, bulan, 0, 23, 59, 59).toISOString();
+			const b = parseInt(bulan, 10);
+			const y = parseInt(tahun, 10);
+			const startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+			const lastDay = new Date(y, b, 0).getDate();
+			const endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 			query = query.gte('tanggal', startDate).lte('tanggal', endDate);
 		}
 
@@ -121,6 +124,10 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Payload tidak lengkap' }, { status: 400 });
 		}
 
+		if (data_absensi.length === 0) {
+			return NextResponse.json({ error: 'Data absensi siswa tidak boleh kosong' }, { status: 400 });
+		}
+
 		const supabase = await createClient();
 		const role = req.headers.get('x-user-role');
 		if (role === 'Kepala Sekolah') {
@@ -150,43 +157,47 @@ export async function POST(req) {
 		}
 
 		// Check existing
-		const { data: existingSesi } = await supabase
+		const { data: existingSesi, error: findSesiErr } = await supabase
 			.from('absensi_harian')
 			.select('sesi_id')
 			.eq('kelas', kelas)
 			.eq('tanggal', oldTanggal)
-			.single();
+			.maybeSingle();
+
+		if (findSesiErr) throw findSesiErr;
 
 		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-H-${generateId()}`;
 
 		if (existingSesi) {
 			if (oldTanggal !== newTanggal) {
-				await supabase.from('absensi_harian').update({ tanggal: newTanggal }).eq('sesi_id', sesiId);
+				const { error: updErr } = await supabase.from('absensi_harian').update({ tanggal: newTanggal }).eq('sesi_id', sesiId);
+				if (updErr) throw updErr;
 			}
 			// Delete old details
-			await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
+			const { error: delErr } = await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
+			if (delErr) throw delErr;
 		} else {
 			// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
 			const taAktif = (!body.tahun_ajar || !body.semester) ? await getTAAktif(supabase) : null;
-			await supabase.from('absensi_harian').insert({
+			const { error: insHarianErr } = await supabase.from('absensi_harian').insert({
 				sesi_id: sesiId,
 				kelas: kelas,
 				tanggal: newTanggal,
 				tahun_ajar: body.tahun_ajar || taAktif.nama,
 				semester: body.semester ? parseInt(body.semester) : taAktif.semester,
 			});
+			if (insHarianErr) throw insHarianErr;
 		}
 
 		// Insert new details
-		if (data_absensi.length > 0) {
-			const rowsToInsert = data_absensi.map(item => ({
-				sesi_id: sesiId,
-				siswa_id: item.siswa_id,
-				status: item.status,
-				keterangan: item.keterangan || ''
-			}));
-			await supabase.from('absensi_harian_siswa').insert(rowsToInsert);
-		}
+		const rowsToInsert = data_absensi.map(item => ({
+			sesi_id: sesiId,
+			siswa_id: item.siswa_id,
+			status: item.status,
+			keterangan: item.keterangan || ''
+		}));
+		const { error: insDetailsErr } = await supabase.from('absensi_harian_siswa').insert(rowsToInsert);
+		if (insDetailsErr) throw insDetailsErr;
 
 		return NextResponse.json({ 
 			success: true, 

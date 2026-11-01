@@ -236,12 +236,15 @@ export default function LaporanAbsensiMapelPage() {
 			}
 
 			if (selectedBulan !== 'all') {
-				const startDate = new Date(tahun, parseInt(selectedBulan) - 1, 1).toISOString();
-				const endDate = new Date(tahun, parseInt(selectedBulan), 0, 23, 59, 59).toISOString();
+				const b = parseInt(selectedBulan, 10);
+				const y = parseInt(tahun, 10);
+				const startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+				const lastDay = new Date(y, b, 0).getDate();
+				const endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 			} else {
-				const startDate = new Date(tahun, 0, 1).toISOString();
-				const endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+				const startDate = `${tahun}-01-01`;
+				const endDate = `${tahun}-12-31`;
 				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 			}
 

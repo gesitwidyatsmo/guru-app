@@ -128,7 +128,7 @@ export default function AbsensiKelasPage() {
 	}, [id]);
 
 	const namaKelas = kelasDetail?.kelas || kelasDetail?.nama_kelas || '';
-	const siswaKelasIni = useMemo(() => siswaList.filter((s) => namaKelas && s.kelas === namaKelas), [siswaList, namaKelas]);
+	const siswaKelasIni = useMemo(() => siswaList.filter((s) => namaKelas && String(s.kelas || '').trim() === String(namaKelas || '').trim()), [siswaList, namaKelas]);
 
 	const filteredSiswaInput = useMemo(() => {
 		if (!searchQuery.trim()) return siswaKelasIni;
@@ -194,31 +194,32 @@ export default function AbsensiKelasPage() {
 		};
 	}, [kelasDetail, tanggal, namaKelas]);
 
-	// ✅ NEW: Fetch data absensi jika sudah ada
-	useEffect(() => {
-		if (!sudahAdaAbsensi || !namaKelas || !tanggal) return;
-
-		const fetchAbsensi = async () => {
-			try {
-				setLoadingAbsensi(true);
-				const supabase = createClient();
-				const { data: sesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggal).single();
-				
-				if (sesi) {
-					const { data: details } = await supabase.from('absensi_harian_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
-					setDataAbsensiTersimpan(details || []);
-				} else {
-					setDataAbsensiTersimpan([]);
-				}
-			} catch (err) {
-				console.error('Error fetch absensi:', err);
-			} finally {
-				setLoadingAbsensi(false);
+	// ✅ Fetch data absensi tersimpan
+	const fetchAbsensi = useCallback(async () => {
+		if (!namaKelas || !tanggal) return;
+		try {
+			setLoadingAbsensi(true);
+			const supabase = createClient();
+			const { data: sesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggal).maybeSingle();
+			
+			if (sesi) {
+				const { data: details } = await supabase.from('absensi_harian_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
+				setDataAbsensiTersimpan(details || []);
+			} else {
+				setDataAbsensiTersimpan([]);
 			}
-		};
+		} catch (err) {
+			console.error('Error fetch absensi:', err);
+		} finally {
+			setLoadingAbsensi(false);
+		}
+	}, [namaKelas, tanggal]);
 
-		fetchAbsensi();
-	}, [sudahAdaAbsensi, namaKelas, tanggal]);
+	useEffect(() => {
+		if (sudahAdaAbsensi) {
+			fetchAbsensi();
+		}
+	}, [sudahAdaAbsensi, fetchAbsensi]);
 
 	// 3) Inisialisasi absensi dengan default status
 	useEffect(() => {
@@ -329,6 +330,11 @@ export default function AbsensiKelasPage() {
 			}
 		}
 
+		if (!siswaKelasIni || siswaKelasIni.length === 0) {
+			Swal.fire('Error', 'Data siswa kelas belum termuat atau tidak ditemukan', 'warning');
+			return;
+		}
+
 		const konfirmasi = await Swal.fire({
 			title: 'Simpan absensi?',
 			text: `Kelas ${namaKelas} tanggal ${tanggal}`,
@@ -376,6 +382,7 @@ export default function AbsensiKelasPage() {
 			});
 
 			setSudahAdaAbsensi(true);
+			await fetchAbsensi();
 		} catch (e) {
 			console.error('Error simpan absensi:', e);
 			await Swal.fire({

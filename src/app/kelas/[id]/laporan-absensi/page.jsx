@@ -116,12 +116,15 @@ export default function LaporanAbsensiPage() {
 			let startDate;
 			let endDate;
 			if (selectedBulan !== 'all') {
-				startDate = new Date(tahun, parseInt(selectedBulan) - 1, 1).toISOString();
-				endDate = new Date(tahun, parseInt(selectedBulan), 0, 23, 59, 59).toISOString();
+				const b = parseInt(selectedBulan, 10);
+				const y = parseInt(tahun, 10);
+				startDate = `${y}-${String(b).padStart(2, '0')}-01`;
+				const lastDay = new Date(y, b, 0).getDate();
+				endDate = `${y}-${String(b).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 			} else {
-				startDate = new Date(tahun, 0, 1).toISOString();
-				endDate = new Date(tahun, 12, 0, 23, 59, 59).toISOString();
+				startDate = `${tahun}-01-01`;
+				endDate = `${tahun}-12-31`;
 				querySesi = querySesi.gte('tanggal', startDate).lte('tanggal', endDate);
 			}
 

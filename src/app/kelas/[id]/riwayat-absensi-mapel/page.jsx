@@ -189,21 +189,24 @@ export default function RiwayatAbsensiMapelPage() {
 		try {
 			const supabase = createClient();
 			
-			const { data: existingSesi } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe).single();
+			const { data: existingSesi, error: findErr } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe).maybeSingle();
+			if (findErr) throw findErr;
 			if (!existingSesi) throw new Error('Sesi tidak ditemukan');
 
 			let sesiId = existingSesi.sesi_id;
 
 			if (selectedTanggal !== tanggalEdit || selectedJamKe !== jamKeEdit) {
 				// Check if new combo already exists
-				const { data: checkNew } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggalEdit).eq('jam_ke', jamKeEdit).single();
+				const { data: checkNew } = await supabase.from('absensi_mapel').select('sesi_id').eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', tanggalEdit).eq('jam_ke', jamKeEdit).maybeSingle();
 				if (checkNew) {
 					throw new Error('Sesi untuk tanggal dan jam tersebut sudah ada');
 				}
-				await supabase.from('absensi_mapel').update({ tanggal: tanggalEdit, jam_ke: jamKeEdit }).eq('sesi_id', sesiId);
+				const { error: updErr } = await supabase.from('absensi_mapel').update({ tanggal: tanggalEdit, jam_ke: jamKeEdit }).eq('sesi_id', sesiId);
+				if (updErr) throw updErr;
 			}
 
-			await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			const { error: delErr } = await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
+			if (delErr) throw delErr;
 			
 			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
 				sesi_id: sesiId,
@@ -212,8 +215,9 @@ export default function RiwayatAbsensiMapelPage() {
 				keterangan: absensiMap[siswaId].keterangan || '',
 			}));
 			
-			if(absensiList.length > 0) {
-				await supabase.from('absensi_mapel_siswa').insert(absensiList);
+			if (absensiList.length > 0) {
+				const { error: insErr } = await supabase.from('absensi_mapel_siswa').insert(absensiList);
+				if (insErr) throw insErr;
 			}
 
 			Swal.fire({
