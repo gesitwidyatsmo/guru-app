@@ -90,6 +90,9 @@ export function exportJurnalPDFReport({
 	};
 
 	journals.forEach((j) => {
+		// Abaikan jurnal yang masih berstatus draft bentrok (belum resmi disahkan)
+		if (j.status_verifikasi === 'draft_bentrok' || j.status_kehadiran === 'Draft Bentrok') return;
+
 		const jp = getJPFromJamKe(j.jam_ke);
 		totalJam += jp;
 

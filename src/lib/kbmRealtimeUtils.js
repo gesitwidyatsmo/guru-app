@@ -349,6 +349,16 @@ export const getKBMStatusBadge = (status) => {
 		};
 	}
 
+	if (s.includes('draft') || s.includes('bentrok') || s.includes('antrean')) {
+		return {
+			label: 'Draft Antrean Bentrok (Menunggu Admin)',
+			bg: 'bg-amber-100',
+			text: 'text-amber-900',
+			border: 'border-amber-600',
+			icon: '⏳',
+		};
+	}
+
 	if (s.includes('susulan')) {
 		return {
 			label: 'Input Susulan',

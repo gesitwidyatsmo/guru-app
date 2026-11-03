@@ -116,6 +116,8 @@ export default function BendaharaBisarohPage() {
 			if (!j.tanggal) return false;
 			if (startDate && j.tanggal < startDate) return false;
 			if (endDate && j.tanggal > endDate) return false;
+			// Proteksi Bisaroh: Abaikan jurnal yang masih berstatus draft bentrok / belum disahkan
+			if (j.status_verifikasi === 'draft_bentrok' || j.status_kehadiran === 'Draft Bentrok') return false;
 			return true;
 		});
 	}, [journals, startDate, endDate]);

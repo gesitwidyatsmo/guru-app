@@ -99,6 +99,16 @@ const ADMIN_NAV_SECTIONS = [
 				),
 			},
 			{
+				label: 'Jurnal & Resolusi Jam',
+				href: '/admin/jurnal',
+				countKey: 'jurnal_bentrok',
+				icon: (
+					<svg className='w-5 h-5 shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' />
+					</svg>
+				),
+			},
+			{
 				label: 'Promosi & Penjurusan',
 				href: '/admin/promosi-kelas',
 				countKey: null,
@@ -239,13 +249,12 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 	const router = useRouter();
 	const { handleLogout } = useLogout();
 	const [isMobileOpen, setIsMobileOpen] = useState(false);
-	const [isCollapsed, setIsCollapsed] = useState(false);
-
-	// Inisialisasi collapse dari LocalStorage
-	useEffect(() => {
-		const saved = localStorage.getItem('admin_sidebar_collapsed');
-		if (saved === 'true') setIsCollapsed(true);
-	}, []);
+	const [isCollapsed, setIsCollapsed] = useState(() => {
+		if (typeof window !== 'undefined') {
+			return localStorage.getItem('admin_sidebar_collapsed') === 'true';
+		}
+		return false;
+	});
 
 	const toggleCollapse = () => {
 		setIsCollapsed((prev) => {
@@ -289,6 +298,7 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 		kelas: null,
 		siswa: null,
 		mapel: null,
+		jurnal_bentrok: null,
 	});
 
 	useEffect(() => {
@@ -297,12 +307,14 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 			fetch('/api/kelas?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
 			fetch('/api/siswa').then((r) => (r.ok ? r.json() : [])).catch(() => []),
 			fetch('/api/mapel?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-		]).then(([users, kelas, siswa, mapel]) => {
+			fetch('/api/admin/jurnal?conflict_only=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { count: 0 })).catch(() => ({ count: 0 })),
+		]).then(([users, kelas, siswa, mapel, conflictsRes]) => {
 			setMenuCounts({
 				pengguna: Array.isArray(users) ? users.length : null,
 				kelas: Array.isArray(kelas) ? kelas.length : null,
 				siswa: Array.isArray(siswa) ? siswa.filter((s) => s.status === 'Aktif').length : null,
 				mapel: Array.isArray(mapel) ? mapel.length : null,
+				jurnal_bentrok: conflictsRes?.count > 0 ? conflictsRes.count : null,
 			});
 		});
 	}, [pathname]);

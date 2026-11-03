@@ -39,12 +39,16 @@ export async function GET(req) {
 		if (checkConflict && kelas && tanggalParam) {
 			const { data: conflictJournals, error: conflictErr } = await supabase
 				.from('jurnal')
-				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap, username)')
+				.select('id, jam_ke, mapel, guru_id, status_kehadiran, status_verifikasi, users!jurnal_guru_id_fkey(nama_lengkap, username)')
 				.eq('kelas', kelas)
 				.eq('tanggal', tanggalParam);
 
 			if (conflictErr) throw conflictErr;
-			return NextResponse.json(conflictJournals || [], { status: 200 });
+			// Hanya jurnal aktif/disetujui yang menjadi acuan bentrok (abaikan draft antrean)
+			const activeConflictJournals = (conflictJournals || []).filter(
+				(j) => j.status_verifikasi !== 'draft_bentrok' && j.status_kehadiran !== 'Draft Bentrok'
+			);
+			return NextResponse.json(activeConflictJournals, { status: 200 });
 		}
 
 		let query = supabase
@@ -171,31 +175,46 @@ export async function POST(req) {
 
 		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
 		const normJamKe = normalizeJamKe(jam_ke);
+		let isDraftConflict = false;
+		let conflictRefId = null;
+
 		if (tanggal && kelas && normJamKe) {
 			const { data: existingJournals } = await supabase
 				.from('jurnal')
-				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
+				.select('id, jam_ke, mapel, guru_id, status_kehadiran, status_verifikasi, users!jurnal_guru_id_fkey(nama_lengkap)')
 				.eq('kelas', kelas)
 				.eq('tanggal', tanggal);
 
-			const conflict = findConflictingSession(existingJournals || [], normJamKe);
+			// Hanya periksa terhadap jurnal aktif (bukan draft antrean)
+			const activeJournals = (existingJournals || []).filter(
+				(j) => j.status_verifikasi !== 'draft_bentrok' && j.status_kehadiran !== 'Draft Bentrok'
+			);
+
+			const conflict = findConflictingSession(activeJournals, normJamKe);
 			if (conflict) {
 				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
 				const mapelExisting = conflict.session.mapel || 'Mapel lain';
 				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
-				return NextResponse.json(
-					{
-						error: `Konflik Jam Mengajar: Jam ke-${normJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${kelas} tanggal ${tanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
-						conflict: {
-							existingJamKe: conflict.session.jam_ke,
-							conflicts: conflict.conflicts,
-							existingMapel: mapelExisting,
-							existingGuru: guruExisting,
-							existingId: conflict.session.id,
+
+				if (body.save_as_draft === true) {
+					isDraftConflict = true;
+					conflictRefId = conflict.session.id;
+				} else {
+					return NextResponse.json(
+						{
+							error: `Konflik Jam Mengajar: Jam ke-${normJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${kelas} tanggal ${tanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
+							conflict: {
+								existingJamKe: conflict.session.jam_ke,
+								conflicts: conflict.conflicts,
+								existingMapel: mapelExisting,
+								existingGuru: guruExisting,
+								existingId: conflict.session.id,
+							},
+							can_save_as_draft: true,
 						},
-					},
-					{ status: 409 }
-				);
+						{ status: 409 }
+					);
+				}
 			}
 		}
 
@@ -267,7 +286,9 @@ export async function POST(req) {
 					tanggal,
 					jamKe: jam_ke,
 			  });
-		const finalStatus = isKegiatanSekolah
+		const finalStatus = isDraftConflict
+			? 'Draft Bentrok'
+			: isKegiatanSekolah
 			? 'Kegiatan Sekolah'
 			: isTugasLuar
 			? 'Tugas Luar'
@@ -306,6 +327,14 @@ export async function POST(req) {
 		if (finalSesiAbsensiId) insertPayload.sesi_absensi_id = finalSesiAbsensiId;
 		if (finalStatus) insertPayload.status_kehadiran = finalStatus;
 
+		if (isDraftConflict) {
+			insertPayload.status_verifikasi = 'draft_bentrok';
+			insertPayload.konflik_dengan_id = conflictRefId;
+			insertPayload.catatan_admin = `Draft antrean bentrok dengan ID ${conflictRefId}`;
+		} else {
+			insertPayload.status_verifikasi = 'disetujui';
+		}
+
 		let { error } = await supabase.from('jurnal').insert(insertPayload);
 
 		// Fallback jika kolom baru belum ada di tabel Supabase
@@ -317,6 +346,9 @@ export async function POST(req) {
 			delete fallbackPayload.durasi_menit;
 			delete fallbackPayload.sesi_absensi_id;
 			delete fallbackPayload.status_kehadiran;
+			delete fallbackPayload.status_verifikasi;
+			delete fallbackPayload.konflik_dengan_id;
+			delete fallbackPayload.catatan_admin;
 			if (insertPayload.metode && !fallbackPayload.kegiatan.includes('[Metode:')) {
 				fallbackPayload.kegiatan = `[Metode: ${insertPayload.metode}] ${fallbackPayload.kegiatan}`.trim();
 			}
@@ -326,7 +358,7 @@ export async function POST(req) {
 
 		if (error) throw error;
 
-		return NextResponse.json({ success: true, id }, { status: 201 });
+		return NextResponse.json({ success: true, id, is_draft: isDraftConflict }, { status: 201 });
 	} catch (error) {
 		console.error('❌ Error POST jurnal:', error);
 		return NextResponse.json({ error: 'Gagal simpan' }, { status: 500 });
@@ -358,15 +390,21 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 	const targetTanggal = others.tanggal || existingData?.tanggal;
 	const targetKelas = others.kelas || existingData?.kelas;
 	const targetJamKe = others.jam_ke !== undefined ? normalizeJamKe(others.jam_ke) : existingData?.jam_ke;
+	const bypassConflict = body.override_conflict === true && (role === 'Admin' || role === 'Kurikulum');
 
-	if (targetTanggal && targetKelas && targetJamKe) {
+	if (!bypassConflict && targetTanggal && targetKelas && targetJamKe) {
 		const { data: existingJournals } = await supabase
 			.from('jurnal')
-			.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
+			.select('id, jam_ke, mapel, guru_id, status_kehadiran, status_verifikasi, users!jurnal_guru_id_fkey(nama_lengkap)')
 			.eq('kelas', targetKelas)
 			.eq('tanggal', targetTanggal);
 
-		const conflict = findConflictingSession(existingJournals || [], targetJamKe, id);
+		// Hanya bandingkan dengan jurnal aktif (abaikan draft antrean)
+		const activeJournals = (existingJournals || []).filter(
+			(j) => j.status_verifikasi !== 'draft_bentrok' && j.status_kehadiran !== 'Draft Bentrok'
+		);
+
+		const conflict = findConflictingSession(activeJournals || [], targetJamKe, id);
 		if (conflict) {
 			const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
 			const mapelExisting = conflict.session.mapel || 'Mapel lain';
@@ -433,9 +471,12 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 	} else if (updates.status_kehadiran !== undefined) {
 		updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
 	}
+	const syncAbsensi = body.sync_absensi === true;
 	delete updates.is_tugas_luar;
 	delete updates.is_kegiatan_sekolah;
 	delete updates.tipe_agenda;
+	delete updates.sync_absensi;
+	delete updates.override_conflict;
 
 	let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
 
@@ -455,10 +496,34 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 			delete fallbackUpdates.durasi_menit;
 			delete fallbackUpdates.sesi_absensi_id;
 			delete fallbackUpdates.status_kehadiran;
+			delete fallbackUpdates.status_verifikasi;
+			delete fallbackUpdates.konflik_dengan_id;
+			delete fallbackUpdates.catatan_admin;
 			const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
 			error = retry.error;
 		}
 	}
+
+	if (error) throw error;
+
+	// Sinkronisasi ke absensi_mapel jika diminta oleh admin
+	if (syncAbsensi && updates.jam_ke) {
+		try {
+			const sesiId = updates.sesi_absensi_id || existingData?.sesi_absensi_id;
+			if (sesiId) {
+				await supabase.from('absensi_mapel').update({ jam_ke: updates.jam_ke }).eq('sesi_id', sesiId);
+			} else if (targetTanggal && targetKelas) {
+				const mapelTarget = others.mapel || existingData?.mapel;
+				let q = supabase.from('absensi_mapel').update({ jam_ke: updates.jam_ke }).eq('tanggal', targetTanggal).eq('kelas', targetKelas);
+				if (mapelTarget) q = q.eq('mapel', mapelTarget);
+				await q;
+			}
+		} catch (absSyncErr) {
+			console.warn('Gagal sinkronisasi absensi_mapel saat update jurnal:', absSyncErr);
+		}
+	}
+
+	return NextResponse.json({ success: true });
 
 	if (error) throw error;
 

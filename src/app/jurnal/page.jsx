@@ -19,6 +19,7 @@ import {
 	getExpectedScheduleTimes,
 } from '@/lib/kbmRealtimeUtils';
 import { findConflictingSession, checkJamOverlap, normalizeJamKe, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
+import { DEFAULT_PROFIL_SEKOLAH, fetchSchoolProfile } from '@/lib/pdfKopSurat';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -33,6 +34,10 @@ export default function JurnalPage() {
 
 	const [userRole, setUserRole] = useState('');
 	const [userId, setUserId] = useState('');
+	const [userName, setUserName] = useState('');
+	const [schoolProfile, setSchoolProfile] = useState(DEFAULT_PROFIL_SEKOLAH);
+	const [adminWaNumber, setAdminWaNumber] = useState('082131028161');
+	const [adminWaName, setAdminWaName] = useState('Admin');
 
 	// Geolocation & Geofencing State
 	const { getPosition, loading: gpsLoading } = useGeolocation();
@@ -121,7 +126,7 @@ export default function JurnalPage() {
 					return;
 				}
 				
-				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+				const { data: profile } = await supabase.from('users').select('id_user, role, nama_lengkap').eq('auth_id', user.id).single();
 				let currentUserId = '';
 				let currentUserRole = '';
 				if (profile) {
@@ -129,6 +134,19 @@ export default function JurnalPage() {
 					currentUserRole = profile.role;
 					setUserId(currentUserId);
 					setUserRole(currentUserRole);
+					setUserName(profile.nama_lengkap || '');
+					fetchSchoolProfile().then((p) => { if (p) setSchoolProfile(p); }).catch(() => {});
+					fetch('/api/settings?key=wa_admin_jurnal', { credentials: 'include' })
+						.then((r) => (r.ok ? r.json() : null))
+						.then((d) => {
+							if (d?.value?.no_wa) {
+								setAdminWaNumber(d.value.no_wa);
+								if (d.value.nama_kontak) setAdminWaName(d.value.nama_kontak);
+							} else if (typeof d?.value === 'string' && d.value.trim()) {
+								setAdminWaNumber(d.value.trim());
+							}
+						})
+						.catch(() => {});
 				} else {
 					router.push('/login');
 					return;
@@ -737,34 +755,50 @@ export default function JurnalPage() {
 			}
 
 			// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
+			let saveAsDraftConflict = false;
+			let conflictTargetSession = null;
+
 			try {
 				const checkRes = await fetch(
 					`/api/jurnal?check_conflict=true&kelas=${encodeURIComponent(formData.kelas)}&tanggal=${encodeURIComponent(formData.tanggal)}`
 				);
 				const latestJournals = checkRes.ok ? await checkRes.json() : existingJournalsToday;
-				const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null);
+				const conflict = findConflictingSession(latestJournals || [], formData.jam_ke, isEditing ? formData.id : null) || currentJamConflict;
 
 				if (conflict) {
 					const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
 					const mapelExisting = conflict.session.mapel || 'Mapel lain';
 					const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
 
-					await Swal.fire({
+					const confirmPrompt = await Swal.fire({
 						title: 'Konflik Jam Mengajar!',
 						html: `
-							<div class="text-left text-sm space-y-2">
+							<div class="text-left text-sm space-y-3">
 								<p>Jam <b>ke-${formData.jam_ke}</b> bertabrakan dengan jadwal <b>${mapelExisting}</b> oleh <b>${guruExisting}</b> (Jam <b>${conflict.session.jam_ke}</b>)${conflictDetail} pada kelas <b>${formData.kelas}</b> tanggal <b>${formData.tanggal}</b>.</p>
-								<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
-									<p class="font-bold text-[#E8451A]">Satu kelas tidak boleh memiliki kegiatan belajar mengajar ganda pada jam yang sama.</p>
-									<p class="text-gray-600 mt-1">Silakan pilih jam mengajar lain yang belum terisi.</p>
+								<div class="p-3 bg-amber-50 border-2 border-[#0D0D0D] text-xs space-y-1.5">
+									<p class="font-bold text-[#0D0D0D]">💡 Ketikan materi & kegiatan Anda tidak akan hilang!</p>
+									<p class="text-gray-700">Jika Anda yakin jadwal Anda yang benar, simpan sebagai <b>Antrean Verifikasi</b> agar Admin dapat menyesuaikan jam dan mengesahkannya.</p>
 								</div>
 							</div>
 						`,
-						icon: 'error',
-						confirmButtonColor: '#E8451A',
-						confirmButtonText: 'Tutup & Ganti Jam',
+						icon: 'warning',
+						showCancelButton: true,
+						confirmButtonText: '💾 Simpan Antrean & Lapor WA',
+						cancelButtonText: '✏️ Ganti Jam',
+						confirmButtonColor: '#00E599',
+						cancelButtonColor: '#0D0D0D',
+						customClass: {
+							confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D]',
+							cancelButton: 'text-white font-bold border-[3px] border-[#0D0D0D]',
+						},
 					});
-					return;
+
+					if (!confirmPrompt.isConfirmed) {
+						return;
+					}
+
+					saveAsDraftConflict = true;
+					conflictTargetSession = conflict.session;
 				}
 			} catch (checkErr) {
 				console.warn('Gagal cek bentrok jurnal pra-submit:', checkErr);
@@ -815,7 +849,12 @@ export default function JurnalPage() {
 					cleanUpdates.sesi_absensi_id = null;
 				}
 
-				if (formData.is_kegiatan_sekolah) {
+				if (saveAsDraftConflict) {
+					cleanUpdates.status_verifikasi = 'draft_bentrok';
+					cleanUpdates.status_kehadiran = 'Draft Bentrok';
+					cleanUpdates.konflik_dengan_id = conflictTargetSession?.id || null;
+					cleanUpdates.catatan_admin = `Draft antrean bentrok dengan KBM ID ${conflictTargetSession?.id || '-'}`;
+				} else if (formData.is_kegiatan_sekolah) {
 					cleanUpdates.status_kehadiran = 'Kegiatan Sekolah';
 					if (!cleanUpdates.kegiatan?.includes('[Kegiatan Sekolah')) {
 						cleanUpdates.kegiatan = `[Kegiatan Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
@@ -863,6 +902,9 @@ export default function JurnalPage() {
 							delete fallback.durasi_menit;
 							delete fallback.sesi_absensi_id;
 							delete fallback.status_kehadiran;
+							delete fallback.status_verifikasi;
+							delete fallback.konflik_dengan_id;
+							delete fallback.catatan_admin;
 
 							if (cleanUpdates.metode && !fallback.kegiatan.includes('[Metode:')) {
 								fallback.kegiatan = `[Metode: ${cleanUpdates.metode}] ${fallback.kegiatan}`.trim();
@@ -897,6 +939,8 @@ export default function JurnalPage() {
 								tipe_agenda: formData.tipe_agenda,
 								user_lat: userLocationStatus?.userLat,
 								user_lng: userLocationStatus?.userLng,
+								save_as_draft: saveAsDraftConflict,
+								conflict_ref_id: conflictTargetSession?.id,
 							}),
 						});
 
@@ -925,7 +969,7 @@ export default function JurnalPage() {
 					finalKegiatan = `[Tugas Luar / Dinas Sekolah] ${finalKegiatan}`.trim();
 				}
 
-				const finalStatus = isKS
+				const computedStatus = isKS
 					? 'Kegiatan Sekolah'
 					: isTL
 					? 'Tugas Luar'
@@ -936,6 +980,9 @@ export default function JurnalPage() {
 							tanggal: formData.tanggal,
 							jamKe: formData.jam_ke,
 					  });
+				const finalStatus = saveAsDraftConflict
+					? 'Draft Bentrok'
+					: computedStatus || (isTL ? 'Tugas Luar' : 'Normal');
 
 				const insertData = {
 					id: newId,
@@ -957,8 +1004,14 @@ export default function JurnalPage() {
 					jam_selesai: finalJamSelesai && String(finalJamSelesai).trim() !== '' ? String(finalJamSelesai).trim().slice(0, 8) : null,
 					durasi_menit: finalDurasi || 0,
 					sesi_absensi_id: matchedAbsensi?.sesi_id || null,
-					status_kehadiran: finalStatus || (isTL ? 'Tugas Luar' : 'Normal'),
+					status_kehadiran: finalStatus,
 				};
+
+				if (saveAsDraftConflict) {
+					insertData.status_verifikasi = 'draft_bentrok';
+					insertData.konflik_dengan_id = conflictTargetSession?.id || null;
+					insertData.catatan_admin = `Draft antrean bentrok dengan KBM ID ${conflictTargetSession?.id || '-'}`;
+				}
 
 				let insertSuccess = false;
 				let lastInsertError = null;
@@ -983,6 +1036,10 @@ export default function JurnalPage() {
 							delete fallback.durasi_menit;
 							delete fallback.sesi_absensi_id;
 							delete fallback.status_kehadiran;
+							delete fallback.status_verifikasi;
+							delete fallback.konflik_dengan_id;
+							delete fallback.catatan_admin;
+
 							if (insertData.metode && !fallback.kegiatan.includes('[Metode:')) {
 								fallback.kegiatan = `[Metode: ${insertData.metode}] ${fallback.kegiatan}`.trim();
 							}
@@ -1014,6 +1071,8 @@ export default function JurnalPage() {
 								tipe_agenda: formData.tipe_agenda,
 								user_lat: userLocationStatus?.userLat,
 								user_lng: userLocationStatus?.userLng,
+								save_as_draft: saveAsDraftConflict,
+								conflict_ref_id: conflictTargetSession?.id,
 							}),
 						});
 						if (res.ok) {
@@ -1037,13 +1096,68 @@ export default function JurnalPage() {
 			// Renomor ulang pertemuan berdasarkan tanggal (urutan kronologis)
 			await renumberPertemuan(formData.kelas, formData.mapel);
 
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil!',
-				text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
-				timer: 1500,
-				showConfirmButton: false,
-			});
+			if (saveAsDraftConflict) {
+				const guruLawan = conflictTargetSession?.users?.nama_lengkap || 'Guru lain';
+				const mapelLawan = conflictTargetSession?.mapel || 'Mapel lain';
+				const jamLawan = conflictTargetSession?.jam_ke || '-';
+
+				// Gunakan nomor WA aduan yang diatur oleh admin (dengan fallback ke profil sekolah)
+				let targetPhone = adminWaNumber || schoolProfile?.telepon || '082131028161';
+				let targetContact = adminWaName || 'Admin';
+
+				try {
+					const waRes = await fetch('/api/settings?key=wa_admin_jurnal', { credentials: 'include' });
+					if (waRes.ok) {
+						const waData = await waRes.json();
+						if (waData?.value?.no_wa) {
+							targetPhone = waData.value.no_wa;
+							if (waData.value.nama_kontak) targetContact = waData.value.nama_kontak;
+						} else if (typeof waData?.value === 'string' && waData.value.trim()) {
+							targetPhone = waData.value.trim();
+						}
+					}
+				} catch (e) {
+					console.warn('Gagal muat pengaturan WA:', e);
+				}
+
+				const cleanPhone = String(targetPhone).replace(/^0/, '62').replace(/\D/g, '');
+				const waMsg = `Assalamu'alaikum ${targetContact}, saya (${userName || 'Guru'}) baru saja menyimpan jurnal KBM ${formData.mapel} di kelas ${formData.kelas} Jam ke-${formData.jam_ke} tanggal ${formData.tanggal} sebagai Antrean Bentrok. Di sistem terhalang KBM ${mapelLawan} (${guruLawan} - Jam ${jamLawan}). Mohon bantuannya untuk disesuaikan dan disahkan di sistem. Terima kasih!`;
+				const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMsg)}`;
+
+				const waPrompt = await Swal.fire({
+					icon: 'info',
+					title: 'Tersimpan Sebagai Antrean!',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Jurnal KBM Anda berhasil disimpan sebagai <b>Antrean Verifikasi</b>.</p>
+							<div class="p-3 bg-amber-50 border-2 border-[#0D0D0D] text-xs space-y-1">
+								<p class="font-bold text-amber-900">⏳ Menunggu Pengesahan Admin</p>
+								<p class="text-gray-700">Ketikan materi aman di sistem. Hak Bisaroh akan otomatis masuk ke rekap begitu Admin menyesuaikan jam KBM.</p>
+							</div>
+							<p class="text-xs text-gray-600 mt-2">
+								Ingin segera mengabari <b>${targetContact} (${targetPhone})</b> sekarang lewat WhatsApp?
+							</p>
+						</div>
+					`,
+					showCancelButton: true,
+					confirmButtonText: '📲 Kirim WhatsApp ke Admin',
+					cancelButtonText: 'Selesai (Nanti Saja)',
+					confirmButtonColor: '#25D366',
+					cancelButtonColor: '#0D0D0D',
+				});
+
+				if (waPrompt.isConfirmed) {
+					window.open(waUrl, '_blank');
+				}
+			} else {
+				await Swal.fire({
+					icon: 'success',
+					title: 'Berhasil!',
+					text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
+					timer: 1500,
+					showConfirmButton: false,
+				});
+			}
 			setIsModalOpen(false);
 			refreshJurnal();
 		} catch (err) {
@@ -1573,21 +1687,12 @@ export default function JurnalPage() {
 											value={formData.jam_ke}
 											onChange={(e) => setFormData({ ...formData, jam_ke: e.target.value })}
 											onBlur={() => setFormData((prev) => ({ ...prev, jam_ke: normalizeJamKe(prev.jam_ke) }))}
-											className={`neo-input w-full px-4 py-3 bg-white border-[3px] ${currentJamConflict ? 'border-[#E8451A] bg-red-50 text-[#E8451A]' : 'border-[#0D0D0D] text-[#0D0D0D]'} font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none`}
+											className={`neo-input w-full px-4 py-3 bg-white border-[3px] ${currentJamConflict ? 'border-[#E8451A] bg-rose-50 text-[#E8451A]' : 'border-[#0D0D0D] text-[#0D0D0D]'} font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none`}
 										/>
 										{currentJamConflict && (
-											<div className='mt-2 p-2 bg-red-50 border-[2px] border-[#E8451A] text-xs text-[#0D0D0D]'>
-												<p className='font-black text-[#E8451A] flex items-center gap-1 text-[11px] uppercase tracking-wider'>
-													<span>⚠️</span> Konflik Jam Mengajar!
-												</p>
-												<p className='mt-1 text-[11px] font-medium leading-snug'>
-													Jam ke-<b>{formData.jam_ke}</b> bentrok dengan <b>{currentJamConflict.session.mapel}</b> ({currentJamConflict.session.users?.nama_lengkap || 'Guru lain'} - Jam {currentJamConflict.session.jam_ke}) di kelas <b>{formData.kelas}</b>.
-												</p>
-												{currentJamConflict.conflicts?.length > 0 && (
-													<p className='text-[10px] font-black text-[#E8451A] mt-0.5'>
-														Jam bertabrakan: Jam ke-{currentJamConflict.conflicts.join(', ')}
-													</p>
-												)}
+											<div className='flex items-center gap-1 mt-1.5 text-[11px] font-black text-[#E8451A] uppercase tracking-wider'>
+												<span>⚠️</span>
+												<span>Bentrok ({currentJamConflict.conflicts?.length > 0 ? `Jam ${currentJamConflict.conflicts.join(', ')}` : currentJamConflict.session.jam_ke})</span>
 											</div>
 										)}
 									</div>
@@ -1603,6 +1708,46 @@ export default function JurnalPage() {
 											className='neo-input w-full px-4 py-3 bg-[#E8E8E8] border-[3px] border-[#0D0D0D] text-[#0D0D0D] font-black shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-white outline-none rounded-none'
 										/>
 									</div>
+
+									{/* BANNER KONFLIK JAM MENGAJAR (Full-Width Responsive Span 3 Kolom) */}
+									{currentJamConflict && (
+										<div className='col-span-1 md:col-span-3 border-[3px] border-[#0D0D0D] bg-[#FFF8E7] p-3.5 sm:p-4 shadow-[4px_4px_0px_0px_#E8451A] animate-in fade-in duration-200 mt-1'>
+											<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
+												<div className='flex items-start gap-2.5 sm:gap-3'>
+													<div className='p-1.5 sm:p-2 bg-[#E8451A] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] text-white shrink-0 mt-0.5'>
+														<svg className='w-4 h-4 sm:w-5 sm:h-5' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+															<path strokeLinecap='round' strokeLinejoin='round' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
+														</svg>
+													</div>
+													<div className='space-y-1 text-xs'>
+														<div className='flex flex-wrap items-center gap-2'>
+															<span className='font-black text-[#0D0D0D] text-xs sm:text-sm uppercase tracking-wide'>
+																Konflik Jam Mengajar Terdeteksi!
+															</span>
+															<span className='px-2 py-0.5 bg-[#E8451A] text-white font-black text-[10px] uppercase border border-[#0D0D0D]'>
+																Jam ke-{formData.jam_ke}
+															</span>
+														</div>
+														<p className='text-gray-800 leading-relaxed font-medium'>
+															Jam ke-<b>{formData.jam_ke}</b> di kelas <b>{formData.kelas}</b> sudah terisi KBM{' '}
+															<b className='text-[#0D0D0D]'>{currentJamConflict.session.mapel}</b> ({currentJamConflict.session.users?.nama_lengkap || 'Guru lain'} - Jam {currentJamConflict.session.jam_ke}).
+														</p>
+														<div className='flex items-center gap-1.5 pt-1 text-[11px] font-bold text-[#0D0D0D]'>
+															<span className='text-emerald-700 font-black text-sm'>✓</span>
+															<span>
+																Ketikan Anda aman. Anda tetap dapat menyimpan antrean ini dan melaporkannya ke Admin via WhatsApp.
+															</span>
+														</div>
+													</div>
+												</div>
+												<div className='shrink-0 self-start sm:self-center'>
+													<span className='inline-block px-3 py-1 bg-[#00E599] text-[#0D0D0D] font-black text-[11px] uppercase border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+														Antrean Diizinkan
+													</span>
+												</div>
+											</div>
+										</div>
+									)}
 								</div>
 
 								{/* Waktu KBM Real-Time Card */}
@@ -1909,18 +2054,31 @@ export default function JurnalPage() {
 								)}
 							</div>
 
-							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-4 sm:py-5 border-t-[4px] border-[#0D0D0D] flex flex-col sm:flex-row justify-end gap-3 sm:gap-4'>
+							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-3.5 sm:py-4 border-t-[4px] border-[#0D0D0D] flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2.5 sm:gap-4'>
 								<button
 									type='button'
 									onClick={() => setIsModalOpen(false)}
-									className='neo-btn-outline w-full sm:w-auto bg-white text-[#0D0D0D] px-6 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest'>
+									className='neo-btn-outline w-full sm:w-auto bg-white text-[#0D0D0D] px-6 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest text-xs sm:text-sm text-center'>
 									BATAL
 								</button>
 								<button
 									type='submit'
-									disabled={saving || !!currentJamConflict}
-									className='neo-btn-primary w-full sm:w-auto bg-[#0D0D0D] text-white px-8 py-3 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] hover:bg-[#E8451A] hover:text-white active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed'>
-									{saving ? 'MENYIMPAN...' : currentJamConflict ? 'JAM BENTROK' : 'SIMPAN JURNAL'}
+									disabled={saving}
+									className={`neo-btn-primary w-full sm:w-auto px-6 sm:px-8 py-3.5 font-black shadow-[4px_4px_0px_0px_#0D0D0D] border-[3px] border-[#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-1 active:translate-x-1 active:shadow-none transition-all rounded-none uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm flex items-center justify-center gap-2 ${
+										currentJamConflict
+											? 'bg-[#00E599] text-[#0D0D0D] hover:bg-[#00c784]'
+											: 'bg-[#0D0D0D] text-white hover:bg-[#E8451A]'
+									}`}>
+									{saving ? (
+										'MENYIMPAN...'
+									) : currentJamConflict ? (
+										<>
+											<span className='text-base'>💾</span>
+											<span>SIMPAN ANTREAN &amp; LAPOR WA</span>
+										</>
+									) : (
+										'SIMPAN JURNAL'
+									)}
 								</button>
 							</div>
 						</form>

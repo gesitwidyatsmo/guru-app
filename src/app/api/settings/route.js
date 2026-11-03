@@ -40,9 +40,9 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const key = searchParams.get('key');
 
-		// Hanya key 'profil_sekolah' yang bersifat publik (dibutuhkan untuk halaman login, identitas, dll)
-		if (key !== 'profil_sekolah') {
-			let role = req.headers.get('x-user-role');
+		// Key 'profil_sekolah' dan 'wa_admin_jurnal' bersifat publik/dapat diakses guru tanpa blokir
+		if (key !== 'profil_sekolah' && key !== 'wa_admin_jurnal') {
+			let role = req.headers.get('x-user-role') || req.cookies.get('user_role')?.value;
 			if (!role) {
 				const authClient = await createClient();
 				const { data: { user } } = await authClient.auth.getUser();
@@ -135,7 +135,8 @@ export async function PUT(req) {
 	try {
 		// Gunakan supabaseAdmin agar tidak terblokir RLS saat membaca profil sekolah / kop surat
 		const supabase = supabaseAdmin || (await createClient());
-		let role = req.headers.get('x-user-role');
+		let role = req.headers.get('x-user-role') || req.cookies.get('user_role')?.value;
+		if (role) role = decodeURIComponent(role).trim();
 
 		if (!role) {
 			const { data: { user } } = await supabase.auth.getUser();
@@ -156,14 +157,16 @@ export async function PUT(req) {
 			return NextResponse.json({ error: 'Parameter "key" dan "value" wajib diisi.' }, { status: 400 });
 		}
 
-		// Izin khusus pengaturan bisaroh dan pengajuan:
+		// Izin khusus pengaturan:
 		// - Bendahara boleh mengubah 'bisaroh_settings' dan 'bisaroh_submissions'
 		// - Kepala Sekolah boleh mengubah 'bisaroh_submissions' (approval / revisi)
+		// - Kurikulum & Admin boleh mengubah 'wa_admin_jurnal'
 		// - Admin boleh mengubah semua
 		const isBendaharaAllowed = role === 'Bendahara' && (key === 'bisaroh_settings' || key === 'bisaroh_submissions');
 		const isKepsekAllowed = role === 'Kepala Sekolah' && key === 'bisaroh_submissions';
+		const isKurikulumAllowed = (role === 'Kurikulum' || role === 'Admin') && key === 'wa_admin_jurnal';
 
-		if (role !== 'Admin' && !isBendaharaAllowed && !isKepsekAllowed) {
+		if (role !== 'Admin' && !isBendaharaAllowed && !isKepsekAllowed && !isKurikulumAllowed) {
 			return NextResponse.json({ error: 'Akses ditolak: Anda tidak memiliki izin mengubah pengaturan ini.' }, { status: 403 });
 		}
 
