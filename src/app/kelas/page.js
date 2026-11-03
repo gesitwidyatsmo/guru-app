@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 
 import Modal from '../components/Modal';
@@ -44,113 +44,115 @@ export default function Page() {
 		}
 	}, []);
 
-	useEffect(() => {
-		const fetchAll = async () => {
-			try {
-				const supabase = createClient();
-				
-				// 1. Ambil Identitas
-				const { data: { user } } = await supabase.auth.getUser();
-				let role = '';
-				let userId = '';
-				if (user) {
-					const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
-					if (profile) {
-						role = profile.role || '';
-						setUserRole(role);
-						userId = profile.id_user;
-					}
+	const fetchAll = useCallback(async () => {
+		try {
+			const supabase = createClient();
+			
+			// 1. Ambil Identitas
+			const { data: { user } } = await supabase.auth.getUser();
+			let role = '';
+			let userId = '';
+			if (user) {
+				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+				if (profile) {
+					role = profile.role || '';
+					setUserRole(role);
+					userId = profile.id_user;
 				}
-
-				// 2. Ambil Kelas yang akan Tampil di Grid (List)
-				let allowedClasses = null;
-				if (role === 'Admin' || role === 'Kepala Sekolah') {
-					allowedClasses = null; // Semua kelas
-				} else if (role === 'Guru' && userId) {
-					const { data: kbmData } = await supabase.from('guru_kbm').select('kelas').eq('id_user', userId);
-					allowedClasses = kbmData ? [...new Set(kbmData.map(r => r.kelas))] : [];
-				} else {
-					allowedClasses = [];
-				}
-
-				let query = supabase.from('kelas').select(`
-					id,
-					nama_kelas,
-					id_wali_kelas,
-					users!kelas_id_wali_kelas_fkey(nama_lengkap)
-				`).order('nama_kelas', { ascending: true });
-
-				if (allowedClasses !== null) {
-					if (allowedClasses.length > 0) {
-						query = query.in('nama_kelas', allowedClasses);
-					} else {
-						query = null;
-						setKelasList([]);
-					}
-				}
-
-				if (query) {
-					const { data: kelasData } = await query;
-					
-					// Ambil jumlah siswa per kelas
-					const { data: allSiswa } = await supabase.from('siswa').select('kelas').eq('status', 'Aktif');
-					const countPerKelas = {};
-					if (allSiswa) {
-						allSiswa.forEach(s => {
-							if (s.kelas) {
-								countPerKelas[s.kelas] = (countPerKelas[s.kelas] || 0) + 1;
-							}
-						});
-					}
-
-					if (kelasData) {
-						setKelasList(kelasData.map(k => ({
-							id: k.id,
-							kelas: k.nama_kelas,
-							id_wali_kelas: k.id_wali_kelas || '',
-							wali_kelas: k.users?.nama_lengkap || '',
-							jumlah_siswa: countPerKelas[k.nama_kelas] || 0
-						})));
-					}
-				}
-
-				// 2.5 Jika Admin, Ambil Daftar Guru untuk Dropdown Wali Kelas
-				if (role === 'Admin') {
-					const { data: dataGuru } = await supabase.from('users').select('id_user, nama_lengkap').eq('role', 'Guru');
-					if (dataGuru) {
-						setGuruList(dataGuru);
-					}
-				}
-
-				// 3. Jika Guru, Persiapkan Data untuk Modal Checklist
-				if (role === 'Guru') {
-					// Ambil SEMUA kelas master yg ada di DB untuk opsi modal
-					const { data: dataAll } = await supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true });
-					if (dataAll) {
-						setAllClasses(dataAll.map(k => ({ id: k.id, kelas: k.nama_kelas })));
-					}
-
-					// Ambil SEMUA mapel master untuk dropdown
-					const { data: dataMapel } = await supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true });
-					if (dataMapel) {
-						setAllMapels(dataMapel);
-					}
-
-					// Ambil penugasan saat ini (Eksplisit)
-					const { data: myData } = await supabase.from('guru_kbm').select('id_kbm, kelas, mapel').eq('id_user', userId).order('kelas').order('mapel');
-					if (myData) {
-						setMyKBM(myData);
-					}
-				}
-			} catch (error) {
-				console.error('Gagal mengambil data:', error);
-			} finally {
-				setLoadingPage(false);
 			}
-		};
 
-		fetchAll();
+			// 2. Ambil Kelas yang akan Tampil di Grid (List)
+			let allowedClasses = null;
+			if (role === 'Admin' || role === 'Kepala Sekolah') {
+				allowedClasses = null; // Semua kelas
+			} else if (role === 'Guru' && userId) {
+				const { data: kbmData } = await supabase.from('guru_kbm').select('kelas').eq('id_user', userId);
+				allowedClasses = kbmData ? [...new Set(kbmData.map(r => r.kelas))] : [];
+			} else {
+				allowedClasses = [];
+			}
+
+			let query = supabase.from('kelas').select(`
+				id,
+				nama_kelas,
+				id_wali_kelas,
+				users!kelas_id_wali_kelas_fkey(nama_lengkap)
+			`).order('nama_kelas', { ascending: true });
+
+			if (allowedClasses !== null) {
+				if (allowedClasses.length > 0) {
+					query = query.in('nama_kelas', allowedClasses);
+				} else {
+					query = null;
+					setKelasList([]);
+				}
+			}
+
+			if (query) {
+				const { data: kelasData } = await query;
+				
+				// Ambil jumlah siswa per kelas
+				const { data: allSiswa } = await supabase.from('siswa').select('kelas').eq('status', 'Aktif');
+				const countPerKelas = {};
+				if (allSiswa) {
+					allSiswa.forEach(s => {
+						if (s.kelas) {
+							countPerKelas[s.kelas] = (countPerKelas[s.kelas] || 0) + 1;
+						}
+					});
+				}
+
+				if (kelasData) {
+					setKelasList(kelasData.map(k => ({
+						id: k.id,
+						kelas: k.nama_kelas,
+						id_wali_kelas: k.id_wali_kelas || '',
+						wali_kelas: k.users?.nama_lengkap || '',
+						jumlah_siswa: countPerKelas[k.nama_kelas] || 0
+					})));
+				}
+			}
+
+			// 2.5 Jika Admin, Ambil Daftar Guru untuk Dropdown Wali Kelas
+			if (role === 'Admin') {
+				const { data: dataGuru } = await supabase.from('users').select('id_user, nama_lengkap').eq('role', 'Guru');
+				if (dataGuru) {
+					setGuruList(dataGuru);
+				}
+			}
+
+			// 3. Jika Guru, Persiapkan Data untuk Modal Checklist
+			if (role === 'Guru') {
+				// Ambil SEMUA kelas master yg ada di DB untuk opsi modal
+				const { data: dataAll } = await supabase.from('kelas').select('id, nama_kelas').order('nama_kelas', { ascending: true });
+				if (dataAll) {
+					setAllClasses(dataAll.map(k => ({ id: k.id, kelas: k.nama_kelas })));
+				}
+
+				// Ambil SEMUA mapel master untuk dropdown
+				const { data: dataMapel } = await supabase.from('mapel').select('id, mapel').order('mapel', { ascending: true });
+				if (dataMapel) {
+					setAllMapels(dataMapel);
+				}
+
+				// Ambil penugasan saat ini (Eksplisit)
+				const { data: myData } = await supabase.from('guru_kbm').select('id_kbm, kelas, mapel').eq('id_user', userId).order('kelas').order('mapel');
+				if (myData) {
+					setMyKBM(myData);
+				}
+			}
+		} catch (error) {
+			console.error('Gagal mengambil data:', error);
+		} finally {
+			setLoadingPage(false);
+		}
 	}, []);
+
+	useEffect(() => {
+		fetchAll();
+		window.addEventListener('focus', fetchAll);
+		return () => window.removeEventListener('focus', fetchAll);
+	}, [fetchAll]);
 
 	// --- HANDLER ADMIN --- //
 	async function submitKelas(e) {
@@ -169,14 +171,7 @@ export default function Page() {
 			setKelasBaru('');
 			setIdWaliKelasBaru('');
 			setShowModal(false);
-			fetch('/api/kelas')
-				.then((res) => res.json())
-				.then(setKelasList);
-			if (userRole === 'Guru') {
-				fetch('/api/kelas?all=true')
-					.then((r) => r.json())
-					.then(setAllClasses);
-			}
+			await fetchAll();
 		}
 	}
 
@@ -195,20 +190,17 @@ export default function Page() {
 		setKelasBaru('');
 		setIdWaliKelasBaru('');
 		if (res.ok) {
-			fetch('/api/kelas')
-				.then((res) => res.json())
-				.then(setKelasList);
+			await fetchAll();
 		}
 	}
 
 	// --- HANDLER GURU (KBM EKSPLISIT) --- //
 	const refreshKBM = async () => {
-		const res = await fetch('/api/kbm/mandiri');
+		const res = await fetch('/api/kbm/mandiri', { cache: 'no-store' });
 		if (res.ok) {
 			const data = await res.json();
 			setMyKBM(data);
-			// Refresh Grid Layar
-			fetch('/api/kelas').then((r) => r.json()).then(setKelasList);
+			await fetchAll();
 		}
 	};
 

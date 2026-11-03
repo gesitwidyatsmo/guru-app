@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
     document: "/offline",
   },
   cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
+  aggressiveFrontEndNavCaching: false,
   // Jangan reload paksa saat online kembali — bisa memicu redirect ke login di standalone mode
   reloadOnOnline: false,
   workboxOptions: {
@@ -26,13 +26,24 @@ const withPWA = withPWAInit({
         },
       },
       {
-        // Supabase REST & Storage (GET saja): StaleWhileRevalidate untuk data offline.
+        // Supabase REST (GET data DB): NetworkFirst agar data terbaru langsung tampil seketika setelah simpan/ubah/hapus
         // PENTING: Mengecualikan auth/v1/ agar refresh token & login tidak di-cache/di-intercept SW.
-        urlPattern: /^https:\/\/.*\.supabase\.co\/(?:rest|storage)\/v1\/.*/i,
-        handler: 'StaleWhileRevalidate',
+        urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
+        handler: 'NetworkFirst',
         method: 'GET',
         options: {
           cacheName: 'supabase-api',
+          networkTimeoutSeconds: 4,
+          expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 7 Hari
+        },
+      },
+      {
+        // Supabase Storage (Gambar / Lampiran): StaleWhileRevalidate untuk load cepat aset media
+        urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/.*/i,
+        handler: 'StaleWhileRevalidate',
+        method: 'GET',
+        options: {
+          cacheName: 'supabase-storage',
           expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 }, // 7 Hari
         },
       },

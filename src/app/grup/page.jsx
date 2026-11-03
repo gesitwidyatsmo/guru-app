@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Plus, Users, Calendar, BookOpen, ChevronLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -17,19 +17,26 @@ export default function ManajemenGrupPage() {
 	const [loadingPage, setLoadingPage] = useState(true);
 	const [search, setSearch] = useState('');
 
-	useEffect(() => {
-		fetch(`/api/grup?${buildPeriodeQuery()}`)
+	const fetchGrup = useCallback(() => {
+		fetch(`/api/grup?${buildPeriodeQuery()}`, { cache: 'no-store' })
 			.then((res) => res.json())
 			.then((json) => {
 				if (Array.isArray(json)) setData(json);
-				setLoading(false);
 			})
 			.catch((err) => {
 				console.error(err);
-				setLoading(false);
 			})
-			.finally(() => setLoadingPage(false));
-	}, [tahunAjar, semester]);
+			.finally(() => {
+				setLoading(false);
+				setLoadingPage(false);
+			});
+	}, [buildPeriodeQuery]);
+
+	useEffect(() => {
+		fetchGrup();
+		window.addEventListener('focus', fetchGrup);
+		return () => window.removeEventListener('focus', fetchGrup);
+	}, [fetchGrup]);
 
 	const filtered = data.filter((item) => item.judul_kegiatan?.toLowerCase().includes(search.toLowerCase()) || item.kelas_id?.toLowerCase().includes(search.toLowerCase()));
 

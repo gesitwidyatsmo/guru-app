@@ -83,6 +83,8 @@ export default function RiwayatAbsensiPage() {
 
 	useEffect(() => {
 		fetchRiwayatSesi();
+		window.addEventListener('focus', fetchRiwayatSesi);
+		return () => window.removeEventListener('focus', fetchRiwayatSesi);
 	}, [fetchRiwayatSesi]);
 
 	const filteredSesi = useMemo(() => {

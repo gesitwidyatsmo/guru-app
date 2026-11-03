@@ -105,11 +105,11 @@ export default function AbsensiMapelPage() {
 				}
 
 				const [resKelas, resMapel, resStatus, resSiswa, resPoin] = await Promise.all([
-					fetch('/api/kelas'),
-					fetch('/api/mapel'),
-					fetch('/api/status-absensi'),
-					fetch('/api/siswa'),
-					fetch(`/api/poin?${buildPeriodeQuery()}`),
+					fetch('/api/kelas', { cache: 'no-store' }),
+					fetch('/api/mapel', { cache: 'no-store' }),
+					fetch('/api/status-absensi', { cache: 'no-store' }),
+					fetch('/api/siswa', { cache: 'no-store' }),
+					fetch(`/api/poin?${buildPeriodeQuery()}`, { cache: 'no-store' }),
 				]);
 				const dataKelas = resKelas.ok ? await resKelas.json() : [];
 				const dataMapel = resMapel.ok ? await resMapel.json() : [];
@@ -196,7 +196,7 @@ export default function AbsensiMapelPage() {
 				mapel: selectedMapel,
 				tanggal: tanggal,
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`);
+			const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`, { cache: 'no-store' });
 			if (res.ok) {
 				const data = await res.json();
 				setSesiHariIni(Array.isArray(data) ? data : []);
@@ -213,6 +213,8 @@ export default function AbsensiMapelPage() {
 
 	useEffect(() => {
 		fetchSesiHariIni();
+		window.addEventListener('focus', fetchSesiHariIni);
+		return () => window.removeEventListener('focus', fetchSesiHariIni);
 	}, [fetchSesiHariIni]);
 
 	// Fetch Riwayat Surat Izin dari Pos Keamanan untuk kelas & tanggal ini
@@ -246,6 +248,8 @@ export default function AbsensiMapelPage() {
 
 	useEffect(() => {
 		fetchSuratKeamanan();
+		window.addEventListener('focus', fetchSuratKeamanan);
+		return () => window.removeEventListener('focus', fetchSuratKeamanan);
 	}, [fetchSuratKeamanan]);
 
 	// Helper: Cek apakah surat keamanan berlaku untuk jam KBM tertentu
@@ -290,7 +294,7 @@ export default function AbsensiMapelPage() {
 				tanggal: tanggal,
 				jam_ke: targetJam,
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`);
+			const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`, { cache: 'no-store' });
 
 			if (res.ok) {
 				const data = await res.json();

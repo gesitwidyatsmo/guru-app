@@ -782,6 +782,7 @@ export default function KurikulumRaporManagementPage() {
 
 			if (res.ok) {
 				showToast('Keputusan pleno kenaikan kelas berhasil disimpan!');
+				await fetchPlenoData();
 			} else {
 				showToast('Gagal menyimpan keputusan pleno', 'error');
 			}

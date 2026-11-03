@@ -135,6 +135,13 @@ export default function JurnalKelasPage() {
 		fetchData();
 	}, [classId]);
 
+	useEffect(() => {
+		if (!userId || !userRole || !(kelasInfo?.kelas || kelasInfo?.nama_kelas)) return;
+		const handleFocus = () => refreshJurnal(userId, userRole, kelasInfo.kelas || kelasInfo.nama_kelas);
+		window.addEventListener('focus', handleFocus);
+		return () => window.removeEventListener('focus', handleFocus);
+	}, [userId, userRole, kelasInfo]);
+
 	const refreshJurnal = async (uid = userId, role = userRole, clsName = (kelasInfo?.kelas || kelasInfo?.nama_kelas)) => {
 		if (!clsName) return [];
 		try {

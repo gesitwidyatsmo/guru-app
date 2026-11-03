@@ -43,6 +43,8 @@ export default function TugasDashboard() {
 
 	useEffect(() => {
 		fetchTasks();
+		window.addEventListener("focus", fetchTasks);
+		return () => window.removeEventListener("focus", fetchTasks);
 	}, []);
 
 	const handleDelete = async (id) => {

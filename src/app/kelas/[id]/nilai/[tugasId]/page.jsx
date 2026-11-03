@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
@@ -16,10 +16,8 @@ export default function DetailNilaiPage() {
 	const [loading, setLoading] = useState(true);
 
 	// Fetch detail tugas
-	useEffect(() => {
+	const fetchDetailTugas = useCallback(async () => {
 		if (!tugasId) return;
-
-		const fetchDetailTugas = async () => {
 			try {
 				const supabase = createClient();
 				const { data: { user } } = await supabase.auth.getUser();
@@ -137,10 +135,13 @@ export default function DetailNilaiPage() {
 			} finally {
 				setLoading(false);
 			}
-		};
-
-		fetchDetailTugas();
 	}, [tugasId]);
+
+	useEffect(() => {
+		fetchDetailTugas();
+		window.addEventListener('focus', fetchDetailTugas);
+		return () => window.removeEventListener('focus', fetchDetailTugas);
+	}, [fetchDetailTugas]);
 
 	// Handle Edit
 	const handleEdit = () => {

@@ -213,12 +213,15 @@ export default function JurnalPage() {
 		fetchData();
 	}, []);
 
-	// Re-fetch jurnal saat periode aktif berubah
+	// Re-fetch jurnal saat periode aktif berubah atau saat window fokus
 	useEffect(() => {
 		if (userId && userRole) {
 			refreshJurnal(userId, userRole);
+			const handleFocus = () => refreshJurnal(userId, userRole);
+			window.addEventListener('focus', handleFocus);
+			return () => window.removeEventListener('focus', handleFocus);
 		}
-	}, [tahunAjar, semester]);
+	}, [userId, userRole, tahunAjar, semester]);
 
 	const refreshJurnal = async (uid = userId, role = userRole) => {
 		try {

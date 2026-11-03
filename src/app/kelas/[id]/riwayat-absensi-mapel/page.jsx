@@ -52,7 +52,7 @@ export default function RiwayatAbsensiMapelPage() {
 					setSiswaList(dataSiswa || []);
 				}
 
-				const dataMapel = await fetch('/api/mapel?all=false').then(res => res.json());
+				const dataMapel = await fetch('/api/mapel?all=false', { cache: 'no-store' }).then(res => res.json());
 				setMapelList(dataMapel || []);
 			} catch (err) {
 				console.error(err);
@@ -101,9 +101,11 @@ export default function RiwayatAbsensiMapelPage() {
 
 	useEffect(() => {
 		fetchRiwayatSesi();
+		window.addEventListener('focus', fetchRiwayatSesi);
 		// Reset selected jika ganti mapel
 		setSelectedTanggal('');
 		setSelectedJamKe('');
+		return () => window.removeEventListener('focus', fetchRiwayatSesi);
 	}, [fetchRiwayatSesi]);
 
 	const filteredSesi = useMemo(() => {

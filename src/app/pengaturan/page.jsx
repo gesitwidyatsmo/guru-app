@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
@@ -65,32 +65,35 @@ export default function PengaturanPage() {
 	}, []);
 
 	// Load data kelas & siswa untuk promosi
+	const loadPromosiData = useCallback(async () => {
+		try {
+			const [resKelas, resSiswa] = await Promise.all([
+				fetch('/api/kelas', { cache: 'no-store' }),
+				fetch('/api/siswa', { cache: 'no-store' }),
+			]);
+			const dataKelas = resKelas.ok ? await resKelas.json() : [];
+			const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
+			setKelasList(dataKelas);
+			const activeSiswa = (dataSiswa || []).filter(s => s.status === 'Aktif');
+			setSiswaList(activeSiswa);
+			// Init promosi massal
+			const initMassal = dataKelas.map(k => ({
+				dari_kelas: k.nama_kelas || k.kelas,
+				ke_kelas: '',
+			}));
+			setPromosiMassal(initMassal);
+			// Init promosi individual
+			setPromosiIndividual(activeSiswa.map(s => ({ siswa_id: s.id, nama: s.nama_lengkap, kelas_lama: s.kelas, ke_kelas: '' })));
+		} catch (err) {
+			console.error('Error load promosi data:', err);
+		}
+	}, []);
+
 	useEffect(() => {
-		if (userRole !== 'Admin') return;
-		const loadData = async () => {
-			try {
-				const [resKelas, resSiswa] = await Promise.all([
-					fetch('/api/kelas'),
-					fetch('/api/siswa'),
-				]);
-				const dataKelas = resKelas.ok ? await resKelas.json() : [];
-				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-				setKelasList(dataKelas);
-				setSiswaList(dataSiswa.filter(s => s.status === 'Aktif'));
-				// Init promosi massal
-				const initMassal = dataKelas.map(k => ({
-					dari_kelas: k.nama_kelas || k.kelas,
-					ke_kelas: '',
-				}));
-				setPromosiMassal(initMassal);
-				// Init promosi individual
-				setPromosiIndividual(dataSiswa.filter(s => s.status === 'Aktif').map(s => ({ siswa_id: s.id, nama: s.nama_lengkap, kelas_lama: s.kelas, ke_kelas: '' })));
-			} catch (err) {
-				console.error(err);
-			}
-		};
-		loadData();
-	}, [userRole]);
+		if (userRole === 'Admin') {
+			loadPromosiData();
+		}
+	}, [userRole, loadPromosiData]);
 
 	// Handler: Buat Tahun Ajar Baru
 	const handleBuatTA = async (e) => {
@@ -171,6 +174,7 @@ export default function PengaturanPage() {
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.error);
 			Swal.fire('Berhasil!', data.message, 'success');
+			await loadPromosiData();
 		} catch (err) {
 			Swal.fire('Error', err.message, 'error');
 		} finally {
@@ -204,6 +208,7 @@ export default function PengaturanPage() {
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.error);
 			Swal.fire('Berhasil!', data.message, 'success');
+			await loadPromosiData();
 		} catch (err) {
 			Swal.fire('Error', err.message, 'error');
 		} finally {

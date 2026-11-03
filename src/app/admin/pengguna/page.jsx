@@ -54,7 +54,7 @@ export default function PenggunaPage() {
 	const fetchUsers = async () => {
 		try {
 			const [response, resAuth, profile, resKelas] = await Promise.all([
-				fetch('/api/users'),
+				fetch('/api/users', { cache: 'no-store' }),
 				fetch('/api/auth/me'),
 				fetchSchoolProfile(),
 				fetch('/api/kelas?all=true').catch(() => ({ ok: false })),

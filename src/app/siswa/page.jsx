@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Loader from '../components/loading';
 import { createClient } from '@/utils/supabase/client';
@@ -225,46 +225,48 @@ export default function Page() {
 	const [showClassPicker, setShowClassPicker] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
 
-	useEffect(() => {
-		const fetchData = async () => {
-			try {
-				const supabase = createClient();
-				const [resSiswa, resKelas, resPoin] = await Promise.all([
-					fetch('/api/siswa').then((res) => res.json()),
-					fetch('/api/kelas?all=false').then((res) => res.json()),
-					supabase.from('poin').select('*'),
-				]);
+	const fetchData = useCallback(async () => {
+		try {
+			const supabase = createClient();
+			const [resSiswa, resKelas, resPoin] = await Promise.all([
+				fetch('/api/siswa', { cache: 'no-store' }).then((res) => res.json()),
+				fetch('/api/kelas?all=false', { cache: 'no-store' }).then((res) => res.json()),
+				supabase.from('poin').select('*'),
+			]);
 
-				const dataSiswa = resSiswa || [];
-				const dataKelas = resKelas || [];
-				const dataPoin = resPoin.data || [];
+			const dataSiswa = resSiswa || [];
+			const dataKelas = resKelas || [];
+			const dataPoin = resPoin.data || [];
 
-				const poinMap = {};
-				dataPoin.forEach((p) => {
-					if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
-					if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
-					else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
-				});
+			const poinMap = {};
+			dataPoin.forEach((p) => {
+				if (!poinMap[p.siswa_id]) poinMap[p.siswa_id] = { positif: 0, negatif: 0 };
+				if (p.tipe === 'positif') poinMap[p.siswa_id].positif += p.poin || 0;
+				else if (p.tipe === 'negatif') poinMap[p.siswa_id].negatif += p.poin || 0;
+			});
 
-				const siswaWithPoin = dataSiswa.map((s) => ({
-					...s,
-					poinPositif: poinMap[s.id]?.positif || 0,
-					poinNegatif: poinMap[s.id]?.negatif || 0,
-				}));
+			const siswaWithPoin = dataSiswa.map((s) => ({
+				...s,
+				poinPositif: poinMap[s.id]?.positif || 0,
+				poinNegatif: poinMap[s.id]?.negatif || 0,
+			}));
 
-				setSiswaList(siswaWithPoin);
-				setKelasList(dataKelas);
-				setLoading(false);
-			} catch (err) {
-				console.error(err);
-				setLoading(false);
-			} finally {
-				setLoadingPage(false);
-			}
-		};
-
-		fetchData();
+			setSiswaList(siswaWithPoin);
+			setKelasList(dataKelas);
+			setLoading(false);
+		} catch (err) {
+			console.error(err);
+			setLoading(false);
+		} finally {
+			setLoadingPage(false);
+		}
 	}, []);
+
+	useEffect(() => {
+		fetchData();
+		window.addEventListener('focus', fetchData);
+		return () => window.removeEventListener('focus', fetchData);
+	}, [fetchData]);
 
 	const filteredSiswa = useMemo(() => {
 		let hasil = siswaList;

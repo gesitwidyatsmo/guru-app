@@ -61,7 +61,7 @@ const GROUP_COLORS = [
 	{ bg: '#34D399', text: '#0D0D0D' }, // Emerald Green
 ];
 
-const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId, isTabMode = false }) => {
+const DragDropBoard = ({ initialGroups, metaData, onBack, onSaved, sessionId, isTabMode = false }) => {
 	const router = useRouter();
 	const { tahunAjarAktif, semesterAktif } = useAcademic();
 	const [groups, setGroups] = useState(initialGroups || []);
@@ -396,8 +396,8 @@ const DragDropBoard = ({ initialGroups, metaData, onBack, sessionId, isTabMode =
 			});
 
 			if (isEditMode) {
+				if (onSaved) await onSaved();
 				if (onBack) onBack();
-				window.location.reload();
 			} else {
 				router.push('/grup');
 			}

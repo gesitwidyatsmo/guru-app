@@ -64,33 +64,10 @@ export default function KelasDetail() {
 		fetchAuth();
 	}, []);
 
-	useEffect(() => {
-		if (!namaKelas) return; // Jangan fetch jika nama kelas belum ketemu
-
-		const fetchStats = async () => {
-			try {
-				const resSiswa = await fetch('/api/siswa');
-				const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
-
-				const siswaDiKelasIni = dataSiswa.filter((siswa) => siswa.status === 'Aktif' && siswa.kelas === namaKelas);
-				const siswaListIni = dataSiswa.filter((siswa) => siswa.kelas === namaKelas);
-
-				setJumlahSiswa(siswaDiKelasIni.length);
-				setSiswaList(siswaListIni);
-			} catch (error) {
-				console.error('Gagal mengambil statistik:', error);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchStats();
-	}, [namaKelas]);
-
 	const fetchKelasData = useCallback(async () => {
 		if (!id) return;
 		try {
-			const res = await fetch('/api/kelas');
+			const res = await fetch('/api/kelas', { cache: 'no-store' });
 			const data = await res.json();
 			const kelas = data.find((k) => k.id === id);
 			if (kelas) {
@@ -104,17 +81,17 @@ export default function KelasDetail() {
 
 	const fetchSiswaData = useCallback(async () => {
 		if (!namaKelas) return;
-		// setLoading(true); // Opsional: jangan set loading true jika ingin silent update
 		try {
 			// 1. Fetch Siswa
-			const resSiswa = await fetch('/api/siswa');
+			const resSiswa = await fetch('/api/siswa', { cache: 'no-store' });
 			const dataSiswa = resSiswa.ok ? await resSiswa.json() : [];
 			const siswaListIni = dataSiswa.filter((siswa) => siswa.kelas === namaKelas);
-			// setJumlahSiswa(siswaListIni.length);
+			const siswaDiKelasIni = siswaListIni.filter((siswa) => siswa.status === 'Aktif');
+			setJumlahSiswa(siswaDiKelasIni.length);
 			setSiswaList(siswaListIni);
 
 			// 2. Fetch Poin
-			const resPoin = await fetch(`/api/poin?kelas=${encodeURIComponent(namaKelas)}`);
+			const resPoin = await fetch(`/api/poin?kelas=${encodeURIComponent(namaKelas)}`, { cache: 'no-store' });
 			const dataPoin = resPoin.ok ? await resPoin.json() : [];
 			setPoinList(dataPoin);
 		} catch (error) {
@@ -126,10 +103,14 @@ export default function KelasDetail() {
 
 	useEffect(() => {
 		fetchKelasData();
+		window.addEventListener('focus', fetchKelasData);
+		return () => window.removeEventListener('focus', fetchKelasData);
 	}, [fetchKelasData]);
 
 	useEffect(() => {
 		fetchSiswaData();
+		window.addEventListener('focus', fetchSiswaData);
+		return () => window.removeEventListener('focus', fetchSiswaData);
 	}, [fetchSiswaData]);
 
 	const handleOpenEdit = () => {

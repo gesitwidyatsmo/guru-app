@@ -54,8 +54,8 @@ function AdminSiswaContent() {
 		try {
 			setLoading(true);
 			const [resSiswa, resKelas, resAuth] = await Promise.all([
-				fetch('/api/siswa'),
-				fetch('/api/kelas?all=true'),
+				fetch('/api/siswa', { cache: 'no-store' }),
+				fetch('/api/kelas?all=true', { cache: 'no-store' }),
 				fetch('/api/auth/me'),
 			]);
 
@@ -81,6 +81,8 @@ function AdminSiswaContent() {
 
 	useEffect(() => {
 		loadData();
+		window.addEventListener('focus', loadData);
+		return () => window.removeEventListener('focus', loadData);
 	}, []);
 
 	// Update filter jika query param berubah

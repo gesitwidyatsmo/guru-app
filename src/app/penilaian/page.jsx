@@ -56,9 +56,9 @@ export default function PenilaianPage() {
 					if (profile) setUserRole(profile.role || '');
 				}
 				const [dataKelas, dataMapel, dataSiswa] = await Promise.all([
-					fetch('/api/kelas?all=false').then(res => res.json()),
-					fetch(`/api/mapel?all=false&${buildPeriodeQuery()}`).then(res => res.json()),
-					fetch('/api/siswa').then(res => res.json())
+					fetch('/api/kelas?all=false', { cache: 'no-store' }).then(res => res.json()),
+					fetch(`/api/mapel?all=false&${buildPeriodeQuery()}`, { cache: 'no-store' }).then(res => res.json()),
+					fetch('/api/siswa', { cache: 'no-store' }).then(res => res.json())
 				]);
 
 				setKelasList(dataKelas || []);
@@ -153,6 +153,8 @@ export default function PenilaianPage() {
 			}
 		};
 		fetchTugas();
+		window.addEventListener('focus', fetchTugas);
+		return () => window.removeEventListener('focus', fetchTugas);
 	}, [selectedKelas, selectedMapel, tahunAjar, semester, refreshTrigger]);
 
 	// --- 3. Load Nilai Detail saat Tugas Dipilih ---

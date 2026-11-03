@@ -173,7 +173,7 @@ export default function KelasAbsensiMapelPage() {
 				mapel: selectedMapel,
 				tanggal: tanggal,
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}`);
+			const res = await fetch(`/api/absensi-mapel?${params.toString()}`, { cache: 'no-store' });
 			if (res.ok) {
 				const data = await res.json();
 				setSesiHariIni(Array.isArray(data) ? data : []);
@@ -190,6 +190,8 @@ export default function KelasAbsensiMapelPage() {
 
 	useEffect(() => {
 		fetchSesiHariIni();
+		window.addEventListener('focus', fetchSesiHariIni);
+		return () => window.removeEventListener('focus', fetchSesiHariIni);
 	}, [fetchSesiHariIni]);
 
 	// 3. Fungsi Muat Detail Absensi Jam Tertentu
@@ -205,7 +207,7 @@ export default function KelasAbsensiMapelPage() {
 				tanggal: tanggal,
 				jam_ke: targetJam,
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}`);
+			const res = await fetch(`/api/absensi-mapel?${params.toString()}`, { cache: 'no-store' });
 
 			if (res.ok) {
 				const data = await res.json();

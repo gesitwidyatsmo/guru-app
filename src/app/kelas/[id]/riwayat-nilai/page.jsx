@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
 import Loader from '@/app/components/loading';
@@ -33,7 +33,7 @@ export default function RiwayatNilaiPage() {
 					setNamaKelas(dataKelas.nama_kelas);
 				}
 
-				const dataMapel = await fetch('/api/mapel?all=false').then(res => res.json());
+				const dataMapel = await fetch('/api/mapel?all=false', { cache: 'no-store' }).then(res => res.json());
 				if (dataMapel) {
 					setMapelList(dataMapel);
 				}
@@ -48,46 +48,47 @@ export default function RiwayatNilaiPage() {
 	}, [id]);
 
 	// Fetch tugas berdasarkan filter
-	useEffect(() => {
+	const fetchTugas = useCallback(async () => {
 		if (!namaKelas) return;
+		setLoading(true);
+		try {
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+			const role = userData?.role;
+			const userId = userData?.id_user;
 
-		const fetchTugas = async () => {
-			setLoading(true);
-			try {
-				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const role = userData?.role;
-				const userId = userData?.id_user;
+			let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, type, deskripsi, mapel, tanggal, kelas, mode_penilaian, total_soal').eq('kelas', namaKelas);
 
-				let query = supabase.from('nilai_tugas').select('tugas_id, guru_id, kategori, type, deskripsi, mapel, tanggal, kelas, mode_penilaian, total_soal').eq('kelas', namaKelas);
+			if (selectedMapel) {
+				query = query.eq('mapel', selectedMapel);
+			}
 
-				if (selectedMapel) {
-					query = query.eq('mapel', selectedMapel);
-				}
+			if (role === 'Guru' && userId) {
+				query = query.eq('guru_id', userId);
+			}
 
-				if (role === 'Guru' && userId) {
-					query = query.eq('guru_id', userId);
-				}
-
-				const { data } = await query;
-				
-				const filtered = (data || []).filter((tugas) => {
-					const tanggalTugas = new Date(tugas.tanggal);
-					return tanggalTugas.getMonth() === currentMonth && tanggalTugas.getFullYear() === currentYear;
+			const { data } = await query;
+			
+			const filtered = (data || []).filter((tugas) => {
+				const tanggalTugas = new Date(tugas.tanggal);
+				return tanggalTugas.getMonth() === currentMonth && tanggalTugas.getFullYear() === currentYear;
 				});
 
-				const uniqueTugas = filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
-				setTugasList(uniqueTugas);
-			} catch (error) {
-				console.error('Error fetching tugas:', error);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchTugas();
+			const uniqueTugas = filtered.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+			setTugasList(uniqueTugas);
+		} catch (error) {
+			console.error('Error fetching tugas:', error);
+		} finally {
+			setLoading(false);
+		}
 	}, [namaKelas, selectedMapel, currentMonth, currentYear]);
+
+	useEffect(() => {
+		fetchTugas();
+		window.addEventListener('focus', fetchTugas);
+		return () => window.removeEventListener('focus', fetchTugas);
+	}, [fetchTugas]);
 
 	// Handler prev/next month
 	const handlePrevMonth = () => {

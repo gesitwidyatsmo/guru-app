@@ -101,54 +101,54 @@ export default function DetailGrupPage() {
 	}, [id]);
 
 	// Fetch Data Detail Grup by ID dan seluruh siswa aktif di kelas tersebut
-	useEffect(() => {
-		const fetchData = async () => {
-			try {
-				const res = await fetch('/api/grup');
-				const allGroups = await res.json();
-				const found = allGroups.find((g) => g.id === id);
-				if (found) {
-					setSessionData(found);
+	const fetchData = useCallback(async () => {
+		try {
+			const res = await fetch('/api/grup', { cache: 'no-store' });
+			const allGroups = await res.json();
+			const found = allGroups.find((g) => g.id === id);
+			if (found) {
+				setSessionData(found);
 
-					// Ambil seluruh siswa aktif di kelas ini untuk mengetahui siapa yang dikecualikan
-					try {
-						const supabase = createClient();
-						const { data: siswaData, error: siswaErr } = await supabase
-							.from('siswa')
-							.select('id, nis, nama_lengkap, status, kelas')
-							.eq('kelas', found.kelas_id)
-							.eq('status', 'Aktif');
+				// Ambil seluruh siswa aktif di kelas ini untuk mengetahui siapa yang dikecualikan
+				try {
+					const supabase = createClient();
+					const { data: siswaData, error: siswaErr } = await supabase
+						.from('siswa')
+						.select('id, nis, nama_lengkap, status, kelas')
+						.eq('kelas', found.kelas_id)
+						.eq('status', 'Aktif');
 
-						if (siswaData && !siswaErr && siswaData.length > 0) {
-							setClassSiswa(siswaData);
-						} else {
-							// Fallback ke API siswa
-							const resSiswa = await fetch(`/api/siswa?kelas=${encodeURIComponent(found.kelas_id)}&status=Aktif`);
-							const jsonSiswa = await resSiswa.json();
-							if (Array.isArray(jsonSiswa)) {
-								setClassSiswa(jsonSiswa);
-							}
+					if (siswaData && !siswaErr && siswaData.length > 0) {
+						setClassSiswa(siswaData);
+					} else {
+						// Fallback ke API siswa
+						const resSiswa = await fetch(`/api/siswa?kelas=${encodeURIComponent(found.kelas_id)}&status=Aktif`, { cache: 'no-store' });
+						const jsonSiswa = await resSiswa.json();
+						if (Array.isArray(jsonSiswa)) {
+							setClassSiswa(jsonSiswa);
 						}
-					} catch (siswaError) {
-						console.error('Gagal mengambil daftar siswa kelas:', siswaError);
 					}
+				} catch (siswaError) {
+					console.error('Gagal mengambil daftar siswa kelas:', siswaError);
 				}
-			} catch (err) {
-				console.error('Error fetching detail:', err);
-			} finally {
-				setLoading(false);
 			}
-		};
+		} catch (err) {
+			console.error('Error fetching detail:', err);
+		} finally {
+			setLoading(false);
+		}
+	}, [id]);
 
+	useEffect(() => {
 		fetchData();
 		fetchAssessmentSummary();
 
 		// Fetch daftar mapel untuk fallback
-		fetch('/api/mapel?all=false')
+		fetch('/api/mapel?all=false', { cache: 'no-store' })
 			.then((res) => (res.ok ? res.json() : []))
 			.then((data) => setMapelList(Array.isArray(data) ? data : []))
 			.catch((err) => console.error('Error fetching mapel list:', err));
-	}, [id, fetchAssessmentSummary]);
+	}, [id, fetchData, fetchAssessmentSummary]);
 
 	const groups = sessionData?.raw_json || [];
 
@@ -806,6 +806,7 @@ export default function DetailGrupPage() {
 								metode: sessionData.metode_generate || 'manual'
 							}}
 							sessionId={id}
+							onSaved={fetchData}
 							onBack={() => setActiveTab('overview')}
 							isTabMode={true}
 						/>
