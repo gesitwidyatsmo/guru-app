@@ -7,11 +7,12 @@ import Swal from 'sweetalert2';
 import Loader from '@/app/components/loading';
 import ButtonBack from '@/app/components/button/ButtonBack';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran } from '@/lib/absensiUtils';
+import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran, normalizeJamKe, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
 import ModalSplitSesi from '@/app/components/ModalSplitSesi';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 export default function KelasAbsensiMapelPage() {
 	const params = useParams();
@@ -310,7 +311,8 @@ export default function KelasAbsensiMapelPage() {
 			return;
 		}
 
-		let currentJamKe = jamKe ? jamKe.trim() : '';
+		let currentJamKe = jamKe ? normalizeJamKe(jamKe.trim()) : '';
+		if (currentJamKe && currentJamKe !== jamKe) setJamKe(currentJamKe);
 
 		if (!currentJamKe) {
 			const { value: inputJamKe } = await Swal.fire({
@@ -331,7 +333,7 @@ export default function KelasAbsensiMapelPage() {
 			});
 
 			if (inputJamKe) {
-				currentJamKe = inputJamKe.trim();
+				currentJamKe = normalizeJamKe(inputJamKe.trim());
 				setJamKe(currentJamKe);
 			} else {
 				return;
@@ -504,6 +506,7 @@ export default function KelasAbsensiMapelPage() {
 			data: dataToSave,
 			user_lat: userCoords?.lat,
 			user_lng: userCoords?.lng,
+			client_time: getTimeWIB(new Date()),
 		};
 
 		try {
@@ -692,6 +695,7 @@ export default function KelasAbsensiMapelPage() {
 								placeholder='Jam (mis: 1-2)'
 								value={jamKe}
 								onChange={(e) => setJamKe(e.target.value)}
+								onBlur={() => setJamKe((prev) => normalizeJamKe(prev))}
 								disabled={mode === 'edit'}
 								className={`neo-input text-center w-full disabled:bg-gray-200 disabled:cursor-not-allowed ${
 									!jamKe ? 'border-[#E8451A] bg-[#FFF5F0]' : 'bg-white'

@@ -156,36 +156,76 @@ export async function POST(req) {
 			}
 		}
 
-		// Check existing
-		const { data: existingSesi, error: findSesiErr } = await supabase
-			.from('absensi_harian')
-			.select('sesi_id')
-			.eq('kelas', kelas)
-			.eq('tanggal', oldTanggal)
-			.maybeSingle();
+		// Check existing: Prioritaskan ID/sesi_id dari body, lalu tanggal
+		const targetId = body.id || body.sesi_id;
+		let existingSesi = null;
 
-		if (findSesiErr) throw findSesiErr;
+		if (targetId) {
+			const { data: byIdData } = await supabase
+				.from('absensi_harian')
+				.select('sesi_id, tanggal')
+				.eq('sesi_id', targetId)
+				.maybeSingle();
+			if (byIdData) existingSesi = byIdData;
+		}
 
-		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-H-${generateId()}`;
+		if (!existingSesi) {
+			const { data: byDateData, error: findSesiErr } = await supabase
+				.from('absensi_harian')
+				.select('sesi_id, tanggal')
+				.eq('kelas', kelas)
+				.eq('tanggal', oldTanggal)
+				.maybeSingle();
+
+			if (findSesiErr) throw findSesiErr;
+			if (byDateData) existingSesi = byDateData;
+		}
+
+		let sesiId = existingSesi ? existingSesi.sesi_id : (targetId || `SESI-H-${generateId()}`);
 
 		if (existingSesi) {
-			if (oldTanggal !== newTanggal) {
-				const { error: updErr } = await supabase.from('absensi_harian').update({ tanggal: newTanggal }).eq('sesi_id', sesiId);
-				if (updErr) throw updErr;
+			const updates = {};
+			if (oldTanggal !== newTanggal) updates.tanggal = newTanggal;
+			if (body.client_time) updates.waktu_absen = body.client_time;
+			updates.updated_at = new Date().toISOString();
+
+			let { error: updErr } = await supabase.from('absensi_harian').update(updates).eq('sesi_id', sesiId);
+			if (updErr && (updErr.code === 'PGRST204' || updErr.code === '42703' || String(updErr.message || '').includes('column'))) {
+				const safeUpdates = { ...updates };
+				delete safeUpdates.updated_at;
+				delete safeUpdates.waktu_absen;
+				if (Object.keys(safeUpdates).length > 0) {
+					const retry = await supabase.from('absensi_harian').update(safeUpdates).eq('sesi_id', sesiId);
+					updErr = retry.error;
+				} else {
+					updErr = null;
+				}
 			}
+			if (updErr) throw updErr;
+
 			// Delete old details
 			const { error: delErr } = await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
 			if (delErr) throw delErr;
 		} else {
 			// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
 			const taAktif = (!body.tahun_ajar || !body.semester) ? await getTAAktif(supabase) : null;
-			const { error: insHarianErr } = await supabase.from('absensi_harian').insert({
+			const insertData = {
 				sesi_id: sesiId,
 				kelas: kelas,
 				tanggal: newTanggal,
 				tahun_ajar: body.tahun_ajar || taAktif.nama,
 				semester: body.semester ? parseInt(body.semester) : taAktif.semester,
-			});
+			};
+			if (body.client_time) insertData.waktu_absen = body.client_time;
+
+			let { error: insHarianErr } = await supabase.from('absensi_harian').insert(insertData);
+			if (insHarianErr && (insHarianErr.code === 'PGRST204' || insHarianErr.code === '42703' || String(insHarianErr.message || '').includes('column'))) {
+				const safeInsert = { ...insertData };
+				delete safeInsert.waktu_absen;
+				delete safeInsert.updated_at;
+				const retry = await supabase.from('absensi_harian').insert(safeInsert);
+				insHarianErr = retry.error;
+			}
 			if (insHarianErr) throw insHarianErr;
 		}
 

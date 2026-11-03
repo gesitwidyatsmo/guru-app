@@ -41,6 +41,96 @@ export const calculateAttendanceSummary = (records = []) => {
 };
 
 /**
+ * Daftar slot jam pelajaran resmi sekolah (JP) untuk deteksi waktu jam dinding.
+ */
+export const JP_SLOTS = [
+	{ slot: 1, startMin: 435, endMin: 475 }, // 07:15 - 07:55
+	{ slot: 2, startMin: 475, endMin: 515 }, // 07:55 - 08:35
+	{ slot: 3, startMin: 515, endMin: 555 }, // 08:35 - 09:15
+	{ slot: 4, startMin: 555, endMin: 615 }, // 09:15/09:35 - 09:55/10:15
+	{ slot: 5, startMin: 615, endMin: 655 }, // 10:15 - 10:55
+	{ slot: 6, startMin: 655, endMin: 695 }, // 10:55 - 11:35
+	{ slot: 7, startMin: 695, endMin: 735 }, // 11:35 - 12:15
+	{ slot: 8, startMin: 735, endMin: 775 }, // 12:15 - 12:55
+	{ slot: 9, startMin: 775, endMin: 815 }, // 12:55 - 13:35
+	{ slot: 10, startMin: 815, endMin: 855 }, // 13:35 - 14:15
+	{ slot: 11, startMin: 855, endMin: 895 }, // 14:15 - 14:55
+	{ slot: 12, startMin: 895, endMin: 935 }, // 14:55 - 15:35
+];
+
+/**
+ * Mencari slot JP terdekat untuk menit jam dinding tertentu (toleransi maks 25 menit).
+ */
+export const findSlotForTimeMinutes = (min, isEnd = false) => {
+	let bestSlot = null;
+	let minDiff = 999;
+	for (const s of JP_SLOTS) {
+		const target = isEnd ? s.endMin : s.startMin;
+		const diff = Math.abs(min - target);
+		if (diff < minDiff) {
+			minDiff = diff;
+			bestSlot = s.slot;
+		}
+	}
+	return minDiff <= 25 ? bestSlot : null;
+};
+
+/**
+ * Preset tombol cepat jam pelajaran yang umum digunakan di sekolah.
+ */
+export const PRESET_JAM_PELAJARAN = ['1-2', '3-4', '5-6', '7-8', '1-3', '4-6', '5-7'];
+
+/**
+ * Menormalisasi string jam pelajaran menjadi format baku seragam (contoh: "1-2", "1-3", atau "4").
+ * Mengakali berbagai variasi input guru:
+ * - Jam dinding: "7.55-10.15", "07:15-08:35", "07.15 - 08.35" -> "2-4", "1-2"
+ * - Deretan slot: "1-2-3", "5-6-7", "4-5-6" -> "1-3", "5-7", "4-6"
+ * - Pemisah beragam: "Jam 2-3", "3, 4,", "3 dan 4", "1 - 3" -> "2-3", "3-4", "1-3"
+ * @param {string|number} jamVal
+ * @returns {string} Contoh: "1-2" atau "4"
+ */
+export const normalizeJamKe = (jamVal) => {
+	if (!jamVal && jamVal !== 0) return '';
+	const raw = String(jamVal).trim();
+	if (!raw) return '';
+
+	// 1. Cek pola jam dinding: misal "7.55-10.15", "07:15 - 08:35", "07.15 s/d 08.35"
+	const timeRangeMatch = raw.match(/^(\d{1,2})[.:](\d{2})\s*(?:[-–—]|s\/?d\.?|sampai)\s*(\d{1,2})[.:](\d{2})$/i);
+	if (timeRangeMatch) {
+		const sMin = parseInt(timeRangeMatch[1], 10) * 60 + parseInt(timeRangeMatch[2], 10);
+		const eMin = parseInt(timeRangeMatch[3], 10) * 60 + parseInt(timeRangeMatch[4], 10);
+		const startSlot = findSlotForTimeMinutes(sMin, false);
+		const endSlot = findSlotForTimeMinutes(eMin, true);
+		if (startSlot && endSlot) {
+			return startSlot === endSlot ? String(startSlot) : `${startSlot}-${endSlot}`;
+		}
+	}
+
+	// 2. Bersihkan kata awalan & penghubung umum: "Jam", "ke", "ke-", "dan"
+	const cleaned = raw
+		.replace(/^(jam|ke)\s*[-:]?\s*/gi, '')
+		.replace(/\s+dan\s+/gi, ',')
+		.replace(/\s*(?:[-–—]|s\/?d\.?|sampai)\s*/gi, '-');
+
+	// 3. Ambil semua digit angka valid (antara jam 1 sampai 15)
+	const nums = (cleaned.match(/\d+/g) || [])
+		.map((n) => parseInt(n, 10))
+		.filter((n) => !isNaN(n) && n > 0 && n <= 15);
+
+	if (nums.length === 0) {
+		return raw;
+	}
+
+	if (nums.length === 1) {
+		return String(nums[0]);
+	}
+
+	const min = Math.min(...nums);
+	const max = Math.max(...nums);
+	return min === max ? String(min) : `${min}-${max}`;
+};
+
+/**
  * Mem-parsing string representasi jam pelajaran menjadi array integer terurut.
  * Mendukung format: "1", "1-3", "1 - 3", "1–3", "1 s/d 3", "1 sd 3", "1,2", "Jam 1-3", dll.
  * @param {string|number} jamVal 
@@ -48,11 +138,11 @@ export const calculateAttendanceSummary = (records = []) => {
  */
 export const parseJamPelajaran = (jamVal) => {
 	if (!jamVal && jamVal !== 0) return [];
-	const raw = String(jamVal).trim();
-	if (!raw) return [];
+	const norm = normalizeJamKe(jamVal);
+	if (!norm) return [];
 
 	// Bersihkan awalan kata non-angka yang umum (misal: "Jam", "ke", "ke-", dll)
-	const cleaned = raw.replace(/^(jam|ke)\s*[-:]?\s*/i, '');
+	const cleaned = norm.replace(/^(jam|ke)\s*[-:]?\s*/i, '');
 
 	// Pisahkan jika ada pemisah koma atau ampersand (&)
 	const segments = cleaned.split(/[,&]/);

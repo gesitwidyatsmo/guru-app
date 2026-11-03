@@ -11,6 +11,7 @@ import { getTodayDateString } from '@/lib/dateUtils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 export default function AbsensiKelasPage() {
 	const params = useParams();
@@ -365,6 +366,7 @@ export default function AbsensiKelasPage() {
 					data: data_absensi,
 					user_lat: userCoords?.lat,
 					user_lng: userCoords?.lng,
+					client_time: getTimeWIB(new Date()),
 				}),
 			});
 

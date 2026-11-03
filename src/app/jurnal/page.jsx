@@ -18,7 +18,7 @@ import {
 	formatDurationString,
 	getExpectedScheduleTimes,
 } from '@/lib/kbmRealtimeUtils';
-import { findConflictingSession } from '@/lib/absensiUtils';
+import { findConflictingSession, checkJamOverlap, normalizeJamKe, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
 
 export default function JurnalPage() {
 	const router = useRouter();
@@ -321,24 +321,54 @@ export default function JurnalPage() {
 				const supabase = createClient();
 				let query = supabase
 					.from('absensi_mapel')
-					.select('sesi_id, created_at, jam_ke, tanggal')
+					.select('sesi_id, created_at, jam_ke, tanggal, waktu_absen')
 					.eq('kelas', formData.kelas)
 					.eq('mapel', formData.mapel)
 					.eq('tanggal', formData.tanggal);
 
 				if (userId) query = query.eq('guru_id', userId);
 
-				const { data, error } = await query.order('created_at', { ascending: false });
+				let { data, error } = await query.order('created_at', { ascending: false });
+				if (error && (error.code === 'PGRST204' || error.code === '42703' || String(error.message || '').includes('waktu_absen'))) {
+					// Fallback jika waktu_absen belum dimigrasi di database
+					let fallbackQuery = supabase
+						.from('absensi_mapel')
+						.select('sesi_id, created_at, jam_ke, tanggal')
+						.eq('kelas', formData.kelas)
+						.eq('mapel', formData.mapel)
+						.eq('tanggal', formData.tanggal);
+					if (userId) fallbackQuery = fallbackQuery.eq('guru_id', userId);
+					const fallbackRes = await fallbackQuery.order('created_at', { ascending: false });
+					data = fallbackRes.data;
+					error = fallbackRes.error;
+				}
+
 				if (!isCancelled && !error && data && data.length > 0) {
-					const exact = formData.jam_ke ? data.find((s) => String(s.jam_ke).trim() === String(formData.jam_ke).trim()) : null;
-					const chosen = exact || data[0];
-					const jamMulaiWIB = getTimeWIB(chosen.created_at);
-					setMatchedAbsensi({
-						sesi_id: chosen.sesi_id,
-						created_at: chosen.created_at,
-						jam_mulai: jamMulaiWIB,
-						jam_ke: chosen.jam_ke,
-					});
+					let chosen = null;
+					if (formData.jam_ke) {
+						// 1. Prioritaskan exact match jam_ke
+						chosen = data.find((s) => String(s.jam_ke).trim() === String(formData.jam_ke).trim());
+						// 2. Jika tidak exact, cari sesi yang overlap jamnya (misal '1-2' dengan '1')
+						if (!chosen) {
+							chosen = data.find((s) => checkJamOverlap(s.jam_ke, formData.jam_ke).isOverlap);
+						}
+					} else {
+						// Jika jam_ke form belum ditentukan, ambil sesi terbaru hari ini
+						chosen = data[0];
+					}
+
+					if (chosen) {
+						const jamMulaiWIB = chosen.waktu_absen || getTimeWIB(chosen.created_at);
+						setMatchedAbsensi({
+							sesi_id: chosen.sesi_id,
+							created_at: chosen.created_at,
+							waktu_absen: chosen.waktu_absen || null,
+							jam_mulai: jamMulaiWIB,
+							jam_ke: chosen.jam_ke,
+						});
+					} else {
+						setMatchedAbsensi(null);
+					}
 				} else if (!isCancelled) {
 					setMatchedAbsensi(null);
 				}
@@ -633,6 +663,11 @@ export default function JurnalPage() {
 		// Pencegahan Double Submit Instan
 		if (saving) return;
 		setSaving(true);
+
+		const normalizedJamKe = normalizeJamKe(formData.jam_ke);
+		if (normalizedJamKe && normalizedJamKe !== formData.jam_ke) {
+			formData.jam_ke = normalizedJamKe;
+		}
 
 		try {
 			// Pengecekan offline
@@ -1537,6 +1572,7 @@ export default function JurnalPage() {
 											placeholder='Contoh: 1-2'
 											value={formData.jam_ke}
 											onChange={(e) => setFormData({ ...formData, jam_ke: e.target.value })}
+											onBlur={() => setFormData((prev) => ({ ...prev, jam_ke: normalizeJamKe(prev.jam_ke) }))}
 											className={`neo-input w-full px-4 py-3 bg-white border-[3px] ${currentJamConflict ? 'border-[#E8451A] bg-red-50 text-[#E8451A]' : 'border-[#0D0D0D] text-[#0D0D0D]'} font-bold shadow-[4px_4px_0px_0px_#0D0D0D] focus:shadow-[6px_6px_0px_0px_#0D0D0D] focus:bg-[#F5C518] outline-none rounded-none`}
 										/>
 										{currentJamConflict && (

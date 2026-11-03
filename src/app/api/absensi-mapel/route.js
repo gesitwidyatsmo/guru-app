@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { calculateAttendanceSummary, findConflictingSession } from '@/lib/absensiUtils';
+import { calculateAttendanceSummary, findConflictingSession, normalizeJamKe } from '@/lib/absensiUtils';
 import { verifyGeofence } from '@/lib/geofenceServer';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
@@ -27,7 +27,8 @@ export async function GET(req) {
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
 		const tanggal = searchParams.get('tanggal');
-		const jam_ke = searchParams.get('jam_ke');
+		const rawJamKe = searchParams.get('jam_ke');
+		const jam_ke = rawJamKe ? normalizeJamKe(rawJamKe) : null;
 		const bulan = searchParams.get('bulan');
 		const tahun = searchParams.get('tahun');
 
@@ -179,8 +180,8 @@ export async function POST(req) {
 		const body = await req.json();
 		const oldTanggal = body.oldTanggal || body.tanggal;
 		const newTanggal = body.newTanggal || body.tanggal;
-		const oldJamKe = body.oldJam_ke || body.jam_ke;
-		const newJamKe = body.newJam_ke || body.jam_ke;
+		const oldJamKe = normalizeJamKe(body.oldJam_ke || body.jam_ke);
+		const newJamKe = normalizeJamKe(body.newJam_ke || body.jam_ke);
 		const { kelas, mapel } = body;
 		const data_absensi = body.absensiList || body.data;
 
@@ -207,21 +208,45 @@ export async function POST(req) {
 			return NextResponse.json({ error: geoCheck.error }, { status: geoCheck.status || 403 });
 		}
 
-		// 1. Cek apakah sesi dengan jam & tanggal lama sudah ada
-		let query = supabase.from('absensi_mapel')
-			.select('sesi_id')
-			.eq('kelas', kelas)
-			.eq('mapel', mapel)
-			.eq('tanggal', oldTanggal)
-			.eq('jam_ke', oldJamKe);
+		// 1. Cek apakah sesi sudah ada: Prioritaskan ID/sesi_id dari body, lalu fallback ke tanggal & jam lama
+		const targetId = body.id || body.sesi_id;
+		let existingSesi = null;
+		let existingSesiList = [];
 
-		if (role === 'Guru' && userId) {
-			query = query.eq('guru_id', userId);
+		if (targetId) {
+			let idQuery = supabase.from('absensi_mapel')
+				.select('sesi_id, jam_ke, tanggal, created_at')
+				.eq('sesi_id', targetId);
+			if (role === 'Guru' && userId) {
+				idQuery = idQuery.eq('guru_id', userId);
+			}
+			const { data: byIdData } = await idQuery.maybeSingle();
+			if (byIdData) {
+				existingSesi = byIdData;
+				existingSesiList = [byIdData];
+			}
 		}
 
-		const { data: existingSesiList, error: queryErr } = await query.order('created_at', { ascending: false });
-		const existingSesi = existingSesiList && existingSesiList.length > 0 ? existingSesiList[0] : null;
-		let sesiId = existingSesi ? existingSesi.sesi_id : `SESI-M-${generateId()}`;
+		if (!existingSesi) {
+			let query = supabase.from('absensi_mapel')
+				.select('sesi_id, jam_ke, tanggal, created_at')
+				.eq('kelas', kelas)
+				.eq('mapel', mapel)
+				.eq('tanggal', oldTanggal)
+				.eq('jam_ke', oldJamKe);
+
+			if (role === 'Guru' && userId) {
+				query = query.eq('guru_id', userId);
+			}
+
+			const { data: foundList } = await query.order('created_at', { ascending: false });
+			if (foundList && foundList.length > 0) {
+				existingSesiList = foundList;
+				existingSesi = foundList[0];
+			}
+		}
+
+		let sesiId = existingSesi ? existingSesi.sesi_id : (targetId || `SESI-M-${generateId()}`);
 
 		// 2. Cek tumpang tindih (overlap) jam pelajaran dengan sesi lain pada tanggal yang sama
 		const { data: allSessionsToday } = await supabase
@@ -245,13 +270,25 @@ export async function POST(req) {
 
 		if (existingSesi) {
 			const updates = {};
-			if (oldTanggal !== newTanggal) updates.tanggal = newTanggal;
-			if (oldJamKe !== newJamKe) updates.jam_ke = newJamKe;
+			if (oldTanggal !== newTanggal || existingSesi.tanggal !== newTanggal) updates.tanggal = newTanggal;
+			if (oldJamKe !== newJamKe || existingSesi.jam_ke !== newJamKe) updates.jam_ke = newJamKe;
+			if (body.client_time) updates.waktu_absen = body.client_time;
+			updates.updated_at = new Date().toISOString();
 			
-			if (Object.keys(updates).length > 0) {
-				const { error: updErr } = await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
-				if (updErr) throw updErr;
+			let { error: updErr } = await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);
+			if (updErr && (updErr.code === 'PGRST204' || updErr.code === '42703' || String(updErr.message || '').includes('column'))) {
+				const safeUpdates = { ...updates };
+				delete safeUpdates.updated_at;
+				delete safeUpdates.waktu_absen;
+				if (Object.keys(safeUpdates).length > 0) {
+					const retry = await supabase.from('absensi_mapel').update(safeUpdates).eq('sesi_id', sesiId);
+					updErr = retry.error;
+				} else {
+					updErr = null;
+				}
 			}
+			if (updErr) throw updErr;
+
 			const { error: delErr } = await supabase.from('absensi_mapel_siswa').delete().eq('sesi_id', sesiId);
 			if (delErr) throw delErr;
 
@@ -264,7 +301,7 @@ export async function POST(req) {
 		} else {
 			// Gunakan tahun ajar dari body; jika tidak ada, ambil yang aktif dari DB
 			const taAktif = (!body.tahun_ajar || !body.semester) ? await getTAAktif(supabase) : null;
-			const { error: insErr } = await supabase.from('absensi_mapel').insert({
+			const insertData = {
 				sesi_id: sesiId,
 				guru_id: userId || null,
 				tanggal: newTanggal,
@@ -273,7 +310,17 @@ export async function POST(req) {
 				mapel: mapel,
 				tahun_ajar: body.tahun_ajar || taAktif.nama,
 				semester: body.semester ? parseInt(body.semester) : taAktif.semester,
-			});
+			};
+			if (body.client_time) insertData.waktu_absen = body.client_time;
+
+			let { error: insErr } = await supabase.from('absensi_mapel').insert(insertData);
+			if (insErr && (insErr.code === 'PGRST204' || insErr.code === '42703' || String(insErr.message || '').includes('column'))) {
+				const safeInsert = { ...insertData };
+				delete safeInsert.waktu_absen;
+				delete safeInsert.updated_at;
+				const retry = await supabase.from('absensi_mapel').insert(safeInsert);
+				insErr = retry.error;
+			}
 			if (insErr) throw insErr;
 		}
 
@@ -306,7 +353,8 @@ export async function DELETE(req) {
 		const kelas = searchParams.get('kelas');
 		const mapel = searchParams.get('mapel');
 		const tanggal = searchParams.get('tanggal');
-		const jam_ke = searchParams.get('jam_ke');
+		const rawJamKe = searchParams.get('jam_ke');
+		const jam_ke = rawJamKe ? normalizeJamKe(rawJamKe) : null;
 
 		if (!kelas || !mapel || !tanggal || !jam_ke) {
 			return NextResponse.json({ error: 'parameter kurang' }, { status: 400 });

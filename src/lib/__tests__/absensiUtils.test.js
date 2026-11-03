@@ -6,6 +6,7 @@
 import {
 	normStatus,
 	calculateAttendanceSummary,
+	normalizeJamKe,
 	parseJamPelajaran,
 	checkJamOverlap,
 	formatJamPelajaran,
@@ -91,7 +92,33 @@ describe('Unit Test: absensiUtils', () => {
 	});
 
 	// =========================================================================
-	// 3. Uji Parsing Jam Pelajaran (parseJamPelajaran)
+	// 3. Uji Normalisasi Jam Ke (normalizeJamKe)
+	// =========================================================================
+	describe('normalizeJamKe', () => {
+		it('harus mengonversi format jam dinding menjadi slot jam pelajaran baku', () => {
+			expect(normalizeJamKe('7.55-10.15')).toBe('2-4');
+			expect(normalizeJamKe('07:15 - 08:35')).toBe('1-2');
+			expect(normalizeJamKe('08:35 - 09:55')).toBe('3-4');
+		});
+
+		it('harus menormalisasi deretan angka berulang menjadi rentang', () => {
+			expect(normalizeJamKe('5-6-7')).toBe('5-7');
+			expect(normalizeJamKe('4-5-6')).toBe('4-6');
+			expect(normalizeJamKe('1-2-3')).toBe('1-3');
+		});
+
+		it('harus membersihkan spasi, kata "Jam", dan kata sambung "dan"', () => {
+			expect(normalizeJamKe('Jam 2-3')).toBe('2-3');
+			expect(normalizeJamKe('Jam 6-7')).toBe('6-7');
+			expect(normalizeJamKe('1 - 3')).toBe('1-3');
+			expect(normalizeJamKe('5 - 7')).toBe('5-7');
+			expect(normalizeJamKe('3, 4,')).toBe('3-4');
+			expect(normalizeJamKe('3 dan 4')).toBe('3-4');
+		});
+	});
+
+	// =========================================================================
+	// 4. Uji Parsing Jam Pelajaran (parseJamPelajaran)
 	// =========================================================================
 	describe('parseJamPelajaran', () => {
 		it('harus mem-parsing rentang jam seperti "1-3" menjadi array [1, 2, 3]', () => {

@@ -12,7 +12,7 @@ import ButtonBack from '../components/button/ButtonBack';
 import { useAcademic } from '@/context/AcademicContext';
 import AcademicPeriodChip, { ArchiveBanner } from '@/app/components/AcademicPeriodChip';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran } from '@/lib/absensiUtils';
+import { normStatus, calculateAttendanceSummary, findConflictingSession, checkJamOverlap, parseJamPelajaran, normalizeJamKe, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { isWithinGeofence, formatDistance } from '@/lib/haversine';
 import GeofenceStatusCard from '@/app/components/GeofenceStatusCard';
@@ -575,7 +575,8 @@ export default function AbsensiMapelPage() {
 			return;
 		}
 
-		let currentJamKe = jamKe ? jamKe.trim() : '';
+		let currentJamKe = jamKe ? normalizeJamKe(jamKe.trim()) : '';
+		if (currentJamKe && currentJamKe !== jamKe) setJamKe(currentJamKe);
 
 		if (!currentJamKe) {
 			const { value: inputJamKe } = await Swal.fire({
@@ -596,7 +597,7 @@ export default function AbsensiMapelPage() {
 			});
 
 			if (inputJamKe) {
-				currentJamKe = inputJamKe.trim();
+				currentJamKe = normalizeJamKe(inputJamKe.trim());
 				setJamKe(currentJamKe);
 			} else {
 				return;
@@ -771,6 +772,7 @@ export default function AbsensiMapelPage() {
 			semester: semesterAktif,
 			user_lat: userCoords?.lat,
 			user_lng: userCoords?.lng,
+			client_time: getTimeWIB(new Date()),
 		};
 
 		try {
@@ -1103,6 +1105,7 @@ export default function AbsensiMapelPage() {
 								placeholder='Jam (mis: 1-2)'
 								value={jamKe}
 								onChange={(e) => setJamKe(e.target.value)}
+								onBlur={() => setJamKe((prev) => normalizeJamKe(prev))}
 								disabled={mode === 'edit'}
 								className={`neo-input text-center w-full disabled:bg-gray-200 disabled:cursor-not-allowed ${
 									!jamKe ? 'border-[#E8451A] bg-[#FFF5F0]' : 'bg-white'

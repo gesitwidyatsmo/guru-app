@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { haversine } from '@/lib/haversine';
 import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
-import { findConflictingSession } from '@/lib/absensiUtils';
+import { findConflictingSession, checkJamOverlap, normalizeJamKe } from '@/lib/absensiUtils';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -161,22 +161,31 @@ export async function POST(req) {
 			console.warn('Geofence verification skipped or table missing:', geoErr.message);
 		}
 
+		// Prioritaskan ID Jurnal: Jika body menyertakan id dan data sudah ada di database, alihkan ke update
+		if (body.id) {
+			const { data: existingJournal } = await supabase.from('jurnal').select('id').eq('id', body.id).maybeSingle();
+			if (existingJournal) {
+				return await executeUpdateJurnal(supabase, body, userId, role);
+			}
+		}
+
 		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1)
-		if (tanggal && kelas && jam_ke) {
+		const normJamKe = normalizeJamKe(jam_ke);
+		if (tanggal && kelas && normJamKe) {
 			const { data: existingJournals } = await supabase
 				.from('jurnal')
 				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
 				.eq('kelas', kelas)
 				.eq('tanggal', tanggal);
 
-			const conflict = findConflictingSession(existingJournals || [], jam_ke);
+			const conflict = findConflictingSession(existingJournals || [], normJamKe);
 			if (conflict) {
 				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
 				const mapelExisting = conflict.session.mapel || 'Mapel lain';
 				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
 				return NextResponse.json(
 					{
-						error: `Konflik Jam Mengajar: Jam ke-${jam_ke} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${kelas} tanggal ${tanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
+						error: `Konflik Jam Mengajar: Jam ke-${normJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${kelas} tanggal ${tanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
 						conflict: {
 							existingJamKe: conflict.session.jam_ke,
 							conflicts: conflict.conflicts,
@@ -205,18 +214,39 @@ export async function POST(req) {
 			try {
 				let absensiQuery = supabase
 					.from('absensi_mapel')
-					.select('sesi_id, created_at, jam_ke')
+					.select('sesi_id, created_at, jam_ke, waktu_absen')
 					.eq('kelas', kelas)
 					.eq('mapel', mapel)
 					.eq('tanggal', tanggal);
 				if (userId) absensiQuery = absensiQuery.eq('guru_id', userId);
-				const { data: matchedSessions } = await absensiQuery.order('created_at', { ascending: false });
+				let { data: matchedSessions, error: qErr } = await absensiQuery.order('created_at', { ascending: false });
+
+				if (qErr && (qErr.code === 'PGRST204' || qErr.code === '42703' || String(qErr.message || '').includes('waktu_absen'))) {
+					// Fallback jika waktu_absen belum dimigrasi di database
+					let fallbackQuery = supabase
+						.from('absensi_mapel')
+						.select('sesi_id, created_at, jam_ke')
+						.eq('kelas', kelas)
+						.eq('mapel', mapel)
+						.eq('tanggal', tanggal);
+					if (userId) fallbackQuery = fallbackQuery.eq('guru_id', userId);
+					const fallbackRes = await fallbackQuery.order('created_at', { ascending: false });
+					matchedSessions = fallbackRes.data;
+				}
 
 				if (matchedSessions && matchedSessions.length > 0) {
-					const exactMatch = matchedSessions.find((s) => s.jam_ke === jam_ke);
-					const chosen = exactMatch || matchedSessions[0];
-					if (chosen.created_at) {
-						finalJamMulai = getTimeWIB(chosen.created_at);
+					let chosen = null;
+					if (jam_ke) {
+						chosen = matchedSessions.find((s) => String(s.jam_ke).trim() === String(jam_ke).trim());
+						if (!chosen) {
+							chosen = matchedSessions.find((s) => checkJamOverlap(s.jam_ke, jam_ke).isOverlap);
+						}
+					} else {
+						chosen = matchedSessions[0];
+					}
+
+					if (chosen) {
+						finalJamMulai = chosen.waktu_absen || (chosen.created_at ? getTimeWIB(chosen.created_at) : null);
 						finalSesiAbsensiId = chosen.sesi_id;
 					}
 				}
@@ -257,7 +287,7 @@ export async function POST(req) {
 			id,
 			guru_id: userId || null,
 			tanggal,
-			jam_ke: jam_ke || '',
+			jam_ke: normJamKe || '',
 			pertemuan_ke: pertemuan_ke || '',
 			kelas,
 			mapel,
@@ -303,6 +333,138 @@ export async function POST(req) {
 	}
 }
 
+// Helper eksekusi update jurnal (mempertahankan created_at asli dan mencegah duplikasi)
+async function executeUpdateJurnal(supabase, body, userId, role) {
+	const { id, pertemuan_ke, metode, ...others } = body;
+	if (!id) {
+		return NextResponse.json({ error: 'ID Jurnal wajib disertakan untuk update' }, { status: 400 });
+	}
+
+	// Ambil data jurnal eksisting untuk verifikasi kepemilikan dan data tanggal/kelas
+	const { data: existingData } = await supabase
+		.from('jurnal')
+		.select('guru_id, kelas, tanggal, jam_ke')
+		.eq('id', id)
+		.maybeSingle();
+
+	// Verifikasi kepemilikan jika Guru
+	if (role === 'Guru' && userId) {
+		if (existingData && existingData.guru_id && existingData.guru_id !== userId) {
+			return NextResponse.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
+		}
+	}
+
+	// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1) saat edit
+	const targetTanggal = others.tanggal || existingData?.tanggal;
+	const targetKelas = others.kelas || existingData?.kelas;
+	const targetJamKe = others.jam_ke !== undefined ? normalizeJamKe(others.jam_ke) : existingData?.jam_ke;
+
+	if (targetTanggal && targetKelas && targetJamKe) {
+		const { data: existingJournals } = await supabase
+			.from('jurnal')
+			.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
+			.eq('kelas', targetKelas)
+			.eq('tanggal', targetTanggal);
+
+		const conflict = findConflictingSession(existingJournals || [], targetJamKe, id);
+		if (conflict) {
+			const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+			const mapelExisting = conflict.session.mapel || 'Mapel lain';
+			const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
+			return NextResponse.json(
+				{
+					error: `Konflik Jam Mengajar: Jam ke-${targetJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${targetKelas} tanggal ${targetTanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
+					conflict: {
+						existingJamKe: conflict.session.jam_ke,
+						conflicts: conflict.conflicts,
+						existingMapel: mapelExisting,
+						existingGuru: guruExisting,
+						existingId: conflict.session.id,
+					},
+				},
+				{ status: 409 }
+			);
+		}
+	}
+
+	const updates = { ...others };
+	if (updates.jam_ke !== undefined) updates.jam_ke = normalizeJamKe(updates.jam_ke);
+	if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
+	if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
+	if (metode !== undefined) updates.metode = metode;
+
+	if (updates.jam_mulai !== undefined) {
+		updates.jam_mulai = updates.jam_mulai && String(updates.jam_mulai).trim() !== '' ? String(updates.jam_mulai).trim().slice(0, 8) : null;
+	}
+	if (updates.jam_selesai !== undefined) {
+		updates.jam_selesai = updates.jam_selesai && String(updates.jam_selesai).trim() !== '' ? String(updates.jam_selesai).trim().slice(0, 8) : null;
+	}
+	if (updates.sesi_absensi_id !== undefined) {
+		updates.sesi_absensi_id = updates.sesi_absensi_id && String(updates.sesi_absensi_id).trim() !== '' ? String(updates.sesi_absensi_id).trim() : null;
+	}
+	if (updates.durasi_menit !== undefined) {
+		updates.durasi_menit = !isNaN(Number(updates.durasi_menit)) ? Number(updates.durasi_menit) : 0;
+	}
+	const isTugasLuar =
+		body.is_tugas_luar === true ||
+		body.tipe_agenda === 'tugas_luar' ||
+		String(body.status_kehadiran || '').toLowerCase().includes('tugas luar') ||
+		String(updates.kegiatan || '').toLowerCase().includes('[tugas luar');
+
+	const isKegiatanSekolah =
+		body.is_kegiatan_sekolah === true ||
+		body.tipe_agenda === 'kegiatan_sekolah' ||
+		String(body.status_kehadiran || '').toLowerCase().includes('kegiatan sekolah') ||
+		String(body.status_kehadiran || '').toLowerCase().includes('hari santri') ||
+		String(updates.kegiatan || '').toLowerCase().includes('[kegiatan sekolah');
+
+	if (isKegiatanSekolah) {
+		updates.status_kehadiran = 'Kegiatan Sekolah';
+	} else if (isTugasLuar) {
+		updates.status_kehadiran = 'Tugas Luar';
+	} else if (updates.jam_mulai && updates.jam_selesai) {
+		updates.status_kehadiran = determineKBMStatus({
+			jamMulai: updates.jam_mulai,
+			jamSelesai: updates.jam_selesai,
+			durasiMenit: updates.durasi_menit,
+			tanggal: updates.tanggal,
+			jamKe: updates.jam_ke,
+		});
+	} else if (updates.status_kehadiran !== undefined) {
+		updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
+	}
+	delete updates.is_tugas_luar;
+	delete updates.is_kegiatan_sekolah;
+	delete updates.tipe_agenda;
+
+	let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
+
+	// Fallback jika kolom baru belum ada di tabel Supabase
+	if (error) {
+		const isMissingCol =
+			error.code === 'PGRST204' ||
+			error.code === '42703' ||
+			String(error.message || '').toLowerCase().includes('column') ||
+			String(error.message || '').toLowerCase().includes('schema cache');
+
+		if (isMissingCol) {
+			const fallbackUpdates = { ...updates };
+			delete fallbackUpdates.metode;
+			delete fallbackUpdates.jam_mulai;
+			delete fallbackUpdates.jam_selesai;
+			delete fallbackUpdates.durasi_menit;
+			delete fallbackUpdates.sesi_absensi_id;
+			delete fallbackUpdates.status_kehadiran;
+			const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
+			error = retry.error;
+		}
+	}
+
+	if (error) throw error;
+
+	return NextResponse.json({ success: true, id, mode: 'update' });
+}
+
 // PUT UPDATE JURNAL
 export async function PUT(req) {
 	try {
@@ -315,137 +477,13 @@ export async function PUT(req) {
 		}
 
 		const userId = req.headers.get('x-user-id');
-
 		const body = await req.json();
-		const { id, pertemuan_ke, metode, ...others } = body;
-
 		const supabase = await createClient();
 
-		// Ambil data jurnal eksisting untuk verifikasi kepemilikan dan data tanggal/kelas
-		const { data: existingData } = await supabase
-			.from('jurnal')
-			.select('guru_id, kelas, tanggal, jam_ke')
-			.eq('id', id)
-			.maybeSingle();
-
-		// Verifikasi kepemilikan jika Guru
-		if (role === 'Guru' && userId) {
-			if (existingData && existingData.guru_id && existingData.guru_id !== userId) {
-				return NextResponse.json({ error: 'Akses Ditolak: Ini bukan Jurnal ciptaan Anda!' }, { status: 403 });
-			}
-		}
-
-		// Validasi Bentrok Jam Mengajar (Tingkat Kelas - Opsi 1) saat edit
-		const targetTanggal = others.tanggal || existingData?.tanggal;
-		const targetKelas = others.kelas || existingData?.kelas;
-		const targetJamKe = others.jam_ke !== undefined ? others.jam_ke : existingData?.jam_ke;
-
-		if (targetTanggal && targetKelas && targetJamKe) {
-			const { data: existingJournals } = await supabase
-				.from('jurnal')
-				.select('id, jam_ke, mapel, guru_id, users!jurnal_guru_id_fkey(nama_lengkap)')
-				.eq('kelas', targetKelas)
-				.eq('tanggal', targetTanggal);
-
-			const conflict = findConflictingSession(existingJournals || [], targetJamKe, id);
-			if (conflict) {
-				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
-				const mapelExisting = conflict.session.mapel || 'Mapel lain';
-				const conflictDetail = conflict.conflicts?.length > 0 ? ` (Jam ke-${conflict.conflicts.join(', ')})` : '';
-				return NextResponse.json(
-					{
-						error: `Konflik Jam Mengajar: Jam ke-${targetJamKe} bertabrakan dengan jurnal ${mapelExisting} oleh ${guruExisting} (Jam ${conflict.session.jam_ke})${conflictDetail} pada kelas ${targetKelas} tanggal ${targetTanggal}. Satu kelas tidak boleh memiliki kegiatan KBM ganda di jam yang sama.`,
-						conflict: {
-							existingJamKe: conflict.session.jam_ke,
-							conflicts: conflict.conflicts,
-							existingMapel: mapelExisting,
-							existingGuru: guruExisting,
-							existingId: conflict.session.id,
-						},
-					},
-					{ status: 409 }
-				);
-			}
-		}
-
-		const updates = { ...others };
-		if (pertemuan_ke !== undefined) updates.pertemuan_ke = pertemuan_ke;
-		if (updates.tuntas !== undefined) updates.tuntas = !!updates.tuntas;
-		if (metode !== undefined) updates.metode = metode;
-
-		if (updates.jam_mulai !== undefined) {
-			updates.jam_mulai = updates.jam_mulai && String(updates.jam_mulai).trim() !== '' ? String(updates.jam_mulai).trim().slice(0, 8) : null;
-		}
-		if (updates.jam_selesai !== undefined) {
-			updates.jam_selesai = updates.jam_selesai && String(updates.jam_selesai).trim() !== '' ? String(updates.jam_selesai).trim().slice(0, 8) : null;
-		}
-		if (updates.sesi_absensi_id !== undefined) {
-			updates.sesi_absensi_id = updates.sesi_absensi_id && String(updates.sesi_absensi_id).trim() !== '' ? String(updates.sesi_absensi_id).trim() : null;
-		}
-		if (updates.durasi_menit !== undefined) {
-			updates.durasi_menit = !isNaN(Number(updates.durasi_menit)) ? Number(updates.durasi_menit) : 0;
-		}
-		const isTugasLuar =
-			body.is_tugas_luar === true ||
-			body.tipe_agenda === 'tugas_luar' ||
-			String(body.status_kehadiran || '').toLowerCase().includes('tugas luar') ||
-			String(updates.kegiatan || '').toLowerCase().includes('[tugas luar');
-
-		const isKegiatanSekolah =
-			body.is_kegiatan_sekolah === true ||
-			body.tipe_agenda === 'kegiatan_sekolah' ||
-			String(body.status_kehadiran || '').toLowerCase().includes('kegiatan sekolah') ||
-			String(body.status_kehadiran || '').toLowerCase().includes('hari santri') ||
-			String(updates.kegiatan || '').toLowerCase().includes('[kegiatan sekolah');
-
-		if (isKegiatanSekolah) {
-			updates.status_kehadiran = 'Kegiatan Sekolah';
-		} else if (isTugasLuar) {
-			updates.status_kehadiran = 'Tugas Luar';
-		} else if (updates.jam_mulai && updates.jam_selesai) {
-			updates.status_kehadiran = determineKBMStatus({
-				jamMulai: updates.jam_mulai,
-				jamSelesai: updates.jam_selesai,
-				durasiMenit: updates.durasi_menit,
-				tanggal: updates.tanggal,
-				jamKe: updates.jam_ke,
-			});
-		} else if (updates.status_kehadiran !== undefined) {
-			updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
-		}
-		delete updates.is_tugas_luar;
-		delete updates.is_kegiatan_sekolah;
-		delete updates.tipe_agenda;
-
-		let { error } = await supabase.from('jurnal').update(updates).eq('id', id);
-
-		// Fallback jika kolom baru belum ada di tabel Supabase
-		if (error) {
-			const isMissingCol =
-				error.code === 'PGRST204' ||
-				error.code === '42703' ||
-				String(error.message || '').toLowerCase().includes('column') ||
-				String(error.message || '').toLowerCase().includes('schema cache');
-
-			if (isMissingCol) {
-				const fallbackUpdates = { ...updates };
-				delete fallbackUpdates.metode;
-				delete fallbackUpdates.jam_mulai;
-				delete fallbackUpdates.jam_selesai;
-				delete fallbackUpdates.durasi_menit;
-				delete fallbackUpdates.sesi_absensi_id;
-				delete fallbackUpdates.status_kehadiran;
-				const retry = await supabase.from('jurnal').update(fallbackUpdates).eq('id', id);
-				error = retry.error;
-			}
-		}
-
-		if (error) throw error;
-
-		return NextResponse.json({ success: true });
+		return await executeUpdateJurnal(supabase, body, userId, role);
 	} catch (error) {
 		console.error('PUT Jurnal Error:', error);
-		return NextResponse.json({ error: 'Gagal update' }, { status: 500 });
+		return NextResponse.json({ error: error?.message || 'Gagal update' }, { status: 500 });
 	}
 }
 
