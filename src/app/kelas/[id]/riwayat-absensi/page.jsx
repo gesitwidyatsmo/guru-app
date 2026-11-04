@@ -1,54 +1,87 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Swal from 'sweetalert2';
-import Loader from '../../../components/loading';
-import SectionHeader from '../../../components/SectionHeader';
+import {
+	ChevronLeft,
+	Calendar as CalendarIcon,
+	Clock,
+	Users,
+	Search,
+	CheckCircle2,
+	AlertTriangle,
+	HelpCircle,
+	XCircle,
+	FileText,
+	ArrowRight,
+	School,
+	Filter,
+	Sparkles,
+} from 'lucide-react';
+import Loader from '@/app/components/loading';
 import { createClient } from '@/utils/supabase/client';
+import { normStatus, evaluateDailyAttendance, isJumatOrLibur } from '@/lib/absensiUtils';
 
 export default function RiwayatAbsensiPage() {
 	const params = useParams();
-	const id = params.id;
+	const router = useRouter();
+	const id = params?.id;
 
 	// State Data Master
-	const [kelasDetail, setKelasDetail] = useState(null);
 	const [namaKelas, setNamaKelas] = useState('');
+	const [waliKelasName, setWaliKelasName] = useState('');
 	const [siswaList, setSiswaList] = useState([]);
 
-	// State Daftar Sesi (Sidebar)
+	// State Riwayat Sesi (Master Sidebar)
 	const [daftarSesi, setDaftarSesi] = useState([]);
 	const [selectedTanggal, setSelectedTanggal] = useState('');
 	const [loadingSesi, setLoadingSesi] = useState(false);
 	const [searchSesi, setSearchSesi] = useState('');
 
-	// State Form Detail
-	const [tanggalEdit, setTanggalEdit] = useState('');
-	const [absensiMap, setAbsensiMap] = useState({}); // {siswa_id: { status, keterangan }}
+	// State Detail Sesi Hari Terpilih
+	const [loadingDetail, setLoadingDetail] = useState(false);
+	const [sesiMapelList, setSesiMapelList] = useState([]);
+	const [detailSiswaMap, setDetailSiswaMap] = useState({}); // { siswa_id: { status, keterangan, sessions: [] } }
+	const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'hadir' | 'sakit' | 'izin' | 'alfa'
 	const [searchSiswa, setSearchSiswa] = useState('');
 
 	// State UI
 	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
 
 	// --- 1. Fetch Data Awal (Kelas & Siswa) ---
 	useEffect(() => {
 		const fetchInitial = async () => {
 			if (!id) return;
 			try {
+				setLoading(true);
 				const supabase = createClient();
-				const { data: dataKelas } = await supabase.from('kelas').select('*').eq('id', id).single();
-				
-				if (dataKelas) {
-					setKelasDetail(dataKelas);
-					setNamaKelas(dataKelas.nama_kelas);
+				const { data: dataKelas, error: errKelas } = await supabase
+					.from('kelas')
+					.select('nama_kelas, wali_kelas')
+					.eq('id', id)
+					.single();
 
-					const { data: dataSiswa } = await supabase.from('siswa').select('*').eq('status', 'Aktif').eq('kelas', dataKelas.nama_kelas);
+				if (errKelas) throw errKelas;
+
+				if (dataKelas) {
+					setNamaKelas(dataKelas.nama_kelas);
+					setWaliKelasName(dataKelas.wali_kelas || 'Wali Kelas');
+
+					const { data: dataSiswa, error: errSiswa } = await supabase
+						.from('siswa')
+						.select('id, nama_lengkap, nis')
+						.eq('status', 'Aktif')
+						.eq('kelas', dataKelas.nama_kelas)
+						.order('nama_lengkap', { ascending: true });
+
+					if (errSiswa) throw errSiswa;
 					setSiswaList(dataSiswa || []);
 				}
 			} catch (err) {
 				console.error(err);
-				Swal.fire('Error', 'Gagal memuat data awal', 'error');
+				Swal.fire('Error', 'Gagal memuat data kelas', 'error');
 			} finally {
 				setLoading(false);
 			}
@@ -56,528 +89,528 @@ export default function RiwayatAbsensiPage() {
 		fetchInitial();
 	}, [id]);
 
-	// --- 2. Fetch Daftar Sesi Absensi ---
+	// --- 2. Fetch Riwayat Tanggal Sesi KBM ---
 	const fetchRiwayatSesi = useCallback(async () => {
 		if (!namaKelas) return;
 		try {
 			setLoadingSesi(true);
 			const supabase = createClient();
-			const { data } = await supabase.from('absensi_harian').select('tanggal').eq('kelas', namaKelas);
-			
-			if (data) {
-				const sesiSet = new Set();
-				data.forEach((item) => {
-					const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
-					if (tgl) sesiSet.add(tgl);
-				});
+			const [resHarian, resMapel] = await Promise.all([
+				supabase.from('absensi_harian').select('tanggal').eq('kelas', namaKelas),
+				supabase.from('absensi_mapel').select('tanggal').eq('kelas', namaKelas),
+			]);
 
-				const sesiArray = Array.from(sesiSet).sort((a, b) => new Date(b) - new Date(a));
-				setDaftarSesi(sesiArray);
+			const sesiSet = new Set();
+			(resHarian.data || []).forEach((item) => {
+				const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
+				if (tgl && !isJumatOrLibur(tgl)) sesiSet.add(tgl);
+			});
+			(resMapel.data || []).forEach((item) => {
+				const tgl = typeof item.tanggal === 'string' ? item.tanggal.slice(0, 10) : item.tanggal;
+				if (tgl && !isJumatOrLibur(tgl)) sesiSet.add(tgl);
+			});
+
+			const sesiArray = Array.from(sesiSet).sort((a, b) => new Date(b) - new Date(a));
+			setDaftarSesi(sesiArray);
+
+			// Pilih tanggal pertama secara default jika belum ada yang terpilih
+			if (sesiArray.length > 0 && !selectedTanggal) {
+				setSelectedTanggal(sesiArray[0]);
 			}
 		} catch (err) {
 			console.error('Error fetching sesi:', err);
 		} finally {
 			setLoadingSesi(false);
 		}
-	}, [namaKelas]);
+	}, [namaKelas, selectedTanggal]);
 
 	useEffect(() => {
 		fetchRiwayatSesi();
-		window.addEventListener('focus', fetchRiwayatSesi);
-		return () => window.removeEventListener('focus', fetchRiwayatSesi);
 	}, [fetchRiwayatSesi]);
 
+	// Filter Sesi Sidebar by Search
 	const filteredSesi = useMemo(() => {
 		if (!searchSesi.trim()) return daftarSesi;
 		const q = searchSesi.toLowerCase().trim();
 		return daftarSesi.filter((tgl) => {
-			const formatted = new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).toLowerCase();
+			const formatted = new Date(tgl)
+				.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+				.toLowerCase();
 			return tgl.toLowerCase().includes(q) || formatted.includes(q);
 		});
 	}, [daftarSesi, searchSesi]);
 
-	const filteredSiswa = useMemo(() => {
-		if (!searchSiswa.trim()) return siswaList;
-		const q = searchSiswa.toLowerCase().trim();
-		return siswaList.filter((s) =>
-			(s.nama_lengkap && s.nama_lengkap.toLowerCase().includes(q)) ||
-			(s.nis && String(s.nis).toLowerCase().includes(q))
-		);
-	}, [siswaList, searchSiswa]);
-
-	// --- 3. Load Detail Sesi ketika sesi dipilih ---
+	// --- 3. Load Detail Sesi ketika Tanggal Dipilih ---
 	useEffect(() => {
-		if (!selectedTanggal) {
-			setTanggalEdit('');
-			setAbsensiMap({});
+		if (!selectedTanggal || !namaKelas || siswaList.length === 0) {
+			setSesiMapelList([]);
+			setDetailSiswaMap({});
 			return;
 		}
 
 		const loadSesiDetail = async () => {
 			try {
+				setLoadingDetail(true);
 				const supabase = createClient();
-				const { data: sesi } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).single();
-				if (sesi) {
-					const { data: details } = await supabase.from('absensi_harian_siswa').select('siswa_id, status, keterangan').eq('sesi_id', sesi.sesi_id);
-					setTanggalEdit(selectedTanggal);
 
-					const map = {};
-					(details || []).forEach((item) => {
-						map[item.siswa_id] = {
-							status: item.status,
-							keterangan: item.keterangan || '',
-						};
+				// Ambil seluruh sesi mapel pada tanggal tersebut
+				const { data: mapelData, error: mapelErr } = await supabase
+					.from('absensi_mapel')
+					.select(`
+						sesi_id, jam_ke, mapel, guru_id, created_at,
+						users (nama_lengkap),
+						absensi_mapel_siswa (
+							siswa_id, status, keterangan
+						)
+					`)
+					.eq('kelas', namaKelas)
+					.eq('tanggal', selectedTanggal)
+					.order('created_at', { ascending: true });
+
+				if (mapelErr) throw mapelErr;
+
+				// Simpan ringkasan sesi mapel untuk ditampilkan di header
+				const mapelSummary = (mapelData || []).map((m) => ({
+					sesi_id: m.sesi_id,
+					jam_ke: m.jam_ke,
+					mapel: m.mapel,
+					guru: m.users?.nama_lengkap || 'Guru Pengampu',
+				}));
+				setSesiMapelList(mapelSummary);
+
+				// Evaluasi kehadiran per siswa secara otomatis dari sesi mapel
+				const map = {};
+				siswaList.forEach((sw) => {
+					const studentSessions = [];
+					(mapelData || []).forEach((m) => {
+						const rec = (m.absensi_mapel_siswa || []).find((r) => String(r.siswa_id) === String(sw.id));
+						if (rec) {
+							studentSessions.push({
+								jam_ke: m.jam_ke,
+								mapel: m.mapel,
+								status: rec.status,
+								keterangan: rec.keterangan || '',
+							});
+						}
 					});
-					setAbsensiMap(map);
-				}
+
+					if (studentSessions.length > 0) {
+						const evalRes = evaluateDailyAttendance(studentSessions);
+						map[sw.id] = {
+							status: evalRes.recommendedStatus,
+							keterangan: evalRes.recommendedKeterangan || '',
+							studentSessions,
+						};
+					} else {
+						map[sw.id] = {
+							status: 'Hadir',
+							keterangan: 'Belum ada catatan ketidakhadiran',
+							studentSessions: [],
+						};
+					}
+				});
+
+				setDetailSiswaMap(map);
 			} catch (err) {
-				console.error('Error loading detail:', err);
+				console.error('Error loading detail sesi:', err);
+			} finally {
+				setLoadingDetail(false);
 			}
 		};
 
 		loadSesiDetail();
-	}, [selectedTanggal, namaKelas]);
+	}, [selectedTanggal, namaKelas, siswaList]);
 
-	// --- 4. Handler Input Perubahan ---
-	const handleStatusChange = (siswaId, val) => {
-		setAbsensiMap((prev) => ({
-			...prev,
-			[siswaId]: {
-				...prev[siswaId],
-				status: val,
-			},
-		}));
-	};
+	// Statistik Hari Terpilih
+	const dailyStats = useMemo(() => {
+		let hadir = 0;
+		let sakit = 0;
+		let izin = 0;
+		let alfa = 0;
 
-	const handleKeteranganChange = (siswaId, val) => {
-		setAbsensiMap((prev) => ({
-			...prev,
-			[siswaId]: {
-				...prev[siswaId],
-				keterangan: val,
-			},
-		}));
-	};
-
-	// --- 5. Simpan Perubahan (Bulk Update via PUT) ---
-	const handleSimpan = async () => {
-		if (!selectedTanggal) return;
-
-		setSaving(true);
-		try {
-			const supabase = createClient();
-			
-			const { data: existingSesi, error: findErr } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', selectedTanggal).maybeSingle();
-			if (findErr) throw findErr;
-			if (!existingSesi) throw new Error('Sesi tidak ditemukan');
-
-			let sesiId = existingSesi.sesi_id;
-
-			if (selectedTanggal !== tanggalEdit) {
-				// Check if new date already exists
-				const { data: checkNew } = await supabase.from('absensi_harian').select('sesi_id').eq('kelas', namaKelas).eq('tanggal', tanggalEdit).maybeSingle();
-				if (checkNew) {
-					throw new Error('Sesi untuk tanggal tersebut sudah ada');
-				}
-				const { error: updDateErr } = await supabase.from('absensi_harian').update({ tanggal: tanggalEdit }).eq('sesi_id', sesiId);
-				if (updDateErr) throw updDateErr;
-			}
-
-			// Update details
-			const { error: delErr } = await supabase.from('absensi_harian_siswa').delete().eq('sesi_id', sesiId);
-			if (delErr) throw delErr;
-			
-			const absensiList = Object.keys(absensiMap).map((siswaId) => ({
-				sesi_id: sesiId,
-				siswa_id: siswaId,
-				status: absensiMap[siswaId].status,
-				keterangan: absensiMap[siswaId].keterangan || '',
-			}));
-			
-			if (absensiList.length > 0) {
-				const { error: insErr } = await supabase.from('absensi_harian_siswa').insert(absensiList);
-				if (insErr) throw insErr;
-			}
-
-			Swal.fire({
-				icon: 'success',
-				title: 'Berhasil',
-				text: 'Perubahan riwayat absensi disimpan',
-				timer: 1500,
-				showConfirmButton: false,
-			});
-
-			await fetchRiwayatSesi();
-			if (tanggalEdit !== selectedTanggal) {
-				setSelectedTanggal(tanggalEdit);
-			}
-		} catch (error) {
-			console.error(error);
-			Swal.fire('Error', error.message, 'error');
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	// --- 6. Hapus Sesi ---
-	const handleHapusSesi = async () => {
-		if (!selectedTanggal) return;
-
-		const resConfirm = await Swal.fire({
-			title: 'Hapus Sesi Absensi?',
-			text: `Sesi Absen (${selectedTanggal}) akan dihapus secara permanen beserta data seluruh siswa!`,
-			icon: 'warning',
-			showCancelButton: true,
-			confirmButtonColor: '#d33',
-			cancelButtonColor: '#3085d6',
-			confirmButtonText: 'Ya, Hapus!',
-			cancelButtonText: 'Batal',
+		Object.values(detailSiswaMap).forEach((st) => {
+			const s = normStatus(st.status);
+			if (s === 'hadir') hadir++;
+			else if (s === 'sakit') sakit++;
+			else if (s === 'izin') izin++;
+			else if (s === 'alfa') alfa++;
 		});
 
-		if (!resConfirm.isConfirmed) return;
+		const total = hadir + sakit + izin + alfa;
+		const rate = total > 0 ? Math.round((hadir / total) * 100) : 0;
+		return { hadir, sakit, izin, alfa, total, rate };
+	}, [detailSiswaMap]);
 
-		setSaving(true);
-		try {
-			const supabase = createClient();
-			const { error } = await supabase.from('absensi_harian').delete().eq('kelas', namaKelas).eq('tanggal', selectedTanggal);
-			if (error) throw error;
+	// Filter Siswa by Status & Search
+	const filteredSiswa = useMemo(() => {
+		return siswaList.filter((sw) => {
+			const info = detailSiswaMap[sw.id] || { status: 'Hadir' };
+			const normSt = normStatus(info.status);
 
-			Swal.fire('Terhapus!', 'Sesi absensi berhasil dihapus.', 'success');
-			setSelectedTanggal('');
-			await fetchRiwayatSesi();
-		} catch (error) {
-			console.error(error);
-			Swal.fire('Error', 'Gagal menghapus sesi absen', 'error');
-		} finally {
-			setSaving(false);
-		}
-	};
+			if (filterStatus !== 'all' && normSt !== filterStatus) return false;
 
-	if (loading) return <Loader />;
+			if (searchSiswa.trim()) {
+				const q = searchSiswa.toLowerCase().trim();
+				const matchName = sw.nama_lengkap && sw.nama_lengkap.toLowerCase().includes(q);
+				const matchNis = sw.nis && String(sw.nis).toLowerCase().includes(q);
+				if (!matchName && !matchNis) return false;
+			}
+
+			return true;
+		});
+	}, [siswaList, detailSiswaMap, filterStatus, searchSiswa]);
+
+	if (loading) {
+		return <Loader text='Memuat riwayat absensi kelas...' />;
+	}
 
 	return (
-		<main className='min-h-screen bg-gray-50 pb-20'>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
-				<SectionHeader
-					title={'Kelola Riwayat Absensi'}
-					leftIcon={
-						<svg
-							xmlns='http://www.w3.org/2000/svg'
-							fill='none'
-							viewBox='0 0 24 24'
-							strokeWidth='2'
-							stroke='currentColor'
-							className='w-6 h-6 text-indigo-600'>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								d='M15 19l-7-7 7-7'
+		<div className='min-h-screen bg-[#FFFDF8] p-4 sm:p-6 lg:p-8 space-y-6'>
+			{/* TOP BAR / BREADCRUMB */}
+			<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-[3px] border-[#0D0D0D] bg-white p-5 shadow-[5px_5px_0px_0px_#0D0D0D] rounded-2xl'>
+				<div className='flex items-center gap-3'>
+					<Link
+						href='/wali-kelas?tab=presensi'
+						className='p-2 bg-yellow-300 hover:bg-yellow-400 border-[2px] border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] transition-all active:translate-x-0.5 active:translate-y-0.5'>
+						<ChevronLeft className='w-5 h-5 text-black' />
+					</Link>
+					<div>
+						<div className='flex flex-wrap items-center gap-2 mb-0.5'>
+							<span className='px-2.5 py-0.5 rounded-lg border border-black bg-emerald-300 text-emerald-950 text-[10px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D]'>
+								🏫 Rombel: {namaKelas}
+							</span>
+							<span className='px-2.5 py-0.5 rounded-lg border border-black bg-purple-200 text-purple-950 text-[10px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D]'>
+								👁️ Mode Monitoring Wali Kelas
+							</span>
+						</div>
+						<h1 className='text-xl sm:text-2xl font-black uppercase tracking-tight text-[#0D0D0D] flex items-center gap-2'>
+							<span>📅</span> Rekap Kalender &amp; Histori Presensi
+						</h1>
+					</div>
+				</div>
+
+				<div className='flex items-center gap-2'>
+					<Link
+						href={`/kelas/${id}/laporan-absensi`}
+						className='px-3.5 py-2 bg-white hover:bg-yellow-200 border-[2px] border-black rounded-xl text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] transition-all flex items-center gap-1.5 active:translate-x-0.5 active:translate-y-0.5'>
+						<FileText className='w-4 h-4 text-black' />
+						<span>Buka Rekap Bulanan (Matriks) →</span>
+					</Link>
+				</div>
+			</div>
+
+			{/* MASTER-DETAIL LAYOUT */}
+			<div className='flex flex-col lg:flex-row gap-6 items-start'>
+				{/* SIDEBAR: DAFTAR TANGGAL (MASTER) */}
+				<div className='w-full lg:w-80 shrink-0 border-[3px] border-[#0D0D0D] bg-white rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] overflow-hidden flex flex-col h-[350px] lg:h-[calc(100vh-180px)] lg:sticky top-6'>
+					{/* Header Sidebar */}
+					<div className='p-4 border-b-2 border-black bg-yellow-100 flex-shrink-0 space-y-2.5'>
+						<div className='flex items-center justify-between'>
+							<span className='text-xs font-black uppercase text-black flex items-center gap-1.5'>
+								<CalendarIcon className='w-4 h-4' />
+								<span>Tanggal KBM ({daftarSesi.length})</span>
+							</span>
+							<span className='text-[10px] font-mono font-bold bg-white px-2 py-0.5 rounded border border-black'>
+								Urut Terbaru
+							</span>
+						</div>
+
+						{/* Pencarian Tanggal */}
+						<div className='relative'>
+							<Search className='w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-500' />
+							<input
+								type='text'
+								placeholder='Cari hari atau tanggal...'
+								value={searchSesi}
+								onChange={(e) => setSearchSesi(e.target.value)}
+								className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border-2 border-black rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_#0D0D0D] outline-none'
 							/>
-						</svg>
-					}
-					onLeftClick={() => window.history.back()}
-				/>
-
-				<div className='mt-8 flex flex-col lg:flex-row gap-6'>
-					{/* SIDEBAR: Daftar Sesi */}
-					<div className='w-full lg:w-[320px] shrink-0'>
-						<div className='bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[300px] lg:h-[calc(100vh-140px)] overflow-hidden lg:sticky top-[80px]'>
-							<div className='p-5 border-b border-gray-100 bg-gray-50 flex-shrink-0'>
-								<h2 className='text-lg font-bold text-gray-800 break-words'>{namaKelas || 'Pilih Kelas'}</h2>
-								<div className='text-sm text-gray-500 mt-1.5 flex items-center gap-1.5 flex-wrap'>
-									<div className='w-2 h-2 rounded-full bg-indigo-500'></div>
-									<span>Daftar Sesi Perekaman</span>
-								</div>
-								{/* Search Sesi */}
-								<div className='relative mt-3'>
-									<input
-										type='text'
-										placeholder='Cari tanggal sesi...'
-										value={searchSesi}
-										onChange={(e) => setSearchSesi(e.target.value)}
-										className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
-									/>
-									<svg className='w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-										<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-									</svg>
-									{searchSesi && (
-										<button onClick={() => setSearchSesi('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
-									)}
-								</div>
-							</div>
-
-							<div className='flex-1 overflow-y-auto p-3 space-y-2'>
-								{loadingSesi ? (
-									<div className='py-8 text-center text-sm text-gray-400'>Memuat daftar sesi...</div>
-								) : daftarSesi.length === 0 ? (
-									<div className='py-8 text-center flex flex-col items-center justify-center text-gray-400'>
-										<svg
-											className='w-12 h-12 mb-3 text-gray-200'
-											fill='none'
-											viewBox='0 0 24 24'
-											stroke='currentColor'>
-											<path
-												strokeLinecap='round'
-												strokeLinejoin='round'
-												strokeWidth={1}
-												d='M12 6v6m0 0v6m0-6h6m-6 0H6'
-											/>
-										</svg>
-										<p className='text-sm'>Belum ada riwayat terekam.</p>
-									</div>
-								) : filteredSesi.length === 0 ? (
-									<div className='py-8 text-center text-sm text-gray-400'>
-										Tidak ada sesi &quot;{searchSesi}&quot;
-									</div>
-								) : (
-									filteredSesi.map((tgl, idx) => {
-										const isSelected = selectedTanggal === tgl;
-										return (
-											<button
-												key={idx}
-												onClick={() => setSelectedTanggal(tgl)}
-												className={`w-full text-left p-3 rounded-xl border transition-all duration-200 ${
-													isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-gray-100 hover:border-indigo-100 hover:shadow hover:bg-gray-50'
-												}`}>
-												<div className='flex items-start justify-between'>
-													<div className='flex items-center gap-3'>
-														<div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-															<svg
-																className='w-5 h-5'
-																fill='none'
-																stroke='currentColor'
-																viewBox='0 0 24 24'>
-																<path
-																	strokeLinecap='round'
-																	strokeLinejoin='round'
-																	strokeWidth={2}
-																	d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
-																/>
-															</svg>
-														</div>
-														<div>
-															<div className={`font-bold ${isSelected ? 'text-indigo-900' : 'text-gray-700'}`}>{new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-															<div className='text-xs text-gray-500 mt-0.5'>Klik untuk ubah & lihat</div>
-														</div>
-													</div>
-												</div>
-											</button>
-										);
-									})
-								)}
-							</div>
+							{searchSesi && (
+								<button
+									onClick={() => setSearchSesi('')}
+									className='absolute right-2 top-1 text-xs font-black text-gray-400 hover:text-black'>
+									✕
+								</button>
+							)}
 						</div>
 					</div>
 
-					{/* KONTEN UTAMA: Form Edit Detail Sesi */}
-					<div className='flex-1'>
-						{!selectedTanggal ? (
-							<div className='bg-white rounded-2xl shadow-sm border border-gray-100 h-[calc(100vh-140px)] flex flex-col items-center justify-center text-center p-8'>
-								<div className='w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6'>
-									<svg
-										className='w-12 h-12 text-gray-300'
-										fill='none'
-										stroke='currentColor'
-										viewBox='0 0 24 24'>
-										<path
-											strokeLinecap='round'
-											strokeLinejoin='round'
-											strokeWidth={1}
-											d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
-										/>
-									</svg>
-								</div>
-								<h3 className='text-xl font-bold text-gray-800 mb-2'>Pilih Sesi Rekaman</h3>
-								<p className='text-gray-500 max-w-sm'>Pilih absensi dari daftar di sebelah kiri untuk melihat, mengedit kehadiran, mengganti tanggal, atau menghapus sesi secara permanen.</p>
+					{/* Daftar Tanggal List */}
+					<div className='flex-1 overflow-y-auto p-3 space-y-2'>
+						{loadingSesi ? (
+							<div className='py-8 text-center text-xs font-bold text-gray-500'>Memuat daftar hari KBM...</div>
+						) : filteredSesi.length === 0 ? (
+							<div className='py-8 text-center text-xs font-bold text-gray-500'>
+								{searchSesi ? `Tidak ada tanggal "${searchSesi}"` : 'Belum ada riwayat KBM yang terekam.'}
 							</div>
 						) : (
-							<div className='bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300'>
-								{/* Header Form Detail */}
-								<div className='border-b border-gray-100 p-6 sm:p-8 relative'>
-									<div className='flex flex-col sm:flex-row sm:items-start justify-between gap-6'>
-										<div className='flex-1 max-w-lg'>
-											<h3 className='text-xl font-bold text-gray-800 mb-4'>Pengaturan Data Sesi Kemarin</h3>
-											<div className='space-y-4'>
-												<div>
-													<label className='block text-sm font-semibold text-gray-700 mb-1.5'>Ubah Tanggal Sesi</label>
-													<input
-														type='date'
-														value={tanggalEdit}
-														onChange={(e) => setTanggalEdit(e.target.value)}
-														className='w-full sm:w-64 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow'
-													/>
-												</div>
+							filteredSesi.map((tgl) => {
+								const isSelected = selectedTanggal === tgl;
+								const dateObj = new Date(tgl);
+								const dayName = dateObj.toLocaleDateString('id-ID', { weekday: 'long' });
+								const dateFormatted = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+
+								return (
+									<button
+										key={tgl}
+										onClick={() => setSelectedTanggal(tgl)}
+										className={`w-full text-left p-3 rounded-xl border-2 transition-all cursor-pointer ${
+											isSelected
+												? 'bg-yellow-300 border-black shadow-[3px_3px_0px_0px_#0D0D0D] -translate-y-0.5'
+												: 'bg-white border-black/30 hover:border-black hover:bg-yellow-50'
+										}`}>
+										<div className='flex items-center justify-between'>
+											<div>
+												<div className='text-xs font-black text-black uppercase'>{dayName}</div>
+												<div className='text-[11px] font-mono text-gray-700 font-bold mt-0.5'>{dateFormatted}</div>
 											</div>
+											{isSelected ? (
+												<span className='w-6 h-6 rounded-lg bg-black text-white flex items-center justify-center text-xs font-black'>
+													✓
+												</span>
+											) : (
+												<ArrowRight className='w-4 h-4 text-gray-400' />
+											)}
 										</div>
-
-										{/* Tampilan Action Buttons */}
-										<div className='flex gap-3 sm:flex-col sm:min-w-[160px]'>
-											<button
-												onClick={handleSimpan}
-												disabled={saving}
-												className='flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg hover:-translate-y-0.5'>
-												{saving ? (
-													<div className='w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin'></div>
-												) : (
-													<>
-														<svg
-															className='w-5 h-5'
-															fill='none'
-															stroke='currentColor'
-															viewBox='0 0 24 24'>
-															<path
-																strokeLinecap='round'
-																strokeLinejoin='round'
-																strokeWidth={2}
-																d='M5 13l4 4L19 7'
-															/>
-														</svg>
-														<span>Simpan</span>
-													</>
-												)}
-											</button>
-
-											<button
-												onClick={handleHapusSesi}
-												disabled={saving}
-												className='flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-semibold transition-colors disabled:opacity-50'>
-												<svg
-													className='w-5 h-5'
-													fill='none'
-													stroke='currentColor'
-													viewBox='0 0 24 24'>
-													<path
-														strokeLinecap='round'
-														strokeLinejoin='round'
-														strokeWidth={2}
-														d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-													/>
-												</svg>
-												<span>Hapus Sesi</span>
-											</button>
-										</div>
-									</div>
-								</div>
-
-								{/* Daftar Siswa dan Absensinya */}
-								<div className='p-4 sm:p-6 lg:p-8 bg-gray-50/50'>
-									<div className='bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm'>
-										{siswaList.length === 0 ? (
-											<div className='p-8 text-center text-gray-500'>Tidak ada siswa di kelas ini.</div>
-										) : (
-											<>
-												{/* Search Siswa Toolbar */}
-												<div className='p-3 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2'>
-													<div className='relative flex-1 max-w-sm'>
-														<input
-															type='text'
-															placeholder='Cari nama atau NIS siswa...'
-															value={searchSiswa}
-															onChange={(e) => setSearchSiswa(e.target.value)}
-															className='w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500'
-														/>
-														<svg className='w-4 h-4 absolute left-2.5 top-2 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-															<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
-														</svg>
-														{searchSiswa && (
-															<button onClick={() => setSearchSiswa('')} className='absolute right-2 top-1.5 text-gray-400 hover:text-gray-600 text-xs font-bold'>✕</button>
-														)}
-													</div>
-													<div className='text-xs text-gray-500'>
-														{searchSiswa.trim() ? `Menampilkan ${filteredSiswa.length} dari ${siswaList.length} siswa` : `Total ${siswaList.length} siswa`}
-													</div>
-												</div>
-
-												{filteredSiswa.length === 0 ? (
-													<div className='p-8 text-center text-gray-500 text-sm'>
-														Tidak ada siswa yang cocok dengan &quot;{searchSiswa}&quot;
-													</div>
-												) : (
-													<div className='overflow-x-auto'>
-														<table className='w-full min-w-[500px]'>
-															<thead>
-																<tr className='bg-gray-50 border-b border-gray-200'>
-																	<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-[40%]'>Data Siswa</th>
-																	<th className='px-4 sm:px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider'>Kehadiran & Keterangan</th>
-																</tr>
-															</thead>
-															<tbody className='divide-y divide-gray-100'>
-																{filteredSiswa.map((siswa, idx) => {
-																	const currentVal = absensiMap[siswa.id] || { status: 'Hadir', keterangan: '' };
-
-																	return (
-																		<tr
-																			key={siswa.id}
-																			className='hover:bg-gray-50 transition-colors group'>
-																			{/* Info Siswa */}
-																			<td className='px-6 py-4 align-top'>
-																				<div className='flex items-center gap-4'>
-																					<div className='w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm flex-shrink-0'>
-																						{idx + 1}
-																					</div>
-																					<div>
-																						<p className='font-bold text-gray-900 group-hover:text-indigo-600 transition-colors'>{siswa.nama_lengkap}</p>
-																						<p className='text-xs text-gray-500 mt-0.5 uppercase tracking-wide'>NIS: {siswa.nis || '-'}</p>
-																					</div>
-																				</div>
-																			</td>
-
-																			{/* Edit Absensi UI */}
-																			<td className='px-6 py-4'>
-																				<div className='flex flex-wrap gap-2 mb-3'>
-																					{[
-																						{ val: 'Hadir', label: 'Hadir', colors: 'text-green-700 bg-green-50 border-green-200 ring-green-500', icon: 'bg-green-500' },
-																						{ val: 'Izin', label: 'Izin', colors: 'text-blue-700 bg-blue-50 border-blue-200 ring-blue-500', icon: 'bg-blue-500' },
-																						{ val: 'Sakit', label: 'Sakit', colors: 'text-yellow-700 bg-yellow-50 border-yellow-200 ring-yellow-500', icon: 'bg-yellow-500' },
-																						{ val: 'Alpha', label: 'Alpha', colors: 'text-red-700 bg-red-50 border-red-200 ring-red-500', icon: 'bg-red-500' },
-																					].map((opt) => {
-																						const isSelected = currentVal.status === opt.val;
-																						return (
-																							<label
-																								key={opt.val}
-																								className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-																									isSelected ? `${opt.colors} shadow-sm border-transparent` : 'text-gray-500 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
-																								}`}>
-																								<input
-																									type='radio'
-																									name={`status-${siswa.id}`}
-																									value={opt.val}
-																									checked={isSelected}
-																									onChange={(e) => handleStatusChange(siswa.id, e.target.value)}
-																									className='sr-only'
-																								/>
-																								<div className={`w-2 h-2 rounded-full ${isSelected ? opt.icon : 'bg-gray-300'}`}></div>
-																								<span className='text-sm font-semibold'>{opt.label}</span>
-																							</label>
-																						);
-																					})}
-																				</div>
-
-																				{/* Input Keterangan */}
-																				<input
-																					type='text'
-																					placeholder='Keterangan (Opsional / Alasan Sakit)'
-																					value={currentVal.keterangan || ''}
-																					onChange={(e) => handleKeteranganChange(siswa.id, e.target.value)}
-																					className='w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500'
-																				/>
-																			</td>
-																		</tr>
-																	);
-																})}
-															</tbody>
-														</table>
-													</div>
-												)}
-											</>
-										)}
-									</div>
-								</div>
-							</div>
+									</button>
+								);
+							})
 						)}
 					</div>
 				</div>
+
+				{/* CONTENT DETAIL: INFORMASI HARI TERPILIH (DETAIL) */}
+				<div className='flex-1 w-full space-y-6'>
+					{!selectedTanggal ? (
+						<div className='border-[3px] border-[#0D0D0D] bg-white rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] p-12 text-center space-y-3'>
+							<span className='text-4xl'>👈</span>
+							<h3 className='text-lg font-black uppercase text-black'>Pilih Tanggal di Sebelah Kiri</h3>
+							<p className='text-xs text-gray-600 max-w-sm mx-auto font-bold'>
+								Pilih salah satu tanggal KBM dari daftar di samping untuk melihat rincian kehadiran siswa dan sesi mata pelajaran yang terlaksana.
+							</p>
+						</div>
+					) : (
+						<>
+							{/* CARD HEADER DETAIL HARI */}
+							<div className='border-[3px] border-[#0D0D0D] bg-white rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] p-5 sm:p-6 space-y-4'>
+								<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b-2 border-black'>
+									<div>
+										<div className='flex flex-wrap items-center gap-2 mb-1'>
+											<span className='px-2.5 py-0.5 rounded-lg border border-black bg-yellow-300 text-yellow-950 text-[10px] font-black uppercase shadow-[1px_1px_0px_0px_#0D0D0D]'>
+												📅 {new Date(selectedTanggal).toLocaleDateString('id-ID', { weekday: 'long' })}
+											</span>
+											<span className='font-mono text-xs font-bold text-gray-600'>
+												{selectedTanggal}
+											</span>
+										</div>
+										<h2 className='text-xl sm:text-2xl font-black uppercase text-black'>
+											{new Date(selectedTanggal).toLocaleDateString('id-ID', {
+												day: 'numeric',
+												month: 'long',
+												year: 'numeric',
+											})}
+										</h2>
+									</div>
+
+									{/* Persentase Kehadiran Badge */}
+									<div className='flex items-center gap-2 bg-[#E2F7F4] border-2 border-black rounded-xl p-2.5 px-4 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div>
+											<span className='text-[10px] font-black uppercase text-[#007A6C] block leading-none'>Tingkat Hadir</span>
+											<span className='text-xl font-black text-black'>{dailyStats.rate}%</span>
+										</div>
+										<span className='text-2xl'>🎯</span>
+									</div>
+								</div>
+
+								{/* Daftar Sesi Mapel yang Terlaksana di Hari Tersebut */}
+								<div>
+									<div className='text-xs font-black uppercase text-black mb-2 flex items-center gap-1.5'>
+										<Clock className='w-4 h-4 text-black' />
+										<span>Sesi Mata Pelajaran Terlaksana ({sesiMapelList.length} Sesi):</span>
+									</div>
+
+									{sesiMapelList.length > 0 ? (
+										<div className='flex flex-wrap gap-2'>
+											{sesiMapelList.map((sesi, idx) => (
+												<div
+													key={idx}
+													className='px-3 py-1.5 bg-[#FFFDF0] border-2 border-black rounded-xl text-xs font-bold shadow-[2px_2px_0px_0px_#0D0D0D]'>
+													<span className='font-black bg-amber-200 px-1.5 py-0.5 rounded border border-black mr-1.5'>
+														Jam {sesi.jam_ke}
+													</span>
+													<span className='text-black font-black'>{sesi.mapel}</span>
+													<span className='text-gray-600 font-normal ml-1.5'>({sesi.guru})</span>
+												</div>
+											))}
+										</div>
+									) : (
+										<div className='p-3 bg-amber-50 border-2 border-dashed border-amber-400 rounded-xl text-xs font-bold text-amber-900'>
+											Tidak ada sesi KBM guru mapel yang tercatat pada tanggal ini.
+										</div>
+									)}
+								</div>
+
+								{/* 4 Counter Stat Box Hari Itu */}
+								<div className='grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2'>
+									<div className='p-3 bg-emerald-100 border-2 border-black rounded-xl text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div className='text-[11px] font-black uppercase text-emerald-900'>Hadir</div>
+										<div className='text-2xl font-black text-emerald-950 mt-0.5'>{dailyStats.hadir}</div>
+									</div>
+
+									<div className='p-3 bg-amber-100 border-2 border-black rounded-xl text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div className='text-[11px] font-black uppercase text-amber-900'>Sakit</div>
+										<div className='text-2xl font-black text-amber-950 mt-0.5'>{dailyStats.sakit}</div>
+									</div>
+
+									<div className='p-3 bg-sky-100 border-2 border-black rounded-xl text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div className='text-[11px] font-black uppercase text-sky-900'>Izin</div>
+										<div className='text-2xl font-black text-sky-950 mt-0.5'>{dailyStats.izin}</div>
+									</div>
+
+									<div className='p-3 bg-rose-100 border-2 border-black rounded-xl text-center shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div className='text-[11px] font-black uppercase text-rose-900'>Alfa</div>
+										<div className='text-2xl font-black text-rose-950 mt-0.5'>{dailyStats.alfa}</div>
+									</div>
+								</div>
+							</div>
+
+							{/* TABEL DETAIL KEHADIRAN SISWA PADA HARI TERSEBUT */}
+							<div className='border-[3px] border-[#0D0D0D] bg-white rounded-2xl shadow-[5px_5px_0px_0px_#0D0D0D] overflow-hidden space-y-4 p-5'>
+								{/* Filter Bar Siswa */}
+								<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b-2 border-black'>
+									{/* Status Filter Buttons */}
+									<div className='flex flex-wrap items-center gap-1.5'>
+										{[
+											{ key: 'all', label: 'Semua Siswa' },
+											{ key: 'hadir', label: `Hadir (${dailyStats.hadir})` },
+											{ key: 'sakit', label: `Sakit (${dailyStats.sakit})` },
+											{ key: 'izin', label: `Izin (${dailyStats.izin})` },
+											{ key: 'alfa', label: `Alfa (${dailyStats.alfa})` },
+										].map((btn) => (
+											<button
+												key={btn.key}
+												type='button'
+												onClick={() => setFilterStatus(btn.key)}
+												className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase border-2 transition-all cursor-pointer ${
+													filterStatus === btn.key
+														? 'bg-black text-white border-black shadow-[2px_2px_0px_0px_#0D0D0D]'
+														: 'bg-white text-black border-black/30 hover:border-black'
+												}`}>
+												{btn.label}
+											</button>
+										))}
+									</div>
+
+									{/* Search Input Siswa */}
+									<div className='relative w-full sm:w-60'>
+										<Search className='w-4 h-4 absolute left-3 top-2.5 text-gray-500' />
+										<input
+											type='text'
+											value={searchSiswa}
+											onChange={(e) => setSearchSiswa(e.target.value)}
+											placeholder='Cari nama atau NIS...'
+											className='w-full pl-9 pr-7 py-2 bg-[#FFFDF0] border-2 border-black font-bold text-xs rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] outline-none'
+										/>
+										{searchSiswa && (
+											<button
+												onClick={() => setSearchSiswa('')}
+												className='absolute right-2.5 top-2 text-xs font-black text-gray-400 hover:text-black'>
+												✕
+											</button>
+										)}
+									</div>
+								</div>
+
+								{/* Table List Siswa */}
+								{loadingDetail ? (
+									<div className='py-12 text-center'>
+										<Loader text='Memuat detail presensi...' />
+									</div>
+								) : filteredSiswa.length === 0 ? (
+									<div className='py-12 text-center space-y-2'>
+										<span className='text-3xl'>🔍</span>
+										<p className='text-sm font-black text-black'>Tidak ada siswa yang sesuai filter.</p>
+										<p className='text-xs text-gray-500'>Coba ubah status filter atau kata kunci pencarian.</p>
+									</div>
+								) : (
+									<div className='overflow-x-auto'>
+										<table className='w-full text-left border-collapse min-w-[700px]'>
+											<thead>
+												<tr className='bg-[#0D0D0D] text-white text-xs uppercase font-black'>
+													<th className='p-3 border-r border-gray-700 w-12 text-center'>No</th>
+													<th className='p-3 border-r border-gray-700 w-28'>NIS</th>
+													<th className='p-3 border-r border-gray-700 min-w-[180px]'>Nama Siswa</th>
+													<th className='p-3 border-r border-gray-700 w-32 text-center'>Status Harian</th>
+													<th className='p-3 border-r border-gray-700'>Rincian Sesi Mapel</th>
+													<th className='p-3'>Keterangan</th>
+												</tr>
+											</thead>
+											<tbody className='divide-y-2 divide-gray-200 text-xs font-bold'>
+												{filteredSiswa.map((sw, idx) => {
+													const info = detailSiswaMap[sw.id] || { status: 'Hadir', studentSessions: [] };
+													const st = normStatus(info.status);
+
+													let badgeColor = 'bg-gray-100 text-gray-800 border-gray-300';
+													if (st === 'hadir') badgeColor = 'bg-emerald-300 text-emerald-950 border-black';
+													else if (st === 'sakit') badgeColor = 'bg-amber-300 text-amber-950 border-black';
+													else if (st === 'izin') badgeColor = 'bg-sky-300 text-sky-950 border-black';
+													else if (st === 'alfa') badgeColor = 'bg-rose-300 text-rose-950 border-black';
+
+													return (
+														<tr key={sw.id} className='hover:bg-yellow-50/70 transition-colors'>
+															<td className='p-3 text-center border-r border-gray-300 font-mono'>
+																{idx + 1}
+															</td>
+															<td className='p-3 border-r border-gray-300 font-mono text-gray-600 text-[11px]'>
+																{sw.nis || '-'}
+															</td>
+															<td className='p-3 border-r border-gray-300 font-black text-black'>
+																{sw.nama_lengkap}
+															</td>
+															<td className='p-3 border-r border-gray-300 text-center'>
+																<span
+																	className={`inline-block px-3 py-1 rounded-lg border-2 text-[11px] font-black uppercase shadow-[1.5px_1.5px_0px_0px_#0D0D0D] ${badgeColor}`}>
+																	{info.status}
+																</span>
+															</td>
+															<td className='p-3 border-r border-gray-300'>
+																{info.studentSessions && info.studentSessions.length > 0 ? (
+																	<div className='flex flex-wrap gap-1.5'>
+																		{info.studentSessions.map((ss, sIdx) => {
+																			const ssStatus = normStatus(ss.status);
+																			let ssBg = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+																			if (ssStatus === 'sakit') ssBg = 'bg-amber-100 text-amber-900 border-amber-300';
+																			else if (ssStatus === 'izin') ssBg = 'bg-sky-100 text-sky-900 border-sky-300';
+																			else if (ssStatus === 'alfa') ssBg = 'bg-rose-100 text-rose-900 border-rose-300';
+
+																			return (
+																				<span
+																					key={sIdx}
+																					className={`inline-block px-2 py-0.5 rounded border text-[10px] font-bold ${ssBg}`}>
+																					Jam {ss.jam_ke}: {ss.status}
+																				</span>
+																			);
+																		})}
+																	</div>
+																) : (
+																	<span className='text-gray-400 italic'>-</span>
+																)}
+															</td>
+															<td className='p-3 text-gray-600 text-[11px]'>
+																{info.keterangan || '-'}
+															</td>
+														</tr>
+													);
+												})}
+											</tbody>
+										</table>
+									</div>
+								)}
+							</div>
+						</>
+					)}
+				</div>
 			</div>
-		</main>
+		</div>
 	);
 }

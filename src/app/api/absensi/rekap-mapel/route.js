@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { isJumatOrLibur } from '@/lib/absensiUtils';
 
 export async function GET(request) {
 	try {
@@ -63,7 +64,10 @@ export async function GET(request) {
 		
 		const tanggalSet = new Set();
 		sessions.forEach(s => {
-			if (s.tanggal) tanggalSet.add(String(s.tanggal).slice(0, 10));
+			if (s.tanggal) {
+				const tStr = String(s.tanggal).slice(0, 10);
+				if (!isJumatOrLibur(tStr)) tanggalSet.add(tStr);
+			}
 		});
 		const tanggalList = Array.from(tanggalSet).sort();
 

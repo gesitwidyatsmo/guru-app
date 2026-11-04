@@ -448,4 +448,20 @@ export const getPossibleSplits = (jamVal) => {
 	return options;
 };
 
+/**
+ * Mengecek apakah tanggal tertentu jatuh pada hari Jum'at (libur mingguan sekolah).
+ * Format input dapat berupa objek Date atau string 'YYYY-MM-DD'.
+ * @param {Date|string} dateVal
+ * @returns {boolean}
+ */
+export const isJumatOrLibur = (dateVal) => {
+	if (!dateVal) return false;
+	const dateStr = typeof dateVal === 'string' ? dateVal.slice(0, 10) : dateVal;
+	// Parsing jam 12:00 siang WIB untuk menghindari pergeseran tanggal karena zona waktu UTC
+	const d = new Date(typeof dateVal === 'string' ? `${dateStr}T12:00:00+07:00` : dateVal);
+	if (isNaN(d.getTime())) return false;
+	return d.getDay() === 5; // 5 = Jum'at
+};
+
+
 

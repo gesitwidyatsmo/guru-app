@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { normStatus, evaluateDailyAttendance, calculateHariAlfa } from '@/lib/absensiUtils';
+import { normStatus, evaluateDailyAttendance, calculateHariAlfa, isJumatOrLibur } from '@/lib/absensiUtils';
 
 export async function GET(req) {
 	try {
@@ -266,16 +266,22 @@ export async function GET(req) {
 			});
 		});
 
-		// 4D. Tentukan Statistik Akhir Hari Ini
-		const hasOfficial = Boolean(sesiHarianResmi && officialDetails.length > 0);
+		// 4D. Tentukan Statistik Akhir Hari Ini (Otomatis Sah 100% dari KBM Guru Mapel)
+		const isJumat = isJumatOrLibur(todayStr);
 		const hasMapelData = sesiMapelToday.length > 0;
+		const hasOfficial = Boolean(sesiHarianResmi && officialDetails.length > 0);
 
 		let finalHadir = 0;
 		let finalSakit = 0;
 		let finalIzin = 0;
 		let finalAlfa = 0;
 
-		if (hasOfficial) {
+		if (hasMapelData) {
+			finalHadir = autoHadir;
+			finalSakit = autoSakit;
+			finalIzin = autoIzin;
+			finalAlfa = autoAlfa;
+		} else if (hasOfficial) {
 			officialDetails.forEach((r) => {
 				const st = normStatus(r.status);
 				if (st === 'hadir') finalHadir++;
@@ -283,20 +289,16 @@ export async function GET(req) {
 				else if (st === 'izin') finalIzin++;
 				else if (st === 'alfa') finalAlfa++;
 			});
-		} else if (hasMapelData) {
-			finalHadir = autoHadir;
-			finalSakit = autoSakit;
-			finalIzin = autoIzin;
-			finalAlfa = autoAlfa;
 		}
 
 		const finalBelum = Math.max(0, totalSiswa - (finalHadir + finalSakit + finalIzin + finalAlfa));
 		const finalPctHadir = totalSiswa > 0 ? Math.round((finalHadir / totalSiswa) * 100) : 0;
 
 		const absensiHariIniStats = {
-			recorded: hasOfficial || hasMapelData,
-			isSah: hasOfficial,
-			source: hasOfficial ? 'official' : hasMapelData ? 'auto_mapel' : 'none',
+			isJumat,
+			recorded: hasMapelData || hasOfficial,
+			isSah: hasMapelData || hasOfficial,
+			source: hasMapelData ? 'auto_mapel' : hasOfficial ? 'official' : 'none',
 			tanggal: todayStr,
 			hadir: finalHadir,
 			sakit: finalSakit,
@@ -310,7 +312,7 @@ export async function GET(req) {
 				mapel: s.mapel,
 				guru: s.guru_nama,
 			})),
-			details: hasOfficial ? officialDetails : siswaMapelBreakdown.map((s) => ({
+			details: siswaMapelBreakdown.map((s) => ({
 				siswa_id: s.siswa_id,
 				status: s.recommendedStatus,
 				keterangan: s.recommendedKeterangan,

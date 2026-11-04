@@ -32,6 +32,23 @@ export async function GET(req) {
 		const bulan = searchParams.get('bulan');
 		const tahun = searchParams.get('tahun');
 
+		const allMapel = searchParams.get('all_mapel') === 'true' || searchParams.get('cek_konflik') === 'true';
+		if (allMapel && kelas && tanggal) {
+			const supabase = await createClient();
+			const { data: allSessions, error: allErr } = await supabase
+				.from('absensi_mapel')
+				.select('sesi_id, guru_id, tanggal, jam_ke, kelas, mapel, created_at, users(nama_lengkap)')
+				.eq('kelas', kelas)
+				.eq('tanggal', tanggal);
+			if (allErr) throw allErr;
+			const mapped = (allSessions || []).map((s) => ({
+				...s,
+				id: s.sesi_id,
+				nama_guru: s.users?.nama_lengkap || 'Guru',
+			}));
+			return NextResponse.json(mapped);
+		}
+
 		if (!kelas || !mapel) {
 			const crossCheck = searchParams.get('cross_check') === 'true';
 			const startDate = searchParams.get('startDate') || searchParams.get('start_date');
@@ -248,24 +265,50 @@ export async function POST(req) {
 
 		let sesiId = existingSesi ? existingSesi.sesi_id : (targetId || `SESI-M-${generateId()}`);
 
-		// 2. Cek tumpang tindih (overlap) jam pelajaran dengan sesi lain pada tanggal yang sama
+		// 2. Cek tumpang tindih (overlap) jam pelajaran dengan seluruh sesi lain di kelas ini pada tanggal yang sama
 		const { data: allSessionsToday } = await supabase
 			.from('absensi_mapel')
-			.select('sesi_id, jam_ke')
+			.select('sesi_id, jam_ke, mapel, guru_id, users(nama_lengkap)')
 			.eq('kelas', kelas)
-			.eq('mapel', mapel)
 			.eq('tanggal', newTanggal);
 
 		const conflict = findConflictingSession(allSessionsToday || [], newJamKe, existingSesi?.sesi_id);
-		if (conflict && conflict.overlapType === 'overlap') {
-			return NextResponse.json({
-				error: `Konflik Jam: Jam ke-${newJamKe} bertabrakan dengan sesi Jam ${conflict.session.jam_ke} yang sudah ada (Jam ke-${conflict.conflicts.join(', ')}). Tidak diperbolehkan membuat sesi tumpang tindih.`,
-				conflict: {
-					existingJamKe: conflict.session.jam_ke,
-					conflicts: conflict.conflicts,
-					existingSesiId: conflict.session.sesi_id,
-				}
-			}, { status: 409 });
+		if (conflict) {
+			const conflictTeacher = conflict.session.users?.nama_lengkap || 'Guru lain';
+			const conflictMapel = conflict.session.mapel || 'Mapel lain';
+			const isSameMapel = String(conflict.session.mapel || '').trim().toLowerCase() === String(mapel || '').trim().toLowerCase();
+
+			if (!isSameMapel) {
+				return NextResponse.json(
+					{
+						error: `Konflik Jam: Jam ke-${newJamKe} bertabrakan dengan mapel ${conflictMapel} (${conflictTeacher}) pada Jam ${conflict.session.jam_ke} (Jam ke-${conflict.conflicts.length > 0 ? conflict.conflicts.join(', ') : conflict.session.jam_ke}). Satu rombel kelas tidak boleh memiliki kegiatan KBM ganda di jam pelajaran yang sama.`,
+						conflict: {
+							existingJamKe: conflict.session.jam_ke,
+							conflicts: conflict.conflicts,
+							existingSesiId: conflict.session.sesi_id,
+							mapel: conflictMapel,
+							guru: conflictTeacher,
+							isOtherMapel: true,
+						},
+					},
+					{ status: 409 }
+				);
+			} else if (conflict.overlapType === 'overlap') {
+				return NextResponse.json(
+					{
+						error: `Konflik Jam: Jam ke-${newJamKe} bertabrakan dengan sesi Jam ${conflict.session.jam_ke} yang sudah ada (Jam ke-${conflict.conflicts.join(', ')}). Tidak diperbolehkan membuat sesi tumpang tindih.`,
+						conflict: {
+							existingJamKe: conflict.session.jam_ke,
+							conflicts: conflict.conflicts,
+							existingSesiId: conflict.session.sesi_id,
+							mapel: conflictMapel,
+							guru: conflictTeacher,
+							isOtherMapel: false,
+						},
+					},
+					{ status: 409 }
+				);
+			}
 		}
 
 		if (existingSesi) {

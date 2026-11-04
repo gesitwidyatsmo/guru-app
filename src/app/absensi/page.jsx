@@ -49,6 +49,7 @@ export default function AbsensiMapelPage() {
 
 	const [existingId, setExistingId] = useState(null);
 	const [sesiHariIni, setSesiHariIni] = useState([]);
+	const [sesiKelasHariIni, setSesiKelasHariIni] = useState([]);
 	const [loadingSesiHariIni, setLoadingSesiHariIni] = useState(false);
 
 	// Surat Izin Pos Keamanan
@@ -168,11 +169,18 @@ export default function AbsensiMapelPage() {
 		);
 	}, [siswaKelasIni, searchQuery]);
 
-	// Deteksi konflik tumpang tindih jam pelajaran secara real-time
+	// Deteksi konflik tumpang tindih jam pelajaran secara real-time (termasuk lintas mapel)
 	const currentJamConflict = useMemo(() => {
-		if (!jamKe || !jamKe.trim() || sesiHariIni.length === 0) return null;
-		return findConflictingSession(sesiHariIni, jamKe, existingId);
-	}, [jamKe, sesiHariIni, existingId]);
+		if (!jamKe || !jamKe.trim() || sesiKelasHariIni.length === 0) return null;
+		const conflict = findConflictingSession(sesiKelasHariIni, jamKe, existingId);
+		if (!conflict) return null;
+
+		const isOtherMapel = String(conflict.session.mapel || '').trim().toLowerCase() !== String(selectedMapel || '').trim().toLowerCase();
+		return {
+			...conflict,
+			isOtherMapel,
+		};
+	}, [jamKe, sesiKelasHariIni, existingId, selectedMapel]);
 
 	// Cek apakah ada santri di kelas ini yang status/keterangannya sedang diterapkan dari surat izin satpam
 	const isAnyLetterApplied = useMemo(() => {
@@ -196,16 +204,28 @@ export default function AbsensiMapelPage() {
 				mapel: selectedMapel,
 				tanggal: tanggal,
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`, { cache: 'no-store' });
-			if (res.ok) {
-				const data = await res.json();
+			const [resMapel, resAll] = await Promise.all([
+				fetch(`/api/absensi-mapel?${params.toString()}&${buildPeriodeQuery()}`, { cache: 'no-store' }),
+				fetch(`/api/absensi-mapel?kelas=${encodeURIComponent(selectedKelas)}&tanggal=${encodeURIComponent(tanggal)}&all_mapel=true`, { cache: 'no-store' }),
+			]);
+
+			if (resMapel.ok) {
+				const data = await resMapel.json();
 				setSesiHariIni(Array.isArray(data) ? data : []);
 			} else {
 				setSesiHariIni([]);
 			}
+
+			if (resAll.ok) {
+				const allData = await resAll.json();
+				setSesiKelasHariIni(Array.isArray(allData) ? allData : []);
+			} else {
+				setSesiKelasHariIni([]);
+			}
 		} catch (err) {
 			console.error('Error fetching sesi hari ini:', err);
 			setSesiHariIni([]);
+			setSesiKelasHariIni([]);
 		} finally {
 			setLoadingSesiHariIni(false);
 		}
@@ -613,39 +633,63 @@ export default function AbsensiMapelPage() {
 		if (siswaKelasIni.length === 0) return;
 
 		// Cek apakah sesi dengan jam tersebut memiliki konflik tumpang tindih dengan sesi lain
-		const conflict = findConflictingSession(sesiHariIni, currentJamKe, existingId);
+		const conflict = findConflictingSession(sesiKelasHariIni, currentJamKe, existingId);
 
 		let targetSesiId = existingId;
 
-		if (conflict && conflict.overlapType === 'overlap') {
-			// Bertabrakan / tumpang tindih sebagian dengan sesi lain (misal: input Jam 1 padahal sudah ada Jam 1-3)
-			const alertResult = await Swal.fire({
-				title: 'Konflik Jam Pelajaran!',
-				html: `
-					<div class="text-left text-sm space-y-2">
-						<p>Jam <b>ke-${currentJamKe}</b> bertabrakan dengan sesi <b>Jam ${conflict.session.jam_ke}</b> yang sudah tersimpan untuk kelas <b>${selectedKelas}</b> (${selectedMapel}) pada tanggal <b>${tanggal}</b>.</p>
-						<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
-							<p class="font-bold text-[#E8451A]">Jam yang bertabrakan: Jam ke-${conflict.conflicts.join(', ')}</p>
-							<p class="text-gray-600 mt-1">Satu jam pelajaran tidak boleh diabsen ganda dalam sesi terpisah.</p>
+		if (conflict) {
+			const isOtherMapel = String(conflict.session.mapel || '').trim().toLowerCase() !== String(selectedMapel || '').trim().toLowerCase();
+			if (isOtherMapel) {
+				const conflictTeacher = conflict.session.nama_guru || conflict.session.users?.nama_lengkap || 'Guru lain';
+				await Swal.fire({
+					title: 'Bentrok Jadwal Pelajaran!',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Jam <b>ke-${currentJamKe}</b> di kelas <b>${selectedKelas}</b> bertabrakan dengan mata pelajaran <b>${conflict.session.mapel}</b> oleh <b>${conflictTeacher}</b> (Jam <b>${conflict.session.jam_ke}</b>) pada tanggal <b>${tanggal}</b>.</p>
+							<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
+								<p class="font-bold text-[#E8451A]">Jam yang bertabrakan: Jam ke-${conflict.conflicts?.length > 0 ? conflict.conflicts.join(', ') : conflict.session.jam_ke}</p>
+								<p class="text-gray-600 mt-1">Satu rombel kelas tidak boleh memiliki kegiatan KBM ganda di jam pelajaran yang sama.</p>
+							</div>
+							<p class="text-xs text-gray-700 mt-2">Silakan periksa kembali jadwal mengajar Anda dan masukkan jam yang sesuai.</p>
 						</div>
-						<p class="text-xs text-gray-700 mt-2">Untuk mengubah absensi pada jam tersebut, silakan buka sesi <b>Jam ${conflict.session.jam_ke}</b> atau masukkan jam pelajaran lain yang belum terdata.</p>
-					</div>
-				`,
-				icon: 'error',
-				showCancelButton: true,
-				confirmButtonText: `Buka Sesi Jam ${conflict.session.jam_ke}`,
-				cancelButtonText: 'Kembali & Ganti Jam',
-				confirmButtonColor: '#2F80ED',
-				cancelButtonColor: '#6B7280',
-			});
-
-			if (alertResult.isConfirmed) {
-				handlePilihSesi(conflict.session);
+					`,
+					icon: 'error',
+					confirmButtonText: 'Periksa Kembali Jam',
+					confirmButtonColor: '#E8451A',
+				});
+				return;
 			}
-			return;
+
+			if (conflict.overlapType === 'overlap') {
+				// Bertabrakan / tumpang tindih sebagian dengan sesi mapel sendiri (misal: input Jam 1 padahal sudah ada Jam 1-3)
+				const alertResult = await Swal.fire({
+					title: 'Konflik Jam Pelajaran!',
+					html: `
+						<div class="text-left text-sm space-y-2">
+							<p>Jam <b>ke-${currentJamKe}</b> bertabrakan dengan sesi <b>Jam ${conflict.session.jam_ke}</b> yang sudah tersimpan untuk kelas <b>${selectedKelas}</b> (${selectedMapel}) pada tanggal <b>${tanggal}</b>.</p>
+							<div class="p-3 bg-red-50 border-2 border-[#0D0D0D] rounded-xl text-xs">
+								<p class="font-bold text-[#E8451A]">Jam yang bertabrakan: Jam ke-${conflict.conflicts.join(', ')}</p>
+								<p class="text-gray-600 mt-1">Satu jam pelajaran tidak boleh diabsen ganda dalam sesi terpisah.</p>
+							</div>
+							<p class="text-xs text-gray-700 mt-2">Untuk mengubah absensi pada jam tersebut, silakan buka sesi <b>Jam ${conflict.session.jam_ke}</b> atau masukkan jam pelajaran lain yang belum terdata.</p>
+						</div>
+					`,
+					icon: 'error',
+					showCancelButton: true,
+					confirmButtonText: `Buka Sesi Jam ${conflict.session.jam_ke}`,
+					cancelButtonText: 'Kembali & Ganti Jam',
+					confirmButtonColor: '#2F80ED',
+					cancelButtonColor: '#6B7280',
+				});
+
+				if (alertResult.isConfirmed) {
+					handlePilihSesi(conflict.session);
+				}
+				return;
+			}
 		}
 
-		if (conflict && conflict.overlapType === 'exact' && (!existingId || mode === 'input')) {
+		if (conflict && !conflict.isOtherMapel && conflict.overlapType === 'exact' && (!existingId || mode === 'input')) {
 			const existingSession = conflict.session;
 			// Sesi dengan jam yang sama persis sudah ada di database! Tampilkan peringatan detail
 			const alertResult = await Swal.fire({
@@ -1191,7 +1235,18 @@ export default function AbsensiMapelPage() {
 					)}
 
 					{/* Indikator Jam Tersimpan & Konflik Tumpang Tindih */}
-					{jamKe && currentJamConflict?.overlapType === 'overlap' && (
+					{jamKe && currentJamConflict?.isOtherMapel && (
+						<div className='mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 bg-rose-50 border-2 border-[#E8451A] rounded-xl text-xs font-bold text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] animate-shake'>
+							<div className='flex items-center gap-2'>
+								<span className='text-base shrink-0'>🚫</span>
+								<span>
+									<b className='text-[#E8451A]'>Bentrok Jam Pelajaran:</b> Jam ke-<b>{jamKe}</b> bertabrakan dengan mapel <b>{currentJamConflict.session.mapel}</b> ({currentJamConflict.session.nama_guru || currentJamConflict.session.users?.nama_lengkap || 'Guru lain'}) pada <b>Jam {currentJamConflict.session.jam_ke}</b>{currentJamConflict.conflicts?.length > 0 ? ` (Jam ke-${currentJamConflict.conflicts.join(', ')})` : ''}.
+								</span>
+							</div>
+						</div>
+					)}
+
+					{jamKe && !currentJamConflict?.isOtherMapel && currentJamConflict?.overlapType === 'overlap' && (
 						<div className='mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 bg-rose-50 border-2 border-[#E8451A] rounded-xl text-xs font-bold text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] animate-shake'>
 							<div className='flex items-center gap-2'>
 								<span className='text-base shrink-0'>⚠️</span>
@@ -1208,7 +1263,7 @@ export default function AbsensiMapelPage() {
 						</div>
 					)}
 
-					{jamKe && currentJamConflict?.overlapType === 'exact' && (
+					{jamKe && !currentJamConflict?.isOtherMapel && currentJamConflict?.overlapType === 'exact' && (
 						<div className='mt-2 flex items-center justify-between gap-2 px-3.5 py-2 bg-[#E2F7F4] border-2 border-[#0D0D0D] rounded-xl text-xs font-bold text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
 							<div className='flex items-center gap-2'>
 								<span className='w-2.5 h-2.5 rounded-full bg-[#00A693] border border-[#0D0D0D] inline-block animate-pulse'></span>

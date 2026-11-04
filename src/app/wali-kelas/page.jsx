@@ -75,8 +75,6 @@ function WaliKelasHubContent() {
 	const [dataHub, setDataHub] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [searchSiswa, setSearchSiswa] = useState('');
-	const [syncing, setSyncing] = useState(false);
-	const [editedStatuses, setEditedStatuses] = useState({});
 
 	// Geolocation & Geofencing State
 	const { getPosition, loading: gpsLoading } = useGeolocation();
@@ -144,123 +142,6 @@ function WaliKelasHubContent() {
 				(s.nis && s.nis.toLowerCase().includes(q))
 		);
 	}, [siswaList, searchSiswa]);
-
-	// Handler untuk 1-Klik Sahkan Presensi Harian dari Agregasi Mapel
-	const handleSyncPresensi = async () => {
-		if (!kelas || !stats?.absensiHariIni) return;
-
-		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
-		let userCoords = null;
-		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && dataHub?.userRole !== 'Admin') {
-			try {
-				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
-					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng };
-				} else {
-					userCoords = await getPosition();
-					const check = isWithinGeofence(userCoords.lat, userCoords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
-					setLocationStatus({ ...check, checked: true, userLat: userCoords.lat, userLng: userCoords.lng });
-
-					if (!check.isInside) {
-						await Swal.fire({
-							icon: 'error',
-							title: 'Di Luar Area Sekolah',
-							html: `
-								<div class="text-left text-sm space-y-2">
-									<p>Sistem mendeteksi posisi Anda saat ini di luar area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
-									<div class="bg-red-50 p-3 rounded border border-red-200">
-										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
-										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
-									</div>
-									<p class="text-xs text-gray-600 font-medium">Pengesahan presensi harian hanya dapat dilakukan dari lingkungan sekolah.</p>
-								</div>
-							`,
-							confirmButtonColor: '#E8451A',
-							confirmButtonText: 'Tutup',
-						});
-						return;
-					}
-				}
-			} catch (gpsErr) {
-				await Swal.fire({
-					icon: 'warning',
-					title: 'Akses Lokasi Wajib',
-					html: `
-						<div class="text-left text-sm space-y-2">
-							<p>Sekolah mewajibkan verifikasi lokasi GPS untuk mengesahkan presensi harian siswa.</p>
-							<p class="text-xs text-red-600 font-bold">${gpsErr.message || 'Gagal membaca GPS'}</p>
-							<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di browser perangkat Anda.</p>
-						</div>
-					`,
-					confirmButtonColor: '#E8451A',
-					confirmButtonText: 'Mengerti',
-				});
-				return;
-			}
-		}
-
-		const confirm = await Swal.fire({
-			title: 'Sahkan Presensi Harian?',
-			text: 'Data hasil agregasi sesi mapel hari ini (siswa hadir jika minimal mengikuti 1 JP) akan disimpan resmi ke Buku Absensi Harian kelas ini.',
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonText: '⚡ Ya, Sahkan Sekarang!',
-			cancelButtonText: 'Batal',
-			confirmButtonColor: '#00A693',
-			cancelButtonColor: '#0D0D0D',
-		});
-
-		if (!confirm.isConfirmed) return;
-
-		setSyncing(true);
-		try {
-			// Susun payload dari breakdown mapel (dengan mempertimbangkan edit status dari wali kelas jika ada)
-			const payloadData = siswaMapelBreakdown.map((s) => {
-				const currentStatus =
-					editedStatuses[s.siswa_id] ||
-					(s.recommendedStatus === 'Belum Ada Data' ? 'Hadir' : s.recommendedStatus);
-				return {
-					siswa_id: s.siswa_id,
-					status: currentStatus,
-					keterangan: s.recommendedKeterangan || '',
-				};
-			});
-
-			const res = await fetch('/api/wali-kelas/sync-presensi', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					id_kelas: kelas.id,
-					tanggal: stats.absensiHariIni.tanggal,
-					data_absensi: payloadData,
-					tahun_ajar: tahunAjar?.nama,
-					semester: tahunAjar?.semester,
-					user_lat: userCoords?.lat,
-					user_lng: userCoords?.lng,
-				}),
-			});
-
-			const resJson = await res.json();
-			if (!res.ok) throw new Error(resJson.error || 'Gagal menyinkronkan presensi');
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Presensi Disahkan!',
-				text: resJson.message || 'Presensi harian resmi berhasil disimpan.',
-				confirmButtonColor: '#00A693',
-			});
-
-			// Refresh data hub
-			fetchHubData();
-		} catch (err) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal',
-				text: err.message,
-			});
-		} finally {
-			setSyncing(false);
-		}
-	};
 
 	// Bimbingan & Kasus Santri State
 	const [bimbinganList, setBimbinganList] = useState([]);
@@ -627,8 +508,8 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 						},
 						{
 							id: 'presensi',
-							label: `Presensi KBM ${isAutoFeed ? '⚡' : ''}`,
-							sublabel: 'Sesi & Rekap Harian',
+							label: 'Presensi KBM',
+							sublabel: 'Monitoring Otomatis',
 							icon: <Calendar className='w-4 h-4' />,
 						},
 						{
@@ -719,23 +600,29 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 								<div>
 									<div className='flex items-center justify-between mb-2'>
 										<span className='text-[10px] sm:text-xs font-black uppercase tracking-wider bg-black/10 px-2 py-0.5 rounded'>
-											{isOfficial ? 'Presensi Resmi' : isAutoFeed ? 'Agregasi Mapel' : 'Presensi Harian'}
+											{absensiToday.isJumat ? 'Libur Sekolah' : 'Akumulasi KBM Mapel'}
 										</span>
 										<CheckCircle2 className='w-5 h-5 text-black' />
 									</div>
 									<div className='text-3xl sm:text-4xl font-black mb-1'>
-										{absensiToday.persentaseHadir}%
+										{absensiToday.isJumat ? 'Libur' : `${absensiToday.persentaseHadir}%`}
 									</div>
 									<div className='text-xs font-bold text-gray-900 mb-2'>
-										{absensiToday.hadir} Hadir • {absensiToday.sakit} Sakit • {absensiToday.izin} Izin • {absensiToday.alfa} Alfa
+										{absensiToday.isJumat
+											? "Hari Jum'at (Tidak Ada KBM)"
+											: `${absensiToday.hadir} Hadir • ${absensiToday.sakit} Sakit • ${absensiToday.izin} Izin • ${absensiToday.alfa} Alfa`}
 									</div>
 								</div>
 
-								{/* Status Indicator: Langsung Sah */}
+								{/* Status Indicator */}
 								<div>
-									{absensiToday.recorded || absensiToday.totalSesiMapel > 0 ? (
+									{absensiToday.isJumat ? (
+										<span className='inline-block text-[11px] font-black bg-purple-300 text-purple-950 px-2.5 py-1 rounded-lg border border-black shadow-[1px_1px_0_#000]'>
+											🕌 Libur Mingguan
+										</span>
+									) : absensiToday.recorded || absensiToday.totalSesiMapel > 0 ? (
 										<span className='inline-block text-[11px] font-black bg-emerald-300 text-emerald-950 px-2.5 py-1 rounded-lg border border-black shadow-[1px_1px_0_#000]'>
-											✅ Presensi Sah (Terhubung KBM)
+											✅ Terakumulasi Otomatis (Sah)
 										</span>
 									) : (
 										<span className='inline-block text-[11px] font-black bg-rose-200 text-rose-900 px-2 py-0.5 rounded border border-black'>
@@ -1033,7 +920,7 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 				)}
 
 				{/* ======================================================== */}
-				{/* TAB 2: PRESENSI HARIAN (TIMELINE & 50% RULE MATRIX) */}
+				{/* TAB 2: PRESENSI HARIAN (MONITORING AKUMULASI MAPEL)     */}
 				{/* ======================================================== */}
 				{activeTab === 'presensi' && (
 					<div className='space-y-6'>
@@ -1043,17 +930,28 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 								<div>
 									<div className='flex flex-wrap items-center gap-2 mb-1'>
 										<span className='text-xs font-black uppercase px-2.5 py-0.5 rounded border border-black bg-emerald-300 text-emerald-950'>
-											✅ Presensi Sah &amp; Terhubung KBM
+											✅ Terakumulasi 100% dari KBM Guru Mapel
 										</span>
-										<span className='text-xs font-bold text-gray-600'>
+										<span className='text-xs font-bold text-gray-600 font-mono'>
 											{absensiToday.tanggal}
 										</span>
+										{absensiToday.isJumat && (
+											<span className='text-xs font-black uppercase px-2.5 py-0.5 rounded border border-black bg-purple-300 text-purple-950'>
+												🕌 Hari Jum&apos;at • Libur Mingguan
+											</span>
+										)}
 									</div>
 									<h2 className='text-xl sm:text-2xl font-black uppercase text-black'>
-										Rekap Presensi KBM Hari Ini
+										Monitoring Presensi KBM Hari Ini
 									</h2>
 								</div>
 								<div className='flex flex-wrap items-center gap-2'>
+									<Link
+										href={`/kelas/${kelas.id}/laporan-absensi`}
+										className='neo-btn-outline !py-2 !px-3 bg-white text-xs sm:text-sm font-bold flex items-center gap-1.5'>
+										<FileText className='w-4 h-4' />
+										<span>Rekap Bulanan</span>
+									</Link>
 									<Link
 										href={`/kelas/${kelas.id}/riwayat-absensi`}
 										className='neo-btn-outline !py-2 !px-3 bg-white text-xs sm:text-sm font-bold flex items-center gap-1.5'>
@@ -1063,15 +961,20 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 								</div>
 							</div>
 
-							{/* Geofence Status Card Banner */}
-							<GeofenceStatusCard
-								geofenceSettings={geofenceSettings}
-								moduleName="absensi"
-								userRole={dataHub?.userRole}
-								locationStatus={locationStatus}
-								setLocationStatus={setLocationStatus}
-								className="mb-6"
-							/>
+							{/* Notifikasi Khusus Hari Jum'at (Libur Mingguan Sekolah) */}
+							{absensiToday.isJumat && (
+								<div className='mb-6 p-4 bg-purple-50 border-2 border-purple-900 rounded-xl text-xs font-bold text-purple-950 flex items-center gap-3 shadow-[2px_2px_0_#000]'>
+									<span className='text-2xl'>🕌</span>
+									<div>
+										<div className='font-black uppercase tracking-wide text-sm text-purple-950'>
+											Hari Jum&apos;at: Libur Mingguan Sekolah
+										</div>
+										<p className='text-purple-800 mt-0.5'>
+											Sesuai kalender akademik madrasah/sekolah, hari Jum&apos;at tidak ada kegiatan KBM belajar-mengajar.
+										</p>
+									</div>
+								</div>
+							)}
 
 							{/* Sesi KBM yang Masuk Hari Ini */}
 							{absensiToday.sesiMapelToday && absensiToday.sesiMapelToday.length > 0 ? (
@@ -1091,11 +994,11 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 										))}
 									</div>
 								</div>
-							) : (
+							) : !absensiToday.isJumat ? (
 								<div className='mb-6 p-4 bg-amber-50 border-2 border-dashed border-amber-400 rounded-xl text-xs font-bold text-amber-900'>
 									Belum ada sesi guru mapel yang menginput absensi KBM hari ini.
 								</div>
-							)}
+							) : null}
 
 							{/* Summary Counters */}
 							<div className='grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6'>
@@ -1144,24 +1047,22 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 												<th className='p-3 border-r-2 border-black'>Nama Siswa</th>
 												<th className='p-3 border-r-2 border-black'>Sesi Mapel Hari Ini</th>
 												<th className='p-3 border-r-2 border-black text-center w-32'>Jam Hadir</th>
-												<th className='p-3 border-r-2 border-black text-center w-36'>Status Harian</th>
-												<th className='p-3 text-center w-32'>Koreksi</th>
+												<th className='p-3 text-center w-36'>Status Terakumulasi</th>
 											</tr>
 										</thead>
 										<tbody className='divide-y-2 divide-black/10 bg-white'>
 											{siswaMapelBreakdown.length === 0 ? (
 												<tr>
-													<td colSpan={6} className='p-6 text-center text-gray-500 italic'>
+													<td colSpan={5} className='p-6 text-center text-gray-500 italic'>
 														Belum ada catatan presensi mapel hari ini.
 													</td>
 												</tr>
 											) : (
 												siswaMapelBreakdown.map((item, idx) => {
 													const currentStatus =
-														editedStatuses[item.siswa_id] ||
-														(item.recommendedStatus === 'Belum Ada Data'
-															? 'Hadir'
-															: item.recommendedStatus);
+														item.recommendedStatus === 'Belum Ada Data'
+															? 'Belum Ada Data'
+															: item.recommendedStatus;
 
 													return (
 														<tr key={item.siswa_id} className='hover:bg-yellow-50 transition-colors'>
@@ -1210,22 +1111,26 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 																	className={`px-2 py-0.5 rounded text-xs font-black border border-black ${
 																		(item.totalJpHadir || 0) >= 1
 																			? 'bg-emerald-100 text-emerald-950'
-																			: 'bg-rose-100 text-rose-950'
+																			: (item.totalRecorded || 0) > 0
+																			? 'bg-rose-100 text-rose-950'
+																			: 'bg-gray-100 text-gray-700'
 																	}`}>
 																	{item.totalJpHadir || 0} / {item.totalRecorded || 0} JP
 																</span>
 															</td>
-															{/* Rekomendasi Status Harian */}
-															<td className='p-3 border-r-2 border-black/10 text-center'>
+															{/* Status Terakumulasi Sah */}
+															<td className='p-3 text-center'>
 																<span
-																	className={`px-2.5 py-1 rounded-lg text-xs font-black border-2 border-black ${
+																	className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black border-2 border-black ${
 																		currentStatus === 'Hadir'
 																			? 'bg-emerald-300 text-emerald-950'
 																			: currentStatus === 'Sakit'
 																			? 'bg-amber-300 text-amber-950'
 																			: currentStatus === 'Izin'
 																			? 'bg-blue-300 text-blue-950'
-																			: 'bg-rose-400 text-white'
+																			: currentStatus === 'Alfa'
+																			? 'bg-rose-400 text-white'
+																			: 'bg-gray-100 text-gray-600'
 																	}`}>
 																	{currentStatus}
 																</span>
@@ -1235,23 +1140,6 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 																	</div>
 																)}
 															</td>
-															{/* Quick Override Dropdown */}
-															<td className='p-3 text-center'>
-																<select
-																	value={currentStatus}
-																	onChange={(e) =>
-																		setEditedStatuses((prev) => ({
-																			...prev,
-																			[item.siswa_id]: e.target.value,
-																		}))
-																	}
-																	className='neo-input !py-1 !px-2 text-xs font-bold bg-white'>
-																	<option value='Hadir'>Hadir</option>
-																	<option value='Sakit'>Sakit</option>
-																	<option value='Izin'>Izin</option>
-																	<option value='Alfa'>Alfa</option>
-																</select>
-															</td>
 														</tr>
 													);
 												})
@@ -1260,25 +1148,19 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 									</table>
 								</div>
 
-								{/* Bottom Save Action */}
-								{/* Bottom Action: Langsung Sah Otomatis */}
-								<div className='pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-yellow-50 p-4 border-2 border-black rounded-xl'>
-									<div className='text-xs font-bold text-gray-800'>
-										✨ <span className='font-black'>Presensi Langsung Sah:</span> Data kehadiran otomatis terakumulasi langsung dari sesi KBM guru mapel hari ini.
-										{Object.keys(editedStatuses).length > 0 && (
-											<span className='text-rose-600 block sm:inline sm:ml-2 font-black'>
-												(Ada {Object.keys(editedStatuses).length} siswa yang statusnya Anda sesuaikan)
-											</span>
-										)}
+								{/* Bottom Action: Informasi Akumulasi Penuh */}
+								<div className='pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-emerald-50 p-4 border-2 border-black rounded-xl'>
+									<div className='text-xs font-bold text-emerald-950'>
+										✨ <span className='font-black'>Presensi KBM Terakumulasi Otomatis:</span> Data kehadiran siswa di atas terakumulasi langsung 100% dari seluruh sesi mata pelajaran guru pengajar hari ini. Wali kelas memantau kondisi presensi rombel secara realtime tanpa memerlukan input atau pengesahan manual.
 									</div>
-									{Object.keys(editedStatuses).length > 0 && (
-										<button
-											onClick={handleSyncPresensi}
-											disabled={syncing}
-											className='neo-btn-primary !py-2 !px-4 bg-emerald-600 text-white hover:bg-emerald-700 text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-[2px_2px_0_#000] shrink-0 disabled:opacity-50'>
-											<span>{syncing ? 'Menyimpan...' : '💾 Simpan Koreksi Status'}</span>
-										</button>
-									)}
+									<div className='flex items-center gap-2 shrink-0'>
+										<Link
+											href={`/kelas/${kelas.id}/laporan-absensi`}
+											className='neo-btn-outline !py-2 !px-3 bg-white text-xs font-black shadow-[2px_2px_0_#000] flex items-center gap-1.5'>
+											<FileText className='w-4 h-4' />
+											<span>Laporan Bulanan</span>
+										</Link>
+									</div>
 								</div>
 							</div>
 						</div>

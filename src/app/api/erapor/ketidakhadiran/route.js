@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
-import { normStatus } from '@/lib/absensiUtils';
+import { normStatus, parseJamPelajaran, calculateHariAlfa, evaluateDailyAttendance, isJumatOrLibur } from '@/lib/absensiUtils';
 import { checkClassLock } from '@/utils/erapor';
 
 async function getAuthInfo(request, supabase) {
@@ -200,32 +200,137 @@ export async function POST(request) {
 			}
 		}
 
-		// Aksi 1: TARIK DARI ABSENSI HARIAN OTOMATIS
+		// Aksi 1: TARIK DARI REKAP KBM MAPEL OTOMATIS
 		if (action === 'sync_harian') {
 			const { data: kls } = await supabase.from('kelas').select('nama_kelas').eq('id', kelas_id).single();
 			if (!kls) return NextResponse.json({ error: 'Kelas tidak ditemukan' }, { status: 404 });
 
-			const { data: rawAbsensi, error: absError } = await supabase
-				.from('absensi_harian_siswa')
-				.select('siswa_id, status')
-				.eq('kelas', kls.nama_kelas)
-				.or('status.ilike.alfa%,status.ilike.alpa%,status.ilike.alpha%,status.eq.A,status.eq.a,status.ilike.sakit%,status.ilike.izin%');
+			const namaKelas = kls.nama_kelas;
 
-			if (absError) throw absError;
+			// Ambil seluruh sesi mapel kelas ini (dan rincian kehadiran siswa)
+			const { data: mapelSessions, error: mapelErr } = await supabase
+				.from('absensi_mapel')
+				.select(`
+					sesi_id, tanggal, jam_ke, mapel,
+					absensi_mapel_siswa (
+						siswa_id, status, keterangan
+					)
+				`)
+				.eq('kelas', namaKelas);
+
+			if (mapelErr) throw mapelErr;
+
+			// Ambil juga sesi harian jika ada
+			const { data: harianSessions } = await supabase
+				.from('absensi_harian')
+				.select(`
+					sesi_id, tanggal,
+					absensi_harian_siswa (
+						siswa_id, status, keterangan
+					)
+				`)
+				.eq('kelas', namaKelas);
+
+			// Kumpulkan seluruh tanggal unik KBM (Dikecualikan hari Jum'at / Libur Sekolah)
+			const tanggalSet = new Set();
+			(mapelSessions || []).forEach((s) => {
+				if (s.tanggal) {
+					const tStr = String(s.tanggal).slice(0, 10);
+					if (!isJumatOrLibur(tStr)) tanggalSet.add(tStr);
+				}
+			});
+			(harianSessions || []).forEach((s) => {
+				if (s.tanggal) {
+					const tStr = String(s.tanggal).slice(0, 10);
+					if (!isJumatOrLibur(tStr)) tanggalSet.add(tStr);
+				}
+			});
+
+			const tanggalList = Array.from(tanggalSet);
+
+			// Mapping sesi per tanggal dan siswa
+			const mapelByDateAndStudent = {};
+			(mapelSessions || []).forEach((m) => {
+				const tStr = m.tanggal ? String(m.tanggal).slice(0, 10) : '';
+				if (!tStr || isJumatOrLibur(tStr)) return;
+				if (!mapelByDateAndStudent[tStr]) mapelByDateAndStudent[tStr] = {};
+
+				const jpList = parseJamPelajaran(m.jam_ke);
+				const jp = jpList.length > 0 ? jpList.length : 1;
+
+				(m.absensi_mapel_siswa || []).forEach((rec) => {
+					const sid = String(rec.siswa_id);
+					if (!mapelByDateAndStudent[tStr][sid]) mapelByDateAndStudent[tStr][sid] = [];
+					mapelByDateAndStudent[tStr][sid].push({
+						jam_ke: m.jam_ke,
+						mapel: m.mapel,
+						jp,
+						status: rec.status,
+						keterangan: rec.keterangan || '',
+					});
+				});
+			});
+
+			const harianByDateAndStudent = {};
+			(harianSessions || []).forEach((h) => {
+				const tStr = h.tanggal ? String(h.tanggal).slice(0, 10) : '';
+				if (!tStr || isJumatOrLibur(tStr)) return;
+				if (!harianByDateAndStudent[tStr]) harianByDateAndStudent[tStr] = {};
+
+				(h.absensi_harian_siswa || []).forEach((rec) => {
+					const sid = String(rec.siswa_id);
+					harianByDateAndStudent[tStr][sid] = {
+						status: rec.status,
+						keterangan: rec.keterangan || '',
+					};
+				});
+			});
+
+			// Ambil seluruh siswa aktif
+			const { data: siswaList } = await supabase
+				.from('siswa')
+				.select('id')
+				.eq('kelas', namaKelas)
+				.eq('status', 'Aktif');
 
 			const countMap = {};
-			(rawAbsensi || []).forEach((row) => {
-				const sid = row.siswa_id;
-				if (!countMap[sid]) countMap[sid] = { sakit: 0, izin: 0, alfa: 0 };
-				const st = normStatus(row.status);
-				if (st === 'sakit') countMap[sid].sakit += 1;
-				else if (st === 'izin') countMap[sid].izin += 1;
-				else if (st === 'alfa') countMap[sid].alfa += 1;
+			(siswaList || []).forEach((sw) => {
+				const sid = sw.id;
+				countMap[sid] = { sakit: 0, izin: 0, alfa: 0, tanpa_keterangan: 0 };
+				let totalJpAlfa = 0;
+				let fullAlfaDays = 0;
+
+				tanggalList.forEach((tanggal) => {
+					const studentSessions = mapelByDateAndStudent[tanggal]?.[sid];
+					let statusHarian = '';
+
+					if (studentSessions && studentSessions.length > 0) {
+						const evalRes = evaluateDailyAttendance(studentSessions);
+						statusHarian = evalRes.recommendedStatus;
+						studentSessions.forEach((ss) => {
+							if (normStatus(ss.status) === 'alfa') totalJpAlfa += ss.jp;
+						});
+					} else if (harianByDateAndStudent[tanggal]?.[sid]) {
+						statusHarian = harianByDateAndStudent[tanggal][sid].status;
+						if (normStatus(statusHarian) === 'alfa') totalJpAlfa += 7;
+					}
+
+					const st = normStatus(statusHarian);
+					if (st === 'sakit') countMap[sid].sakit += 1;
+					else if (st === 'izin') countMap[sid].izin += 1;
+					else if (st === 'alfa') fullAlfaDays += 1;
+				});
+
+				// Hitung Alfa dari total JP Alfa
+				const alfaCalc = calculateHariAlfa(totalJpAlfa);
+				const finalAlfa = Math.max(fullAlfaDays, alfaCalc.totalHari);
+				countMap[sid].alfa = finalAlfa;
+				countMap[sid].tanpa_keterangan = finalAlfa;
 			});
 
 			return NextResponse.json({
 				success: true,
-				message: 'Penarikan absensi harian berhasil dihitung',
+				message: 'Penarikan absensi KBM berhasil dihitung otomatis',
 				data: countMap,
 			});
 		}

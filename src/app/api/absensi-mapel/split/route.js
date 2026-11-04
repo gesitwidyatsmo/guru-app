@@ -91,27 +91,28 @@ export async function POST(req) {
 
 		const originalSesi = originalList[0];
 
-		// 2. Ambil seluruh sesi yang ada hari ini untuk mendeteksi potensi bentrok dengan sesi lain
+		// 2. Ambil seluruh sesi yang ada hari ini di kelas ini untuk mendeteksi potensi bentrok
 		const { data: allSessionsToday } = await supabase
 			.from('absensi_mapel')
-			.select('sesi_id, jam_ke')
+			.select('sesi_id, jam_ke, mapel, users(nama_lengkap)')
 			.eq('kelas', kelas)
-			.eq('mapel', mapel)
 			.eq('tanggal', tanggal);
 
 		// Abaikan originalSesi saat cek konflik sesi_1_jam dan sesi_2_jam
 		const conflict1 = findConflictingSession(allSessionsToday || [], sesi_1_jam, originalSesi.sesi_id);
 		if (conflict1) {
+			const teacher1 = conflict1.session.users?.nama_lengkap || 'Guru';
 			return NextResponse.json(
-				{ error: `Konflik Jam: Sesi 1 (Jam ${sesi_1_jam}) bertabrakan dengan sesi Jam ${conflict1.session.jam_ke} yang sudah ada.` },
+				{ error: `Konflik Jam: Sesi 1 (Jam ${sesi_1_jam}) bertabrakan dengan sesi ${conflict1.session.mapel || 'mapel lain'} (${teacher1}) pada Jam ${conflict1.session.jam_ke}.` },
 				{ status: 409 }
 			);
 		}
 
 		const conflict2 = findConflictingSession(allSessionsToday || [], sesi_2_jam, originalSesi.sesi_id);
 		if (conflict2) {
+			const teacher2 = conflict2.session.users?.nama_lengkap || 'Guru';
 			return NextResponse.json(
-				{ error: `Konflik Jam: Sesi 2 (Jam ${sesi_2_jam}) bertabrakan dengan sesi Jam ${conflict2.session.jam_ke} yang sudah ada.` },
+				{ error: `Konflik Jam: Sesi 2 (Jam ${sesi_2_jam}) bertabrakan dengan sesi ${conflict2.session.mapel || 'mapel lain'} (${teacher2}) pada Jam ${conflict2.session.jam_ke}.` },
 				{ status: 409 }
 			);
 		}

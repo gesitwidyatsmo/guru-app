@@ -11,6 +11,7 @@ import {
 	checkJamOverlap,
 	formatJamPelajaran,
 	getPossibleSplits,
+	isJumatOrLibur,
 } from '../absensiUtils';
 
 describe('Unit Test: absensiUtils', () => {
@@ -185,6 +186,28 @@ describe('Unit Test: absensiUtils', () => {
 		it('harus mengembalikan array kosong untuk sesi 1 jam (tidak dapat dipecah)', () => {
 			expect(getPossibleSplits('1')).toEqual([]);
 			expect(getPossibleSplits('')).toEqual([]);
+		});
+	});
+	// =========================================================================
+	// 6. Uji Hari Libur Sekolah (isJumatOrLibur - Hari Jum'at Libur)
+	// =========================================================================
+	describe('isJumatOrLibur', () => {
+		it('harus mengidentifikasi hari Jum\'at sebagai libur mingguan', () => {
+			expect(isJumatOrLibur('2026-11-06')).toBe(true);
+			expect(isJumatOrLibur('2026-11-13')).toBe(true);
+		});
+
+		it('harus mengembalikan false untuk hari KBM aktif selain Jum\'at', () => {
+			expect(isJumatOrLibur('2026-11-02')).toBe(false);
+			expect(isJumatOrLibur('2026-11-04')).toBe(false);
+			expect(isJumatOrLibur('2026-11-05')).toBe(false);
+			expect(isJumatOrLibur('2026-11-07')).toBe(false);
+		});
+
+		it('harus aman menangani input falsy', () => {
+			expect(isJumatOrLibur(null)).toBe(false);
+			expect(isJumatOrLibur(undefined)).toBe(false);
+			expect(isJumatOrLibur('')).toBe(false);
 		});
 	});
 });
