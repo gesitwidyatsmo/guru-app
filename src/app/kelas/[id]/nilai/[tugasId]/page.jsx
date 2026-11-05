@@ -72,14 +72,27 @@ export default function DetailNilaiPage() {
 				}
 
 				if (tugasDetail) {
-					// Fetch all students for this class
-					const { data: daftarSiswa, error: errSiswa } = await supabase
+					// Fetch all students for this class (diurutkan berdasarkan nomor_absen resmi)
+					let daftarSiswa = null;
+					let { data: dSiswa, error: errSiswa } = await supabase
 						.from('siswa')
-						.select('id, nama_lengkap, status')
+						.select('id, nama_lengkap, status, nomor_absen')
 						.eq('kelas', tugasDetail.kelas)
+						.order('nomor_absen', { ascending: true, nullsFirst: false })
 						.order('nama_lengkap', { ascending: true });
 					
-					if (errSiswa) console.error("Error fetching siswa", errSiswa);
+					if (errSiswa && (errSiswa.code === '42703' || errSiswa.message?.includes('nomor_absen'))) {
+						const fallback = await supabase
+							.from('siswa')
+							.select('id, nama_lengkap, status')
+							.eq('kelas', tugasDetail.kelas)
+							.order('nama_lengkap', { ascending: true });
+						daftarSiswa = fallback.data;
+					} else {
+						daftarSiswa = dSiswa;
+					}
+					
+					if (errSiswa && !daftarSiswa) console.error("Error fetching siswa", errSiswa);
 					
 					let finalSiswaList = [];
 
@@ -87,7 +100,7 @@ export default function DetailNilaiPage() {
 						// Gabungkan daftar seluruh siswa dengan nilai yang sudah masuk
 						finalSiswaList = daftarSiswa.map((s, index) => {
 							const found = submittedSiswa.find(sub => sub.siswa_id === s.id);
-							const nomorAbsen = String(index + 1); 
+							const nomorAbsen = String(s.nomor_absen || index + 1); 
 							return {
 								id: s.id,
 								nama_lengkap: s.nama_lengkap,

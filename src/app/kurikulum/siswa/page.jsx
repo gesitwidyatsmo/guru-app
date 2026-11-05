@@ -322,6 +322,13 @@ function KurikulumSiswaContent() {
 
 				<div className='flex flex-wrap items-center gap-2.5 w-full md:w-auto'>
 					<AcademicPeriodChip />
+					<Link
+						href={`/kurikulum/siswa/urutan${filterKelas !== 'all' ? `?kelas=${encodeURIComponent(filterKelas)}` : ''}`}
+						className='neo-btn-outline flex items-center justify-center gap-1.5 text-xs sm:text-sm !py-2.5 !px-3.5 bg-cyan-100'
+						title='Atur Urutan Nomor Absen Siswa per Rombel'>
+						<span>⚡</span>
+						<span>Atur No. Absen</span>
+					</Link>
 					<button
 						onClick={() => {
 							setImportTargetKelas(filterKelas !== 'all' ? filterKelas : (kelasList[0]?.kelas || ''));

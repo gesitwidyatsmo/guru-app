@@ -102,7 +102,7 @@ export default function EditNilaiPage() {
 					// Fetch all students for this class
 					const { data: daftarSiswa, error: errSiswa } = await supabase
 						.from('siswa')
-						.select('id, nama_lengkap, status')
+						.select('id, nama_lengkap, status, nomor_absen')
 						.eq('kelas', tugasDetail.kelas)
 						.order('nama_lengkap', { ascending: true });
 					
@@ -113,7 +113,7 @@ export default function EditNilaiPage() {
 					if (daftarSiswa && daftarSiswa.length > 0) {
 						finalSiswaList = daftarSiswa.map((s, index) => {
 							const found = submittedSiswa.find(sub => sub.siswa_id === s.id);
-							const nomorAbsen = String(index + 1);
+							const nomorAbsen = String(s.nomor_absen || index + 1);
 							return {
 								id: s.id,
 								nama_lengkap: s.nama_lengkap,
@@ -713,7 +713,7 @@ export default function EditNilaiPage() {
 										
 										<div className='flex items-center gap-4 flex-1'>
 											<div className='w-8 h-8 flex items-center justify-center bg-[#0D0D0D] text-white font-black text-sm rounded-full shadow-[2px_2px_0px_0px_#0D0D0D]'>
-												{index + 1}
+												{siswa.absen || index + 1}
 											</div>
 											<div className='text-base font-black text-[#0D0D0D] uppercase'>
 												{siswa.nama_lengkap}

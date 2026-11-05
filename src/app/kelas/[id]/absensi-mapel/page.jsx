@@ -144,7 +144,15 @@ export default function KelasAbsensiMapelPage() {
 		if (classId) fetchAll();
 	}, [classId]);
 
-	const siswaKelasIni = useMemo(() => siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim()), [siswaList, selectedKelas]);
+	const siswaKelasIni = useMemo(() => {
+		const filtered = siswaList.filter((s) => String(s.kelas).trim() === String(selectedKelas).trim());
+		return [...filtered].sort((a, b) => {
+			const aAbsen = a.nomor_absen != null && !isNaN(Number(a.nomor_absen)) ? Number(a.nomor_absen) : 9999;
+			const bAbsen = b.nomor_absen != null && !isNaN(Number(b.nomor_absen)) ? Number(b.nomor_absen) : 9999;
+			if (aAbsen !== bAbsen) return aAbsen - bAbsen;
+			return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id');
+		});
+	}, [siswaList, selectedKelas]);
 
 	const filteredSiswa = useMemo(() => {
 		if (!searchQuery.trim()) return siswaKelasIni;
@@ -996,7 +1004,7 @@ export default function KelasAbsensiMapelPage() {
 													<tr
 														key={siswa.id}
 														className='hover:bg-[#FFF5F0] transition-colors'>
-														<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{idx + 1}</td>
+														<td className='px-6 py-4 font-bold text-[#0D0D0D] border-r-2 border-[#0D0D0D]'>{siswa.nomor_absen || idx + 1}</td>
 														<td className='px-6 py-4 border-r-2 border-[#0D0D0D]'>
 															<p className='font-bold text-[#0D0D0D] text-base'>
 																{siswa.nama_lengkap}
@@ -1058,7 +1066,7 @@ export default function KelasAbsensiMapelPage() {
 													<p className='text-xs text-[#0D0D0D] font-mono font-bold'>{siswa.nis || '-'}</p>
 												</div>
 												<span className='absolute top-4 right-4 text-sm font-black text-[#0D0D0D] border-2 border-[#0D0D0D] w-8 h-8 flex items-center justify-center rounded-full bg-[#F5C518] shadow-[2px_2px_0px_0px_#0D0D0D]'>
-													{idx + 1}
+													{siswa.nomor_absen || idx + 1}
 												</span>
 											</div>
 

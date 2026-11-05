@@ -203,14 +203,30 @@ export default function LaporanAbsensiMapelPage() {
 			const supabase = createClient();
 			const tahun = new Date().getFullYear();
 
-			// 1. Ambil data siswa
-			const { data: siswaData, error: siswaError } = await supabase
+			// 1. Ambil data siswa (diurutkan berdasarkan nomor_absen resmi)
+			let siswaData = null;
+			let { data: sData, error: siswaError } = await supabase
 				.from('siswa')
-				.select('id, nis, nama_lengkap, kelas')
+				.select('id, nis, nama_lengkap, kelas, nomor_absen')
 				.eq('kelas', namaKelas)
-				.eq('status', 'Aktif');
+				.eq('status', 'Aktif')
+				.order('nomor_absen', { ascending: true, nullsFirst: false })
+				.order('nama_lengkap', { ascending: true });
 
-			if (siswaError) throw siswaError;
+			if (siswaError && (siswaError.code === '42703' || siswaError.message?.includes('nomor_absen'))) {
+				const fallback = await supabase
+					.from('siswa')
+					.select('id, nis, nama_lengkap, kelas')
+					.eq('kelas', namaKelas)
+					.eq('status', 'Aktif')
+					.order('nama_lengkap', { ascending: true });
+				if (fallback.error) throw fallback.error;
+				siswaData = fallback.data;
+			} else if (siswaError) {
+				throw siswaError;
+			} else {
+				siswaData = sData;
+			}
 
 			const siswaDiKelas = siswaData || [];
 			
@@ -372,7 +388,7 @@ export default function LaporanAbsensiMapelPage() {
 
 		// Buat data rows
 		const data = rekapData.siswa.map((siswa, index) => {
-			const row = [index + 1, siswa.nis || '-', siswa.nama_lengkap];
+			const row = [siswa.nomor_absen || (index + 1), siswa.nis || '-', siswa.nama_lengkap];
 
 			// Tambahkan status per tanggal
 			tanggalList.forEach((tanggal) => {
@@ -716,7 +732,7 @@ export default function LaporanAbsensiMapelPage() {
 
 													return (
 														<tr key={siswa.id} className='hover:bg-[#FFF5F0] transition-colors group'>
-															<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-4 py-3 text-center font-bold text-sm sticky left-0 bg-white group-hover:bg-[#FFF5F0] z-10'>{index + 1}</td>
+															<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-4 py-3 text-center font-bold text-sm sticky left-0 bg-white group-hover:bg-[#FFF5F0] z-10'>{siswa.nomor_absen || (index + 1)}</td>
 															<td className='border-b-[2px] border-r-[3px] border-[#0D0D0D] px-6 py-3'>
 																<div className='flex items-center gap-4'>
 																	<div className='w-10 h-10 border-[3px] border-[#0D0D0D] bg-[#8B5CF6] flex items-center justify-center text-white font-black text-sm shadow-[2px_2px_0px_0px_#0D0D0D] flex-shrink-0'>

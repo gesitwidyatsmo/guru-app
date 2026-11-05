@@ -38,27 +38,43 @@ export async function GET(req) {
 			role === 'Keamanan Putri';
 		const supabaseClient = isPrivileged ? supabaseAdmin : (role ? await createClient() : supabaseAdmin);
 
-		let query = supabaseClient.from('siswa').select('*').order('nama_lengkap', { ascending: true });
+		const buildQuery = (includeAbsenOrder = true) => {
+			let q = supabaseClient.from('siswa').select('*');
+			if (allowedClasses !== null) {
+				if (allowedClasses.length === 0) return null;
+				q = q.in('kelas', allowedClasses);
+			}
+			if (kelas) q = q.eq('kelas', kelas);
+			if (status) q = q.eq('status', status);
 
-		if (allowedClasses !== null) {
-			if (allowedClasses.length === 0) return NextResponse.json([]);
-			query = query.in('kelas', allowedClasses);
+			// Filter gender otomatis berbasis role Keamanan atau parameter
+			if (role === 'Keamanan Putra') {
+				q = q.eq('jenis_kelamin', 'Laki-laki');
+			} else if (role === 'Keamanan Putri') {
+				q = q.eq('jenis_kelamin', 'Perempuan');
+			} else if (genderParam && genderParam !== 'all') {
+				q = q.eq('jenis_kelamin', genderParam);
+			}
+
+			if (includeAbsenOrder) {
+				return q.order('nomor_absen', { ascending: true, nullsFirst: false }).order('nama_lengkap', { ascending: true });
+			}
+			return q.order('nama_lengkap', { ascending: true });
+		};
+
+		let query = buildQuery(true);
+		if (query === null) return NextResponse.json([]);
+
+		let { data: siswaList, error } = await query;
+		// Fallback jika kolom nomor_absen belum dimigrasikan di database
+		if (error && (error.code === '42703' || error.message?.includes('nomor_absen'))) {
+			const fallbackQuery = buildQuery(false);
+			const fallbackRes = await fallbackQuery;
+			if (fallbackRes.error) throw fallbackRes.error;
+			siswaList = fallbackRes.data;
+		} else if (error) {
+			throw error;
 		}
-		
-		if (kelas) query = query.eq('kelas', kelas);
-		if (status) query = query.eq('status', status);
-
-		// Filter gender otomatis berbasis role Keamanan atau parameter
-		if (role === 'Keamanan Putra') {
-			query = query.eq('jenis_kelamin', 'Laki-laki');
-		} else if (role === 'Keamanan Putri') {
-			query = query.eq('jenis_kelamin', 'Perempuan');
-		} else if (genderParam && genderParam !== 'all') {
-			query = query.eq('jenis_kelamin', genderParam);
-		}
-
-		const { data: siswaList, error } = await query;
-		if (error) throw error;
 
 		return NextResponse.json(siswaList || []);
 	} catch (error) {
@@ -97,7 +113,7 @@ export async function POST(request) {
 			};
 
 			const biodataFields = [
-				'nisn', 'nik', 'tempat_lahir', 'tanggal_lahir', 'agama', 'anak_ke', 'jumlah_saudara', 'sekolah_asal',
+				'nomor_absen', 'nisn', 'nik', 'tempat_lahir', 'tanggal_lahir', 'agama', 'anak_ke', 'jumlah_saudara', 'sekolah_asal',
 				'alamat', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kode_pos', 'jenis_tinggal',
 				'no_hp', 'nama_ayah', 'pendidikan_ayah', 'pekerjaan_ayah',
 				'nama_ibu', 'pendidikan_ibu', 'pekerjaan_ibu',
@@ -236,7 +252,7 @@ export async function PUT(req) {
 
 		const updates = {};
 		const allowedFields = [
-			'nis', 'nisn', 'nik', 'nama_lengkap', 'kelas', 'jenis_kelamin', 'status',
+			'nomor_absen', 'nis', 'nisn', 'nik', 'nama_lengkap', 'kelas', 'jenis_kelamin', 'status',
 			'tempat_lahir', 'tanggal_lahir', 'agama', 'anak_ke', 'jumlah_saudara', 'sekolah_asal',
 			'alamat', 'rt', 'rw', 'dusun', 'kelurahan', 'kecamatan', 'kode_pos', 'jenis_tinggal',
 			'no_hp', 'nama_ayah', 'pendidikan_ayah', 'pekerjaan_ayah',

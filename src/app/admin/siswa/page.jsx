@@ -342,6 +342,16 @@ function AdminSiswaContent() {
 				</div>
 
 				<div className='flex flex-wrap items-center gap-2.5 w-full sm:w-auto'>
+					<Link
+						href={`/admin/siswa/urutan${filterKelas !== 'all' ? `?kelas=${encodeURIComponent(filterKelas)}` : ''}`}
+						className='neo-btn-outline flex items-center justify-center gap-2 text-xs sm:text-sm !py-2.5 !px-4 bg-cyan-100 flex-1 sm:flex-none'
+						title='Atur Urutan Nomor Absen Siswa per Rombel'>
+						<svg className='w-4 h-4 text-cyan-800' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+							<path strokeLinecap='round' strokeLinejoin='round' d='M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12' />
+						</svg>
+						<span>Atur No. Absen</span>
+					</Link>
+
 					<button
 						onClick={handleExportExcel}
 						className='neo-btn-outline flex items-center justify-center gap-2 text-xs sm:text-sm !py-2.5 !px-4 bg-white flex-1 sm:flex-none'>

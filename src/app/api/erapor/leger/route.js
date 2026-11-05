@@ -93,14 +93,30 @@ export async function GET(request) {
 			}
 		}
 
-		// 2. Ambil seluruh siswa aktif
-		const { data: siswaList, error: siswaErr } = await supabase
+		// 2. Ambil seluruh siswa aktif (diurutkan berdasarkan nomor_absen resmi)
+		let siswaList = null;
+		let { data: sList, error: siswaErr } = await supabase
 			.from('siswa')
-			.select('id, nis, nisn, nama_lengkap, jenis_kelamin')
+			.select('id, nis, nisn, nama_lengkap, jenis_kelamin, nomor_absen')
 			.eq('kelas', kelasData.nama_kelas)
 			.eq('status', 'Aktif')
+			.order('nomor_absen', { ascending: true, nullsFirst: false })
 			.order('nama_lengkap', { ascending: true });
-		if (siswaErr) throw siswaErr;
+
+		if (siswaErr && (siswaErr.code === '42703' || siswaErr.message?.includes('nomor_absen'))) {
+			const fallback = await supabase
+				.from('siswa')
+				.select('id, nis, nisn, nama_lengkap, jenis_kelamin')
+				.eq('kelas', kelasData.nama_kelas)
+				.eq('status', 'Aktif')
+				.order('nama_lengkap', { ascending: true });
+			if (fallback.error) throw fallback.error;
+			siswaList = fallback.data;
+		} else if (siswaErr) {
+			throw siswaErr;
+		} else {
+			siswaList = sList;
+		}
 
 		// 3. Ambil daftar mata pelajaran intrakurikuler terurut (Kelompok A & B, mengecualikan Ekskul)
 		const { data: allMapels, error: mapelErr } = await supabase

@@ -129,7 +129,15 @@ export default function AbsensiKelasPage() {
 	}, [id]);
 
 	const namaKelas = kelasDetail?.kelas || kelasDetail?.nama_kelas || '';
-	const siswaKelasIni = useMemo(() => siswaList.filter((s) => namaKelas && String(s.kelas || '').trim() === String(namaKelas || '').trim()), [siswaList, namaKelas]);
+	const siswaKelasIni = useMemo(() => {
+		const filtered = siswaList.filter((s) => namaKelas && String(s.kelas || '').trim() === String(namaKelas || '').trim());
+		return [...filtered].sort((a, b) => {
+			const aAbsen = a.nomor_absen != null && !isNaN(Number(a.nomor_absen)) ? Number(a.nomor_absen) : 9999;
+			const bAbsen = b.nomor_absen != null && !isNaN(Number(b.nomor_absen)) ? Number(b.nomor_absen) : 9999;
+			if (aAbsen !== bAbsen) return aAbsen - bAbsen;
+			return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id');
+		});
+	}, [siswaList, namaKelas]);
 
 	const filteredSiswaInput = useMemo(() => {
 		if (!searchQuery.trim()) return siswaKelasIni;
@@ -512,7 +520,7 @@ export default function AbsensiKelasPage() {
 										key={absensi.siswa_id || index}
 										className='w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50 rounded-lg border border-gray-100 transition text-left'>
 										<div className='flex items-center gap-3'>
-											<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-semibold'>{index + 1}</div>
+											<div className='w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold'>{siswa.nomor_absen || index + 1}</div>
 											<div>
 												<div className='text-sm font-medium text-gray-800'>
 													{siswa.nama_lengkap}
@@ -733,7 +741,7 @@ export default function AbsensiKelasPage() {
 												<tr
 													key={siswa.id}
 													className='border-b border-gray-50 hover:bg-gray-50'>
-													<td className='px-3 py-2 align-top text-gray-500'>{index + 1}</td>
+													<td className='px-3 py-2 align-top text-gray-500 font-bold'>{siswa.nomor_absen || index + 1}</td>
 													<td className='px-3 py-2 align-top'>
 														<div className='flex items-center gap-1.5'>
 															<div className='font-medium text-gray-800 text-sm'>

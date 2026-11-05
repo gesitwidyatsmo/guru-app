@@ -222,7 +222,7 @@ export default function LaporanAbsensiPage() {
 		headers.push('Hadir (H)', 'Izin (I)', 'Sakit (S)', 'Alfa (A)', 'JP Alfa', '% Kehadiran');
 
 		const rows = rekapData.siswa.map((siswa, idx) => {
-			const row = [idx + 1, siswa.nis || '-', siswa.nama_lengkap];
+			const row = [siswa.nomor_absen || (idx + 1), siswa.nis || '-', siswa.nama_lengkap];
 			sortedTanggalList.forEach((tgl) => {
 				const rec = siswa.absensi?.[tgl];
 				const st = normStatus(rec?.status);
@@ -543,7 +543,7 @@ export default function LaporanAbsensiPage() {
 										return (
 											<tr key={siswa.id} className='hover:bg-yellow-50/70 transition-colors'>
 												<td className='p-3 text-center border-r border-gray-300 sticky left-0 bg-white hover:bg-yellow-50 z-10 font-mono'>
-													{idx + 1}
+													{siswa.nomor_absen || (idx + 1)}
 												</td>
 												<td className='p-3 border-r border-gray-300 font-mono text-gray-600 text-[11px]'>
 													{siswa.nis || '-'}
@@ -770,7 +770,7 @@ export default function LaporanAbsensiPage() {
 
 								return (
 									<tr key={siswa.id} className='text-center'>
-										<td className='py-1.5 px-1 border-r border-black/40 font-mono'>{idx + 1}</td>
+										<td className='py-1.5 px-1 border-r border-black/40 font-mono'>{siswa.nomor_absen || (idx + 1)}</td>
 										<td className='py-1.5 px-2 border-r border-black/40 font-mono text-gray-700'>{siswa.nis || '-'}</td>
 										<td className='py-1.5 px-3 border-r border-black/40 text-left font-bold uppercase'>{siswa.nama_lengkap}</td>
 										<td className='py-1.5 px-2 border-r border-black/40 font-bold bg-emerald-50/40'>{h} Hari</td>
@@ -865,7 +865,7 @@ export default function LaporanAbsensiPage() {
 
 								return (
 									<tr key={siswa.id} className='text-center'>
-										<td className='py-1 px-1 border-r border-black/40 font-mono'>{idx + 1}</td>
+										<td className='py-1 px-1 border-r border-black/40 font-mono'>{siswa.nomor_absen || (idx + 1)}</td>
 										<td className='py-1 px-1 border-r border-black/40 font-mono text-gray-700'>
 											{siswa.nis || '-'}
 										</td>

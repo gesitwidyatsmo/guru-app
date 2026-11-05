@@ -1569,6 +1569,12 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 									/>
 								</div>
 								<Link
+									href={`/admin/siswa/urutan?kelas=${encodeURIComponent(kelas.nama_kelas)}`}
+									className='px-3 py-2 bg-cyan-300 hover:bg-cyan-400 text-black border-2 border-black rounded-xl text-xs font-black uppercase tracking-wide shadow-[2px_2px_0_#000] flex items-center gap-1.5 whitespace-nowrap hover:-translate-y-0.5 transition-all'
+									title='Atur Urutan Nomor Absen Siswa Rombel Ini'>
+									<span>⚡ Atur No. Absen</span>
+								</Link>
+								<Link
 									href='/wali-kelas/biodata'
 									className='px-3 py-2 bg-yellow-300 hover:bg-yellow-400 text-black border-2 border-black rounded-xl text-xs font-black uppercase tracking-wide shadow-[2px_2px_0_#000] flex items-center gap-1.5 whitespace-nowrap hover:-translate-y-0.5 transition-all'>
 									<span>Buka Editor CRUD Sekaligus</span>
@@ -1601,7 +1607,7 @@ Rekomendasi : ${item.rekomendasi_tindak_lanjut || 'Pembinaan Wali Kelas'}`;
 										filteredSiswa.map((siswa, idx) => (
 											<tr key={siswa.id} className='hover:bg-yellow-50 transition-colors'>
 												<td className='p-3 border-r-2 border-black/10 text-center font-black'>
-													{idx + 1}
+													{siswa.nomor_absen || idx + 1}
 												</td>
 												<td className='p-3 border-r-2 border-black/10 font-mono'>
 													{siswa.nis || '-'}

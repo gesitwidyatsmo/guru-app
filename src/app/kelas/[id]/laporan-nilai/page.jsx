@@ -162,7 +162,12 @@ export default function LaporanPage() {
 					...s,
 					poinPositif: poinMap[s.id]?.positif || 0,
 					poinNegatif: poinMap[s.id]?.negatif || 0,
-				}));
+				})).sort((a, b) => {
+					const aAbsen = a.nomor_absen != null && !isNaN(Number(a.nomor_absen)) ? Number(a.nomor_absen) : 9999;
+					const bAbsen = b.nomor_absen != null && !isNaN(Number(b.nomor_absen)) ? Number(b.nomor_absen) : 9999;
+					if (aAbsen !== bAbsen) return aAbsen - bAbsen;
+					return (a.nama_lengkap || '').localeCompare(b.nama_lengkap || '', 'id');
+				});
 				setSiswaList(siswaKelas);
 			} catch (err) {
 				console.error('Error init laporan nilai:', err);
@@ -385,7 +390,7 @@ export default function LaporanPage() {
 		// Prepare data for Excel
 		const dataToExport = studentGrades.map((siswa, index) => {
 			const row = {
-				No: index + 1,
+				No: siswa.nomor_absen || (index + 1),
 				Nama: siswa.nama_lengkap,
 				NIS: siswa.nis,
 				'Total Pt (+)': siswa.poinPositif || 0,
@@ -765,7 +770,7 @@ export default function LaporanPage() {
 												className='hover:bg-[#F3F4F6] transition-colors'>
 												<td className='px-6 py-4 whitespace-nowrap border-r-[4px] border-[#0D0D0D]'>
 													<div className='flex items-center gap-4'>
-														<div className='w-8 h-8 bg-white border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-center text-xs font-black text-[#0D0D0D]'>{idx + 1}</div>
+														<div className='w-8 h-8 bg-white border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center justify-center text-xs font-black text-[#0D0D0D]'>{siswa.nomor_absen || (idx + 1)}</div>
 														<div>
 															<div className='text-sm font-black text-[#0D0D0D] uppercase'>{siswa.nama_lengkap}</div>
 															<div className='text-xs font-bold text-gray-500 uppercase tracking-widest'>{siswa.nis}</div>

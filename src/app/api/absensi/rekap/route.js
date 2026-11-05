@@ -15,15 +15,30 @@ export async function GET(request) {
 
 		const supabase = await createClient();
 
-		// 1. Ambil data siswa aktif
-		const { data: siswaData, error: siswaError } = await supabase
+		// 1. Ambil data siswa aktif (diurutkan berdasarkan nomor_absen, fallback nama_lengkap)
+		let siswaData = null;
+		let { data: sData, error: siswaError } = await supabase
 			.from('siswa')
-			.select('id, nis, nama_lengkap, kelas')
+			.select('id, nis, nama_lengkap, kelas, nomor_absen')
 			.eq('kelas', kelas)
 			.eq('status', 'Aktif')
+			.order('nomor_absen', { ascending: true, nullsFirst: false })
 			.order('nama_lengkap', { ascending: true });
 
-		if (siswaError) throw siswaError;
+		if (siswaError && (siswaError.code === '42703' || siswaError.message?.includes('nomor_absen'))) {
+			const fallback = await supabase
+				.from('siswa')
+				.select('id, nis, nama_lengkap, kelas')
+				.eq('kelas', kelas)
+				.eq('status', 'Aktif')
+				.order('nama_lengkap', { ascending: true });
+			if (fallback.error) throw fallback.error;
+			siswaData = fallback.data;
+		} else if (siswaError) {
+			throw siswaError;
+		} else {
+			siswaData = sData;
+		}
 
 		const siswaDiKelas = siswaData || [];
 		
