@@ -675,6 +675,61 @@ export default function JurnalPage() {
 		}
 	};
 
+	// 1-Klik Pengesahan Mandiri Jurnal Bebas oleh Guru
+	const handleClaimFreed = async (journalId, mapel = '') => {
+		const result = await Swal.fire({
+			title: 'Sahkan Jurnal Anda?',
+			text: `Slot jam untuk KBM ${mapel || ''} telah bebas dari bentrok (diselesaikan mandiri). Sahkan sekarang agar hak Bisaroh Anda aktif?`,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonText: '✅ Ya, Sahkan Sekarang',
+			cancelButtonText: 'Batal',
+			confirmButtonColor: '#00E599',
+			cancelButtonColor: '#0D0D0D',
+			customClass: {
+				confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				cancelButton: 'text-white font-bold border-[2px] border-[#0D0D0D]',
+			},
+		});
+
+		if (!result.isConfirmed) return;
+
+		try {
+			setSaving(true);
+			const res = await fetch('/api/jurnal/claim-freed', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({ id: journalId }),
+			});
+
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || 'Gagal mengesahkan jurnal.');
+
+			await Swal.fire({
+				title: 'Alhamdulillah Berhasil!',
+				text: data.message || 'Jurnal KBM berhasil disahkan dan hak Bisaroh telah aktif.',
+				icon: 'success',
+				confirmButtonColor: '#00E599',
+				customClass: {
+					confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				},
+			});
+
+			await refreshJurnal();
+		} catch (err) {
+			console.error('Error claiming freed journal:', err);
+			Swal.fire({
+				title: 'Gagal Mengesahkan',
+				text: err.message,
+				icon: 'error',
+				confirmButtonColor: '#E8451A',
+			});
+		} finally {
+			setSaving(false);
+		}
+	};
+
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 
@@ -854,29 +909,46 @@ export default function JurnalPage() {
 					cleanUpdates.status_kehadiran = 'Draft Bentrok';
 					cleanUpdates.konflik_dengan_id = conflictTargetSession?.id || null;
 					cleanUpdates.catatan_admin = `Draft antrean bentrok dengan KBM ID ${conflictTargetSession?.id || '-'}`;
-				} else if (formData.is_kegiatan_sekolah) {
-					cleanUpdates.status_kehadiran = 'Kegiatan Sekolah';
-					if (!cleanUpdates.kegiatan?.includes('[Kegiatan Sekolah')) {
-						cleanUpdates.kegiatan = `[Kegiatan Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
-					}
-				} else if (formData.is_tugas_luar) {
-					cleanUpdates.status_kehadiran = 'Tugas Luar';
-					if (!cleanUpdates.kegiatan?.includes('[Tugas Luar')) {
-						cleanUpdates.kegiatan = `[Tugas Luar / Dinas Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
-					}
-				} else if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
-					cleanUpdates.status_kehadiran = determineKBMStatus({
-						jamMulai: cleanUpdates.jam_mulai,
-						jamSelesai: cleanUpdates.jam_selesai,
-						durasiMenit: cleanUpdates.durasi_menit,
-						tanggal: cleanUpdates.tanggal,
-						jamKe: cleanUpdates.jam_ke,
-						skipSusulanCheck: !formData.status_kehadiran?.includes('Susulan'),
-					});
-				} else if (formData.status_kehadiran && String(formData.status_kehadiran).trim() !== '') {
-					cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
 				} else {
-					cleanUpdates.status_kehadiran = 'Normal';
+					// Jika sebelumnya adalah draft bentrok dan sekarang disimpan tanpa bentrok:
+					// Otomatis naikkan ke disetujui & hapus relasi konflik
+					if (
+						formData.status_verifikasi === 'draft_bentrok' ||
+						String(formData.status_kehadiran || '').toLowerCase().includes('draft bentrok')
+					) {
+						cleanUpdates.status_verifikasi = 'disetujui';
+						cleanUpdates.konflik_dengan_id = null;
+						cleanUpdates.catatan_admin = `Disahkan mandiri oleh guru pada ${new Date().toLocaleString('id-ID')} (Data KBM diperbarui dan diverifikasi bebas bentrok).`;
+					}
+
+					if (formData.is_kegiatan_sekolah) {
+						cleanUpdates.status_kehadiran = 'Kegiatan Sekolah';
+						if (!cleanUpdates.kegiatan?.includes('[Kegiatan Sekolah')) {
+							cleanUpdates.kegiatan = `[Kegiatan Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+						}
+					} else if (formData.is_tugas_luar) {
+						cleanUpdates.status_kehadiran = 'Tugas Luar';
+						if (!cleanUpdates.kegiatan?.includes('[Tugas Luar')) {
+							cleanUpdates.kegiatan = `[Tugas Luar / Dinas Sekolah] ${cleanUpdates.kegiatan || ''}`.trim();
+						}
+					} else if (cleanUpdates.jam_mulai && cleanUpdates.jam_selesai) {
+						cleanUpdates.status_kehadiran = determineKBMStatus({
+							jamMulai: cleanUpdates.jam_mulai,
+							jamSelesai: cleanUpdates.jam_selesai,
+							durasiMenit: cleanUpdates.durasi_menit,
+							tanggal: cleanUpdates.tanggal,
+							jamKe: cleanUpdates.jam_ke,
+							skipSusulanCheck: !formData.status_kehadiran?.includes('Susulan'),
+						});
+					} else if (
+						formData.status_kehadiran &&
+						String(formData.status_kehadiran).trim() !== '' &&
+						!String(formData.status_kehadiran).toLowerCase().includes('draft bentrok')
+					) {
+						cleanUpdates.status_kehadiran = String(formData.status_kehadiran).trim();
+					} else {
+						cleanUpdates.status_kehadiran = 'Normal';
+					}
 				}
 				
 				let updateSuccess = false;
@@ -1190,6 +1262,15 @@ export default function JurnalPage() {
 		return matchKelas && matchTanggal && matchSearch;
 	});
 
+	// Jurnal berstatus antrean draft yang slotnya sudah bebas mandiri
+	const freedDraftJournals = useMemo(() => {
+		return (journals || []).filter(
+			(j) =>
+				(j.status_verifikasi === 'draft_bentrok' || String(j.status_kehadiran || '').toLowerCase().includes('draft bentrok')) &&
+				j.slot_is_free
+		);
+	}, [journals]);
+
 	if (loading) {
 		return <Loader />;
 	}
@@ -1350,7 +1431,38 @@ export default function JurnalPage() {
             </div>
 
 			{/* Timeline Content */}
-			<div className='max-w-5xl mx-auto px-4 sm:px-8 relative z-10'>
+			<div className='max-w-5xl mx-auto px-4 sm:px-8 relative z-10 space-y-8'>
+				{/* BANNER REKOMENDASI PENGESAHAN MANDIRI JURNAL BEBAS */}
+				{freedDraftJournals.length > 0 && (
+					<div className='border-[4px] border-[#0D0D0D] bg-[#00E599] p-4 sm:p-5 shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200'>
+						<div className='flex items-start gap-3.5'>
+							<span className='text-3xl sm:text-4xl'>🎉</span>
+							<div className='space-y-1'>
+								<div className='flex flex-wrap items-center gap-2'>
+									<span className='px-2.5 py-0.5 bg-[#0D0D0D] text-white font-black text-xs uppercase tracking-wider'>
+										SELESAI MANDIRI
+									</span>
+									<h3 className='font-black text-sm sm:text-base text-[#0D0D0D] uppercase tracking-wide'>
+										Jadwal Bentrok Anda Sudah Bebas ({freedDraftJournals.length} KBM Siap Disahkan)
+									</h3>
+								</div>
+								<p className='text-xs font-bold text-[#0D0D0D] max-w-2xl leading-relaxed'>
+									Jadwal KBM yang sebelumnya bertabrakan kini telah kosong karena guru rekan telah menyesuaikan jam mengajarnya. Anda dapat langsung mengesahkan sekarang agar hak Bisaroh Anda aktif.
+								</p>
+							</div>
+						</div>
+						<div className='shrink-0 self-start md:self-center'>
+							<button
+								type='button'
+								onClick={() => handleClaimFreed(freedDraftJournals[0].id, freedDraftJournals[0].mapel)}
+								className='px-5 py-3 bg-white text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-y-0 transition-all cursor-pointer whitespace-nowrap'
+							>
+								✅ Sahkan Sekarang ({freedDraftJournals[0].mapel} - Jam {freedDraftJournals[0].jam_ke})
+							</button>
+						</div>
+					</div>
+				)}
+
 				{filteredJournals.length === 0 ? (
 					<div className='bg-white shadow-[8px_8px_0px_0px_#0D0D0D] border-[4px] border-[#0D0D0D] p-16 text-center flex flex-col items-center justify-center relative overflow-hidden'>
 						<div className='absolute -top-10 -right-10 w-40 h-40 bg-[#F5C518] rounded-full border-[4px] border-[#0D0D0D] opacity-50'></div>
@@ -1364,15 +1476,85 @@ export default function JurnalPage() {
 					</div>
 				) : (
 					<div className='space-y-12'>
-						{filteredJournals.map((journal) => (
+						{filteredJournals.map((journal) => {
+							const isDraftBentrok =
+								journal.status_verifikasi === 'draft_bentrok' ||
+								String(journal.status_kehadiran || '').toLowerCase().includes('draft bentrok');
+							const slotIsFree = journal.slot_is_free;
+
+							return (
 							<div
 								key={journal.id}
-								className='bg-white rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] transition-all relative group'>
+								className={`bg-white rounded-none border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[12px_12px_0px_0px_#0D0D0D] transition-all relative group ${
+									isDraftBentrok && slotIsFree ? 'ring-4 ring-[#00E599]' : ''
+								}`}>
 								
 								{/* Status Strip */}
-								<div className={`absolute left-0 top-0 bottom-0 w-4 border-r-[4px] border-[#0D0D0D] ${journal.tuntas ? 'bg-[#00A693]' : 'bg-[#E8451A]'}`}></div>
+								<div
+									className={`absolute left-0 top-0 bottom-0 w-4 border-r-[4px] border-[#0D0D0D] ${
+										isDraftBentrok
+											? slotIsFree
+												? 'bg-[#00E599]'
+												: 'bg-[#F5C518]'
+											: journal.tuntas
+											? 'bg-[#00A693]'
+											: 'bg-[#E8451A]'
+									}`}></div>
 
 								<div className='pl-6 sm:pl-8 py-6 pr-6'>
+									{/* BANNER NOTIFIKASI KHUSUS JURNAL ANTREAN DRAFT BENTROK */}
+									{isDraftBentrok && (
+										<div
+											className={`mb-6 p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+												slotIsFree ? 'bg-emerald-100' : 'bg-amber-100'
+											}`}
+										>
+											<div className='space-y-1 text-xs'>
+												<div className='flex items-center gap-2'>
+													<span
+														className={`px-2 py-0.5 font-black text-[10px] uppercase border border-[#0D0D0D] ${
+															slotIsFree
+																? 'bg-[#00E599] text-[#0D0D0D]'
+																: 'bg-[#F5C518] text-[#0D0D0D]'
+														}`}
+													>
+														{slotIsFree ? '🟢 Slot Jam Sudah Bebas!' : '⏳ Antrean Draft Bentrok'}
+													</span>
+													<span className='font-black text-[#0D0D0D] text-[11px] uppercase'>
+														{slotIsFree
+															? 'Selesai Mandiri Antar Guru'
+															: 'Menunggu Koordinasi / Admin'}
+													</span>
+												</div>
+												<p className={`font-bold ${slotIsFree ? 'text-emerald-950' : 'text-amber-950'}`}>
+													{slotIsFree
+														? `Tidak ada KBM lain di Jam ke-${journal.jam_ke}. Klik Sahkan Jurnal agar hak Bisaroh Anda segera aktif.`
+														: journal.active_overlap
+														? `Masih bertabrakan dengan KBM ${journal.active_overlap.mapel} (${journal.active_overlap.users?.nama_lengkap || 'Guru lain'} - Jam ${journal.active_overlap.jam_ke}). Silakan koordinasi atau tunggu verifikasi Admin.`
+														: 'Menunggu penyesuaian jam atau persetujuan resolusi oleh Admin.'}
+												</p>
+											</div>
+											<div className='shrink-0 self-start sm:self-center'>
+												{slotIsFree ? (
+													<button
+														type='button'
+														onClick={() => handleClaimFreed(journal.id, journal.mapel)}
+														className='px-4 py-2 bg-[#00E599] text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[3px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer whitespace-nowrap'
+													>
+														✅ Sahkan Jurnal Sekarang
+													</button>
+												) : (
+													<button
+														type='button'
+														onClick={() => handleOpenModal(journal)}
+														className='px-3.5 py-2 bg-white text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all cursor-pointer whitespace-nowrap'
+													>
+														✏️ Sesuaikan Jam
+													</button>
+												)}
+											</div>
+										</div>
+									)}
 									<div className='flex flex-col lg:flex-row justify-between items-start gap-6 mb-8'>
 										<div className='flex flex-col sm:flex-row items-start sm:items-center gap-6'>
 											{/* Date Badge (Offset/Popping out slightly) */}
@@ -1479,7 +1661,8 @@ export default function JurnalPage() {
 									</div>
 								</div>
 							</div>
-						))}
+						);
+					})}
 					</div>
 				)}
 			</div>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { normalizeJamKe, findConflictingSession, checkJamOverlap } from '@/lib/absensiUtils';
+import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
 
 async function checkAdminAuth(req, supabase) {
 	let role = req.headers.get('x-user-role');
@@ -69,23 +70,12 @@ export async function GET(req) {
 			const { data: drafts, error: draftErr } = await draftQuery;
 			if (draftErr) throw draftErr;
 
-			// Untuk setiap draft, cari data jurnal yang bentrok
+			// Untuk setiap draft, cari data jurnal yang bentrok dan periksa apakah sudah bebas
 			const conflictPairs = [];
 			for (const draft of drafts || []) {
-				let conflictJournal = null;
-
-				// A. Cek berdasarkan konflik_dengan_id
-				if (draft.konflik_dengan_id) {
-					const { data: cData } = await supabaseAdmin
-						.from('jurnal')
-						.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
-						.eq('id', draft.konflik_dengan_id)
-						.maybeSingle();
-					conflictJournal = cData;
-				}
-
-				// B. Fallback: Cari sesi aktif di kelas & tanggal yang sama yang overlap jamnya
-				if (!conflictJournal && draft.kelas && draft.tanggal) {
+				// 1. Ambil semua KBM aktif di kelas & tanggal yang sama (bukan draft antrean)
+				let activeJournals = [];
+				if (draft.kelas && draft.tanggal) {
 					const { data: classJournals } = await supabaseAdmin
 						.from('jurnal')
 						.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
@@ -93,18 +83,63 @@ export async function GET(req) {
 						.eq('tanggal', draft.tanggal)
 						.neq('id', draft.id);
 
-					const activeJournals = (classJournals || []).filter(
-						(j) => j.status_verifikasi !== 'draft_bentrok' && j.status_kehadiran !== 'Draft Bentrok'
+					activeJournals = (classJournals || []).filter(
+						(j) => j.status_verifikasi !== 'draft_bentrok' && !String(j.status_kehadiran || '').toLowerCase().includes('draft bentrok')
 					);
+				}
 
-					const match = activeJournals.find((j) => checkJamOverlap(j.jam_ke, draft.jam_ke).isOverlap);
-					if (match) conflictJournal = match;
+				// 2. Cek apakah SAAT INI ada KBM aktif yang tumpang tindih dengan draft.jam_ke
+				const currentActiveOverlap = activeJournals.find((j) => checkJamOverlap(j.jam_ke, draft.jam_ke).isOverlap);
+
+				// 3. Ambil data konflik pembanding awal (berdasarkan draft.konflik_dengan_id)
+				let originalConflict = null;
+				if (draft.konflik_dengan_id) {
+					const { data: cData } = await supabaseAdmin
+						.from('jurnal')
+						.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)')
+						.eq('id', draft.konflik_dengan_id)
+						.maybeSingle();
+					originalConflict = cData;
+				}
+
+				const isStillConflict = !!currentActiveOverlap;
+				const slotIsFree = !currentActiveOverlap;
+
+				// 4. Susun pesan status resolusi untuk admin & guru
+				let resolutionStatus = 'masih_bentrok';
+				let resolutionNote = '';
+
+				if (slotIsFree) {
+					resolutionStatus = 'sudah_bebas';
+					if (originalConflict) {
+						const origGuru = originalConflict.users?.nama_lengkap || 'Guru lawan';
+						if (originalConflict.kelas !== draft.kelas) {
+							resolutionNote = `${origGuru} telah memindahkan KBM ke kelas ${originalConflict.kelas} (Jam ${originalConflict.jam_ke}). Kelas ${draft.kelas} di Jam ${draft.jam_ke} saat ini sudah bersih/bebas dan siap disahkan.`;
+						} else if (originalConflict.jam_ke !== draft.jam_ke) {
+							resolutionNote = `${origGuru} telah memindahkan KBM ke Jam ${originalConflict.jam_ke}. Slot Jam ${draft.jam_ke} saat ini sudah kosong dan siap disahkan.`;
+						} else {
+							resolutionNote = `Jadwal ${origGuru} sudah tidak lagi bertabrakan di kelas ${draft.kelas}. Slot Jam ${draft.jam_ke} saat ini sudah kosong dan siap disahkan.`;
+						}
+					} else if (draft.konflik_dengan_id) {
+						resolutionNote = `Jurnal KBM lawan sebelumnya telah dihapus dari sistem. Slot Jam ${draft.jam_ke} saat ini sudah bebas dan aman.`;
+					} else {
+						resolutionNote = `Tidak ditemukan KBM aktif lain yang bertabrakan di Jam ${draft.jam_ke}. Slot sudah kosong dan siap disahkan.`;
+					}
+				} else {
+					const overlapGuru = currentActiveOverlap.users?.nama_lengkap || 'Guru lain';
+					resolutionNote = `Masih bertabrakan dengan KBM ${currentActiveOverlap.mapel} oleh ${overlapGuru} (Jam ${currentActiveOverlap.jam_ke}).`;
 				}
 
 				conflictPairs.push({
 					id: draft.id,
 					draft,
-					conflictWith: conflictJournal,
+					conflictWith: currentActiveOverlap || originalConflict,
+					activeOverlap: currentActiveOverlap || null,
+					originalConflict: originalConflict || null,
+					isStillConflict,
+					slotIsFree,
+					resolutionStatus,
+					resolutionNote,
 				});
 			}
 
@@ -202,8 +237,22 @@ export async function PUT(req) {
 			}
 		}
 
-		// Tambahkan catatan audit admin
-		updates.catatan_admin = updates.catatan_admin || `Diperbarui oleh Admin (${new Date().toLocaleString('id-ID')})`;
+		// Auto-upgrade status jika jurnal sebelumnya berstatus draft_bentrok dan kini disimpan tanpa bentrok
+		if (
+			existingData?.status_verifikasi === 'draft_bentrok' ||
+			String(existingData?.status_kehadiran || '').toLowerCase().includes('draft bentrok')
+		) {
+			updates.status_verifikasi = 'disetujui';
+			if (!updates.status_kehadiran || updates.status_kehadiran === 'Draft Bentrok') {
+				updates.status_kehadiran = 'Normal';
+			}
+			updates.konflik_dengan_id = null;
+			const nowStr = new Date().toLocaleString('id-ID');
+			updates.catatan_admin = `Disahkan oleh Admin pada ${nowStr} (Data KBM disesuaikan ke ${targetKelas} ${targetTanggal} Jam ${targetJamKe} dan diverifikasi bebas dari bentrok).`;
+		} else {
+			// Tambahkan catatan audit admin biasa
+			updates.catatan_admin = updates.catatan_admin || `Diperbarui oleh Admin (${new Date().toLocaleString('id-ID')})`;
+		}
 
 		// Bersihkan field relasi join atau non-kolom agar tidak error PostgreSQL
 		delete updates.users;
@@ -233,6 +282,14 @@ export async function PUT(req) {
 		if (!updatedRows || updatedRows.length === 0) {
 			return NextResponse.json({ error: 'Data jurnal tidak ditemukan untuk diperbarui.' }, { status: 404 });
 		}
+
+		// Otomatis cek & sahkan draft antrean rekan yang sebelumnya terblokir jika kelas/jam KBM ini dipindahkan
+		await autoResolveFreedDrafts({
+			sourceJournalId: id,
+			oldData: existingData,
+			newData: { kelas: targetKelas, jam_ke: targetJamKe },
+			actionType: 'update',
+		});
 
 		// Sinkronisasi ke absensi_mapel
 		if (sync_absensi && updates.jam_ke) {
@@ -292,15 +349,24 @@ export async function DELETE(req) {
 			return NextResponse.json({ error: 'ID Jurnal diperlukan.' }, { status: 400 });
 		}
 
-		// Ambil data untuk cek sesi_absensi_id
+		// Ambil data untuk cek sesi_absensi_id dan auto-resolusi draft rekan
 		const { data: journal } = await supabaseAdmin
 			.from('jurnal')
-			.select('sesi_absensi_id, kelas, mapel, tanggal')
+			.select('id, sesi_absensi_id, kelas, mapel, tanggal, jam_ke, guru_id')
 			.eq('id', id)
 			.maybeSingle();
 
 		const { error: delErr } = await supabaseAdmin.from('jurnal').delete().eq('id', id);
 		if (delErr) throw delErr;
+
+		// Otomatis bebaskan draft antrean yang sebelumnya terhalang oleh jurnal ini
+		if (journal) {
+			await autoResolveFreedDrafts({
+				sourceJournalId: id,
+				oldData: journal,
+				actionType: 'delete',
+			});
+		}
 
 		if (deleteAbsensi && journal) {
 			try {

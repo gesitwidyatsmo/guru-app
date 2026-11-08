@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { normalizeJamKe } from '@/lib/absensiUtils';
+import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
 
 async function checkAdminAuth(req, supabase) {
 	let role = req.headers.get('x-user-role');
@@ -87,6 +88,48 @@ export async function POST(req) {
 		const nowStr = new Date().toLocaleString('id-ID');
 
 		// -----------------------------------------------------------------------
+		// AKSI: SAHKAN SERENTAK SEMUA DRAFT YANG SUDAH BEBAS
+		// -----------------------------------------------------------------------
+		if (action === 'approve_all_freed' && Array.isArray(body.draft_ids) && body.draft_ids.length > 0) {
+			const approvePayload = {
+				status_verifikasi: 'disetujui',
+				status_kehadiran: 'Normal',
+				catatan_admin: `Disahkan serentak oleh Admin pada ${nowStr} (Slot jam telah dibebaskan mandiri oleh guru).`,
+			};
+			const { error: batchErr } = await supabaseAdmin
+				.from('jurnal')
+				.update(approvePayload)
+				.in('id', body.draft_ids);
+
+			if (batchErr) throw batchErr;
+
+			return NextResponse.json({
+				success: true,
+				message: `${body.draft_ids.length} Jurnal KBM yang slotnya sudah bebas berhasil disahkan serentak!`,
+			});
+		}
+
+		// -----------------------------------------------------------------------
+		// AKSI: SAHKAN 1 DRAFT YANG SLOTNYA SUDAH BEBAS (SELESAI MANDIRI)
+		// -----------------------------------------------------------------------
+		if (action === 'approve_freed_draft' || action === 'approve_draft') {
+			const approvePayload = {
+				status_verifikasi: 'disetujui',
+				status_kehadiran: 'Normal',
+				catatan_admin: `Disahkan oleh Admin pada ${nowStr} (Slot jam KBM telah dibebaskan mandiri oleh guru).`,
+			};
+			if (guru_b_update.jam_ke) approvePayload.jam_ke = normalizeJamKe(guru_b_update.jam_ke);
+
+			const { error: appErr } = await supabaseAdmin.from('jurnal').update(approvePayload).eq('id', draft_id);
+			if (appErr) throw appErr;
+
+			return NextResponse.json({
+				success: true,
+				message: `Jurnal KBM ${draftData.mapel} oleh ${draftData.users?.nama_lengkap || 'Guru'} berhasil disahkan. Hak Bisaroh telah aktif.`,
+			});
+		}
+
+		// -----------------------------------------------------------------------
 		// AKSI: TOLAK DRAFT
 		// -----------------------------------------------------------------------
 		if (action === 'reject_draft') {
@@ -108,6 +151,14 @@ export async function POST(req) {
 		// -----------------------------------------------------------------------
 		if (action === 'delete_conflict_and_approve' && targetConflictId) {
 			await supabaseAdmin.from('jurnal').delete().eq('id', targetConflictId);
+
+			if (conflictData) {
+				await autoResolveFreedDrafts({
+					sourceJournalId: targetConflictId,
+					oldData: conflictData,
+					actionType: 'delete',
+				});
+			}
 
 			const approvePayload = {
 				status_verifikasi: 'disetujui',
@@ -133,14 +184,21 @@ export async function POST(req) {
 			const updatePayloadGuruA = {
 				jam_ke: newJamGuruA,
 				kelas: newKelasGuruA,
-				catatan_admin: `Jam disesuaikan dari ${conflictData.jam_ke} ke ${newJamGuruA} oleh Admin (${nowStr}) untuk membuka slot KBM.`,
+				catatan_admin: `${newKelasGuruA !== conflictData.kelas ? `Kelas diubah ke ${newKelasGuruA}. ` : ''}Jam disesuaikan dari ${conflictData.jam_ke} ke ${newJamGuruA} oleh Admin (${nowStr}) untuk membuka slot KBM.`,
 			};
 
 			const { error: updErrA } = await supabaseAdmin.from('jurnal').update(updatePayloadGuruA).eq('id', targetConflictId);
 			if (updErrA) throw updErrA;
 
-			// Sinkronisasi absensi_mapel Guru A jika diminta
-			if (sync_absensi && newJamGuruA !== conflictData.jam_ke) {
+			await autoResolveFreedDrafts({
+				sourceJournalId: targetConflictId,
+				oldData: conflictData,
+				newData: { kelas: newKelasGuruA, jam_ke: newJamGuruA },
+				actionType: 'update',
+			});
+
+			// Sinkronisasi absensi_mapel Guru A jika diminta (baik jam maupun kelas berubah)
+			if (sync_absensi && (newJamGuruA !== conflictData.jam_ke || newKelasGuruA !== conflictData.kelas)) {
 				try {
 					if (conflictData.sesi_absensi_id) {
 						await supabaseAdmin

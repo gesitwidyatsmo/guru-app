@@ -50,6 +50,7 @@ export default function AdminJurnalPage() {
 	const [filterGuru, setFilterGuru] = useState('all');
 	const [filterStatus, setFilterStatus] = useState('all');
 	const [searchQuery, setSearchQuery] = useState('');
+	const [radarFilter, setRadarFilter] = useState('all'); // 'all' | 'freed' | 'conflict'
 
 	// Modal Resolusi Konflik
 	const [selectedConflict, setSelectedConflict] = useState(null);
@@ -160,22 +161,23 @@ export default function AdminJurnalPage() {
 		});
 	};
 
-	// Eksekusi Resolusi Konflik (Pangkas / Geser & Sahkan)
-	const handleExecuteResolve = async (actionType = 'adjust_and_approve') => {
-		if (!selectedConflict) return;
+	// Eksekusi Resolusi Konflik (Pangkas / Geser & Sahkan / Tolak Draft / Hapus Bentrok)
+	const handleExecuteResolve = async (actionType = 'adjust_and_approve', targetConflict = null) => {
+		const conflict = targetConflict || selectedConflict;
+		if (!conflict) return;
 
 		try {
 			setResolving(true);
 			const payload = {
-				draft_id: selectedConflict.draft?.id,
-				conflict_id: selectedConflict.conflictWith?.id || selectedConflict.draft?.konflik_dengan_id,
+				draft_id: conflict.draft?.id || conflict.id,
+				conflict_id: conflict.conflictWith?.id || conflict.draft?.konflik_dengan_id,
 				action: actionType,
 				guru_a_update: {
-					jam_ke: resolveForm.guru_a_jam,
-					kelas: resolveForm.guru_a_kelas,
+					jam_ke: resolveForm.guru_a_jam || conflict.conflictWith?.jam_ke,
+					kelas: resolveForm.guru_a_kelas || conflict.conflictWith?.kelas,
 				},
 				guru_b_update: {
-					jam_ke: resolveForm.guru_b_jam,
+					jam_ke: resolveForm.guru_b_jam || conflict.draft?.jam_ke,
 				},
 				sync_absensi: resolveForm.sync_absensi,
 			};
@@ -215,6 +217,124 @@ export default function AdminJurnalPage() {
 		}
 	};
 
+	// 1-Klik Sahkan Draft yang Slotnya Sudah Bebas (Resolusi Mandiri Antar Guru)
+	const handleApproveFreedDraft = async (draftId, mapel = '') => {
+		const result = await Swal.fire({
+			title: 'Sahkan Jurnal KBM?',
+			text: `Slot jam untuk KBM ${mapel || ''} telah bebas dari bentrok (diselesaikan mandiri). Sahkan sekarang agar hak Bisaroh guru segera aktif?`,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonText: 'Ya, Sahkan Sekarang',
+			cancelButtonText: 'Batal',
+			confirmButtonColor: '#00E599',
+			cancelButtonColor: '#0D0D0D',
+			customClass: {
+				confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				cancelButton: 'text-white font-bold border-[2px] border-[#0D0D0D]',
+			},
+		});
+
+		if (!result.isConfirmed) return;
+
+		try {
+			setResolving(true);
+			const res = await fetch('/api/admin/jurnal/resolve', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					draft_id: draftId,
+					action: 'approve_freed_draft',
+				}),
+			});
+
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || 'Gagal mengesahkan jurnal.');
+
+			await Swal.fire({
+				title: 'Berhasil Disahkan!',
+				text: data.message || 'Jurnal KBM berhasil disahkan dan hak Bisaroh telah aktif.',
+				icon: 'success',
+				confirmButtonColor: '#00E599',
+				customClass: {
+					confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				},
+			});
+
+			fetchData();
+		} catch (err) {
+			console.error('Error approve freed draft:', err);
+			Swal.fire({
+				title: 'Gagal Mengesahkan',
+				text: err.message,
+				icon: 'error',
+				confirmButtonColor: '#E8451A',
+			});
+		} finally {
+			setResolving(false);
+		}
+	};
+
+	// Sahkan Serentak Semua Draft yang Slotnya Sudah Bebas
+	const handleApproveAllFreed = async (freedIds = []) => {
+		if (!freedIds.length) return;
+
+		const result = await Swal.fire({
+			title: `Sahkan ${freedIds.length} Jurnal Bebas?`,
+			text: `Semua KBM ini telah diverifikasi bahwa slot jamnya sudah bebas dari bentrok. Seluruh hak Bisaroh akan diaktifkan secara serentak.`,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonText: `⚡ Ya, Sahkan Semua (${freedIds.length})`,
+			cancelButtonText: 'Batal',
+			confirmButtonColor: '#00E599',
+			cancelButtonColor: '#0D0D0D',
+			customClass: {
+				confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				cancelButton: 'text-white font-bold border-[2px] border-[#0D0D0D]',
+			},
+		});
+
+		if (!result.isConfirmed) return;
+
+		try {
+			setResolving(true);
+			const res = await fetch('/api/admin/jurnal/resolve', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					action: 'approve_all_freed',
+					draft_ids: freedIds,
+				}),
+			});
+
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || 'Gagal mengesahkan serentak.');
+
+			await Swal.fire({
+				title: 'Berhasil Disahkan!',
+				text: data.message || 'Semua jurnal bebas berhasil disahkan serentak.',
+				icon: 'success',
+				confirmButtonColor: '#00E599',
+				customClass: {
+					confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				},
+			});
+
+			fetchData();
+		} catch (err) {
+			console.error('Error approve all freed:', err);
+			Swal.fire({
+				title: 'Gagal Mengesahkan',
+				text: err.message,
+				icon: 'error',
+				confirmButtonColor: '#E8451A',
+			});
+		} finally {
+			setResolving(false);
+		}
+	};
+
 	// Buka Modal Edit Langsung Jurnal
 	const handleOpenEdit = (j) => {
 		setEditingJournal(j);
@@ -229,8 +349,8 @@ export default function AdminJurnalPage() {
 			kegiatan: j.kegiatan || '',
 			hambatan: j.hambatan || '',
 			solusi: j.solusi || '',
-			status_kehadiran: j.status_kehadiran || 'Normal',
-			status_verifikasi: j.status_verifikasi || 'disetujui',
+			status_kehadiran: j.status_kehadiran === 'Draft Bentrok' ? 'Normal' : (j.status_kehadiran || 'Normal'),
+			status_verifikasi: 'disetujui',
 			sync_absensi: true,
 			override_conflict: false,
 		});
@@ -455,6 +575,9 @@ export default function AdminJurnalPage() {
 				if (j.status_verifikasi !== 'draft_bentrok' && j.status_kehadiran !== 'Draft Bentrok') return false;
 			} else if (filterStatus === 'disetujui') {
 				if (j.status_verifikasi === 'draft_bentrok' || j.status_kehadiran === 'Draft Bentrok') return false;
+			} else if (filterStatus === 'mandiri') {
+				const note = String(j.catatan_admin || '').toLowerCase();
+				if (!note.includes('mandiri') && !note.includes('dibebaskan')) return false;
 			}
 
 			if (searchQuery) {
@@ -468,6 +591,15 @@ export default function AdminJurnalPage() {
 			return true;
 		});
 	}, [journals, filterKelas, filterGuru, filterTanggal, filterStatus, searchQuery]);
+
+	// Klasifikasi Konflik: yang slotnya sudah bebas vs yang masih tumpang tindih
+	const freedConflicts = useMemo(() => conflicts.filter((c) => c.slotIsFree), [conflicts]);
+	const stillConflicts = useMemo(() => conflicts.filter((c) => c.isStillConflict), [conflicts]);
+	const displayedConflicts = useMemo(() => {
+		if (radarFilter === 'freed') return freedConflicts;
+		if (radarFilter === 'conflict') return stillConflicts;
+		return conflicts;
+	}, [radarFilter, conflicts, freedConflicts, stillConflicts]);
 
 	// Visual Grid: Matriks Jam per Kelas untuk Tanggal Terpilih
 	const timelineData = useMemo(() => {
@@ -607,118 +739,304 @@ export default function AdminJurnalPage() {
 							</p>
 						</div>
 					) : (
-						<div className='grid grid-cols-1 gap-6'>
-							{conflicts.map((item, idx) => {
-								const draft = item.draft;
-								const conflictWith = item.conflictWith;
-								const draftGuru = draft.users?.nama_lengkap || 'Guru Pengajar';
-								const conflictGuru = conflictWith?.users?.nama_lengkap || 'Guru Lain';
-
-								return (
-									<div
-										key={draft.id || idx}
-										className='border-[4px] border-[#0D0D0D] bg-white p-5 sm:p-6 shadow-[6px_6px_0px_0px_#0D0D0D] space-y-4'
+						<div className='space-y-5'>
+							{/* Sub-filter & Aksi Serentak */}
+							<div className='flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D]'>
+								<div className='flex flex-wrap items-center gap-2'>
+									<button
+										onClick={() => setRadarFilter('all')}
+										className={`px-3.5 py-1.5 border-[2px] border-[#0D0D0D] font-black text-xs uppercase transition-all cursor-pointer ${
+											radarFilter === 'all'
+												? 'bg-[#0D0D0D] text-white shadow-[2px_2px_0px_0px_#0D0D0D]'
+												: 'bg-white text-[#0D0D0D] hover:bg-gray-100'
+										}`}
 									>
-										{/* Banner Status */}
-										<div className='flex flex-wrap items-center justify-between gap-2 p-3 bg-red-100 border-[2px] border-[#E8451A]'>
-											<div className='flex items-center gap-2'>
-												<span className='px-2.5 py-1 bg-[#E8451A] text-white font-black text-xs uppercase'>
-													⚠️ Konflik Jam Terdeteksi
-												</span>
-												<span className='font-bold text-xs text-[#0D0D0D]'>
-													Kelas <b>{draft.kelas}</b> • Tanggal <b>{draft.tanggal}</b>
-												</span>
-											</div>
-											<span className='text-xs font-black text-gray-600'>
-												ID Antrean: #{draft.id.slice(0, 8)}
-											</span>
-										</div>
+										Semua ({conflicts.length})
+									</button>
+									<button
+										onClick={() => setRadarFilter('freed')}
+										className={`px-3.5 py-1.5 border-[2px] border-[#0D0D0D] font-black text-xs uppercase transition-all cursor-pointer flex items-center gap-1.5 ${
+											radarFilter === 'freed'
+												? 'bg-[#00E599] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'
+												: 'bg-white text-[#0D0D0D] hover:bg-emerald-50'
+										}`}
+									>
+										<span>🟢 Sudah Bebas / Mandiri</span>
+										<span className='px-1.5 py-0.2 bg-white text-[#0D0D0D] border border-black text-[10px]'>
+											{freedConflicts.length}
+										</span>
+									</button>
+									<button
+										onClick={() => setRadarFilter('conflict')}
+										className={`px-3.5 py-1.5 border-[2px] border-[#0D0D0D] font-black text-xs uppercase transition-all cursor-pointer flex items-center gap-1.5 ${
+											radarFilter === 'conflict'
+												? 'bg-[#E8451A] text-white shadow-[2px_2px_0px_0px_#0D0D0D]'
+												: 'bg-white text-[#0D0D0D] hover:bg-rose-50'
+										}`}
+									>
+										<span>⚠️ Masih Bentrok</span>
+										<span className='px-1.5 py-0.2 bg-white text-[#0D0D0D] border border-black text-[10px]'>
+											{stillConflicts.length}
+										</span>
+									</button>
+								</div>
 
-										{/* Perbandingan Berdampingan (Kiri: Jurnal Terdata, Kanan: Draft Antrean) */}
-										<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-											{/* Guru A (Terdata di Database) */}
-											<div className='p-4 border-[3px] border-[#0D0D0D] bg-[#FFF5F0] space-y-2'>
-												<div className='flex items-center justify-between'>
-													<span className='text-[11px] font-black uppercase px-2 py-0.5 bg-[#E8451A] text-white border-[2px] border-[#0D0D0D]'>
-														1. Jurnal Terbit (Di Database)
-													</span>
-													<span className='text-xs font-black text-[#E8451A]'>
-														Jam ke-{conflictWith?.jam_ke || '-'}
-													</span>
-												</div>
-												<h4 className='text-base font-black text-[#0D0D0D]'>{conflictGuru}</h4>
-												<p className='text-xs font-bold text-gray-700'>
-													Mapel: <b>{conflictWith?.mapel || '-'}</b>
-												</p>
-												<p className='text-xs text-gray-600 line-clamp-2'>
-													Materi: {conflictWith?.materi || '(Belum ada catatan materi)'}
-												</p>
-											</div>
+								{freedConflicts.length > 0 && (
+									<button
+										onClick={() => handleApproveAllFreed(freedConflicts.map((c) => c.id))}
+										className='flex items-center gap-1.5 px-4 py-2 bg-[#00E599] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black text-xs uppercase tracking-wider shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer'
+									>
+										<span>⚡ Sahkan Semua Bebas ({freedConflicts.length})</span>
+									</button>
+								)}
+							</div>
 
-											{/* Guru B (Draft Antrean Menunggu) */}
-											<div className='p-4 border-[3px] border-[#0D0D0D] bg-[#FFFDF0] space-y-2'>
-												<div className='flex items-center justify-between'>
-													<span className='text-[11px] font-black uppercase px-2 py-0.5 bg-[#F5C518] text-[#0D0D0D] border-[2px] border-[#0D0D0D]'>
-														2. Draft Antrean (Menunggu Sah)
-													</span>
-													<span className='text-xs font-black text-[#0D0D0D]'>
-														Diajukan: Jam ke-{draft.jam_ke}
-													</span>
-												</div>
-												<h4 className='text-base font-black text-[#0D0D0D]'>{draftGuru}</h4>
-												<p className='text-xs font-bold text-gray-700'>
-													Mapel: <b>{draft.mapel || '-'}</b>
-												</p>
-												<p className='text-xs text-gray-600 line-clamp-2'>
-													Materi: {draft.materi || '(Belum ada catatan materi)'}
-												</p>
-												<div className='pt-1'>
-													<span className='text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-300'>
-														⏳ Belum Masuk Rekap Bisaroh
-													</span>
-												</div>
-											</div>
-										</div>
-
-										{/* Panel Aksi Resolusi Cepat */}
-										<div className='flex flex-wrap items-center justify-between gap-3 pt-3 border-t-[2px] border-dashed border-[#0D0D0D]'>
-											<div className='text-xs text-gray-700 font-bold'>
-												Pilih tindakan penyelesaian:
-											</div>
-											<div className='flex flex-wrap items-center gap-2'>
-												<button
-													onClick={() => handleOpenResolve(item)}
-													className='flex items-center gap-1.5 px-4 py-2 bg-[#00E599] text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[3px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all cursor-pointer'
-												>
-													<Scissors className='w-4 h-4' />
-													Atur Jam & Sahkan
-												</button>
-
-												{conflictWith && (
-													<button
-														onClick={() =>
-															handleExecuteResolve('delete_conflict_and_approve')
-														}
-														className='flex items-center gap-1 px-3 py-2 bg-rose-100 text-[#E8451A] font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-rose-200 cursor-pointer'
-														title='Gunakan jika Jurnal 1 adalah salah input/duplikat'
-													>
-														<Trash2 className='w-3.5 h-3.5' />
-														Hapus Jurnal 1 & Sahkan
-													</button>
-												)}
-
-												<button
-													onClick={() => handleExecuteResolve('reject_draft')}
-													className='flex items-center gap-1 px-3 py-2 bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-gray-300 cursor-pointer'
-												>
-													<X className='w-3.5 h-3.5' />
-													Tolak Draft
-												</button>
-											</div>
+							{/* Notifikasi Rekomendasi Selesai Mandiri */}
+							{freedConflicts.length > 0 && radarFilter !== 'conflict' && (
+								<div className='border-[3px] border-[#0D0D0D] bg-emerald-100 p-4 shadow-[4px_4px_0px_0px_#00E599] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3'>
+									<div className='flex items-start gap-3'>
+										<span className='text-2xl'>🎉</span>
+										<div className='space-y-0.5'>
+											<h4 className='font-black text-xs sm:text-sm text-[#0D0D0D] uppercase'>
+												{freedConflicts.length} KBM Telah Bebas / Selesai Mandiri Antar Guru!
+											</h4>
+											<p className='text-xs text-gray-800 font-medium'>
+												Guru lawan telah menggeser jadwal atau membebaskan slot jam. KBM siap disahkan agar hak Bisaroh guru segera aktif.
+											</p>
 										</div>
 									</div>
-								);
-							})}
+									<button
+										onClick={() => handleApproveAllFreed(freedConflicts.map((c) => c.id))}
+										className='px-3.5 py-1.5 bg-[#00E599] text-[#0D0D0D] font-black text-xs uppercase border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] hover:-translate-y-0.5 whitespace-nowrap cursor-pointer'
+									>
+										⚡ Sahkan Serentak
+									</button>
+								</div>
+							)}
+
+							{/* Daftar Kartu Konflik / Draft Antrean */}
+							{displayedConflicts.length === 0 ? (
+								<div className='border-[3px] border-[#0D0D0D] bg-white p-8 text-center shadow-[4px_4px_0px_0px_#0D0D0D]'>
+									<p className='text-xs font-bold text-gray-600 uppercase'>
+										Tidak ada data aduan pada kategori filter ini.
+									</p>
+								</div>
+							) : (
+								<div className='grid grid-cols-1 gap-6'>
+									{displayedConflicts.map((item, idx) => {
+										const draft = item.draft;
+										const conflictWith = item.conflictWith;
+										const draftGuru = draft.users?.nama_lengkap || 'Guru Pengajar';
+										const conflictGuru = conflictWith?.users?.nama_lengkap || 'Guru Terkait';
+										const slotIsFree = item.slotIsFree;
+
+										return (
+											<div
+												key={draft.id || idx}
+												className={`border-[4px] p-5 sm:p-6 shadow-[6px_6px_0px_0px_#0D0D0D] space-y-4 ${
+													slotIsFree
+														? 'border-[#00E599] bg-[#F4FDF8]'
+														: 'border-[#0D0D0D] bg-white'
+												}`}
+											>
+												{/* Banner Status */}
+												<div
+													className={`flex flex-wrap items-center justify-between gap-2 p-3 border-[2px] ${
+														slotIsFree
+															? 'bg-emerald-100 border-[#00E599]'
+															: 'bg-red-100 border-[#E8451A]'
+													}`}
+												>
+													<div className='flex items-center gap-2'>
+														<span
+															className={`px-2.5 py-1 font-black text-xs uppercase border border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] ${
+																slotIsFree
+																	? 'bg-[#00E599] text-[#0D0D0D]'
+																	: 'bg-[#E8451A] text-white'
+															}`}
+														>
+															{slotIsFree
+																? '🟢 Slot Sudah Bebas (Selesai Mandiri)'
+																: '⚠️ Konflik Jam Aktif'}
+														</span>
+														<span className='font-bold text-xs text-[#0D0D0D]'>
+															Kelas <b>{draft.kelas}</b> • Tanggal <b>{draft.tanggal}</b>
+														</span>
+													</div>
+													<div className='flex items-center gap-2'>
+														{slotIsFree && (
+															<span className='text-[11px] font-black text-emerald-800 bg-white px-2 py-0.5 border border-[#00E599]'>
+																Siap Disahkan (1-Klik)
+															</span>
+														)}
+														<span className='text-xs font-black text-gray-600'>
+															ID: #{draft.id.slice(0, 8)}
+														</span>
+													</div>
+												</div>
+
+												{/* Catatan Status Resolusi Cerdas */}
+												{item.resolutionNote && (
+													<div
+														className={`p-3 border-[2px] shadow-[2px_2px_0px_0px_#0D0D0D] flex items-start gap-2.5 text-xs ${
+															slotIsFree
+																? 'bg-white border-[#00E599]'
+																: 'bg-[#FFF9F5] border-[#E8451A]'
+														}`}
+													>
+														<span className='text-base'>{slotIsFree ? '✅' : '⚠️'}</span>
+														<div className='space-y-0.5'>
+															<div className='font-black text-[#0D0D0D] uppercase text-[11px]'>
+																{slotIsFree
+																	? 'Status Koordinasi Mandiri Antar Guru:'
+																	: 'Status Tumpang Tindih Jam:'}
+															</div>
+															<p
+																className={`font-bold ${
+																	slotIsFree ? 'text-emerald-950' : 'text-rose-950'
+																}`}
+															>
+																{item.resolutionNote}
+															</p>
+														</div>
+													</div>
+												)}
+
+												{/* Perbandingan Berdampingan (Kiri: Jurnal Terbit / Lawan, Kanan: Draft Antrean) */}
+												<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+													{/* Sesi KBM Pembanding / Lawan */}
+													<div className='p-4 border-[3px] border-[#0D0D0D] bg-[#FFF5F0] space-y-2'>
+														<div className='flex items-center justify-between'>
+															<span className='text-[11px] font-black uppercase px-2 py-0.5 bg-[#E8451A] text-white border-[2px] border-[#0D0D0D]'>
+																{slotIsFree
+																	? '1. KBM Terkait (Telah Digeser/Bebas)'
+																	: '1. Jurnal Terbit (Di Database)'}
+															</span>
+															<span className='text-xs font-black text-[#E8451A]'>
+																Jam ke-{conflictWith?.jam_ke || '-'}
+															</span>
+														</div>
+														<h4 className='text-base font-black text-[#0D0D0D]'>{conflictGuru}</h4>
+														<p className='text-xs font-bold text-gray-700'>
+															Kelas: <b>{conflictWith?.kelas || '-'}</b> • Mapel: <b>{conflictWith?.mapel || '-'}</b>
+														</p>
+														<p className='text-xs text-gray-600 line-clamp-2'>
+															Materi: {conflictWith?.materi || '(Belum ada catatan materi)'}
+														</p>
+													</div>
+
+													{/* Guru B (Draft Antrean Menunggu) */}
+													<div
+														className={`p-4 border-[3px] border-[#0D0D0D] space-y-2 ${
+															slotIsFree ? 'bg-emerald-50' : 'bg-[#FFFDF0]'
+														}`}
+													>
+														<div className='flex items-center justify-between'>
+															<span
+																className={`text-[11px] font-black uppercase px-2 py-0.5 border-[2px] border-[#0D0D0D] ${
+																	slotIsFree
+																		? 'bg-[#00E599] text-[#0D0D0D]'
+																		: 'bg-[#F5C518] text-[#0D0D0D]'
+																}`}
+															>
+																2. Draft Antrean ({slotIsFree ? 'Slot Bebas' : 'Menunggu'})
+															</span>
+															<span className='text-xs font-black text-[#0D0D0D]'>
+																Diajukan: Jam ke-{draft.jam_ke}
+															</span>
+														</div>
+														<h4 className='text-base font-black text-[#0D0D0D]'>{draftGuru}</h4>
+														<p className='text-xs font-bold text-gray-700'>
+															Kelas: <b>{draft.kelas || '-'}</b> • Mapel: <b>{draft.mapel || '-'}</b>
+														</p>
+														<p className='text-xs text-gray-600 line-clamp-2'>
+															Materi: {draft.materi || '(Belum ada catatan materi)'}
+														</p>
+														<div className='pt-1'>
+															{slotIsFree ? (
+																<span className='text-[11px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 border border-emerald-400'>
+																	✓ Siap Diaktifkan ke Rekap Bisaroh
+																</span>
+															) : (
+																<span className='text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-300'>
+																	⏳ Belum Masuk Rekap Bisaroh
+																</span>
+															)}
+														</div>
+													</div>
+												</div>
+
+												{/* Panel Aksi Resolusi */}
+												<div className='flex flex-wrap items-center justify-between gap-3 pt-3 border-t-[2px] border-dashed border-[#0D0D0D]'>
+													<div className='text-xs text-gray-700 font-bold'>
+														{slotIsFree
+															? 'Tindakan: Slot sudah aman & bebas!'
+															: 'Pilih tindakan penyelesaian:'}
+													</div>
+													<div className='flex flex-wrap items-center gap-2'>
+														{slotIsFree ? (
+															<>
+																<button
+																	onClick={() => handleApproveFreedDraft(draft.id, draft.mapel)}
+																	className='flex items-center gap-1.5 px-5 py-2.5 bg-[#00E599] text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[3px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer'
+																>
+																	<Check className='w-4 h-4' />
+																	Sahkan Jurnal Sekarang
+																</button>
+																<button
+																	onClick={() => handleOpenResolve(item)}
+																	className='flex items-center gap-1 px-3 py-2 bg-white text-[#0D0D0D] font-black text-xs uppercase border-[2px] border-[#0D0D0D] hover:bg-gray-100 cursor-pointer'
+																>
+																	<Scissors className='w-3.5 h-3.5' />
+																	Atur Manual
+																</button>
+																<button
+																	onClick={() => handleExecuteResolve('reject_draft', item)}
+																	className='flex items-center gap-1 px-3 py-2 bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-gray-300 cursor-pointer'
+																>
+																	<X className='w-3.5 h-3.5' />
+																	Tolak Draft
+																</button>
+															</>
+														) : (
+															<>
+																<button
+																	onClick={() => handleOpenResolve(item)}
+																	className='flex items-center gap-1.5 px-4 py-2 bg-[#F5C518] text-[#0D0D0D] font-black text-xs uppercase tracking-wider border-[3px] border-[#0D0D0D] shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all cursor-pointer'
+																>
+																	<Scissors className='w-4 h-4' />
+																	Atur Jam & Sahkan
+																</button>
+
+																{conflictWith && (
+																	<button
+																		onClick={() =>
+																			handleExecuteResolve('delete_conflict_and_approve', item)
+																		}
+																		className='flex items-center gap-1 px-3 py-2 bg-rose-100 text-[#E8451A] font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-rose-200 cursor-pointer'
+																		title='Gunakan jika Jurnal 1 adalah salah input/duplikat'
+																	>
+																		<Trash2 className='w-3.5 h-3.5' />
+																		Hapus Jurnal 1 & Sahkan
+																	</button>
+																)}
+
+																<button
+																	onClick={() => handleExecuteResolve('reject_draft', item)}
+																	className='flex items-center gap-1 px-3 py-2 bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider border-[2px] border-[#0D0D0D] hover:bg-gray-300 cursor-pointer'
+																>
+																	<X className='w-3.5 h-3.5' />
+																	Tolak Draft
+																</button>
+															</>
+														)}
+													</div>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							)}
 						</div>
 					)}
 				</div>
@@ -909,6 +1227,7 @@ export default function AdminJurnalPage() {
 									<option value='all'>Semua Status</option>
 									<option value='draft'>Hanya Draft Antrean</option>
 									<option value='disetujui'>Hanya Disetujui</option>
+									<option value='mandiri'>🟢 Disahkan Mandiri / Bebas</option>
 								</select>
 							</div>
 						</div>
@@ -977,11 +1296,21 @@ export default function AdminJurnalPage() {
 													</div>
 												</td>
 												<td className='p-3'>
-													<span
-														className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[10px] font-black uppercase ${badge.bg} ${badge.text} ${badge.border}`}
-													>
-														<span>{badge.icon}</span> {badge.label}
-													</span>
+													<div className='flex flex-col gap-1'>
+														<span
+															className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[10px] font-black uppercase ${badge.bg} ${badge.text} ${badge.border}`}
+														>
+															<span>{badge.icon}</span> {badge.label}
+														</span>
+														{j.catatan_admin && (String(j.catatan_admin).toLowerCase().includes('mandiri') || String(j.catatan_admin).toLowerCase().includes('dibebaskan')) && (
+															<span
+																className='inline-flex items-center gap-1 px-2 py-0.5 border border-[#00E599] bg-emerald-100 text-emerald-950 text-[10px] font-black uppercase'
+																title={j.catatan_admin}
+															>
+																<span>🟢</span> Selesai Mandiri
+															</span>
+														)}
+													</div>
 												</td>
 												<td className='p-3 text-center'>
 													<div className='flex items-center justify-center gap-1'>

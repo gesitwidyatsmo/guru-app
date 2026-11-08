@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { haversine } from '@/lib/haversine';
 import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
 import { findConflictingSession, checkJamOverlap, normalizeJamKe } from '@/lib/absensiUtils';
+import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
 
 function generateId() {
 	return Math.random().toString(36).substring(2, 11);
@@ -71,7 +72,34 @@ export async function GET(req) {
 		const { data, error } = await query;
 		if (error) throw error;
 
-		return NextResponse.json(data || [], { status: 200 });
+		// Periksa status keterbebasan slot untuk jurnal yang masih berstatus draft_bentrok
+		const enrichedData = await Promise.all(
+			(data || []).map(async (j) => {
+				if (j.status_verifikasi === 'draft_bentrok' || String(j.status_kehadiran || '').toLowerCase().includes('draft bentrok')) {
+					// Ambil sesi aktif pada kelas & tanggal yang sama
+					const { data: classJournals } = await supabase
+						.from('jurnal')
+						.select('id, jam_ke, mapel, guru_id, status_verifikasi, status_kehadiran, users!jurnal_guru_id_fkey(nama_lengkap)')
+						.eq('kelas', j.kelas)
+						.eq('tanggal', j.tanggal)
+						.neq('id', j.id);
+
+					const activeJournals = (classJournals || []).filter(
+						(cj) => cj.status_verifikasi !== 'draft_bentrok' && !String(cj.status_kehadiran || '').toLowerCase().includes('draft bentrok')
+					);
+
+					const overlap = activeJournals.find((cj) => checkJamOverlap(cj.jam_ke, j.jam_ke).isOverlap);
+					return {
+						...j,
+						slot_is_free: !overlap,
+						active_overlap: overlap || null,
+					};
+				}
+				return j;
+			})
+		);
+
+		return NextResponse.json(enrichedData, { status: 200 });
 	} catch (error) {
 		console.error('❌ Error GET jurnal:', error);
 		return NextResponse.json({ error: 'Gagal ambil data' }, { status: 500 });
@@ -471,6 +499,17 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 	} else if (updates.status_kehadiran !== undefined) {
 		updates.status_kehadiran = updates.status_kehadiran && String(updates.status_kehadiran).trim() !== '' ? String(updates.status_kehadiran).trim() : 'Normal';
 	}
+
+	// Auto-upgrade status jika jurnal sebelumnya berstatus draft_bentrok dan kini disimpan tanpa bentrok
+	if (existingData?.status_verifikasi === 'draft_bentrok' || String(existingData?.status_kehadiran || '').includes('Draft Bentrok')) {
+		updates.status_verifikasi = 'disetujui';
+		if (!updates.status_kehadiran || updates.status_kehadiran === 'Draft Bentrok') {
+			updates.status_kehadiran = 'Normal';
+		}
+		const nowStr = new Date().toLocaleString('id-ID');
+		updates.catatan_admin = `Disahkan mandiri oleh guru pada ${nowStr} (Jam KBM disesuaikan ke ${updates.jam_ke || existingData?.jam_ke})`;
+	}
+
 	const syncAbsensi = body.sync_absensi === true;
 	delete updates.is_tugas_luar;
 	delete updates.is_kegiatan_sekolah;
@@ -506,6 +545,14 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 
 	if (error) throw error;
 
+	// Otomatis cek & sahkan draft rekan yang sebelumnya terblokir jika kelas/jam KBM ini dipindahkan
+	await autoResolveFreedDrafts({
+		sourceJournalId: id,
+		oldData: existingData,
+		newData: { kelas: targetKelas, jam_ke: targetJamKe },
+		actionType: 'update',
+	});
+
 	// Sinkronisasi ke absensi_mapel jika diminta oleh admin
 	if (syncAbsensi && updates.jam_ke) {
 		try {
@@ -522,10 +569,6 @@ async function executeUpdateJurnal(supabase, body, userId, role) {
 			console.warn('Gagal sinkronisasi absensi_mapel saat update jurnal:', absSyncErr);
 		}
 	}
-
-	return NextResponse.json({ success: true });
-
-	if (error) throw error;
 
 	return NextResponse.json({ success: true, id, mode: 'update' });
 }
@@ -572,19 +615,34 @@ export async function DELETE(req) {
 
 		const supabase = await createClient();
 
+		// Ambil data jurnal sebelum dihapus untuk kepentingan auto-resolusi draft antrean rekan
+		const { data: targetJournal } = await supabase
+			.from('jurnal')
+			.select('id, kelas, tanggal, jam_ke, guru_id')
+			.eq('id', id)
+			.maybeSingle();
+
 		// Verifikasi kepemilikan jika Guru
 		if (role === 'Guru') {
-			const { data: existingData } = await supabase.from('jurnal').select('guru_id').eq('id', id).single();
-			if (!existingData) {
+			if (!targetJournal) {
 				return NextResponse.json({ error: 'Data Jurnal spesifik tidak ditemukan' }, { status: 404 });
 			}
-			if (existingData.guru_id !== userId) {
+			if (targetJournal.guru_id !== userId) {
 				return NextResponse.json({ error: 'Akses Ditolak: Anda mencoba menghapus Jurnal kolega Anda.' }, { status: 403 });
 			}
 		}
 
 		const { error } = await supabase.from('jurnal').delete().eq('id', id);
 		if (error) throw error;
+
+		// Otomatis bebaskan draft antrean yang sebelumnya terhalang oleh jurnal ini
+		if (targetJournal) {
+			await autoResolveFreedDrafts({
+				sourceJournalId: id,
+				oldData: targetJournal,
+				actionType: 'delete',
+			});
+		}
 
 		return NextResponse.json({ success: true });
 	} catch (error) {
