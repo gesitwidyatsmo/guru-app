@@ -758,8 +758,8 @@ export default function JurnalPage() {
 			if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah) {
 				try {
 					const coords = await getPosition();
-					const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
-					setUserLocationStatus({ ...check, checked: true, userLat: coords.lat, userLng: coords.lng });
+					const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, coords.accuracy);
+					setUserLocationStatus({ ...check, checked: true, userLat: coords.lat, userLng: coords.lng, accuracy: coords.accuracy });
 
 					if (!check.isInside) {
 						await Swal.fire({
@@ -771,6 +771,7 @@ export default function JurnalPage() {
 									<div class="bg-red-50 p-3 rounded border border-red-200">
 										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
 										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+										<p class="text-xs text-gray-500 mt-0.5">Akurasi GPS perangkat: ±${Math.round(coords.accuracy || 0)} meter</p>
 									</div>
 									<p class="text-xs text-gray-600 font-medium">Jurnal mengajar reguler hanya dapat disimpan saat Anda berada di lingkungan sekolah. Jika Anda sedang bertugas di luar sekolah atau mengikuti agenda khusus, pilih opsi agenda yang sesuai.</p>
 								</div>
@@ -802,7 +803,7 @@ export default function JurnalPage() {
 				try {
 					const coords = await getPosition();
 					if (coords?.lat && coords?.lng) {
-						setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng });
+						setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng, accuracy: coords.accuracy });
 					}
 				} catch {
 					// Jangan memblokir jika GPS gagal saat tugas luar
@@ -1011,6 +1012,7 @@ export default function JurnalPage() {
 								tipe_agenda: formData.tipe_agenda,
 								user_lat: userLocationStatus?.userLat,
 								user_lng: userLocationStatus?.userLng,
+								user_accuracy: userLocationStatus?.accuracy,
 								save_as_draft: saveAsDraftConflict,
 								conflict_ref_id: conflictTargetSession?.id,
 							}),
@@ -1143,6 +1145,7 @@ export default function JurnalPage() {
 								tipe_agenda: formData.tipe_agenda,
 								user_lat: userLocationStatus?.userLat,
 								user_lng: userLocationStatus?.userLng,
+								user_accuracy: userLocationStatus?.accuracy,
 								save_as_draft: saveAsDraftConflict,
 								conflict_ref_id: conflictTargetSession?.id,
 							}),
@@ -2217,8 +2220,8 @@ export default function JurnalPage() {
 												onClick={async () => {
 													try {
 														const c = await getPosition();
-														const chk = isWithinGeofence(c.lat, c.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
-														setUserLocationStatus({ ...chk, checked: true, userLat: c.lat, userLng: c.lng });
+														const chk = isWithinGeofence(c.lat, c.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, c.accuracy);
+														setUserLocationStatus({ ...chk, checked: true, userLat: c.lat, userLng: c.lng, accuracy: c.accuracy });
 													} catch (e) {
 														Swal.fire({
 															icon: 'warning',

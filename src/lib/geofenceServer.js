@@ -1,19 +1,21 @@
-import { haversine, formatDistance } from '@/lib/haversine';
+import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
 
 /**
  * Memvalidasi apakah permintaan berada di dalam area geofence sekolah.
+ * Memperhitungkan margin toleransi akurasi GPS (accuracy buffer).
  * 
  * @param {Object} options
  * @param {Object} options.supabase Klien Supabase (server atau admin)
  * @param {number|string|null} options.userLat Koordinat latitude dari perangkat user
  * @param {number|string|null} options.userLng Koordinat longitude dari perangkat user
+ * @param {number|string|null} [options.userAccuracy=null] Akurasi GPS perangkat user dalam meter
  * @param {string} [options.moduleName='absensi'] Nama modul ('jurnal' atau 'absensi')
  * @param {string} [options.role] Peran pengguna (Admin dilewati dari validasi)
  * @param {boolean} [options.isTugasLuar=false] Apakah pengguna bertugas di luar sekolah
  * @param {boolean} [options.isKegiatanSekolah=false] Apakah kegiatan sekolah (Hari Santri, event, dll)
- * @returns {Promise<{ allowed: boolean, status?: number, error?: string, distance?: number }>}
+ * @returns {Promise<{ allowed: boolean, status?: number, error?: string, distance?: number, effectiveDistance?: number, accuracyBuffer?: number }>}
  */
-export async function verifyGeofence({ supabase, userLat, userLng, moduleName = 'absensi', role, isTugasLuar = false, isKegiatanSekolah = false }) {
+export async function verifyGeofence({ supabase, userLat, userLng, userAccuracy = null, moduleName = 'absensi', role, isTugasLuar = false, isKegiatanSekolah = false }) {
 	// Administrator, Guru bertugas luar, atau Kegiatan Sekolah dikecualikan dari batasan geofencing
 	if (role === 'Admin' || isTugasLuar || isKegiatanSekolah) {
 		return { allowed: true, isTugasLuar: !!isTugasLuar, isKegiatanSekolah: !!isKegiatanSekolah };
@@ -53,18 +55,25 @@ export async function verifyGeofence({ supabase, userLat, userLng, moduleName = 
 			};
 		}
 
-		const distance = haversine(userLat, userLng, geofence.lat, geofence.lng);
 		const maxRadius = Number(geofence.radius) || 200;
+		const check = isWithinGeofence(userLat, userLng, geofence.lat, geofence.lng, maxRadius, userAccuracy);
 
-		if (distance > maxRadius) {
+		if (!check.isInside) {
 			return {
 				allowed: false,
 				status: 403,
-				error: `Di Luar Radius: Anda terdeteksi berada ${formatDistance(distance)} dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${maxRadius}m). Pengisian ${moduleName === 'absensi' ? 'absensi' : 'jurnal'} hanya dapat dilakukan dari lingkungan sekolah.`,
+				distance: check.distance,
+				effectiveDistance: check.effectiveDistance,
+				error: `Di Luar Radius: Anda terdeteksi berada ${formatDistance(check.distance)} dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${maxRadius}m). Pengisian ${moduleName === 'absensi' ? 'absensi' : 'jurnal'} hanya dapat dilakukan dari lingkungan sekolah.`,
 			};
 		}
 
-		return { allowed: true, distance: Math.round(distance) };
+		return {
+			allowed: true,
+			distance: check.distance,
+			effectiveDistance: check.effectiveDistance,
+			accuracyBuffer: check.accuracyBuffer,
+		};
 	} catch (err) {
 		console.warn('⚠️ Server geofence verification bypassed due to error:', err.message);
 		return { allowed: true };

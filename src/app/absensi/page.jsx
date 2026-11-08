@@ -753,11 +753,11 @@ export default function AbsensiMapelPage() {
 		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin') {
 			try {
 				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
-					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng };
+					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng, accuracy: locationStatus.accuracy };
 				} else {
 					userCoords = await getPosition();
-					const check = isWithinGeofence(userCoords.lat, userCoords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius);
-					setLocationStatus({ ...check, checked: true, userLat: userCoords.lat, userLng: userCoords.lng });
+					const check = isWithinGeofence(userCoords.lat, userCoords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, userCoords.accuracy);
+					setLocationStatus({ ...check, checked: true, userLat: userCoords.lat, userLng: userCoords.lng, accuracy: userCoords.accuracy });
 
 					if (!check.isInside) {
 						await Swal.fire({
@@ -769,6 +769,7 @@ export default function AbsensiMapelPage() {
 									<div class="bg-red-50 p-3 rounded border border-red-200">
 										<p class="text-xs text-gray-700">Jarak Anda ke sekolah: <b class="text-red-600 text-sm">${formatDistance(check.distance)}</b></p>
 										<p class="text-xs text-gray-500 mt-1">Radius maksimum yang diizinkan: <b>${geofenceSettings.radius} meter</b></p>
+										<p class="text-xs text-gray-500 mt-0.5">Akurasi GPS perangkat: ±${Math.round(userCoords.accuracy || 0)} meter</p>
 									</div>
 									<p class="text-xs text-gray-600 font-medium">Pengisian absensi hanya dapat dilakukan dari lingkungan sekolah.</p>
 								</div>
@@ -816,6 +817,7 @@ export default function AbsensiMapelPage() {
 			semester: semesterAktif,
 			user_lat: userCoords?.lat,
 			user_lng: userCoords?.lng,
+			user_accuracy: userCoords?.accuracy,
 			client_time: getTimeWIB(new Date()),
 		};
 

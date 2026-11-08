@@ -61,4 +61,33 @@ describe('isWithinGeofence', () => {
 		expect(result.isInside).toBe(false);
 		expect(result.distance).toBeGreaterThan(radius);
 	});
+
+	it('should allow marginal distance within GPS accuracy buffer', () => {
+		// Jarak ~220 meter (sedikit di luar 200m), tapi akurasi GPS HP ±40m (buffer 20m)
+		// dLat ~0.00198 ~ 220 meter
+		const userLat = -6.201980;
+		const userLng = 106.816666;
+		
+		// Tanpa akurasi, ditolak
+		const resultStrict = isWithinGeofence(userLat, userLng, schoolLat, schoolLng, radius);
+		expect(resultStrict.distance).toBeGreaterThan(200);
+		expect(resultStrict.isInside).toBe(false);
+
+		// Dengan akurasi 40m (buffer 20m), efektif distance <= 200m sehingga diizinkan
+		const resultBuffered = isWithinGeofence(userLat, userLng, schoolLat, schoolLng, radius, 40);
+		expect(resultBuffered.accuracyBuffer).toBe(20);
+		expect(resultBuffered.effectiveDistance).toBeLessThanOrEqual(radius);
+		expect(resultBuffered.isInside).toBe(true);
+	});
+
+	it('should cap accuracy buffer at maximum 40 meters to prevent spoofing', () => {
+		// Jarak 260m dari sekolah, akurasi sangat buruk misal 200m
+		const userLat = -6.202350;
+		const userLng = 106.816666;
+
+		const result = isWithinGeofence(userLat, userLng, schoolLat, schoolLng, radius, 200);
+		// Buffer dibatasi maksimal 40m
+		expect(result.accuracyBuffer).toBe(40);
+		expect(result.isInside).toBe(false);
+	});
 });

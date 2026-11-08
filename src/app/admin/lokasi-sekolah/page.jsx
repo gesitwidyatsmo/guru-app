@@ -101,6 +101,12 @@ export default function LokasiSekolahPage() {
 				lng: roundedLng,
 			}));
 
+			const accuracyWarning = coords.accuracy > 45
+				? `<div class="bg-amber-50 border border-amber-300 p-2 rounded mt-2 text-xs text-amber-900 leading-relaxed">
+						⚠️ <b>Saran:</b> Akurasi sensor saat ini ±${Math.round(coords.accuracy)}m. Untuk hasil terbaik, ambil titik tengah di area terbuka (lapangan/halaman sekolah) atau gunakan koordinat dari Google Maps agar titik tengah sekolah tidak meleset.
+				   </div>`
+				: `<p class="text-xs text-emerald-700 font-semibold mt-1">✓ Sinyal GPS akurat (±${Math.round(coords.accuracy)} meter)</p>`;
+
 			Swal.fire({
 				icon: 'success',
 				title: 'Lokasi Berhasil Terdeteksi!',
@@ -109,6 +115,7 @@ export default function LokasiSekolahPage() {
 						<p><b>Latitude:</b> ${roundedLat}</p>
 						<p><b>Longitude:</b> ${roundedLng}</p>
 						<p class="text-xs text-gray-500">Tingkat akurasi GPS: ±${Math.round(coords.accuracy)} meter</p>
+						${accuracyWarning}
 					</div>
 				`,
 				confirmButtonColor: '#00A693',
@@ -129,7 +136,7 @@ export default function LokasiSekolahPage() {
 		setTestResult(null);
 		try {
 			const coords = await getPosition();
-			const check = isWithinGeofence(coords.lat, coords.lng, settings.lat, settings.lng, settings.radius);
+			const check = isWithinGeofence(coords.lat, coords.lng, settings.lat, settings.lng, settings.radius, coords.accuracy);
 
 			setTestResult({
 				...check,

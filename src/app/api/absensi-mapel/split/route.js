@@ -60,6 +60,7 @@ export async function POST(req) {
 			supabase,
 			userLat: user_lat,
 			userLng: user_lng,
+			userAccuracy: body.user_accuracy,
 			moduleName: 'absensi',
 			role,
 		});

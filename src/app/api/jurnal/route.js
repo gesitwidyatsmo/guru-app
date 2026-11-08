@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { haversine } from '@/lib/haversine';
+import { verifyGeofence } from '@/lib/geofenceServer';
 import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
 import { findConflictingSession, checkJamOverlap, normalizeJamKe } from '@/lib/absensiUtils';
 import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
@@ -155,42 +155,22 @@ export async function POST(req) {
 			String(body.materi || '').toLowerCase().includes('[kegiatan sekolah');
 
 		// Verifikasi Geofence jika diaktifkan oleh Admin (Kecualikan jika Guru Tugas Luar, Kegiatan Sekolah, atau Admin)
-		try {
-			const { data: geofenceSetting } = await supabase
-				.from('app_settings')
-				.select('value')
-				.eq('key', 'geofence')
-				.maybeSingle();
+		const geoCheck = await verifyGeofence({
+			supabase,
+			userLat: user_lat,
+			userLng: user_lng,
+			userAccuracy: body.user_accuracy,
+			moduleName: 'jurnal',
+			role,
+			isTugasLuar,
+			isKegiatanSekolah,
+		});
 
-			const geofence = geofenceSetting?.value;
-			if (geofence?.enabled && !isTugasLuar && !isKegiatanSekolah && role !== 'Admin') {
-				if (user_lat === undefined || user_lng === undefined || user_lat === null || user_lng === null) {
-					return NextResponse.json(
-						{
-							error: `Akses Lokasi Wajib: Sistem pembatasan area aktif untuk ${
-								geofence.nama_lokasi || 'Area Sekolah'
-							}. Harap aktifkan GPS dan izinkan akses lokasi di browser Anda.`,
-						},
-						{ status: 403 }
-					);
-				}
-
-				const distance = haversine(user_lat, user_lng, geofence.lat, geofence.lng);
-				if (distance > geofence.radius) {
-					return NextResponse.json(
-						{
-							error: `Di Luar Radius: Anda terdeteksi berada ${Math.round(
-								distance
-							)} meter dari ${geofence.nama_lokasi || 'Sekolah'} (radius izin: ${
-								geofence.radius
-							}m). Jurnal hanya dapat diisi dari lingkungan sekolah. Jika Anda bertugas di luar sekolah atau mengikuti kegiatan sekolah, pilih opsi agenda yang sesuai.`,
-						},
-						{ status: 403 }
-					);
-				}
-			}
-		} catch (geoErr) {
-			console.warn('Geofence verification skipped or table missing:', geoErr.message);
+		if (!geoCheck.allowed) {
+			return NextResponse.json(
+				{ error: geoCheck.error },
+				{ status: geoCheck.status || 403 }
+			);
 		}
 
 		// Prioritaskan ID Jurnal: Jika body menyertakan id dan data sudah ada di database, alihkan ke update

@@ -13,7 +13,7 @@ export default function GeofenceStatusCard({
 	setLocationStatus,
 	className = '',
 }) {
-	const { getPosition, loading: gpsLoading } = useGeolocation();
+	const { getPosition, loading: gpsLoading, isInAppBrowser } = useGeolocation();
 	const [internalStatus, setInternalStatus] = useState(null);
 
 	// Sinkronisasi status dari props jika ada, atau gunakan state internal
@@ -43,7 +43,8 @@ export default function GeofenceStatusCard({
 				coords.lng,
 				geofenceSettings.lat,
 				geofenceSettings.lng,
-				geofenceSettings.radius
+				geofenceSettings.radius,
+				coords.accuracy
 			);
 
 			const newStatus = {
@@ -51,10 +52,15 @@ export default function GeofenceStatusCard({
 				checked: true,
 				userLat: coords.lat,
 				userLng: coords.lng,
+				accuracy: coords.accuracy,
 			};
 			updateStatus(newStatus);
 
 			if (check.isInside) {
+				const bufferNote = check.accuracyBuffer > 0 && check.distance > geofenceSettings.radius
+					? `<p class="text-xs text-emerald-800 bg-emerald-50 p-2 rounded border border-emerald-200 mt-2">ℹ️ Jarak terhitung <b>${formatDistance(check.distance)}</b> lolos batas toleransi berkat penyesuaian margin akurasi sensor (±${Math.round(coords.accuracy)}m).</p>`
+					: '';
+
 				Swal.fire({
 					icon: 'success',
 					title: 'Lokasi Terverifikasi!',
@@ -62,6 +68,8 @@ export default function GeofenceStatusCard({
 						<div class="text-left text-sm space-y-1">
 							<p>Posisi Anda berada di dalam area <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
 							<p class="text-xs text-gray-600 font-semibold mt-2">Jarak ke titik pusat: <b class="text-emerald-700">${formatDistance(check.distance)}</b> (Batas: ${geofenceSettings.radius}m)</p>
+							<p class="text-xs text-gray-500">Tingkat akurasi GPS: ±${Math.round(coords.accuracy || 0)} meter</p>
+							${bufferNote}
 						</div>
 					`,
 					confirmButtonColor: '#00A693',
@@ -76,8 +84,9 @@ export default function GeofenceStatusCard({
 							<div class="bg-red-50 p-2.5 rounded-lg border border-red-200 text-xs">
 								<p>Jarak Anda saat ini: <b class="text-red-600">${formatDistance(check.distance)}</b></p>
 								<p>Radius maksimum izin: <b>${geofenceSettings.radius} meter</b></p>
+								<p class="text-gray-500 mt-1">Akurasi GPS perangkat: ±${Math.round(coords.accuracy || 0)} meter</p>
 							</div>
-							${isAdmin ? '<p class="text-xs font-bold text-amber-700 mt-2">ℹ️ Catatan: Karena Anda adalah Admin, Anda tetap dapat menyimpan data (Bypass Aktif).</p>' : '<p class="text-xs text-gray-600">Pastikan Anda berada di lingkungan sekolah sebelum menyimpan.</p>'}
+							${isAdmin ? '<p class="text-xs font-bold text-amber-700 mt-2">ℹ️ Catatan: Karena Anda adalah Admin, Anda tetap dapat menyimpan data (Bypass Aktif).</p>' : '<p class="text-xs text-gray-600">Pastikan Anda berada di lingkungan sekolah sebelum menyimpan. Jika Anda sedang di dalam ruangan, coba dekati jendela atau buka aplikasi Google Maps sebentar agar GPS HP terkunci.</p>'}
 						</div>
 					`,
 					confirmButtonColor: '#E8451A',
@@ -130,6 +139,18 @@ export default function GeofenceStatusCard({
 								👑 Mode Admin (Bypass)
 							</span>
 						)}
+						{isChecked && status?.accuracy && (
+							<span
+								className={`px-2 py-0.5 rounded text-[10px] font-bold border border-[#0D0D0D] ${
+									status.accuracy <= 25
+										? 'bg-emerald-200 text-emerald-900'
+										: status.accuracy <= 70
+										? 'bg-amber-200 text-amber-900'
+										: 'bg-orange-200 text-orange-900'
+								}`}>
+								🎯 Akurasi: ±{Math.round(status.accuracy)}m
+							</span>
+						)}
 					</div>
 					<p className='text-[11px] font-medium opacity-90 mt-0.5'>
 						{!isChecked
@@ -138,6 +159,11 @@ export default function GeofenceStatusCard({
 							? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m). Absensi siap disimpan.`
 							: `Posisi Anda melebihi batas radius (${geofenceSettings.radius}m).${isAdmin ? ' Admin tetap dapat menyimpan.' : ' Pengisian hanya dapat dilakukan dari sekolah.'}`}
 					</p>
+					{isInAppBrowser && (
+						<p className='text-[10px] text-amber-800 font-bold mt-1 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 inline-block'>
+							⚠️ Terdeteksi di WhatsApp/In-App Browser: Buka di Google Chrome / Safari agar GPS lebih akurat.
+						</p>
+					)}
 				</div>
 			</div>
 
@@ -150,7 +176,7 @@ export default function GeofenceStatusCard({
 					{gpsLoading ? (
 						<>
 							<span className='animate-spin'>⏳</span>
-							<span>Memeriksa GPS...</span>
+							<span>Mendeteksi GPS...</span>
 						</>
 					) : (
 						<>
