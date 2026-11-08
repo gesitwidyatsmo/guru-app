@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
 import { normalizeJamKe, findConflictingSession, checkJamOverlap } from '@/lib/absensiUtils';
+import { calculateDurationMinutes, getExpectedScheduleTimes } from '@/lib/kbmRealtimeUtils';
 import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
 
 async function checkAdminAuth(req, supabase) {
@@ -49,12 +50,56 @@ export async function GET(req) {
 		}
 
 		const { searchParams } = new URL(req.url);
+		const loadAssignments = searchParams.get('guru_assignments') === 'true';
 		const conflictOnly = searchParams.get('conflict_only') === 'true';
 		const kelas = searchParams.get('kelas');
 		const guruId = searchParams.get('guru_id');
 		const tanggal = searchParams.get('tanggal');
 		const tahunAjar = searchParams.get('tahun_ajar');
 		const semester = searchParams.get('semester');
+
+		// 0. Ambil Pemetaan Penugasan Mengajar Guru (KBM, Jadwal, & Riwayat Jurnal)
+		if (loadAssignments) {
+			const targetGuruId = searchParams.get('guru_id');
+
+			let kbmQuery = supabaseAdmin.from('guru_kbm').select('id_user, kelas, mapel');
+			let jadwalQuery = supabaseAdmin.from('jadwal').select('id_user, kelas, mapel');
+			let journalQuery = supabaseAdmin.from('jurnal').select('guru_id, kelas, mapel').limit(1500);
+
+			if (targetGuruId) {
+				kbmQuery = kbmQuery.eq('id_user', targetGuruId);
+				jadwalQuery = jadwalQuery.eq('id_user', targetGuruId);
+				journalQuery = journalQuery.eq('guru_id', targetGuruId);
+			}
+
+			const [kbmRes, jdwRes, jrnRes] = await Promise.all([
+				kbmQuery.then((r) => r, () => ({ data: [] })),
+				jadwalQuery.then((r) => r, () => ({ data: [] })),
+				journalQuery.then((r) => r, () => ({ data: [] })),
+			]);
+
+			const assignmentsByGuru = {};
+			const addEntry = (uid, k, m) => {
+				if (!uid || !k || !m) return;
+				const cleanKelas = String(k).trim();
+				const cleanMapel = String(m).trim();
+				if (!cleanKelas || !cleanMapel) return;
+
+				if (!assignmentsByGuru[uid]) assignmentsByGuru[uid] = [];
+				const exists = assignmentsByGuru[uid].some(
+					(item) => item.kelas === cleanKelas && item.mapel === cleanMapel
+				);
+				if (!exists) {
+					assignmentsByGuru[uid].push({ kelas: cleanKelas, mapel: cleanMapel });
+				}
+			};
+
+			(kbmRes?.data || []).forEach((r) => addEntry(r.id_user, r.kelas, r.mapel));
+			(jdwRes?.data || []).forEach((r) => addEntry(r.id_user, r.kelas, r.mapel));
+			(jrnRes?.data || []).forEach((r) => addEntry(r.guru_id, r.kelas, r.mapel));
+
+			return NextResponse.json({ success: true, assignments: assignmentsByGuru }, { status: 200 });
+		}
 
 		// 1. Jika mode conflict_only: prioritaskan ambil antrean draft_bentrok dan cari pasangannya
 		if (conflictOnly) {
@@ -170,6 +215,255 @@ export async function GET(req) {
 	} catch (error) {
 		console.error('Error GET /api/admin/jurnal:', error);
 		return NextResponse.json({ error: error.message || 'Terjadi kesalahan sistem.' }, { status: 500 });
+	}
+}
+
+// ---------------------------------------------------------------------------
+// POST: Input Jurnal Guru oleh Admin (Bantuan Kendala Teknis: HP Mati, Sinyal, dll)
+// ---------------------------------------------------------------------------
+export async function POST(req) {
+	try {
+		const supabase = await createClient();
+		const { isAuthorized, role, userId } = await checkAdminAuth(req, supabase);
+
+		if (!isAuthorized) {
+			return NextResponse.json({ error: 'Akses Ditolak: Khusus Admin atau Kurikulum.' }, { status: 403 });
+		}
+
+		const body = await req.json();
+		const {
+			guru_id,
+			kelas,
+			mapel,
+			tanggal,
+			jam_ke,
+			pertemuan_ke,
+			metode,
+			materi,
+			kegiatan,
+			hambatan,
+			solusi,
+			tuntas,
+			jam_mulai,
+			jam_selesai,
+			status_kehadiran,
+			alasan_kendala,
+			catatan_kendala,
+			sync_absensi,
+			override_conflict,
+		} = body;
+
+		if (!guru_id) {
+			return NextResponse.json({ error: 'Guru pengajar wajib dipilih.' }, { status: 400 });
+		}
+		if (!kelas) {
+			return NextResponse.json({ error: 'Kelas wajib dipilih.' }, { status: 400 });
+		}
+		if (!mapel) {
+			return NextResponse.json({ error: 'Mata pelajaran wajib dipilih.' }, { status: 400 });
+		}
+		if (!tanggal) {
+			return NextResponse.json({ error: 'Tanggal KBM wajib diisi.' }, { status: 400 });
+		}
+		if (!jam_ke) {
+			return NextResponse.json({ error: 'Jam ke (JP) wajib diisi.' }, { status: 400 });
+		}
+		if (!materi || !materi.trim()) {
+			return NextResponse.json({ error: 'Materi pembelajaran wajib diisi.' }, { status: 400 });
+		}
+
+		const normJam = normalizeJamKe(jam_ke);
+
+		// Validasi Bentrok Jam Mengajar jika tidak di-override
+		if (!override_conflict && tanggal && kelas && normJam) {
+			const { data: classJournals } = await supabaseAdmin
+				.from('jurnal')
+				.select('id, jam_ke, mapel, guru_id, status_verifikasi, status_kehadiran, users!jurnal_guru_id_fkey(nama_lengkap)')
+				.eq('kelas', kelas)
+				.eq('tanggal', tanggal);
+
+			const activeJournals = (classJournals || []).filter(
+				(j) => j.status_verifikasi !== 'draft_bentrok' && !String(j.status_kehadiran || '').toLowerCase().includes('draft bentrok')
+			);
+
+			const conflict = findConflictingSession(activeJournals, normJam);
+			if (conflict) {
+				const guruExisting = conflict.session.users?.nama_lengkap || 'Guru lain';
+				return NextResponse.json(
+					{
+						error: `Konflik: Jam ke-${normJam} di kelas ${kelas} bertabrakan dengan KBM ${conflict.session.mapel} oleh ${guruExisting} (Jam ${conflict.session.jam_ke}).`,
+						conflict: {
+							existingId: conflict.session.id,
+							existingJamKe: conflict.session.jam_ke,
+							existingGuru: guruExisting,
+							existingMapel: conflict.session.mapel,
+						},
+						can_override: true,
+					},
+					{ status: 409 }
+				);
+			}
+		}
+
+		// Periode Akademik: jika tidak disediakan di body, ambil dari tabel tahun_ajar aktif
+		let tahun_ajar = body.tahun_ajar;
+		let semester = body.semester;
+		if (!tahun_ajar || !semester) {
+			const { data: taAktif } = await supabaseAdmin
+				.from('tahun_ajar')
+				.select('nama, semester')
+				.eq('is_aktif', true)
+				.maybeSingle();
+
+			if (taAktif) {
+				tahun_ajar = tahun_ajar || taAktif.nama;
+				semester = semester || taAktif.semester;
+			}
+		}
+
+		// Perhitungan Jam Mulai & Selesai serta Durasi (WIB)
+		let finalJamMulai = jam_mulai ? String(jam_mulai).trim().slice(0, 8) : null;
+		let finalJamSelesai = jam_selesai ? String(jam_selesai).trim().slice(0, 8) : null;
+
+		// Jika jam mulai/selesai belum diisi, gunakan alokasi jam resmi sekolah
+		if (!finalJamMulai || !finalJamSelesai) {
+			const scheduleInfo = getExpectedScheduleTimes(normJam, tanggal);
+			if (scheduleInfo) {
+				if (!finalJamMulai) finalJamMulai = scheduleInfo.start;
+				if (!finalJamSelesai) finalJamSelesai = scheduleInfo.end;
+			}
+		}
+
+		let durasiMenit = body.durasi_menit !== undefined ? Number(body.durasi_menit) : 0;
+		if (finalJamMulai && finalJamSelesai) {
+			durasiMenit = calculateDurationMinutes(finalJamMulai, finalJamSelesai);
+		}
+
+		// Otomatis tautkan sesi_absensi_id jika ada data absensi_mapel di kelas, mapel, & tanggal ini
+		let sesiAbsensiId = body.sesi_absensi_id || null;
+		if (!sesiAbsensiId && tanggal && kelas && mapel) {
+			try {
+				const { data: matchedSessions } = await supabaseAdmin
+					.from('absensi_mapel')
+					.select('sesi_id, jam_ke')
+					.eq('kelas', kelas)
+					.eq('mapel', mapel)
+					.eq('tanggal', tanggal)
+					.order('created_at', { ascending: false });
+
+				if (matchedSessions && matchedSessions.length > 0) {
+					const exact = matchedSessions.find((s) => String(s.jam_ke).trim() === String(normJam).trim());
+					sesiAbsensiId = exact ? exact.sesi_id : matchedSessions[0].sesi_id;
+				}
+			} catch (lookupErr) {
+				console.warn('Gagal lookup sesi absensi mapel:', lookupErr);
+			}
+		}
+
+		// Susun Catatan Audit Admin
+		const nowWib = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+		let adminName = role || 'Admin';
+		if (userId) {
+			const { data: u } = await supabaseAdmin.from('users').select('nama_lengkap').eq('id_user', userId).maybeSingle();
+			if (u?.nama_lengkap) adminName = u.nama_lengkap;
+		}
+
+		const labelKendala = alasan_kendala || 'Kendala Teknis (HP mati / tidak ada sinyal)';
+		const extraKendala = catatan_kendala ? ` - ${catatan_kendala}` : '';
+		const adminAudit = `Diinputkan oleh ${adminName} pada ${nowWib} [Bantuan Kendala: ${labelKendala}${extraKendala}]`;
+
+		let finalHambatan = hambatan || '';
+		if (labelKendala && !finalHambatan.toLowerCase().includes(labelKendala.toLowerCase())) {
+			finalHambatan = finalHambatan ? `[${labelKendala}${extraKendala}] ${finalHambatan}` : `[${labelKendala}${extraKendala}]`;
+		}
+
+		const id = Math.random().toString(36).substring(2, 11);
+		const insertPayload = {
+			id,
+			guru_id,
+			tanggal,
+			jam_ke: normJam,
+			pertemuan_ke: pertemuan_ke ? String(pertemuan_ke) : '',
+			kelas,
+			mapel,
+			materi: materi.trim(),
+			kegiatan: kegiatan?.trim() || `KBM ${mapel} kelas ${kelas}`,
+			metode: metode || 'Ceramah',
+			hambatan: finalHambatan,
+			solusi: solusi || '',
+			tuntas: tuntas !== undefined ? !!tuntas : true,
+			tahun_ajar: tahun_ajar || '',
+			semester: semester ? parseInt(semester, 10) : 1,
+			jam_mulai: finalJamMulai,
+			jam_selesai: finalJamSelesai,
+			durasi_menit: durasiMenit || 0,
+			sesi_absensi_id: sesiAbsensiId,
+			status_kehadiran: status_kehadiran || 'Normal',
+			status_verifikasi: 'disetujui',
+			catatan_admin: adminAudit,
+		};
+
+		// INSERT MENGGUNAKAN supabaseAdmin (Bypass RLS & Geofence)
+		let { data: insertedRows, error: insertErr } = await supabaseAdmin
+			.from('jurnal')
+			.insert(insertPayload)
+			.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)');
+
+		// Fallback jika kolom baru belum ada di schema cache PostgREST
+		if (insertErr && (insertErr.code === 'PGRST204' || insertErr.code === '42703')) {
+			const fallbackPayload = { ...insertPayload };
+			delete fallbackPayload.metode;
+			delete fallbackPayload.jam_mulai;
+			delete fallbackPayload.jam_selesai;
+			delete fallbackPayload.durasi_menit;
+			delete fallbackPayload.sesi_absensi_id;
+			delete fallbackPayload.status_kehadiran;
+			delete fallbackPayload.status_verifikasi;
+			delete fallbackPayload.konflik_dengan_id;
+			delete fallbackPayload.catatan_admin;
+
+			if (insertPayload.metode && !fallbackPayload.kegiatan.includes('[Metode:')) {
+				fallbackPayload.kegiatan = `[Metode: ${insertPayload.metode}] ${fallbackPayload.kegiatan}`.trim();
+			}
+
+			const retry = await supabaseAdmin
+				.from('jurnal')
+				.insert(fallbackPayload)
+				.select('*, users!jurnal_guru_id_fkey(nama_lengkap, username)');
+			insertErr = retry.error;
+			insertedRows = retry.data;
+		}
+
+		if (insertErr) throw insertErr;
+
+		// Sinkronisasi ke absensi_mapel jika diminta
+		if (sync_absensi && sesiAbsensiId) {
+			try {
+				await supabaseAdmin
+					.from('absensi_mapel')
+					.update({
+						jam_ke: normJam,
+						kelas,
+						mapel,
+						guru_id,
+					})
+					.eq('sesi_id', sesiAbsensiId);
+			} catch (syncErr) {
+				console.warn('Gagal sinkronisasi absensi_mapel:', syncErr);
+			}
+		}
+
+		return NextResponse.json(
+			{
+				success: true,
+				message: 'Jurnal guru berhasil diinput dan langsung disahkan oleh Admin.',
+				data: insertedRows ? insertedRows[0] : insertPayload,
+			},
+			{ status: 201 }
+		);
+	} catch (error) {
+		console.error('Error POST /api/admin/jurnal:', error);
+		return NextResponse.json({ error: error.message || 'Gagal menyimpan jurnal guru.' }, { status: 500 });
 	}
 }
 

@@ -5,9 +5,15 @@ import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
 import { createClient } from '@/utils/supabase/client';
 import { useAdminAuth } from '../AdminLayoutClient';
-import { normalizeJamKe, checkJamOverlap, parseJamPelajaran } from '@/lib/absensiUtils';
+import { normalizeJamKe, checkJamOverlap, parseJamPelajaran, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
 import { getTodayDateString } from '@/lib/dateUtils';
-import { getKBMStatusBadge } from '@/lib/kbmRealtimeUtils';
+import {
+	getKBMStatusBadge,
+	calculateDurationMinutes,
+	formatDurationString,
+	getExpectedScheduleTimes,
+	getTimeWIB,
+} from '@/lib/kbmRealtimeUtils';
 import {
 	AlertTriangle,
 	CheckCircle2,
@@ -26,9 +32,29 @@ import {
 	ShieldCheck,
 	Check,
 	X,
+	PlusCircle,
+	UserCheck,
+	Zap,
+	LifeBuoy,
+	AlertCircle,
+	Sparkles,
+	BookOpen,
+	Link2,
+	Unlink,
 } from 'lucide-react';
 
 const JP_SLOTS = [1, 2, 3, 4, 5, 6, 7];
+
+const KENDALA_PRESETS = [
+	{ id: 'hp_mati', label: 'HP Mati / Baterai Habis', icon: '🔋' },
+	{ id: 'sinyal_hilang', label: 'Tidak Ada Sinyal / Kuota Habis', icon: '📶' },
+	{ id: 'hp_rusak', label: 'Kerusakan HP / Perangkat', icon: '📱' },
+	{ id: 'gps_error', label: 'Kendala GPS / Geofence', icon: '📍' },
+	{ id: 'laporan_fisik', label: 'Laporan Jurnal Fisik / Manual', icon: '📋' },
+	{ id: 'lainnya', label: 'Kendala Teknis Lainnya', icon: '⚠️' },
+];
+
+const METODE_OPTIONS = ['Ceramah', 'Diskusi', 'Praktikum', 'Presentasi', 'Tanya Jawab', 'Penugasan'];
 
 export default function AdminJurnalPage() {
 	const { role, isKepsek } = useAdminAuth();
@@ -83,6 +109,35 @@ export default function AdminJurnalPage() {
 	});
 	const [savingEdit, setSavingEdit] = useState(false);
 
+	// Modal Input Jurnal Kendala Guru oleh Admin
+	const [createModalOpen, setCreateModalOpen] = useState(false);
+	const [savingCreate, setSavingCreate] = useState(false);
+	const initialCreateForm = {
+		guru_id: '',
+		kelas: '',
+		mapel: '',
+		tanggal: getTodayDateString(),
+		jam_ke: '1-2',
+		pertemuan_ke: '1',
+		metode: 'Ceramah',
+		materi: '',
+		kegiatan: '',
+		hambatan: '',
+		solusi: '',
+		tuntas: true,
+		jam_mulai: '07:15',
+		jam_selesai: '08:35',
+		durasi_menit: 80,
+		status_kehadiran: 'Normal',
+		alasan_kendala: 'HP Mati / Baterai Habis',
+		catatan_kendala: '',
+		sync_absensi: true,
+		override_conflict: false,
+	};
+	const [createForm, setCreateForm] = useState(initialCreateForm);
+	const [teacherAssignments, setTeacherAssignments] = useState({}); // { [guru_id]: [ { kelas, mapel }, ... ] }
+	const [filterByTeacherAssignments, setFilterByTeacherAssignments] = useState(true);
+
 	// State Pengaturan WhatsApp Aduan KBM
 	const [waModalOpen, setWaModalOpen] = useState(false);
 	const [waNumberInput, setWaNumberInput] = useState('');
@@ -93,12 +148,13 @@ export default function AdminJurnalPage() {
 	const fetchData = useCallback(async () => {
 		try {
 			setLoading(true);
-			const [resConflicts, resJournals, resKelas, resUsers, resMapel, resWaSetting, resSchoolProfile] = await Promise.all([
+			const [resConflicts, resJournals, resKelas, resUsers, resMapel, resAssignments, resWaSetting, resSchoolProfile] = await Promise.all([
 				fetch('/api/admin/jurnal?conflict_only=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { conflicts: [] })),
 				fetch('/api/admin/jurnal', { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])),
 				fetch('/api/kelas?all=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])),
 				fetch('/api/users', { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])),
 				fetch('/api/mapel?all=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : [])),
+				fetch('/api/admin/jurnal?guru_assignments=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { assignments: {} })),
 				fetch('/api/settings?key=wa_admin_jurnal', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
 				fetch('/api/settings?key=profil_sekolah', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
 			]);
@@ -108,6 +164,7 @@ export default function AdminJurnalPage() {
 			setKelasList(Array.isArray(resKelas) ? resKelas : []);
 			setGuruList(Array.isArray(resUsers) ? resUsers.filter((u) => u.role === 'Guru') : []);
 			setMapelList(Array.isArray(resMapel) ? resMapel : []);
+			setTeacherAssignments(resAssignments?.assignments || {});
 
 			if (resWaSetting?.value?.no_wa) {
 				setWaNumberInput(resWaSetting.value.no_wa);
@@ -426,6 +483,337 @@ export default function AdminJurnalPage() {
 		}
 	};
 
+	// Helper Hitung Pertemuan Ke Cerdas
+	const getSuggestedPertemuanKe = (k, m) => {
+		if (!k || !m) return '1';
+		const existingCount = journals.filter(
+			(j) => j.kelas === k && j.mapel === m
+		).length;
+		return String(existingCount + 1);
+	};
+
+	// Pemetaan Penugasan Guru Terpilih (KBM, Jadwal, & Riwayat Jurnal)
+	const currentGuruAssignments = useMemo(() => {
+		if (!createForm.guru_id) return [];
+		return teacherAssignments[createForm.guru_id] || [];
+	}, [createForm.guru_id, teacherAssignments]);
+
+	// Daftar Kelas yang Relevan untuk Guru Terpilih
+	const availableKelasOptions = useMemo(() => {
+		if (!filterByTeacherAssignments || currentGuruAssignments.length === 0) {
+			return kelasList.map((k) => ({
+				nama_kelas: k.nama_kelas,
+				isAssigned: currentGuruAssignments.some((a) => a.kelas === k.nama_kelas),
+			}));
+		}
+		const assignedKelasSet = new Set(currentGuruAssignments.map((a) => a.kelas));
+		const result = [];
+		assignedKelasSet.forEach((kNama) => {
+			result.push({ nama_kelas: kNama, isAssigned: true });
+		});
+		return result;
+	}, [filterByTeacherAssignments, currentGuruAssignments, kelasList]);
+
+	// Daftar Mapel yang Relevan untuk Guru Terpilih (dan kelas terpilih jika ada)
+	const availableMapelOptions = useMemo(() => {
+		if (!filterByTeacherAssignments || currentGuruAssignments.length === 0) {
+			return mapelList.map((m) => ({
+				mapel: m.mapel,
+				isAssigned: currentGuruAssignments.some((a) => a.mapel === m.mapel),
+			}));
+		}
+		let assigned = currentGuruAssignments;
+		if (createForm.kelas) {
+			const forClass = currentGuruAssignments.filter((a) => a.kelas === createForm.kelas);
+			if (forClass.length > 0) {
+				assigned = forClass;
+			}
+		}
+		const assignedMapelSet = new Set(assigned.map((a) => a.mapel));
+		const result = [];
+		assignedMapelSet.forEach((mNama) => {
+			result.push({ mapel: mNama, isAssigned: true });
+		});
+		return result;
+	}, [filterByTeacherAssignments, currentGuruAssignments, createForm.kelas, mapelList]);
+
+	// Saat Guru Terpilih Berubah: Otomatis sinkronkan Kelas & Mapel pertama guru tersebut
+	const handleGuruChange = (selectedGuruId) => {
+		const guruAssigned = teacherAssignments[selectedGuruId] || [];
+		let nextKelas = createForm.kelas;
+		let nextMapel = createForm.mapel;
+
+		if (guruAssigned.length > 0) {
+			nextKelas = guruAssigned[0].kelas;
+			nextMapel = guruAssigned[0].mapel;
+		} else {
+			if (!kelasList.some((k) => k.nama_kelas === nextKelas)) {
+				nextKelas = kelasList[0]?.nama_kelas || '';
+			}
+			if (!mapelList.some((m) => m.mapel === nextMapel)) {
+				nextMapel = mapelList[0]?.mapel || '';
+			}
+		}
+
+		const nextPertemuan = getSuggestedPertemuanKe(nextKelas, nextMapel);
+
+		setCreateForm((prev) => ({
+			...prev,
+			guru_id: selectedGuruId,
+			kelas: nextKelas,
+			mapel: nextMapel,
+			pertemuan_ke: nextPertemuan,
+		}));
+	};
+
+	// Saat Kelas Berubah: Otomatis sesuaikan Mapel jika ditautkan
+	const handleKelasChange = (selectedKelas) => {
+		let nextMapel = createForm.mapel;
+		if (filterByTeacherAssignments && currentGuruAssignments.length > 0) {
+			const mapelsInClass = currentGuruAssignments
+				.filter((a) => a.kelas === selectedKelas)
+				.map((a) => a.mapel);
+			if (mapelsInClass.length > 0 && !mapelsInClass.includes(nextMapel)) {
+				nextMapel = mapelsInClass[0];
+			}
+		}
+		const p = getSuggestedPertemuanKe(selectedKelas, nextMapel);
+		setCreateForm((prev) => ({
+			...prev,
+			kelas: selectedKelas,
+			mapel: nextMapel,
+			pertemuan_ke: p,
+		}));
+	};
+
+	// Buka Modal Input Jurnal Kendala Guru oleh Admin
+	const handleOpenCreateModal = () => {
+		const defaultTanggal = filterTanggal || getTodayDateString();
+		const sched = getExpectedScheduleTimes('1-2', defaultTanggal);
+		const start = sched?.start || '07:15';
+		const end = sched?.end || '08:35';
+		const dur = calculateDurationMinutes(start, end);
+
+		const defaultGuru = filterGuru !== 'all' ? filterGuru : (guruList[0]?.id_user || '');
+		const guruAssigned = defaultGuru ? (teacherAssignments[defaultGuru] || []) : [];
+
+		let defaultKelas = '';
+		let defaultMapel = '';
+
+		if (guruAssigned.length > 0) {
+			defaultKelas = guruAssigned[0].kelas;
+			defaultMapel = guruAssigned[0].mapel;
+		} else {
+			defaultKelas = filterKelas !== 'all' ? filterKelas : (kelasList[0]?.nama_kelas || '');
+			defaultMapel = mapelList[0]?.mapel || '';
+		}
+
+		const initialPertemuan = getSuggestedPertemuanKe(defaultKelas, defaultMapel);
+
+		setFilterByTeacherAssignments(true); // Default selalu aktif menautkan ke jadwal guru
+		setCreateForm({
+			...initialCreateForm,
+			tanggal: defaultTanggal,
+			guru_id: defaultGuru,
+			kelas: defaultKelas,
+			mapel: defaultMapel,
+			pertemuan_ke: initialPertemuan,
+			jam_ke: '1-2',
+			jam_mulai: start,
+			jam_selesai: end,
+			durasi_menit: dur,
+		});
+		setCreateModalOpen(true);
+	};
+
+	// Saat Jam Ke berubah: update jam_mulai & jam_selesai otomatis
+	const handleCreateJamKeChange = (val) => {
+		const sched = getExpectedScheduleTimes(val, createForm.tanggal);
+		if (sched) {
+			const dur = calculateDurationMinutes(sched.start, sched.end);
+			setCreateForm((prev) => ({
+				...prev,
+				jam_ke: val,
+				jam_mulai: sched.start,
+				jam_selesai: sched.end,
+				durasi_menit: dur,
+			}));
+		} else {
+			setCreateForm((prev) => ({ ...prev, jam_ke: val }));
+		}
+	};
+
+	// Tombol Pintas: Isi Jadwal Resmi
+	const handleFillOfficialSchedule = () => {
+		const sched = getExpectedScheduleTimes(createForm.jam_ke, createForm.tanggal);
+		if (sched) {
+			const dur = calculateDurationMinutes(sched.start, sched.end);
+			setCreateForm((prev) => ({
+				...prev,
+				jam_mulai: sched.start,
+				jam_selesai: sched.end,
+				durasi_menit: dur,
+			}));
+			Swal.fire({
+				toast: true,
+				position: 'top-end',
+				icon: 'success',
+				title: `Jam diset: ${sched.start} - ${sched.end} (${sched.hari})`,
+				showConfirmButton: false,
+				timer: 2000,
+			});
+		} else {
+			Swal.fire('Informasi', 'Alokasi jadwal resmi untuk slot jam ini tidak ditemukan. Silakan atur manual.', 'info');
+		}
+	};
+
+	// Tombol Pintas: Isi Jam Sekarang
+	const handleFillCurrentTime = () => {
+		const now = getTimeWIB(new Date());
+		setCreateForm((prev) => {
+			const start = prev.jam_mulai || now;
+			const dur = calculateDurationMinutes(start, now);
+			return {
+				...prev,
+				jam_selesai: now,
+				durasi_menit: dur,
+			};
+		});
+	};
+
+	// Saat Jam Mulai / Selesai diubah manual
+	const handleCreateTimeChange = (field, val) => {
+		setCreateForm((prev) => {
+			const next = { ...prev, [field]: val };
+			if (next.jam_mulai && next.jam_selesai) {
+				next.durasi_menit = calculateDurationMinutes(next.jam_mulai, next.jam_selesai);
+			}
+			return next;
+		});
+	};
+
+	// Toggle Metode
+	const handleToggleCreateMetode = (methodName) => {
+		const current = (createForm.metode || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean);
+		let next;
+		if (current.includes(methodName)) {
+			next = current.filter((m) => m !== methodName);
+		} else {
+			next = [...current, methodName];
+		}
+		setCreateForm((prev) => ({
+			...prev,
+			metode: next.join(', ') || 'Ceramah',
+		}));
+	};
+
+	// Simpan Input Jurnal Kendala Guru
+	const handleSaveCreate = async () => {
+		if (!createForm.guru_id) {
+			Swal.fire('Peringatan', 'Harap pilih Guru pengajar.', 'warning');
+			return;
+		}
+		if (!createForm.kelas) {
+			Swal.fire('Peringatan', 'Harap pilih Kelas.', 'warning');
+			return;
+		}
+		if (!createForm.mapel) {
+			Swal.fire('Peringatan', 'Harap pilih Mata Pelajaran.', 'warning');
+			return;
+		}
+		if (!createForm.tanggal) {
+			Swal.fire('Peringatan', 'Tanggal KBM wajib diisi.', 'warning');
+			return;
+		}
+		if (!createForm.jam_ke) {
+			Swal.fire('Peringatan', 'Jam ke (JP) wajib diisi.', 'warning');
+			return;
+		}
+		if (!createForm.materi.trim()) {
+			Swal.fire('Peringatan', 'Materi pembelajaran wajib diisi.', 'warning');
+			return;
+		}
+
+		try {
+			setSavingCreate(true);
+			const res = await fetch('/api/admin/jurnal', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify(createForm),
+			});
+
+			const data = await res.json();
+			if (!res.ok) {
+				if (res.status === 409 && data.can_override) {
+					const confirmOverride = await Swal.fire({
+						title: 'Konflik Jam Terdeteksi!',
+						text: `${data.error} Apakah Anda ingin tetap MEMAKSA SIMPAN (Override KBM Khusus / Team Teaching)?`,
+						icon: 'warning',
+						showCancelButton: true,
+						confirmButtonText: 'Paksa Simpan (Override)',
+						cancelButtonText: 'Batal & Ubah Jam',
+						confirmButtonColor: '#E8451A',
+					});
+
+					if (confirmOverride.isConfirmed) {
+						const retryRes = await fetch('/api/admin/jurnal', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							credentials: 'include',
+							body: JSON.stringify({ ...createForm, override_conflict: true }),
+						});
+						const retryData = await retryRes.json();
+						if (retryRes.ok) {
+							setCreateModalOpen(false);
+							fetchData();
+							Swal.fire('Berhasil Disimpan', 'Jurnal guru berhasil diinput dengan override khusus.', 'success');
+							return;
+						} else {
+							throw new Error(retryData.error || 'Gagal menyimpan jurnal override.');
+						}
+					}
+					return;
+				}
+				throw new Error(data.error || 'Gagal menyimpan jurnal.');
+			}
+
+			const guruObj = guruList.find((g) => g.id_user === createForm.guru_id);
+			const namaGuru = guruObj?.nama_lengkap || 'Guru';
+
+			await Swal.fire({
+				title: 'Berhasil Disimpan!',
+				html: `
+					<div class="text-left text-sm space-y-2">
+						<p>Jurnal KBM atas nama <b>${namaGuru}</b> telah berhasil disimpan dan langsung disahkan oleh Admin.</p>
+						<p class="text-xs text-gray-600">Jam KBM & hak Bisaroh guru telah aktif.</p>
+					</div>
+				`,
+				icon: 'success',
+				confirmButtonColor: '#00E599',
+				customClass: {
+					confirmButton: 'text-[#0D0D0D] font-black border-[3px] border-[#0D0D0D]',
+				},
+			});
+
+			setCreateModalOpen(false);
+			fetchData();
+		} catch (err) {
+			console.error('Error save create jurnal admin:', err);
+			Swal.fire({
+				title: 'Gagal Menyimpan',
+				text: err.message,
+				icon: 'error',
+				confirmButtonColor: '#E8451A',
+			});
+		} finally {
+			setSavingCreate(false);
+		}
+	};
+
 	// Hapus Jurnal
 	const handleDeleteJournal = async (j) => {
 		const result = await Swal.fire({
@@ -654,6 +1042,14 @@ export default function AdminJurnalPage() {
 				</div>
 
 				<div className='flex flex-wrap items-center gap-2'>
+					<button
+						onClick={handleOpenCreateModal}
+						className='flex items-center gap-2 px-4 py-2.5 bg-[#00E599] text-[#0D0D0D] border-[3px] border-[#0D0D0D] text-xs font-black uppercase tracking-wider shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#0D0D0D] transition-all cursor-pointer'
+						title='Input jurnal KBM untuk guru yang mengalami kendala teknis (HP mati, sinyal putus, dsb)'
+					>
+						<PlusCircle className='w-4 h-4' />
+						<span>+ Input Jurnal Kendala Guru</span>
+					</button>
 					<button
 						onClick={() => setWaModalOpen(true)}
 						className='flex items-center gap-2 px-4 py-2.5 bg-[#25D366] text-[#0D0D0D] border-[3px] border-[#0D0D0D] text-xs font-black uppercase tracking-wider shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#0D0D0D] transition-all cursor-pointer'
@@ -1750,6 +2146,548 @@ export default function AdminJurnalPage() {
 								className='flex items-center gap-2 px-5 py-2.5 bg-[#00E599] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black text-xs uppercase shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 transition-all cursor-pointer'
 							>
 								{savingWa ? 'Menyimpan...' : 'Simpan Nomor WA'}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* =================================================================== */}
+			{/* MODAL: INPUT JURNAL GURU OLEH ADMIN (KENDALA TEKNIS: HP MATI, DLL) */}
+			{/* =================================================================== */}
+			{createModalOpen && (
+				<div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4'>
+					<div className='w-full max-w-3xl bg-white border-[4px] border-[#0D0D0D] shadow-[8px_8px_0px_0px_#0D0D0D] p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto animate-in fade-in duration-200'>
+						{/* Modal Header */}
+						<div className='flex items-center justify-between border-b-[3px] border-[#0D0D0D] pb-3'>
+							<div className='flex items-center gap-2.5'>
+								<div className='p-2 bg-[#00E599] border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+									<UserCheck className='w-5 h-5 text-[#0D0D0D]' />
+								</div>
+								<div>
+									<h3 className='text-base sm:text-lg font-black uppercase text-[#0D0D0D] tracking-tight'>
+										Input Jurnal Guru (Bantuan Kendala Teknis)
+									</h3>
+									<p className='text-xs text-gray-600 font-semibold'>
+										Bantu inputkan jurnal KBM guru yang terkendala HP mati, sinyal putus, atau kendala perangkat.
+									</p>
+								</div>
+							</div>
+							<button
+								onClick={() => setCreateModalOpen(false)}
+								className='p-1.5 bg-gray-100 border-[2px] border-[#0D0D0D] hover:bg-red-400 hover:text-white cursor-pointer transition-colors'
+							>
+								<X className='w-5 h-5 text-[#0D0D0D]' />
+							</button>
+						</div>
+
+						{/* Notice / Audit Info */}
+						<div className='p-3 bg-amber-50 border-[2px] border-[#0D0D0D] flex items-start gap-2.5 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+							<LifeBuoy className='w-5 h-5 text-amber-600 shrink-0 mt-0.5' />
+							<div className='text-xs space-y-0.5'>
+								<p className='font-black text-[#0D0D0D] uppercase tracking-wide'>
+									Mode Bantuan Admin &amp; Kurikulum
+								</p>
+								<p className='text-gray-700 leading-relaxed font-medium'>
+									Jurnal yang diinputkan di sini akan <b>otomatis disahkan (disetujui)</b> dan hak jam mengajar/Bisaroh guru langsung aktif. Sistem akan mencantumkan log audit resmi bahwa data diinputkan oleh Admin karena kendala teknis.
+								</p>
+							</div>
+						</div>
+
+						{/* Form Content */}
+						<div className='space-y-4 text-xs font-bold'>
+							{/* SECTION 1: IDENTITAS GURU, KELAS, MAPEL & TANGGAL */}
+							<div className='p-3.5 bg-gray-50 border-[2px] border-[#0D0D0D] space-y-3'>
+								<div className='flex items-center gap-2 border-b border-gray-300 pb-1.5'>
+									<BookOpen className='w-4 h-4 text-[#0D0D0D]' />
+									<span className='uppercase tracking-wider font-black text-[#0D0D0D] text-[11px]'>
+										1. Identitas Guru &amp; Jadwal KBM
+									</span>
+								</div>
+
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+									{/* Pilih Guru */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Guru Pengajar <span className='text-red-500'>*</span>
+										</label>
+										<select
+											value={createForm.guru_id}
+											onChange={(e) => handleGuruChange(e.target.value)}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-black text-xs outline-none focus:bg-yellow-50 shadow-[1px_1px_0px_0px_#0D0D0D]'
+										>
+											<option value=''>-- Pilih Guru Pengajar --</option>
+											{guruList.map((g) => (
+												<option key={g.id_user} value={g.id_user}>
+													{g.nama_lengkap} {g.username ? `(@${g.username})` : ''}
+												</option>
+											))}
+										</select>
+									</div>
+
+									{/* Tanggal KBM */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Tanggal Pelaksanaan KBM <span className='text-red-500'>*</span>
+										</label>
+										<input
+											type='date'
+											value={createForm.tanggal}
+											onChange={(e) => {
+												const tgl = e.target.value;
+												setCreateForm((prev) => {
+													const sched = getExpectedScheduleTimes(prev.jam_ke, tgl);
+													return {
+														...prev,
+														tanggal: tgl,
+														jam_mulai: sched?.start || prev.jam_mulai,
+														jam_selesai: sched?.end || prev.jam_selesai,
+														durasi_menit: sched ? calculateDurationMinutes(sched.start, sched.end) : prev.durasi_menit,
+													};
+												});
+											}}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										/>
+									</div>
+
+									{/* Banner Tautan Penugasan Guru */}
+									<div className='sm:col-span-2 flex flex-wrap items-center justify-between gap-2 p-2.5 bg-yellow-50 border-[2px] border-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D]'>
+										<div className='flex items-center gap-2'>
+											{currentGuruAssignments.length > 0 ? (
+												<Link2 className='w-4 h-4 text-emerald-700 shrink-0' />
+											) : (
+												<Unlink className='w-4 h-4 text-gray-500 shrink-0' />
+											)}
+											<span className='text-[11px] font-bold text-gray-800'>
+												{currentGuruAssignments.length > 0 ? (
+													<>
+														Ditemukan <b className='text-emerald-800'>{currentGuruAssignments.length} penugasan KBM</b> untuk guru ini.
+													</>
+												) : (
+													'Guru ini belum memiliki penugasan KBM resmi di database (menampilkan seluruh kelas & mapel).'
+												)}
+											</span>
+										</div>
+										{currentGuruAssignments.length > 0 && (
+											<button
+												type='button'
+												onClick={() => setFilterByTeacherAssignments((prev) => !prev)}
+												className={`px-2.5 py-1 text-[10px] font-black uppercase border-[2px] border-[#0D0D0D] cursor-pointer transition-all ${
+													filterByTeacherAssignments
+														? 'bg-[#00E599] text-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]'
+														: 'bg-white text-gray-700 hover:bg-gray-100'
+												}`}
+												title='Klik untuk beralih antara hanya kelas/mapel yang diampu guru atau seluruh kelas/mapel'
+											>
+												{filterByTeacherAssignments ? '✓ Ditautkan ke Jadwal Guru' : 'Tampilkan Semua Kelas & Mapel'}
+											</button>
+										)}
+									</div>
+
+									{/* Pilih Kelas */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Kelas <span className='text-red-500'>*</span>
+											{filterByTeacherAssignments && currentGuruAssignments.length > 0 && (
+												<span className='text-[10px] text-emerald-700 font-bold ml-1'>(Sesuai Guru)</span>
+											)}
+										</label>
+										<select
+											value={createForm.kelas}
+											onChange={(e) => handleKelasChange(e.target.value)}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										>
+											<option value=''>-- Pilih Kelas --</option>
+											{availableKelasOptions.map((k) => (
+												<option key={k.nama_kelas} value={k.nama_kelas}>
+													{k.nama_kelas} {k.isAssigned && !filterByTeacherAssignments ? '★ (Diampu)' : ''}
+												</option>
+											))}
+										</select>
+									</div>
+
+									{/* Pilih Mapel */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Mata Pelajaran <span className='text-red-500'>*</span>
+											{filterByTeacherAssignments && currentGuruAssignments.length > 0 && (
+												<span className='text-[10px] text-emerald-700 font-bold ml-1'>(Sesuai Guru)</span>
+											)}
+										</label>
+										<select
+											value={createForm.mapel}
+											onChange={(e) => {
+												const m = e.target.value;
+												const p = getSuggestedPertemuanKe(createForm.kelas, m);
+												setCreateForm((prev) => ({ ...prev, mapel: m, pertemuan_ke: p }));
+											}}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										>
+											<option value=''>-- Pilih Mata Pelajaran --</option>
+											{availableMapelOptions.map((m) => (
+												<option key={m.mapel} value={m.mapel}>
+													{m.mapel} {m.isAssigned && !filterByTeacherAssignments ? '★ (Diampu)' : ''}
+												</option>
+											))}
+										</select>
+									</div>
+
+									{/* Jam Ke (JP) */}
+									<div className='sm:col-span-2'>
+										<div className='flex items-center justify-between mb-1'>
+											<label className='text-gray-800'>
+												Jam Ke (JP) <span className='text-red-500'>*</span>
+											</label>
+											<span className='text-[10px] text-gray-500 font-normal'>
+												Klik preset atau ketik manual (contoh: 1-2, 3-4, 5)
+											</span>
+										</div>
+										<div className='flex flex-wrap items-center gap-1.5 mb-1.5'>
+											{PRESET_JAM_PELAJARAN.map((preset) => (
+												<button
+													key={preset}
+													type='button'
+													onClick={() => handleCreateJamKeChange(preset)}
+													className={`px-2.5 py-1 text-[11px] font-black border-[2px] border-[#0D0D0D] cursor-pointer transition-all ${
+														createForm.jam_ke === preset
+															? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -translate-y-0.5'
+															: 'bg-white text-gray-700 hover:bg-gray-100'
+													}`}
+												>
+													JP {preset}
+												</button>
+											))}
+										</div>
+										<input
+											type='text'
+											placeholder='Contoh: 1-2 atau 3-4'
+											value={createForm.jam_ke}
+											onChange={(e) => handleCreateJamKeChange(e.target.value)}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-black text-sm outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										/>
+									</div>
+
+									{/* Pertemuan Ke */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Pertemuan Ke (Opsional)
+										</label>
+										<div className='flex items-center gap-2'>
+											<input
+												type='text'
+												placeholder='1, 2, dst.'
+												value={createForm.pertemuan_ke}
+												onChange={(e) => setCreateForm({ ...createForm, pertemuan_ke: e.target.value })}
+												className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none'
+											/>
+											<button
+												type='button'
+												onClick={() => {
+													const p = getSuggestedPertemuanKe(createForm.kelas, createForm.mapel);
+													setCreateForm((prev) => ({ ...prev, pertemuan_ke: p }));
+												}}
+												className='px-2.5 py-2 bg-gray-200 border border-[#0D0D0D] text-[10px] font-black uppercase hover:bg-gray-300 shrink-0 cursor-pointer'
+												title='Hitung ulang dari riwayat KBM kelas & mapel ini'
+											>
+												Hitung
+											</button>
+										</div>
+									</div>
+
+									{/* Status Kehadiran KBM */}
+									<div>
+										<label className='block text-gray-800 mb-1'>
+											Status Kehadiran KBM
+										</label>
+										<select
+											value={createForm.status_kehadiran}
+											onChange={(e) => setCreateForm({ ...createForm, status_kehadiran: e.target.value })}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										>
+											<option value='Normal'>Normal / Hadir Tepat Waktu</option>
+											<option value='Terlambat'>Terlambat</option>
+											<option value='Tugas Luar'>Tugas Luar</option>
+											<option value='Kegiatan Sekolah'>Kegiatan Sekolah</option>
+										</select>
+									</div>
+								</div>
+							</div>
+
+							{/* SECTION 2: PENGATURAN JAM MASUK & SELESAI */}
+							<div className='p-3.5 bg-emerald-50/80 border-[2px] border-emerald-500 shadow-[2px_2px_0px_0px_#0D0D0D] space-y-3'>
+								<div className='flex flex-wrap items-center justify-between gap-2 border-b border-emerald-300 pb-2'>
+									<div className='flex items-center gap-1.5'>
+										<Clock className='w-4 h-4 text-emerald-800' />
+										<span className='uppercase tracking-wider font-black text-emerald-950 text-[11px]'>
+											2. Pengaturan Jam Masuk &amp; Jam Selesai KBM
+										</span>
+									</div>
+									<div className='flex items-center gap-1.5'>
+										<button
+											type='button'
+											onClick={handleFillOfficialSchedule}
+											className='flex items-center gap-1 px-2.5 py-1 bg-white border border-[#0D0D0D] text-[10px] font-black uppercase text-[#0D0D0D] hover:bg-emerald-200 cursor-pointer shadow-[1px_1px_0px_0px_#0D0D0D]'
+											title='Otomatis mengisi jam masuk & selesai sesuai jadwal resmi sekolah untuk JP yang dipilih'
+										>
+											<Zap className='w-3 h-3 text-amber-500 fill-amber-500' />
+											<span>Jadwal Resmi</span>
+										</button>
+										<button
+											type='button'
+											onClick={handleFillCurrentTime}
+											className='flex items-center gap-1 px-2.5 py-1 bg-white border border-[#0D0D0D] text-[10px] font-black uppercase text-[#0D0D0D] hover:bg-emerald-200 cursor-pointer shadow-[1px_1px_0px_0px_#0D0D0D]'
+											title='Gunakan jam saat ini untuk jam selesai'
+										>
+											<Clock className='w-3 h-3 text-sky-600' />
+											<span>Jam Sekarang</span>
+										</button>
+									</div>
+								</div>
+
+								<div className='grid grid-cols-1 sm:grid-cols-3 gap-3 items-end'>
+									{/* Jam Masuk */}
+									<div>
+										<label className='block text-emerald-950 mb-1'>
+											Jam Masuk / Mulai KBM
+										</label>
+										<input
+											type='time'
+											value={createForm.jam_mulai}
+											onChange={(e) => handleCreateTimeChange('jam_mulai', e.target.value)}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-black text-sm outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										/>
+									</div>
+
+									{/* Jam Selesai */}
+									<div>
+										<label className='block text-emerald-950 mb-1'>
+											Jam Selesai KBM
+										</label>
+										<input
+											type='time'
+											value={createForm.jam_selesai}
+											onChange={(e) => handleCreateTimeChange('jam_selesai', e.target.value)}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-black text-sm outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+										/>
+									</div>
+
+									{/* Durasi Terhitung */}
+									<div>
+										<label className='block text-emerald-950 mb-1'>
+											Durasi Riil KBM
+										</label>
+										<div className='px-3 py-2 bg-white border-[2px] border-[#0D0D0D] font-black text-sm text-[#0D0D0D] flex items-center justify-between shadow-[1px_1px_0px_0px_#0D0D0D]'>
+											<span>{formatDurationString(createForm.durasi_menit, false)}</span>
+											<span className='px-1.5 py-0.5 bg-emerald-200 text-emerald-900 text-[10px] border border-[#0D0D0D]'>
+												{createForm.durasi_menit} mnt
+											</span>
+										</div>
+									</div>
+								</div>
+								<p className='text-[10px] text-emerald-900 font-medium'>
+									💡 <b>Fleksibilitas Penuh</b>: Admin dapat bebas menentukan jam masuk &amp; selesai riil agar durasi mengajar guru tetap tercatat akurat meskipun guru lapor terlambat akibat kendala teknis.
+								</p>
+							</div>
+
+							{/* SECTION 3: ALASAN KENDALA GURU (AUDIT TRAIL) */}
+							<div className='p-3.5 bg-amber-50/80 border-[2px] border-amber-500 shadow-[2px_2px_0px_0px_#0D0D0D] space-y-3'>
+								<div className='flex items-center gap-2 border-b border-amber-300 pb-1.5'>
+									<AlertCircle className='w-4 h-4 text-amber-700' />
+									<span className='uppercase tracking-wider font-black text-amber-950 text-[11px]'>
+										3. Jenis Kendala Teknis Guru
+									</span>
+								</div>
+
+								{/* Pilihan Cepat Kendala */}
+								<div>
+									<label className='block text-amber-950 mb-1.5'>
+										Pilih Jenis Kendala yang Dialami Guru:
+									</label>
+									<div className='grid grid-cols-2 sm:grid-cols-3 gap-1.5'>
+										{KENDALA_PRESETS.map((item) => (
+											<button
+												key={item.id}
+												type='button'
+												onClick={() => setCreateForm({ ...createForm, alasan_kendala: item.label })}
+												className={`px-2.5 py-1.5 text-left border-[2px] border-[#0D0D0D] text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 ${
+													createForm.alasan_kendala === item.label
+														? 'bg-[#F5C518] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -translate-y-0.5'
+														: 'bg-white text-gray-700 hover:bg-yellow-50'
+												}`}
+											>
+												<span>{item.icon}</span>
+												<span className='truncate'>{item.label}</span>
+											</button>
+										))}
+									</div>
+								</div>
+
+								{/* Catatan Tambahan Kendala */}
+								<div>
+									<label className='block text-amber-950 mb-1'>
+										Detail / Catatan Tambahan Kendala
+									</label>
+									<input
+										type='text'
+										placeholder='Contoh: Baterai HP drop saat di kelas 7A, lapor ke ruang kurikulum jam 10:00'
+										value={createForm.catatan_kendala}
+										onChange={(e) => setCreateForm({ ...createForm, catatan_kendala: e.target.value })}
+										className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-medium outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+									/>
+									<p className='text-[10px] text-amber-800 font-medium mt-1'>
+										Catatan ini akan otomatis disimpan ke rekam jejak audit administrasi KBM guru untuk transparansi supervisi.
+									</p>
+								</div>
+							</div>
+
+							{/* SECTION 4: KONTEN PEMBELAJARAN */}
+							<div className='p-3.5 bg-gray-50 border-[2px] border-[#0D0D0D] space-y-3'>
+								<div className='flex items-center gap-2 border-b border-gray-300 pb-1.5'>
+									<Sparkles className='w-4 h-4 text-[#0D0D0D]' />
+									<span className='uppercase tracking-wider font-black text-[#0D0D0D] text-[11px]'>
+										4. Materi &amp; Kegiatan Pembelajaran
+									</span>
+								</div>
+
+								{/* Metode Pembelajaran */}
+								<div>
+									<label className='block text-gray-800 mb-1.5'>
+										Metode Pembelajaran (Bisa pilih lebih dari satu)
+									</label>
+									<div className='flex flex-wrap gap-1.5'>
+										{METODE_OPTIONS.map((m) => {
+											const isSelected = (createForm.metode || '')
+												.split(',')
+												.map((s) => s.trim())
+												.includes(m);
+											return (
+												<button
+													key={m}
+													type='button'
+													onClick={() => handleToggleCreateMetode(m)}
+													className={`px-3 py-1 text-xs font-bold border-[2px] border-[#0D0D0D] cursor-pointer transition-all ${
+														isSelected
+															? 'bg-[#00B2FF] text-[#0D0D0D] shadow-[2px_2px_0px_0px_#0D0D0D] -translate-y-0.5'
+															: 'bg-white text-gray-700 hover:bg-gray-100'
+													}`}
+												>
+													{isSelected ? '✓ ' : ''}{m}
+												</button>
+											);
+										})}
+									</div>
+								</div>
+
+								{/* Materi */}
+								<div>
+									<label className='block text-gray-800 mb-1'>
+										Materi Pembelajaran <span className='text-red-500'>*</span>
+									</label>
+									<input
+										type='text'
+										placeholder='Contoh: Bab 3 - Persamaan Linear Satu Variabel'
+										value={createForm.materi}
+										onChange={(e) => setCreateForm({ ...createForm, materi: e.target.value })}
+										className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white font-bold outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+									/>
+								</div>
+
+								{/* Kegiatan */}
+								<div>
+									<label className='block text-gray-800 mb-1'>
+										Kegiatan Pembelajaran (Opsional)
+									</label>
+									<textarea
+										rows={2}
+										placeholder='Contoh: Guru menjelaskan konsep dan siswa mengerjakan latihan soal kelompok.'
+										value={createForm.kegiatan}
+										onChange={(e) => setCreateForm({ ...createForm, kegiatan: e.target.value })}
+										className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white outline-none shadow-[1px_1px_0px_0px_#0D0D0D]'
+									/>
+								</div>
+
+								{/* Hambatan & Solusi */}
+								<div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
+									<div>
+										<label className='block text-gray-800 mb-1'>Hambatan KBM Siswa (Opsional)</label>
+										<input
+											type='text'
+											placeholder='Contoh: Beberapa siswa belum memahami rumus dasar'
+											value={createForm.hambatan}
+											onChange={(e) => setCreateForm({ ...createForm, hambatan: e.target.value })}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white outline-none'
+										/>
+									</div>
+									<div>
+										<label className='block text-gray-800 mb-1'>Solusi KBM (Opsional)</label>
+										<input
+											type='text'
+											placeholder='Contoh: Diberikan bimbingan tambahan dan tutor sebaya'
+											value={createForm.solusi}
+											onChange={(e) => setCreateForm({ ...createForm, solusi: e.target.value })}
+											className='w-full px-3 py-2 border-[2px] border-[#0D0D0D] bg-white outline-none'
+										/>
+									</div>
+								</div>
+
+								{/* Checkbox Tuntas */}
+								<label className='flex items-center gap-2 cursor-pointer pt-1'>
+									<input
+										type='checkbox'
+										checked={createForm.tuntas}
+										onChange={(e) => setCreateForm({ ...createForm, tuntas: e.target.checked })}
+										className='w-4 h-4 cursor-pointer accent-[#00E599]'
+									/>
+									<span className='text-xs font-bold text-gray-800'>
+										Materi Pembelajaran Tuntas Disampaikan pada Jam Ini
+									</span>
+								</label>
+							</div>
+
+							{/* SECTION 5: OPSI SINKRONISASI & BYPASS */}
+							<div className='p-3 bg-gray-100 border border-gray-400 space-y-2 text-xs'>
+								<label className='flex items-center gap-2 cursor-pointer'>
+									<input
+										type='checkbox'
+										checked={createForm.sync_absensi}
+										onChange={(e) => setCreateForm({ ...createForm, sync_absensi: e.target.checked })}
+										className='w-4 h-4 cursor-pointer accent-[#0D0D0D]'
+									/>
+									<span className='font-bold text-gray-800'>
+										Otomatis tautkan / sinkronkan sesi presensi siswa (<code className='bg-gray-200 px-1 py-0.5 rounded'>absensi_mapel</code>) jika ditemukan
+									</span>
+								</label>
+								<label className='flex items-center gap-2 cursor-pointer text-[#E8451A]'>
+									<input
+										type='checkbox'
+										checked={createForm.override_conflict}
+										onChange={(e) => setCreateForm({ ...createForm, override_conflict: e.target.checked })}
+										className='w-4 h-4 cursor-pointer accent-[#E8451A]'
+									/>
+									<span className='font-bold'>
+										Bypass Bentrok (Izinkan simpan jika jam bertabrakan karena Team Teaching / Pengganti)
+									</span>
+								</label>
+							</div>
+						</div>
+
+						{/* Modal Footer */}
+						<div className='flex items-center justify-end gap-3 pt-3 border-t-[3px] border-[#0D0D0D]'>
+							<button
+								type='button'
+								onClick={() => setCreateModalOpen(false)}
+								className='px-4 py-2.5 bg-gray-200 border-[2px] border-[#0D0D0D] font-black text-xs uppercase cursor-pointer hover:bg-gray-300'
+							>
+								Batal
+							</button>
+							<button
+								type='button'
+								disabled={savingCreate}
+								onClick={handleSaveCreate}
+								className='flex items-center gap-2 px-6 py-2.5 bg-[#00E599] text-[#0D0D0D] border-[3px] border-[#0D0D0D] font-black text-xs uppercase tracking-wider shadow-[3px_3px_0px_0px_#0D0D0D] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#0D0D0D] transition-all cursor-pointer disabled:opacity-50'
+							>
+								<Check className='w-4 h-4' />
+								<span>{savingCreate ? 'Menyimpan & Mengesahkan...' : 'Simpan & Sahkan Jurnal Guru'}</span>
 							</button>
 						</div>
 					</div>
