@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
-import { swalConfirmDelete, swalSuccess, swalError } from '@/lib/swal';
+import { swalConfirmDeleteAsync, swalSuccess, swalError } from '@/lib/swal';
 
 const WARNA_OPTIONS = [
   { key: 'cream',  label: 'Cream',  bg: '#FFF5F0', text: '#0D0D0D' },
@@ -298,18 +298,19 @@ export default function CatatanPage() {
   };
 
   const handleDelete = async (id, fotoUrl) => {
-    const result = await swalConfirmDelete('Hapus Catatan?', 'Catatan dan foto lampirannya tidak bisa dikembalikan.');
+    const result = await swalConfirmDeleteAsync({
+      title: 'Hapus Catatan?',
+      text: 'Catatan dan foto lampirannya tidak bisa dikembalikan.',
+      actionFn: async () => {
+        const supabase = createClient();
+        if (fotoUrl) await deleteFotoFromStorage(supabase, fotoUrl);
+        const { error } = await supabase.from('catatan').delete().eq('id', id);
+        if (error) throw error;
+      },
+    });
     if (!result.isConfirmed) return;
-    try {
-      const supabase = createClient();
-      if (fotoUrl) await deleteFotoFromStorage(supabase, fotoUrl);
-      const { error } = await supabase.from('catatan').delete().eq('id', id);
-      if (error) throw error;
-      await refresh();
-      swalSuccess('Terhapus!', 'Catatan berhasil dihapus.');
-    } catch (err) {
-      swalError('Gagal Menghapus', err.message || 'Coba lagi.');
-    }
+    await refresh();
+    swalSuccess('Terhapus!', 'Catatan berhasil dihapus.');
   };
 
   const handleTogglePin = async (item) => {

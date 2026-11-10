@@ -327,14 +327,15 @@ export default function NilaiKuantitatifPage() {
 			const json = await res.json();
 			if (!res.ok) throw new Error(json.error || 'Gagal menyimpan nilai');
 
-			Swal.fire({
+			await fetchStudentsAndGrades();
+			await Swal.fire({
 				icon: 'success',
 				title: 'Tersimpan',
 				text: `Nilai dan narasi rapor berhasil disimpan untuk ${json.count || 0} siswa.`,
-				timer: 1500,
+				timer: 2000,
 				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-			fetchStudentsAndGrades();
 		} catch (err) {
 			Swal.fire({ icon: 'error', title: 'Gagal', text: err.message });
 		} finally {

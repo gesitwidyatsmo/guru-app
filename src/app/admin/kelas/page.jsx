@@ -165,7 +165,7 @@ export default function AdminKelasPage() {
 			});
 
 			setIsModalOpen(false);
-			loadData();
+			await loadData();
 		} catch (err) {
 			Swal.fire('Gagal Menyimpan', err.message, 'error');
 		} finally {
@@ -196,21 +196,33 @@ export default function AdminKelasPage() {
 			cancelButtonColor: '#0D0D0D',
 			confirmButtonText: 'Ya, Hapus Kelas',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const res = await fetch(`/api/kelas?id=${item.id}`, {
+						method: 'DELETE',
+					});
+					const data = await res.json();
+					if (!res.ok) throw new Error(data.error || 'Gagal menghapus kelas.');
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus kelas.');
+					return false;
+				}
+			},
 		});
 
-		if (!confirm.isConfirmed) return;
-
-		try {
-			const res = await fetch(`/api/kelas?id=${item.id}`, {
-				method: 'DELETE',
+		if (confirm.isConfirmed) {
+			await loadData();
+			Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: `Kelas ${item.kelas} telah berhasil dihapus.`,
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error || 'Gagal menghapus kelas.');
-
-			Swal.fire('Terhapus!', `Kelas ${item.kelas} telah berhasil dihapus.`, 'success');
-			loadData();
-		} catch (err) {
-			Swal.fire('Error', err.message, 'error');
 		}
 	};
 

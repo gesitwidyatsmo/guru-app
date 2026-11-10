@@ -182,7 +182,7 @@ function AdminSiswaContent() {
 			});
 
 			setIsModalOpen(false);
-			loadData();
+			await loadData();
 		} catch (err) {
 			Swal.fire('Gagal Menyimpan', err.message, 'error');
 		} finally {
@@ -193,6 +193,7 @@ function AdminSiswaContent() {
 	const handleDelete = async (item) => {
 		if (isReadOnly) return;
 
+		let historyBlocked = null;
 		const confirm = await Swal.fire({
 			title: 'Hapus Siswa?',
 			html: `Anda yakin ingin menghapus data siswa <b>${item.nama_lengkap}</b> (${item.kelas})?`,
@@ -202,39 +203,56 @@ function AdminSiswaContent() {
 			cancelButtonColor: '#0D0D0D',
 			confirmButtonText: 'Ya, Hapus Siswa',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const res = await fetch(`/api/siswa?id=${item.id}`, {
+						method: 'DELETE',
+					});
+					const data = await res.json();
+					if (!res.ok) {
+						if (data.hasHistory) {
+							historyBlocked = data.error;
+							return false;
+						}
+						throw new Error(data.error || 'Gagal menghapus siswa.');
+					}
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus siswa.');
+					return false;
+				}
+			},
 		});
 
-		if (!confirm.isConfirmed) return;
-
-		try {
-			const res = await fetch(`/api/siswa?id=${item.id}`, {
-				method: 'DELETE',
+		if (historyBlocked) {
+			await Swal.fire({
+				title: 'Tidak Dapat Dihapus',
+				html: `
+					<div class="text-left text-sm space-y-2">
+						<p>${historyBlocked}</p>
+						<p class="font-bold text-xs bg-yellow-100 p-2 border-2 border-black rounded-lg">
+							💡 Saran: Klik <b>Edit</b> pada baris siswa ini lalu ubah Status menjadi <b>"Lulus"</b> atau <b>"Pindah"</b>.
+						</p>
+					</div>
+				`,
+				icon: 'info',
+				confirmButtonColor: '#0D0D0D',
 			});
-			const data = await res.json();
-			if (!res.ok) {
-				if (data.hasHistory) {
-					await Swal.fire({
-						title: 'Tidak Dapat Dihapus',
-						html: `
-							<div class="text-left text-sm space-y-2">
-								<p>${data.error}</p>
-								<p class="font-bold text-xs bg-yellow-100 p-2 border-2 border-black rounded-lg">
-									💡 Saran: Klik <b>Edit</b> pada baris siswa ini lalu ubah Status menjadi <b>"Lulus"</b> atau <b>"Pindah"</b>.
-								</p>
-							</div>
-						`,
-						icon: 'info',
-						confirmButtonColor: '#0D0D0D',
-					});
-					return;
-				}
-				throw new Error(data.error || 'Gagal menghapus siswa.');
-			}
+			return;
+		}
 
-			Swal.fire('Terhapus!', 'Data siswa telah berhasil dihapus.', 'success');
-			loadData();
-		} catch (err) {
-			Swal.fire('Error', err.message, 'error');
+		if (confirm.isConfirmed) {
+			await loadData();
+			Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: 'Data siswa telah berhasil dihapus.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 

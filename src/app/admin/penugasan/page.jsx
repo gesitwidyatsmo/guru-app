@@ -23,6 +23,7 @@ export default function PenugasanPage() {
 	const [filterKelas, setFilterKelas] = useState('all');
 
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [submitting, setSubmitting] = useState(false);
 	const [formData, setFormData] = useState({
 		id_user: '',
 		kelas: '',
@@ -97,6 +98,7 @@ export default function PenugasanPage() {
 		}
 
 		try {
+			setSubmitting(true);
 			const supabase = createClient();
 			const newKBM = {
 				id_kbm: 'KBM-' + Date.now() + Math.random().toString(36).substring(2, 6).toUpperCase(),
@@ -107,11 +109,20 @@ export default function PenugasanPage() {
 			const { error } = await supabase.from('guru_kbm').insert([newKBM]);
 			if (error) throw error;
 
-			Swal.fire('Ditugaskan!', 'Relasi mengajar KBM telah berhasil diformalkan.', 'success');
 			setIsModalOpen(false);
-			fetchAllData();
+			await fetchAllData();
+			Swal.fire({
+				icon: 'success',
+				title: 'Ditugaskan!',
+				text: 'Relasi mengajar KBM telah berhasil diformalkan.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		} catch (error) {
 			Swal.fire('Gagal!', error.message, 'error');
+		} finally {
+			setSubmitting(false);
 		}
 	};
 
@@ -125,19 +136,31 @@ export default function PenugasanPage() {
 			cancelButtonColor: '#0D0D0D',
 			confirmButtonText: 'Ya, Cabut!',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const supabase = createClient();
+					const { error } = await supabase.from('guru_kbm').delete().eq('id_kbm', kbmId);
+					if (error) throw error;
+					return true;
+				} catch (error) {
+					Swal.showValidationMessage(error.message || 'Gagal mencabut wewenang');
+					return false;
+				}
+			},
 		});
 
 		if (result.isConfirmed) {
-			try {
-				const supabase = createClient();
-				const { error } = await supabase.from('guru_kbm').delete().eq('id_kbm', kbmId);
-				if (error) throw error;
-
-				Swal.fire('Dicabut', 'Penugasan KBM berhasil dihapus.', 'success');
-				fetchAllData();
-			} catch (error) {
-				Swal.fire('Error', error.message, 'error');
-			}
+			await fetchAllData();
+			Swal.fire({
+				icon: 'success',
+				title: 'Dicabut!',
+				text: 'Penugasan KBM berhasil dihapus.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 
@@ -474,14 +497,16 @@ export default function PenugasanPage() {
 								<div className='pt-4 border-t-2 border-black/10 flex gap-3'>
 									<button
 										type='button'
+										disabled={submitting}
 										onClick={() => setIsModalOpen(false)}
-										className='neo-btn-outline flex-1 text-center justify-center text-xs sm:text-sm !py-2.5'>
+										className='neo-btn-outline flex-1 text-center justify-center text-xs sm:text-sm !py-2.5 disabled:opacity-50'>
 										Batal
 									</button>
 									<button
 										type='submit'
-										className='neo-btn-primary flex-1 text-center justify-center text-xs sm:text-sm !py-2.5 bg-black text-white'>
-										Simpan Penugasan
+										disabled={submitting}
+										className='neo-btn-primary flex-1 text-center justify-center text-xs sm:text-sm !py-2.5 bg-black text-white disabled:opacity-50 flex items-center justify-center gap-2'>
+										{submitting ? 'Menyimpan...' : 'Simpan Penugasan'}
 									</button>
 								</div>
 							</form>

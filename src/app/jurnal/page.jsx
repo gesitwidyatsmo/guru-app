@@ -647,6 +647,7 @@ export default function JurnalPage() {
 	};
 
 	const handleDelete = async (id) => {
+		const targetJurnal = journals.find((j) => j.id === id);
 		const result = await Swal.fire({
 			title: 'Hapus Jurnal?',
 			text: 'Data yang dihapus tidak bisa dikembalikan.',
@@ -655,23 +656,34 @@ export default function JurnalPage() {
 			confirmButtonColor: '#EF4444',
 			confirmButtonText: 'Ya, Hapus',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const supabase = createClient();
+					const { error } = await supabase.from('jurnal').delete().eq('id', id);
+					if (error) throw error;
+					if (targetJurnal) {
+						await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
+					}
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Terjadi kesalahan saat menghapus.');
+					return false;
+				}
+			},
 		});
 
 		if (result.isConfirmed) {
-			try {
-				// Ambil info kelas & mapel sebelum hapus agar bisa renumber setelahnya
-				const targetJurnal = journals.find(j => j.id === id);
-				const supabase = createClient();
-				const { error } = await supabase.from('jurnal').delete().eq('id', id);
-				if (error) throw error;
-
-				Swal.fire('Terhapus!', 'Jurnal berhasil dihapus.', 'success');
-				// Renomor ulang setelah hapus
-				if (targetJurnal) await renumberPertemuan(targetJurnal.kelas, targetJurnal.mapel);
-				refreshJurnal();
-			} catch (err) {
-				Swal.fire('Error', 'Terjadi kesalahan saat menghapus.', 'error');
-			}
+			await refreshJurnal();
+			Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: 'Jurnal berhasil dihapus.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 
@@ -1225,16 +1237,17 @@ export default function JurnalPage() {
 					window.open(waUrl, '_blank');
 				}
 			} else {
+				setIsModalOpen(false);
+				await refreshJurnal();
 				await Swal.fire({
 					icon: 'success',
 					title: 'Berhasil!',
 					text: `Jurnal berhasil ${isEditing ? 'diperbarui' : 'disimpan'}`,
-					timer: 1500,
+					timer: 2000,
 					showConfirmButton: false,
+					timerProgressBar: true,
 				});
 			}
-			setIsModalOpen(false);
-			refreshJurnal();
 		} catch (err) {
 			console.error('Error simpan jurnal:', err);
 			const isNetworkErr =

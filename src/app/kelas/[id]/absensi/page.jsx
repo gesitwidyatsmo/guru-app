@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Swal from 'sweetalert2';
+import { swalProcess } from '@/lib/swal';
 import { useParams, useRouter } from 'next/navigation';
 import SectionHeader from '@/app/components/SectionHeader';
 import Link from 'next/link';
@@ -290,6 +291,14 @@ export default function AbsensiKelasPage() {
 	const handleSimpan = async () => {
 		if (!kelasDetail) return;
 
+		if (!siswaKelasIni || siswaKelasIni.length === 0) {
+			Swal.fire('Error', 'Data siswa kelas belum termuat atau tidak ditemukan', 'warning');
+			return;
+		}
+
+		setSaving(true);
+		swalProcess('Sedang Menyimpan...', 'Mohon tunggu, sedang memverifikasi lokasi & menyimpan data absensi...');
+
 		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
 		let userCoords = null;
 		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin') {
@@ -319,6 +328,7 @@ export default function AbsensiKelasPage() {
 							confirmButtonColor: '#E8451A',
 							confirmButtonText: 'Tutup',
 						});
+						setSaving(false);
 						return;
 					}
 				}
@@ -336,25 +346,10 @@ export default function AbsensiKelasPage() {
 					confirmButtonColor: '#E8451A',
 					confirmButtonText: 'Mengerti',
 				});
+				setSaving(false);
 				return;
 			}
 		}
-
-		if (!siswaKelasIni || siswaKelasIni.length === 0) {
-			Swal.fire('Error', 'Data siswa kelas belum termuat atau tidak ditemukan', 'warning');
-			return;
-		}
-
-		const konfirmasi = await Swal.fire({
-			title: 'Simpan absensi?',
-			text: `Kelas ${namaKelas} tanggal ${tanggal}`,
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonText: 'Ya, simpan',
-			cancelButtonText: 'Batal',
-		});
-
-		if (!konfirmasi.isConfirmed) return;
 
 		const data_absensi = siswaKelasIni.map((s) => ({
 			siswa_id: s.id,
@@ -363,7 +358,6 @@ export default function AbsensiKelasPage() {
 		}));
 
 		try {
-			setSaving(true);
 			const res = await fetch('/api/absensi', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -385,22 +379,24 @@ export default function AbsensiKelasPage() {
 				throw new Error(errJson.error || 'Gagal menyimpan absensi');
 			}
 
+			setSudahAdaAbsensi(true);
+			await fetchAbsensi();
+
 			await Swal.fire({
 				icon: 'success',
 				title: 'Berhasil',
 				text: 'Absensi berhasil disimpan',
-				timer: 1500,
+				timer: 2000,
 				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-
-			setSudahAdaAbsensi(true);
-			await fetchAbsensi();
-		} catch (e) {
-			console.error('Error simpan absensi:', e);
-			await Swal.fire({
+		} catch (err) {
+			console.error(err);
+			Swal.fire({
 				icon: 'error',
 				title: 'Gagal Menyimpan',
-				text: e.message || 'Terjadi kesalahan saat menyimpan',
+				text: err.message || 'Gagal menyimpan absensi',
+				confirmButtonColor: '#E8451A',
 			});
 		} finally {
 			setSaving(false);

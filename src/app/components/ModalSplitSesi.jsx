@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { swalProcess } from '@/lib/swal';
 import { getPossibleSplits } from '@/lib/absensiUtils';
 
 export default function ModalSplitSesi({
@@ -135,6 +136,7 @@ export default function ModalSplitSesi({
 		if (!konfirmasi.isConfirmed) return;
 
 		setLoading(true);
+		swalProcess('Sedang Memecah Sesi...', 'Mohon tunggu, sistem sedang memproses pembagian sesi...');
 		try {
 			const res = await fetch('/api/absensi-mapel/split', {
 				method: 'POST',

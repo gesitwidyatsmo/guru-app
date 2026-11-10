@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Loader from '@/app/components/loading';
 import Swal from 'sweetalert2';
+import { swalProcess, swalSuccess, swalError } from '@/lib/swal';
 import * as XLSX from 'xlsx';
 import {
 	Users,
@@ -115,6 +116,7 @@ export default function WaliKelasBiodataPage() {
 	// Handler: Submit Create / Edit
 	const handleSubmitBiodata = async (payload, isCreate) => {
 		try {
+			swalProcess('Menyimpan Data...', 'Mohon tunggu, sedang menghubungi server...');
 			const url = '/api/siswa';
 			const method = isCreate ? 'POST' : 'PUT';
 
@@ -129,23 +131,11 @@ export default function WaliKelasBiodataPage() {
 				throw new Error(json.error || 'Gagal menyimpan biodata siswa.');
 			}
 
-			Swal.fire({
-				icon: 'success',
-				title: 'Berhasil!',
-				text: isCreate ? 'Siswa baru berhasil ditambahkan ke rombel.' : 'Biodata siswa berhasil diperbarui.',
-				timer: 1600,
-				showConfirmButton: false,
-			});
-
 			setIsModalOpen(false);
-			fetchHubData();
+			await fetchHubData();
+			swalSuccess('Berhasil!', isCreate ? 'Siswa baru berhasil ditambahkan ke rombel.' : 'Biodata siswa berhasil diperbarui.', 2000);
 		} catch (err) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menyimpan',
-				text: err.message,
-				confirmButtonColor: '#E8451A',
-			});
+			swalError('Gagal Menyimpan', err.message);
 		}
 	};
 
@@ -187,32 +177,27 @@ export default function WaliKelasBiodataPage() {
 			cancelButtonText: 'Batal',
 			confirmButtonColor: '#E8451A',
 			cancelButtonColor: '#0D0D0D',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const res = await fetch(`/api/siswa?id=${siswa.id}`, { method: 'DELETE' });
+					const json = await res.json();
+
+					if (!res.ok) {
+						throw new Error(json.error || 'Gagal menghapus siswa');
+					}
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus siswa');
+					return false;
+				}
+			},
 		});
 
-		if (!result.isConfirmed) return;
-
-		try {
-			const res = await fetch(`/api/siswa?id=${siswa.id}`, { method: 'DELETE' });
-			const json = await res.json();
-
-			if (!res.ok) {
-				throw new Error(json.error || 'Gagal menghapus siswa');
-			}
-
-			Swal.fire({
-				icon: 'success',
-				title: 'Terhapus!',
-				text: 'Data siswa berhasil dihapus.',
-				timer: 1500,
-				showConfirmButton: false,
-			});
-			fetchHubData();
-		} catch (err) {
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menghapus',
-				text: err.message,
-			});
+		if (result.isConfirmed) {
+			await fetchHubData();
+			swalSuccess('Terhapus!', 'Data siswa berhasil dihapus.', 2000);
 		}
 	};
 

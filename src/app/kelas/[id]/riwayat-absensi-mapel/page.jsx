@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Swal from 'sweetalert2';
+import { swalProcess } from '@/lib/swal';
 import Loader from '../../../components/loading';
 import SectionHeader from '../../../components/SectionHeader';
 import { createClient } from '@/utils/supabase/client';
@@ -188,6 +189,8 @@ export default function RiwayatAbsensiMapelPage() {
 		if (!selectedTanggal || !selectedJamKe) return;
 
 		setSaving(true);
+		swalProcess('Sedang Menyimpan...', 'Mohon tunggu, sedang menyimpan perubahan riwayat absensi...');
+
 		try {
 			const supabase = createClient();
 			
@@ -222,19 +225,20 @@ export default function RiwayatAbsensiMapelPage() {
 				if (insErr) throw insErr;
 			}
 
-			Swal.fire({
-				icon: 'success',
-				title: 'Berhasil',
-				text: 'Perubahan riwayat absensi mapel disimpan',
-				timer: 1500,
-				showConfirmButton: false,
-			});
-
 			await fetchRiwayatSesi();
 			if (tanggalEdit !== selectedTanggal || jamKeEdit !== selectedJamKe) {
 				setSelectedTanggal(tanggalEdit);
 				setSelectedJamKe(jamKeEdit);
 			}
+
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil',
+				text: 'Perubahan riwayat absensi mapel disimpan',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		} catch (error) {
 			console.error(error);
 			Swal.fire('Error', error.message, 'error');
@@ -252,29 +256,37 @@ export default function RiwayatAbsensiMapelPage() {
 			text: `Sesi Absen (${selectedTanggal}, Jam ${selectedJamKe}) akan dihapus secara permanen beserta data seluruh siswa!`,
 			icon: 'warning',
 			showCancelButton: true,
-			confirmButtonColor: '#d33',
-			cancelButtonColor: '#3085d6',
+			confirmButtonColor: '#EF4444',
+			cancelButtonColor: '#6B7280',
 			confirmButtonText: 'Ya, Hapus!',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const supabase = createClient();
+					const { error } = await supabase.from('absensi_mapel').delete().eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe);
+					if (error) throw error;
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus sesi absen mapel');
+					return false;
+				}
+			},
 		});
 
-		if (!resConfirm.isConfirmed) return;
-
-		setSaving(true);
-		try {
-			const supabase = createClient();
-			const { error } = await supabase.from('absensi_mapel').delete().eq('kelas', namaKelas).eq('mapel', selectedMapel).eq('tanggal', selectedTanggal).eq('jam_ke', selectedJamKe);
-			if (error) throw error;
-
-			Swal.fire('Terhapus!', 'Sesi absensi mapel berhasil dihapus.', 'success');
+		if (resConfirm.isConfirmed) {
 			setSelectedTanggal('');
 			setSelectedJamKe('');
 			await fetchRiwayatSesi();
-		} catch (error) {
-			console.error(error);
-			Swal.fire('Error', 'Gagal menghapus sesi absen mapel', 'error');
-		} finally {
-			setSaving(false);
+			await Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: 'Sesi absensi mapel berhasil dihapus.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 

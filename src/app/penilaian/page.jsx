@@ -415,21 +415,6 @@ export default function PenilaianPage() {
 			return;
 		}
 
-		const result = await Swal.fire({
-			title: 'Simpan Nilai Baru?',
-			text: `Menyimpan nilai untuk ${terisi} siswa (${modePenilaian === 'jumlah_benar' ? 'Mode Jumlah Benar' : 'Mode Nilai Langsung'})`,
-			icon: 'question',
-			showCancelButton: true,
-			confirmButtonColor: '#4F46E5',
-			cancelButtonColor: '#6B7280',
-			confirmButtonText: 'Ya, Simpan',
-			cancelButtonText: 'Batal',
-		});
-
-		if (!result.isConfirmed) return;
-
-		setSaving(true);
-
 		const payload = {
 			judul,
 			type,
@@ -454,85 +439,95 @@ export default function PenilaianPage() {
 				timer: 3000,
 				showConfirmButton: false,
 			});
-			setSaving(false);
 			return;
 		}
 
-		try {
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-			const userId = userData?.id_user;
-			const role = userData?.role;
+		setSaving(true);
+		const { value: createdTugasId } = await Swal.fire({
+			title: 'Simpan Nilai Baru?',
+			text: `Menyimpan nilai untuk ${terisi} siswa (${modePenilaian === 'jumlah_benar' ? 'Mode Jumlah Benar' : 'Mode Nilai Langsung'})`,
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonColor: '#4F46E5',
+			cancelButtonColor: '#6B7280',
+			confirmButtonText: 'Ya, Simpan',
+			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const supabase = createClient();
+					const { data: { user } } = await supabase.auth.getUser();
+					const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+					const userId = userData?.id_user;
+					const role = userData?.role;
 
-			// Validate
-			if (role === 'Guru' && userId) {
-				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', selectedKelas).eq('mapel', selectedMapel).single();
-				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak mengajar mapel ini di kelas tersebut.');
-			}
+					// Validate
+					if (role === 'Guru' && userId) {
+						const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', selectedKelas).eq('mapel', selectedMapel).single();
+						if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak mengajar mapel ini di kelas tersebut.');
+					}
 
-			// Generate ID
-			const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+					// Generate ID
+					const tugasId = `TGS-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-			const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert({
-				tugas_id: tugasId,
-				guru_id: userId,
-				kategori: judul,
-				type,
-				deskripsi,
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				tanggal,
-				tahun_ajar: tahunAjarAktif,
-				semester: semesterAktif,
-				mode_penilaian: modePenilaian,
-				total_soal: parseInt(totalSoal) || 100,
-				skala_maks: parseInt(skalaMaks) || 100,
-				pembulatan: pembulatan,
-			});
-			if (insertHeaderError) throw insertHeaderError;
+					const { error: insertHeaderError } = await supabase.from('nilai_tugas').insert({
+						tugas_id: tugasId,
+						guru_id: userId,
+						kategori: judul,
+						type,
+						deskripsi,
+						kelas: selectedKelas,
+						mapel: selectedMapel,
+						tanggal,
+						tahun_ajar: tahunAjarAktif,
+						semester: semesterAktif,
+						mode_penilaian: modePenilaian,
+						total_soal: parseInt(totalSoal) || 100,
+						skala_maks: parseInt(skalaMaks) || 100,
+						pembulatan: pembulatan,
+					});
+					if (insertHeaderError) throw insertHeaderError;
 
-			// Insert scores
-			const validGrades = payload.nilai.map(n => {
-				const siswa = getSiswaById(n.siswa_id);
-				return {
-					tugas_id: tugasId,
-					siswa_id: n.siswa_id,
-					nama_siswa: siswa?.nama_lengkap || 'Unknown',
-					nilai: parseFloat(n.nilai) || 0,
-					jumlah_benar: n.jumlah_benar,
-				};
-			});
+					// Insert scores
+					const validGrades = payload.nilai.map(n => {
+						const siswa = getSiswaById(n.siswa_id);
+						return {
+							tugas_id: tugasId,
+							siswa_id: n.siswa_id,
+							nama_siswa: siswa?.nama_lengkap || 'Unknown',
+							nilai: parseFloat(n.nilai) || 0,
+							jumlah_benar: n.jumlah_benar,
+						};
+					});
 
-			if (validGrades.length > 0) {
-				const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
-				if (insertScoreError) {
-					await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
-					throw insertScoreError;
+					if (validGrades.length > 0) {
+						const { error: insertScoreError } = await supabase.from('nilai_siswa').insert(validGrades);
+						if (insertScoreError) {
+							await supabase.from('nilai_tugas').delete().eq('tugas_id', tugasId);
+							throw insertScoreError;
+						}
+					}
+					return tugasId;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menyimpan nilai');
+					return false;
 				}
 			}
+		});
 
+		setSaving(false);
+		if (createdTugasId) {
+			setSelectedTugasId(createdTugasId);
+			setRefreshTrigger(prev => prev + 1);
 			await Swal.fire({
 				icon: 'success',
 				title: 'Berhasil!',
-				text: 'Tugas baru berhasil dibuat',
-				timer: 1500,
+				text: 'Tugas baru berhasil dibuat dan disimpan.',
+				timer: 2000,
 				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-
-			// Trigger refetch daftar tugas via dependency effect
-			setSelectedTugasId(tugasId);
-			setRefreshTrigger(prev => prev + 1);
-		} catch (error) {
-			console.error(error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menyimpan',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
-			});
-		} finally {
-			setSaving(false);
 		}
 	};
 
@@ -595,9 +590,11 @@ export default function PenilaianPage() {
 			customClass: {
 				popup: 'border-4 border-[#0D0D0D] rounded-none shadow-[8px_8px_0px_0px_#0D0D0D] bg-white',
 				title: 'pt-4',
-				confirmButton: 'bg-[#00A693] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
-				cancelButton: 'bg-[#E8451A] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase',
+				confirmButton: 'bg-[#00A693] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase disabled:opacity-50',
+				cancelButton: 'bg-[#E8451A] text-white font-black px-6 py-3 mx-2 border-4 border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] hover:-translate-y-1 hover:-translate-x-1 hover:shadow-[6px_6px_0px_0px_#0D0D0D] active:translate-x-0 active:translate-y-0 active:shadow-[0px_0px_0px_0px_#0D0D0D] transition-all uppercase disabled:opacity-50',
 			},
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
 			didOpen: () => {
 				if (isJumlahBenarMode) {
 					const inputBenar = document.getElementById('swal-input-benar');
@@ -611,7 +608,10 @@ export default function PenilaianPage() {
 				}
 			},
 			focusConfirm: false,
-			preConfirm: () => {
+			preConfirm: async () => {
+				let finalScore = 0;
+				let jumlahBenar = null;
+
 				if (isJumlahBenarMode) {
 					const val = document.getElementById('swal-input-benar').value;
 					const max = parseFloat(totalSoal) || 100;
@@ -619,70 +619,74 @@ export default function PenilaianPage() {
 						Swal.showValidationMessage(`Masukkan jumlah benar valid (0 - ${max})`);
 						return false;
 					}
-					const finalScore = calcNilaiFromBenar(val, totalSoal, skalaMaks, pembulatan);
-					return { finalScore, jumlahBenar: parseFloat(val) };
+					finalScore = calcNilaiFromBenar(val, totalSoal, skalaMaks, pembulatan);
+					jumlahBenar = parseFloat(val);
 				} else {
 					const val = document.getElementById('swal-input-nilai').value;
 					if (val === '' || parseFloat(val) < 0 || parseFloat(val) > 100) {
 						Swal.showValidationMessage('Masukkan nilai valid (0-100)');
 						return false;
 					}
-					return { finalScore: parseFloat(val), jumlahBenar: null };
+					finalScore = parseFloat(val);
+				}
+
+				try {
+					const supabase = createClient();
+					
+					// Validate
+					const { data: { user } } = await supabase.auth.getUser();
+					const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+					const role = userData?.role;
+					const userId = userData?.id_user;
+
+					const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
+					if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
+
+					if (role === 'Guru' && userId) {
+						if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+							throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
+						}
+						const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+						if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
+					}
+
+					// Check existing
+					const { data: existingNilai } = await supabase.from('nilai_siswa').select('id').eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId).single();
+					if (existingNilai) {
+						const { error: updErr } = await supabase.from('nilai_siswa').update({
+							nilai: finalScore,
+							jumlah_benar: jumlahBenar,
+						}).eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId);
+						if (updErr) throw updErr;
+					} else {
+						const { error: insErr } = await supabase.from('nilai_siswa').insert({
+							tugas_id: selectedTugasId,
+							siswa_id: siswaId,
+							nama_siswa: siswa.nama_lengkap,
+							nilai: finalScore,
+							jumlah_benar: jumlahBenar,
+						});
+						if (insErr) throw insErr;
+					}
+
+					return { finalScore, jumlahBenar };
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menyimpan nilai');
+					return false;
 				}
 			},
 		});
 
 		if (resultData) {
-			try {
-				const supabase = createClient();
-				
-				// Validate
-				const { data: { user } } = await supabase.auth.getUser();
-				const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-				const role = userData?.role;
-				const userId = userData?.id_user;
-
-				const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
-				if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
-
-				if (role === 'Guru' && userId) {
-					if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
-						throw new Error('Akses Ditolak: Anda mencoba menyunting Tugas buatan kolega.');
-					}
-					const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
-					if (!isAllowed) throw new Error('Akses Ditolak: Modifikasi tugas di luar yurisdiksi kelas ini dilarang.');
-				}
-
-				// Check existing
-				const { data: existingNilai } = await supabase.from('nilai_siswa').select('id').eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId).single();
-				if (existingNilai) {
-					await supabase.from('nilai_siswa').update({
-						nilai: resultData.finalScore,
-						jumlah_benar: resultData.jumlahBenar,
-					}).eq('tugas_id', selectedTugasId).eq('siswa_id', siswaId);
-				} else {
-					await supabase.from('nilai_siswa').insert({
-						tugas_id: selectedTugasId,
-						siswa_id: siswaId,
-						nama_siswa: siswa.nama_lengkap,
-						nilai: resultData.finalScore,
-						jumlah_benar: resultData.jumlahBenar,
-					});
-				}
-
-				Swal.fire({
-					icon: 'success',
-					title: 'Tersimpan',
-					text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${resultData.finalScore}`,
-					timer: 1000,
-					showConfirmButton: false,
-				});
-				// Refresh data lokal
-				refreshCurrentTugasData(selectedTugasId);
-			} catch (err) {
-				console.error(err);
-				Swal.fire('Error', 'Gagal mengupdate nilai', 'error');
-			}
+			await refreshCurrentTugasData(selectedTugasId);
+			await Swal.fire({
+				icon: 'success',
+				title: 'Tersimpan',
+				text: `Nilai ${siswa.nama_lengkap} diupdate menjadi ${resultData.finalScore}`,
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 
@@ -708,41 +712,38 @@ export default function PenilaianPage() {
 			cancelButtonColor: '#6B7280',
 			confirmButtonText: 'Ya, Hapus!',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const supabase = createClient();
+					const { data: { user } } = await supabase.auth.getUser();
+					const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
+					const role = userData?.role;
+					const userId = userData?.id_user;
+
+					const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
+					if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
+
+					if (role === 'Guru' && userId) {
+						if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
+							throw new Error('Akses Ditolak: Dilarang menghapus riwayat penilaian kepunyaan rekan Guru Anda.');
+						}
+						const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
+						if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak berhak menghapus tugas dari kelas eksternal.');
+					}
+
+					const { error: deleteError } = await supabase.from('nilai_tugas').delete().eq('tugas_id', selectedTugasId);
+					if (deleteError) throw deleteError;
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus tugas');
+					return false;
+				}
+			}
 		});
 
-		if (!result.isConfirmed) return;
-
-		setSaving(true);
-		try {
-			const supabase = createClient();
-			const { data: { user } } = await supabase.auth.getUser();
-			const { data: userData } = await supabase.from('users').select('role, id_user').eq('auth_id', user?.id).single();
-			const role = userData?.role;
-			const userId = userData?.id_user;
-
-			const { data: existingTugas, error: fetchError } = await supabase.from('nilai_tugas').select('guru_id, kelas, mapel').eq('tugas_id', selectedTugasId).single();
-			if (fetchError || !existingTugas) throw new Error('Tugas tidak ditemukan');
-
-			if (role === 'Guru' && userId) {
-				if (existingTugas.guru_id && existingTugas.guru_id !== userId) {
-					throw new Error('Akses Ditolak: Dilarang menghapus riwayat penilaian kepunyaan rekan Guru Anda.');
-				}
-				const { data: isAllowed } = await supabase.from('guru_kbm').select('id_kbm').eq('id_user', userId).eq('kelas', existingTugas.kelas).eq('mapel', existingTugas.mapel).single();
-				if (!isAllowed) throw new Error('Akses Ditolak: Anda tidak berhak menghapus tugas dari kelas eksternal.');
-			}
-
-			const { error: deleteError } = await supabase.from('nilai_tugas').delete().eq('tugas_id', selectedTugasId);
-			if (deleteError) throw deleteError;
-
-			await Swal.fire({
-				icon: 'success',
-				title: 'Berhasil Dihapus!',
-				text: `Data nilai berhasil dihapus`,
-				timer: 1500,
-				showConfirmButton: false,
-			});
-
-			// Reset ke mode "Tugas Baru"
+		if (result.isConfirmed) {
 			setSelectedTugasId('');
 			setRefreshTrigger(prev => prev + 1);
 			setJudul('');
@@ -753,53 +754,19 @@ export default function PenilaianPage() {
 			setModePenilaian('langsung');
 			setTotalSoal(25);
 			setSkalaMaks(100);
+
 			setPembulatan('decimal_1');
 			setInitialSiswaIds([]);
 			setTanggal(getTodayDateString());
 
-			// Refresh daftar tugas
-			let query = supabase.from('nilai_tugas').select('tugas_id, kategori, tanggal, kelas, mapel, guru_id').eq('kelas', selectedKelas).eq('mapel', selectedMapel);
-			if (role === 'Guru' && userId) {
-				query = query.eq('guru_id', userId);
-			}
-
-			const { data: tugasData } = await query;
-			if (tugasData) {
-				const tugasIds = tugasData.map(t => t.tugas_id);
-				let counts = {};
-				if (tugasIds.length > 0) {
-					const { data: siswaData } = await supabase.from('nilai_siswa').select('tugas_id, siswa_id, nilai').in('tugas_id', tugasIds);
-					if (siswaData) {
-						siswaData.forEach(s => {
-							if (s.nilai && parseInt(s.nilai) > 0) {
-								counts[s.tugas_id] = (counts[s.tugas_id] || 0) + 1;
-							}
-						});
-					}
-				}
-
-				const mappedTugas = tugasData.map(t => ({
-					tugas_id: t.tugas_id,
-					judul: t.kategori,
-					tanggal: t.tanggal,
-					kelas: t.kelas,
-					mapel: t.mapel,
-					jumlahSiswaMengumpulkan: counts[t.tugas_id] || 0,
-					totalSiswa: siswaList.filter(s => s.kelas === t.kelas).length
-				}));
-
-				setDaftarTugas(mappedTugas.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal)));
-			}
-		} catch (error) {
-			console.error(error);
-			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Menghapus',
-				text: error.message,
-				confirmButtonColor: '#4F46E5',
+			await Swal.fire({
+				icon: 'success',
+				title: 'Berhasil Dihapus!',
+				text: `Data nilai berhasil dihapus`,
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-		} finally {
-			setSaving(false);
 		}
 	};
 

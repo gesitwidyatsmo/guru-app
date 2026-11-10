@@ -145,7 +145,7 @@ export default function AdminMapelPage() {
 			});
 
 			setIsModalOpen(false);
-			loadData();
+			await loadData();
 		} catch (err) {
 			Swal.fire('Gagal Menyimpan', err.message, 'error');
 		} finally {
@@ -165,21 +165,33 @@ export default function AdminMapelPage() {
 			cancelButtonColor: '#0D0D0D',
 			confirmButtonText: 'Ya, Hapus Mapel',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const res = await fetch(`/api/mapel?id=${item.id}`, {
+						method: 'DELETE',
+					});
+					const data = await res.json();
+					if (!res.ok) throw new Error(data.error || 'Gagal menghapus mata pelajaran.');
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus mata pelajaran.');
+					return false;
+				}
+			},
 		});
 
-		if (!confirm.isConfirmed) return;
-
-		try {
-			const res = await fetch(`/api/mapel?id=${item.id}`, {
-				method: 'DELETE',
+		if (confirm.isConfirmed) {
+			await loadData();
+			Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: `Mata pelajaran ${item.mapel} telah berhasil dihapus.`,
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
 			});
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error || 'Gagal menghapus mata pelajaran.');
-
-			Swal.fire('Terhapus!', `Mata pelajaran ${item.mapel} telah berhasil dihapus.`, 'success');
-			loadData();
-		} catch (err) {
-			Swal.fire('Error', err.message, 'error');
 		}
 	};
 

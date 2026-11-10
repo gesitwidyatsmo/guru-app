@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import Swal from 'sweetalert2';
+import { swalProcess } from '@/lib/swal';
 import Loader from '@/app/components/loading';
 import ButtonBack from '@/app/components/button/ButtonBack';
 import { getTodayDateString } from '@/lib/dateUtils';
@@ -476,21 +477,10 @@ export default function KelasAbsensiMapelPage() {
 			// Pengguna mengkonfirmasi untuk menimpa data yang sudah ada
 			targetSesiId = existingSession.id;
 			setExistingId(targetSesiId);
-		} else if (!conflict) {
-			// Konfirmasi simpan biasa
-			const result = await Swal.fire({
-				title: 'Simpan Absensi Mapel?',
-				text: `Simpan data ${selectedMapel} jam ke-${currentJamKe}?`,
-				icon: 'question',
-				showCancelButton: true,
-				confirmButtonColor: '#4F46E5',
-				cancelButtonColor: '#6B7280',
-				confirmButtonText: 'Ya, Simpan',
-				cancelButtonText: 'Batal',
-			});
-
-			if (!result.isConfirmed) return;
 		}
+
+		setSaving(true);
+		swalProcess('Sedang Menyimpan...', 'Mohon tunggu, sedang memverifikasi lokasi & menyimpan data absensi...');
 
 		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
 		let userCoords = null;
@@ -521,6 +511,7 @@ export default function KelasAbsensiMapelPage() {
 							confirmButtonColor: '#E8451A',
 							confirmButtonText: 'Tutup',
 						});
+						setSaving(false);
 						return;
 					}
 				}
@@ -538,11 +529,10 @@ export default function KelasAbsensiMapelPage() {
 					confirmButtonColor: '#E8451A',
 					confirmButtonText: 'Mengerti',
 				});
+				setSaving(false);
 				return;
 			}
 		}
-
-		setSaving(true);
 
 		const dataToSave = siswaKelasIni.map((s) => ({
 			siswa_id: s.id,
@@ -577,20 +567,21 @@ export default function KelasAbsensiMapelPage() {
 				const draftKey = `draft_absensi_${selectedKelas}_${selectedMapel}_${tanggal}_${currentJamKe}`;
 				if (typeof window !== 'undefined') localStorage.removeItem(draftKey);
 
-				await Swal.fire({
-					icon: 'success',
-					title: 'Berhasil!',
-					text: 'Data absensi mapel tersimpan.',
-					timer: 1500,
-					showConfirmButton: false,
-				});
-
-				// Setelah simpan, pindah ke mode Rekap
+				// Pindah ke mode Rekap
 				setMode('rekap');
 				if (responseData.id) setExistingId(responseData.id);
 
 				// Refresh daftar sesi hari ini agar badge & list langsung terupdate
 				await fetchSesiHariIni();
+
+				await Swal.fire({
+					icon: 'success',
+					title: 'Berhasil!',
+					text: 'Data absensi mapel tersimpan.',
+					timer: 2000,
+					showConfirmButton: false,
+					timerProgressBar: true,
+				});
 			} else {
 				const errJson = await res.json().catch(() => ({}));
 				throw new Error(errJson.error || 'Gagal menyimpan');
@@ -613,42 +604,52 @@ export default function KelasAbsensiMapelPage() {
 			cancelButtonColor: '#6B7280',
 			confirmButtonText: 'Ya, Hapus',
 			cancelButtonText: 'Batal',
+			showLoaderOnConfirm: true,
+			allowOutsideClick: () => !Swal.isLoading(),
+			preConfirm: async () => {
+				try {
+					const params = new URLSearchParams({
+						kelas: selectedKelas,
+						mapel: selectedMapel,
+						tanggal: tanggal,
+						jam_ke: jamKe,
+					});
+					const res = await fetch(`/api/absensi-mapel?${params.toString()}`, {
+						method: 'DELETE',
+					});
+
+					if (!res.ok) {
+						const errJson = await res.json().catch(() => ({}));
+						throw new Error(errJson.error || 'Gagal menghapus data');
+					}
+					return true;
+				} catch (err) {
+					Swal.showValidationMessage(err.message || 'Gagal menghapus data absensi');
+					return false;
+				}
+			},
 		});
 
-		if (!result.isConfirmed) return;
-
-		try {
-			setLoading(true);
-			const params = new URLSearchParams({
-				kelas: selectedKelas,
-				mapel: selectedMapel,
-				tanggal: tanggal,
-				jam_ke: jamKe,
+		if (result.isConfirmed) {
+			// Reset data
+			const init = {};
+			siswaKelasIni.forEach((s) => {
+				init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
 			});
-			const res = await fetch(`/api/absensi-mapel?${params.toString()}`, {
-				method: 'DELETE',
-			});
+			setAbsensi(init);
+			setExistingId(null);
+			setMode('input');
+			// Refresh riwayat sesi hari ini
+			await fetchSesiHariIni();
 
-			if (res.ok) {
-				await Swal.fire('Terhapus!', 'Data absensi telah dihapus.', 'success');
-				// Reset data
-				const init = {};
-				siswaKelasIni.forEach((s) => {
-					init[s.id] = { status: statusList[0]?.label || 'Hadir', keterangan: '' };
-				});
-				setAbsensi(init);
-				setExistingId(null);
-				setMode('input');
-				// Refresh riwayat sesi hari ini
-				await fetchSesiHariIni();
-			} else {
-				throw new Error('Gagal menghapus data');
-			}
-		} catch (error) {
-			console.error(error);
-			Swal.fire('Error', 'Gagal menghapus data absensi', 'error');
-		} finally {
-			setLoading(false);
+			await Swal.fire({
+				icon: 'success',
+				title: 'Terhapus!',
+				text: 'Data absensi telah dihapus.',
+				timer: 2000,
+				showConfirmButton: false,
+				timerProgressBar: true,
+			});
 		}
 	};
 
