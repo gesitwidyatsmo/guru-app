@@ -247,7 +247,7 @@ export default function AdminDashboardPage() {
 		{ label: 'Data Siswa', route: '/admin/siswa', count: stats.siswaCount, color: 'bg-cyan-100 hover:bg-cyan-200' },
 		{ label: 'Mata Pelajaran', route: '/admin/mapel', count: stats.mapelCount, color: 'bg-yellow-100 hover:bg-yellow-200' },
 		{ label: 'Jadwal Mengajar', route: '/jadwal', count: 'Kalender', color: 'bg-emerald-100 hover:bg-emerald-200' },
-		{ label: 'Jurnal Guru', route: '/jurnal', count: 'Harian', color: 'bg-indigo-100 hover:bg-indigo-200' },
+		{ label: 'Jurnal Guru', route: '/admin/jurnal', count: 'Harian', color: 'bg-indigo-100 hover:bg-indigo-200' },
 		{ label: 'Rekap Laporan', route: '/laporan', count: 'Akademik', color: 'bg-pink-100 hover:bg-pink-200' },
 	];
 

@@ -203,13 +203,43 @@ export default function CatatanPage() {
     const init = async () => {
       try {
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/login'); return; }
-        const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
-        if (!profile) { router.push('/login'); return; }
-        setUserId(profile.id_user);
-        setAuthUid(user.id);
-        await fetchCatatan(supabase, profile.id_user);
+        let currentUserId = '';
+        let currentAuthId = '';
+
+        try {
+          const authRes = await fetch('/api/auth/me', { credentials: 'include' });
+          if (authRes.ok) {
+            const authData = await authRes.json();
+            if (authData?.user) {
+              currentUserId = authData.user.id || '';
+            }
+          }
+        } catch (authErr) {
+          console.warn('Gagal fetch /api/auth/me:', authErr);
+        }
+
+        if (!currentUserId) {
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              currentAuthId = user.id;
+              const { data: profile } = await supabase.from('users').select('id_user').eq('auth_id', user.id).single();
+              if (profile) currentUserId = profile.id_user;
+            }
+          } catch (supErr) {
+            console.warn('Gagal fetch supabase auth:', supErr);
+          }
+        }
+
+        if (!currentUserId && typeof window !== 'undefined') {
+          currentUserId = localStorage.getItem('user_id') || '';
+        }
+
+        if (currentUserId) {
+          setUserId(currentUserId);
+          if (currentAuthId) setAuthUid(currentAuthId);
+          await fetchCatatan(supabase, currentUserId);
+        }
       } catch (err) {
         console.error(err);
       } finally {

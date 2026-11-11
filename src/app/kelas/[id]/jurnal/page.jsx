@@ -94,24 +94,47 @@ export default function JurnalKelasPage() {
 			if (!classId) return;
 			try {
 				const supabase = createClient();
-				const { data: { user } } = await supabase.auth.getUser();
-				if (!user) {
-					router.push('/login');
-					return;
-				}
-				
-				const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
 				let currentUserId = '';
 				let currentUserRole = '';
-				if (profile) {
-					currentUserId = profile.id_user;
-					currentUserRole = profile.role;
-					setUserId(currentUserId);
-					setUserRole(currentUserRole);
-				} else {
-					router.push('/login');
-					return;
+
+				// 1. Ambil identitas melalui endpoint server /api/auth/me (stabil & membaca cookie server)
+				try {
+					const authRes = await fetch('/api/auth/me', { credentials: 'include' });
+					if (authRes.ok) {
+						const authData = await authRes.json();
+						if (authData?.user) {
+							currentUserId = authData.user.id || '';
+							currentUserRole = authData.user.role || '';
+						}
+					}
+				} catch (authErr) {
+					console.warn('Gagal fetch /api/auth/me:', authErr);
 				}
+
+				// 2. Fallback langsung ke Supabase auth client jika /api/auth/me belum berhasil
+				if (!currentUserId) {
+					try {
+						const { data: { user } } = await supabase.auth.getUser();
+						if (user) {
+							const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+							if (profile) {
+								currentUserId = profile.id_user || '';
+								currentUserRole = profile.role || '';
+							}
+						}
+					} catch (supErr) {
+						console.warn('Gagal fetch supabase auth:', supErr);
+					}
+				}
+
+				// 3. Fallback terakhir ke localStorage jika tersedia
+				if (!currentUserId && typeof window !== 'undefined') {
+					currentUserId = localStorage.getItem('user_id') || '';
+					currentUserRole = localStorage.getItem('user_role') || '';
+				}
+
+				if (currentUserId) setUserId(currentUserId);
+				if (currentUserRole) setUserRole(currentUserRole);
 				
 				const { data: kelasData } = await supabase.from('kelas').select('*').eq('id', classId).single();
 				if (!kelasData) {
