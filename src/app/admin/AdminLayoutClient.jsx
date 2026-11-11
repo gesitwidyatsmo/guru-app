@@ -174,6 +174,16 @@ const ADMIN_NAV_SECTIONS = [
 					</svg>
 				),
 			},
+			{
+				label: 'Mode Pemeliharaan',
+				href: '/admin/pemeliharaan',
+				countKey: null,
+				icon: (
+					<svg className='w-5 h-5 shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.32l-3.276 3.277a1.5 1.5 0 01-2.122 0l-2.12-2.122a1.5 1.5 0 010-2.122L18.42 3.12a4.5 4.5 0 00-6.32 4.487c.047.579.023 1.192-.14 1.742m-1.768 1.768l2.122 2.122' />
+					</svg>
+				),
+			},
 		],
 	},
 ];

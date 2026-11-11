@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getMaintenanceStatus } from '@/lib/maintenanceMode';
 
 export async function POST(req) {
 	try {
@@ -35,6 +36,19 @@ export async function POST(req) {
 		if (profileError || !userProfile) {
 			console.error('Profile Fetch Error:', profileError?.message);
 			return NextResponse.json({ error: 'Profil tidak ditemukan.' }, { status: 401 });
+		}
+
+		// Jika sistem sedang dalam Mode Pemeliharaan, tolak login untuk semua pengguna selain Admin
+		const maintenanceState = await getMaintenanceStatus();
+		if (maintenanceState?.enabled && userProfile.role !== 'Admin') {
+			await supabase.auth.signOut();
+			return NextResponse.json(
+				{
+					error: 'Sistem sedang dalam masa pemeliharaan berkala. Akses saat ini dikunci dan hanya dapat dibuka oleh Administrator.',
+					maintenance: true,
+				},
+				{ status: 403 }
+			);
 		}
 
 		const tokenPayload = {

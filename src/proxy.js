@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/utils/supabase/admin';
+import { getMaintenanceStatus } from '@/lib/maintenanceMode';
 
 export const config = {
 	matcher: [
 		// Kecualikan semua aset statis Next.js DAN aset PWA agar tidak di-intercept middleware
-		'/((?!_next/static|_next/image|favicon\\.ico|favicon\\.png|manifest\\.json|sw\\.js|workbox-.*\\.js|fallback-.*\\.js|swe-worker-.*\\.js|android\\/.*|ios\\/.*|windows\\/.*|screenshots\\/.*|icon.*\\.png|icon.*\\.svg|icon\\.svg|gwa\\.svg|logo.*\\.png).*)',
+		'/((?!_next/static|_next/image|favicon\\.ico|favicon\\.png|manifest\\.json|sw\\.js|workbox-.*\\.js|fallback-.*\\.js|swe-worker-.*\\.js|android\\/.*|ios\\/.*|windows\\/.*|screenshots\\/.*|Pemeliharaan\\/.*|pemeliharaan\\/.*|icon.*\\.png|icon.*\\.svg|icon\\.svg|gwa\\.svg|logo.*\\.png).*)',
 	],
 };
 
@@ -36,7 +37,15 @@ export async function proxy(request) {
 	);
 
 	const { pathname } = request.nextUrl;
+
+	// Selalu izinkan akses langsung ke folder aset pemeliharaan agar gambar tidak diblokir
+	if (pathname.startsWith('/Pemeliharaan/') || pathname.startsWith('/pemeliharaan/')) {
+		return NextResponse.next({ request });
+	}
+
 	const publicRoutes = [
+		'/pemeliharaan',
+		'/api/maintenance',
 		'/login',
 		'/soal',
 		'/api/soal',
@@ -111,6 +120,50 @@ export async function proxy(request) {
 			});
 		}
 	};
+
+	// --- 1. Pengecekan Mode Pemeliharaan Sistem (Maintenance Mode) ---
+	const maintenance = await getMaintenanceStatus();
+	const isMaintenanceActive = !!maintenance?.enabled;
+
+	if (isMaintenanceActive) {
+		const isAdmin = payload?.role === 'Admin';
+
+		if (isAdmin) {
+			// Administrator dapat bypass pemeliharaan untuk mengelola sistem
+			if (pathname === '/login' || pathname === '/') {
+				finalResponse = NextResponse.redirect(new URL('/admin', request.url));
+				attachUserCookies(finalResponse, payload);
+				const cookiesToPreserve = supabaseResponse.cookies.getAll();
+				cookiesToPreserve.forEach(c => finalResponse.cookies.set(c.name, c.value, c));
+				return finalResponse;
+			}
+			// Admin bebas mengakses halaman lain (termasuk /pemeliharaan untuk preview)
+		} else {
+			// Pengguna Non-Admin atau Publik: KUNCI TOTAL SELURUH WEBSITE
+			const isAllowedDuringMaintenance =
+				pathname === '/pemeliharaan' ||
+				pathname === '/api/login' ||
+				pathname === '/api/maintenance' ||
+				pathname === '/api/logout';
+
+			if (!isAllowedDuringMaintenance) {
+				if (pathname.startsWith('/api/')) {
+					return NextResponse.json(
+						{
+							error: 'Sistem sedang dalam masa pemeliharaan (Maintenance Mode). Akses API sementara dikunci.',
+							maintenance: true,
+						},
+						{ status: 503 }
+					);
+				}
+				// Alihkan seluruh navigasi halaman lainnya langsung ke /pemeliharaan
+				finalResponse = NextResponse.redirect(new URL('/pemeliharaan', request.url));
+				const cookiesToPreserve = supabaseResponse.cookies.getAll();
+				cookiesToPreserve.forEach(c => finalResponse.cookies.set(c.name, c.value, c));
+				return finalResponse;
+			}
+		}
+	}
 
 	// Halaman login: jika sudah punya sesi valid, redirect ke dashboard masing-masing
 	if (pathname === '/login' && payload) {

@@ -29,18 +29,25 @@ export default function AdminDashboardPage() {
 	});
 	const [activeTahunAjar, setActiveTahunAjar] = useState(null);
 	const [lastBackup, setLastBackup] = useState(null);
+	const [maintenanceActive, setMaintenanceActive] = useState(false);
 
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				const [resUsers, resSiswa, resKelas, resMapel, resTA, resAuth] = await Promise.all([
+				const [resUsers, resSiswa, resKelas, resMapel, resTA, resAuth, resMaint] = await Promise.all([
 					fetch('/api/users'),
 					fetch('/api/siswa'),
 					fetch('/api/kelas'),
 					fetch('/api/mapel'),
 					fetch('/api/tahun-ajar'),
 					fetch('/api/auth/me'),
+					fetch('/api/maintenance'),
 				]);
+
+				if (resMaint && resMaint.ok) {
+					const maintData = await resMaint.json();
+					setMaintenanceActive(!!maintData?.enabled);
+				}
 
 				if (resAuth.ok) {
 					const authData = await resAuth.json();
@@ -240,6 +247,19 @@ export default function AdminDashboardPage() {
 			color: 'bg-teal-300',
 			textColor: 'text-black',
 		},
+		{
+			title: 'Mode Pemeliharaan',
+			desc: 'Kunci seluruh akses website dan tampilkan halaman pemeliharaan saat perbaikan atau update berkala.',
+			href: '/admin/pemeliharaan',
+			icon: (
+				<svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+					<path strokeLinecap='round' strokeLinejoin='round' d='M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.32l-3.276 3.277a1.5 1.5 0 01-2.122 0l-2.12-2.122a1.5 1.5 0 010-2.122L18.42 3.12a4.5 4.5 0 00-6.32 4.487c.047.579.023 1.192-.14 1.742m-1.768 1.768l2.122 2.122' />
+				</svg>
+			),
+			badge: maintenanceActive ? '🔴 AKTIF (Terkunci)' : '🟢 Normal',
+			color: maintenanceActive ? 'bg-red-400' : 'bg-lime-300',
+			textColor: maintenanceActive ? 'text-white' : 'text-black',
+		},
 	];
 
 	const masterDataShortcuts = [
@@ -253,6 +273,34 @@ export default function AdminDashboardPage() {
 
 	return (
 		<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8'>
+			{/* Banner Peringatan Mode Pemeliharaan Aktif */}
+			{maintenanceActive && (
+				<div className='bg-red-500 border-[3px] border-black rounded-2xl p-4 sm:p-5 shadow-[6px_6px_0px_0px_#0D0D0D] flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white'>
+					<div className='flex items-center gap-3'>
+						<div className='p-2 bg-yellow-300 text-black border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] shrink-0'>
+							<svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+								<path strokeLinecap='round' strokeLinejoin='round' d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' />
+							</svg>
+						</div>
+						<div>
+							<h3 className='font-black text-sm sm:text-base text-white tracking-wide flex items-center gap-2'>
+								<span>⚠️ PERINGATAN: MODE PEMELIHARAAN SEDANG AKTIF!</span>
+								<span className='px-2 py-0.5 bg-white text-red-600 rounded-md text-[10px] uppercase font-black'>Website Terkunci</span>
+							</h3>
+							<p className='text-xs text-red-100 font-bold mt-0.5'>
+								Seluruh pengunjung dan guru saat ini dialihkan ke Halaman Pemeliharaan. Pengguna umum tidak dapat mengakses sistem.
+							</p>
+						</div>
+					</div>
+					<Link
+						href='/admin/pemeliharaan'
+						className='inline-flex items-center justify-center px-4 py-2.5 bg-yellow-300 hover:bg-yellow-400 active:translate-x-[2px] active:translate-y-[2px] text-black font-black text-xs uppercase rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_#0D0D0D] transition-all whitespace-nowrap'
+					>
+						Kelola / Buka Kunci
+					</Link>
+				</div>
+			)}
+
 			{/* Welcome Banner */}
 			<div className='bg-white border-2 border-black rounded-2xl p-6 sm:p-8 shadow-[6px_6px_0px_0px_#0D0D0D] relative overflow-hidden'>
 				<div className='flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10'>

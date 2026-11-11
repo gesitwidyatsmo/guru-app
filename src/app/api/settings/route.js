@@ -40,8 +40,8 @@ export async function GET(req) {
 		const { searchParams } = new URL(req.url);
 		const key = searchParams.get('key');
 
-		// Key 'profil_sekolah' dan 'wa_admin_jurnal' bersifat publik/dapat diakses guru tanpa blokir
-		if (key !== 'profil_sekolah' && key !== 'wa_admin_jurnal') {
+		// Key 'profil_sekolah', 'wa_admin_jurnal', dan 'maintenance_mode' bersifat publik/dapat diakses tanpa blokir
+		if (key !== 'profil_sekolah' && key !== 'wa_admin_jurnal' && key !== 'maintenance_mode') {
 			let role = req.headers.get('x-user-role') || req.cookies.get('user_role')?.value;
 			if (!role) {
 				const authClient = await createClient();
