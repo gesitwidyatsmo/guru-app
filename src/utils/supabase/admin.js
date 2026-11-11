@@ -4,7 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 // Jika SUPABASE_SERVICE_ROLE_KEY tidak di-set, singleton ini tetap dibuat dengan anon key
 // agar tidak crash saat inisialisasi, tapi operasi admin yang butuh bypass RLS akan gagal.
 // Pastikan SUPABASE_SERVICE_ROLE_KEY ditambahkan di .env.local & Vercel environment variables.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  console.warn('[supabaseAdmin] WARNING: NEXT_PUBLIC_SUPABASE_URL tidak dikonfigurasi.');
+}
 
 if (!serviceRoleKey) {
   console.warn(
@@ -14,8 +19,8 @@ if (!serviceRoleKey) {
 }
 
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  supabaseUrl,
+  serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key',
   {
     auth: {
       // Admin client tidak perlu menyimpan sesi atau auto-refresh token
