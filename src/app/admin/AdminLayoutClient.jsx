@@ -109,6 +109,16 @@ const ADMIN_NAV_SECTIONS = [
 				),
 			},
 			{
+				label: 'Manajemen Absensi',
+				href: '/admin/absensi',
+				countKey: 'absensi_bentrok',
+				icon: (
+					<svg className='w-5 h-5 shrink-0' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+						<path strokeLinecap='round' strokeLinejoin='round' d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' />
+					</svg>
+				),
+			},
+			{
 				label: 'Jurnal & Resolusi Jam',
 				href: '/admin/jurnal',
 				countKey: 'jurnal_bentrok',
@@ -318,6 +328,7 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 		kelas: null,
 		siswa: null,
 		mapel: null,
+		absensi_bentrok: null,
 		jurnal_bentrok: null,
 	});
 
@@ -327,13 +338,15 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 			fetch('/api/kelas?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
 			fetch('/api/siswa').then((r) => (r.ok ? r.json() : [])).catch(() => []),
 			fetch('/api/mapel?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+			fetch('/api/admin/absensi?radar=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { summary: {} })).catch(() => ({ summary: {} })),
 			fetch('/api/admin/jurnal?conflict_only=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { count: 0 })).catch(() => ({ count: 0 })),
-		]).then(([users, kelas, siswa, mapel, conflictsRes]) => {
+		]).then(([users, kelas, siswa, mapel, absensiRadar, conflictsRes]) => {
 			setMenuCounts({
 				pengguna: Array.isArray(users) ? users.length : null,
 				kelas: Array.isArray(kelas) ? kelas.length : null,
 				siswa: Array.isArray(siswa) ? siswa.filter((s) => s.status === 'Aktif').length : null,
 				mapel: Array.isArray(mapel) ? mapel.length : null,
+				absensi_bentrok: absensiRadar?.summary?.conflicts_count > 0 ? absensiRadar.summary.conflicts_count : null,
 				jurnal_bentrok: conflictsRes?.count > 0 ? conflictsRes.count : null,
 			});
 		});
@@ -419,6 +432,8 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 			{ title: 'Master Data Siswa', category: 'Menu', href: '/admin/siswa', icon: '🎒' },
 			{ title: 'Master Mata Pelajaran', category: 'Menu', href: '/admin/mapel', icon: '📚' },
 			{ title: 'Tahun Ajar & Semester', category: 'Menu', href: '/admin/tahun-ajar', icon: '📅' },
+			{ title: 'Manajemen & Radar Presensi Siswa', category: 'Menu', href: '/admin/absensi', icon: '📝' },
+			{ title: 'Jurnal & Resolusi Jam Mengajar', category: 'Menu', href: '/admin/jurnal', icon: '📖' },
 			{ title: 'Promosi Kelas & Penjurusan', category: 'Menu', href: '/admin/promosi-kelas', icon: '🎓' },
 			{ title: 'Profil & Identitas Sekolah', category: 'Menu', href: '/admin/sekolah', icon: '🏛️' },
 			{ title: 'Lokasi & Geofencing Sekolah', category: 'Menu', href: '/admin/lokasi-sekolah', icon: '📍' },

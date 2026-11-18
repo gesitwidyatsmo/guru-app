@@ -156,6 +156,32 @@ export default function AdminDashboardPage() {
 			textColor: 'text-black',
 		},
 		{
+			title: 'Manajemen Presensi Siswa',
+			desc: 'Radar deteksi bentrok jadwal mengajar, timeline KBM per rombel, serta bantuan input presensi guru saat kendala.',
+			href: '/admin/absensi',
+			icon: (
+				<svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+					<path strokeLinecap='round' strokeLinejoin='round' d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' />
+				</svg>
+			),
+			badge: 'Radar & Timeline Presensi',
+			color: 'bg-emerald-300',
+			textColor: 'text-black',
+		},
+		{
+			title: 'Jurnal & Resolusi Jam',
+			desc: 'Pusat supervisi jurnal KBM harian, verifikasi ketuntasan materi, dan auto-resolusi konflik bentrok jam mengajar.',
+			href: '/admin/jurnal',
+			icon: (
+				<svg className='w-7 h-7' fill='none' stroke='currentColor' viewBox='0 0 24 24' strokeWidth='2.5'>
+					<path strokeLinecap='round' strokeLinejoin='round' d='M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' />
+				</svg>
+			),
+			badge: 'Radar & Timeline Jurnal',
+			color: 'bg-indigo-300',
+			textColor: 'text-black',
+		},
+		{
 			title: 'Tahun Ajar & Semester',
 			desc: 'Buka tahun ajaran baru dan tentukan periode semester aktif untuk seluruh sistem.',
 			href: '/admin/tahun-ajar',
@@ -266,8 +292,9 @@ export default function AdminDashboardPage() {
 		{ label: 'Data Kelas', route: '/admin/kelas', count: stats.kelasCount, color: 'bg-orange-100 hover:bg-orange-200' },
 		{ label: 'Data Siswa', route: '/admin/siswa', count: stats.siswaCount, color: 'bg-cyan-100 hover:bg-cyan-200' },
 		{ label: 'Mata Pelajaran', route: '/admin/mapel', count: stats.mapelCount, color: 'bg-yellow-100 hover:bg-yellow-200' },
-		{ label: 'Jadwal Mengajar', route: '/jadwal', count: 'Kalender', color: 'bg-emerald-100 hover:bg-emerald-200' },
+		{ label: 'Presensi Siswa', route: '/admin/absensi', count: 'Radar KBM', color: 'bg-emerald-100 hover:bg-emerald-200' },
 		{ label: 'Jurnal Guru', route: '/admin/jurnal', count: 'Harian', color: 'bg-indigo-100 hover:bg-indigo-200' },
+		{ label: 'Jadwal Mengajar', route: '/jadwal', count: 'Kalender', color: 'bg-teal-100 hover:bg-teal-200' },
 		{ label: 'Rekap Laporan', route: '/laporan', count: 'Akademik', color: 'bg-pink-100 hover:bg-pink-200' },
 	];
 
