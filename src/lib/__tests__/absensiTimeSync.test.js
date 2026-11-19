@@ -7,7 +7,7 @@
  */
 
 import { checkJamOverlap } from '../absensiUtils';
-import { getTimeWIB } from '../kbmRealtimeUtils';
+import { getTimeWIB, resolveJamMulaiPresensi } from '../kbmRealtimeUtils';
 
 describe('Unit Test: Sinkronisasi Waktu & Lookup Sesi Absensi', () => {
 	// Simulasi riwayat sesi absensi yang tersimpan di database pada satu hari
@@ -47,7 +47,7 @@ describe('Unit Test: Sinkronisasi Waktu & Lookup Sesi Absensi', () => {
 
 		return {
 			sesi_id: chosen.sesi_id,
-			jam_mulai: chosen.waktu_absen || getTimeWIB(chosen.created_at),
+			jam_mulai: resolveJamMulaiPresensi(chosen),
 			jam_ke: chosen.jam_ke,
 		};
 	};
@@ -112,6 +112,20 @@ describe('Unit Test: Sinkronisasi Waktu & Lookup Sesi Absensi', () => {
 
 			const result = matchSessionForJurnal([sessionLegacy], '1-2');
 			expect(result.jam_mulai).toBe('08:40');
+		});
+
+		test('mencegah bug Terlambat Masuk jika waktu_absen sempat tertimpa saat update absensi (>15m dari created_at)', () => {
+			// Kasus: Sesi dibuat jam 07:15 (JP 1), lalu guru/wali kelas update data siswa jam 09:30
+			const sessionOverwrittenByUpdate = {
+				sesi_id: 'SESI-UPDATED-LATER',
+				jam_ke: '1-2',
+				waktu_absen: '09:30', // Jam saat update ditekan
+				created_at: '2026-11-03T00:15:00.000Z', // 07:15 WIB (waktu presensi awal sebenarnya)
+			};
+
+			const result = matchSessionForJurnal([sessionOverwrittenByUpdate], '1-2');
+			// Harus menggunakan jam awal saat dibuat (07:15 WIB), BUKAN jam saat diupdate (09:30 WIB)
+			expect(result.jam_mulai).toBe('07:15');
 		});
 	});
 });

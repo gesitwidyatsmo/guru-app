@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { calculateAttendanceSummary, findConflictingSession, normalizeJamKe } from '@/lib/absensiUtils';
 import { verifyGeofence } from '@/lib/geofenceServer';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const normDate = (v) => String(v ?? '').slice(0, 10);
@@ -233,7 +234,7 @@ export async function POST(req) {
 
 		if (targetId) {
 			let idQuery = supabase.from('absensi_mapel')
-				.select('sesi_id, jam_ke, tanggal, created_at')
+				.select('sesi_id, jam_ke, tanggal, created_at, waktu_absen')
 				.eq('sesi_id', targetId);
 			if (role === 'Guru' && userId) {
 				idQuery = idQuery.eq('guru_id', userId);
@@ -247,7 +248,7 @@ export async function POST(req) {
 
 		if (!existingSesi) {
 			let query = supabase.from('absensi_mapel')
-				.select('sesi_id, jam_ke, tanggal, created_at')
+				.select('sesi_id, jam_ke, tanggal, created_at, waktu_absen')
 				.eq('kelas', kelas)
 				.eq('mapel', mapel)
 				.eq('tanggal', oldTanggal)
@@ -316,7 +317,12 @@ export async function POST(req) {
 			const updates = {};
 			if (oldTanggal !== newTanggal || existingSesi.tanggal !== newTanggal) updates.tanggal = newTanggal;
 			if (oldJamKe !== newJamKe || existingSesi.jam_ke !== newJamKe) updates.jam_ke = newJamKe;
-			if (body.client_time) updates.waktu_absen = body.client_time;
+			// PENTING: Jangan pernah menimpa waktu_absen asli jika sudah ada!
+			// waktu_absen mencatat jam awal presensi siswa saat KBM berlangsung.
+			// Riwayat waktu perubahan/update hanya disimpan di kolom updated_at.
+			if (!existingSesi.waktu_absen) {
+				updates.waktu_absen = existingSesi.created_at ? getTimeWIB(existingSesi.created_at) : (body.client_time || null);
+			}
 			updates.updated_at = new Date().toISOString();
 			
 			let { error: updErr } = await supabase.from('absensi_mapel').update(updates).eq('sesi_id', sesiId);

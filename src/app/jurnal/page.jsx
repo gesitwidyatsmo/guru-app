@@ -17,6 +17,7 @@ import {
 	getKBMStatusBadge,
 	formatDurationString,
 	getExpectedScheduleTimes,
+	resolveJamMulaiPresensi,
 } from '@/lib/kbmRealtimeUtils';
 import { findConflictingSession, checkJamOverlap, normalizeJamKe, PRESET_JAM_PELAJARAN } from '@/lib/absensiUtils';
 import { DEFAULT_PROFIL_SEKOLAH, fetchSchoolProfile } from '@/lib/pdfKopSurat';
@@ -404,7 +405,7 @@ export default function JurnalPage() {
 					}
 
 					if (chosen) {
-						const jamMulaiWIB = chosen.waktu_absen || getTimeWIB(chosen.created_at);
+						const jamMulaiWIB = resolveJamMulaiPresensi(chosen);
 						setMatchedAbsensi({
 							sesi_id: chosen.sesi_id,
 							created_at: chosen.created_at,

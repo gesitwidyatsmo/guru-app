@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { verifyGeofence } from '@/lib/geofenceServer';
+import { getTimeWIB } from '@/lib/kbmRealtimeUtils';
 
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const normDate = (v) => String(v ?? '').slice(0, 10);
@@ -164,7 +165,7 @@ export async function POST(req) {
 		if (targetId) {
 			const { data: byIdData } = await supabase
 				.from('absensi_harian')
-				.select('sesi_id, tanggal')
+				.select('sesi_id, tanggal, created_at, waktu_absen')
 				.eq('sesi_id', targetId)
 				.maybeSingle();
 			if (byIdData) existingSesi = byIdData;
@@ -173,7 +174,7 @@ export async function POST(req) {
 		if (!existingSesi) {
 			const { data: byDateData, error: findSesiErr } = await supabase
 				.from('absensi_harian')
-				.select('sesi_id, tanggal')
+				.select('sesi_id, tanggal, created_at, waktu_absen')
 				.eq('kelas', kelas)
 				.eq('tanggal', oldTanggal)
 				.maybeSingle();
@@ -187,7 +188,12 @@ export async function POST(req) {
 		if (existingSesi) {
 			const updates = {};
 			if (oldTanggal !== newTanggal) updates.tanggal = newTanggal;
-			if (body.client_time) updates.waktu_absen = body.client_time;
+			// PENTING: Jangan pernah menimpa waktu_absen asli jika sudah ada!
+			// waktu_absen mencatat jam awal presensi siswa saat absensi diambil.
+			// Riwayat waktu perubahan/update hanya disimpan di kolom updated_at.
+			if (!existingSesi.waktu_absen) {
+				updates.waktu_absen = existingSesi.created_at ? getTimeWIB(existingSesi.created_at) : (body.client_time || null);
+			}
 			updates.updated_at = new Date().toISOString();
 
 			let { error: updErr } = await supabase.from('absensi_harian').update(updates).eq('sesi_id', sesiId);

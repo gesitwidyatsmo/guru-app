@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { verifyGeofence } from '@/lib/geofenceServer';
-import { getTimeWIB, calculateDurationMinutes, determineKBMStatus } from '@/lib/kbmRealtimeUtils';
+import { getTimeWIB, calculateDurationMinutes, determineKBMStatus, resolveJamMulaiPresensi } from '@/lib/kbmRealtimeUtils';
 import { findConflictingSession, checkJamOverlap, normalizeJamKe } from '@/lib/absensiUtils';
 import { autoResolveFreedDrafts } from '@/lib/kbmConflictAutoResolver';
 
@@ -273,7 +273,7 @@ export async function POST(req) {
 					}
 
 					if (chosen) {
-						finalJamMulai = chosen.waktu_absen || (chosen.created_at ? getTimeWIB(chosen.created_at) : null);
+						finalJamMulai = resolveJamMulaiPresensi(chosen);
 						finalSesiAbsensiId = chosen.sesi_id;
 					}
 				}

@@ -292,6 +292,33 @@ export const determineKBMStatus = ({
 };
 
 /**
+ * Menentukan jam mulai presensi KBM yang akurat dari record sesi absensi.
+ * Memprioritaskan waktu_absen (client_time awal saat guru absen di kelas),
+ * namun melindungi dari anomali jika waktu_absen sempat tertimpa oleh timestamp
+ * update/edit di kemudian waktu (waktu_absen jauh lebih lambat dari created_at server).
+ * @param {Object} session - Record dari absensi_mapel
+ * @param {string} [session.waktu_absen] - Waktu presensi "HH:mm"
+ * @param {string|Date} [session.created_at] - Timestamp saat sesi dibuat
+ * @returns {string|null} Format "HH:mm"
+ */
+export const resolveJamMulaiPresensi = (session) => {
+	if (!session) return null;
+	const createdWIB = session.created_at ? getTimeWIB(session.created_at) : null;
+	const waktuAbsen = session.waktu_absen && String(session.waktu_absen).trim() !== '' ? String(session.waktu_absen).trim() : null;
+	if (!waktuAbsen) return createdWIB;
+	if (!createdWIB) return waktuAbsen;
+
+	// Jika waktu_absen tercatat jauh lebih lambat (> 15 menit) dibanding created_at server,
+	// berarti waktu_absen sempat tertimpa oleh timestamp update/edit sesi, gunakan created_at aslinya.
+	const waktuAbsenMins = parseTimeToMinutes(waktuAbsen);
+	const createdMins = parseTimeToMinutes(createdWIB);
+	if (waktuAbsenMins > createdMins + 15) {
+		return createdWIB;
+	}
+	return waktuAbsen;
+};
+
+/**
  * Metadata styling untuk badge status kehadiran KBM (tema Neobrutalism).
  * @param {string} status
  * @returns {{ label: string, bg: string, text: string, border: string, icon: string }}
