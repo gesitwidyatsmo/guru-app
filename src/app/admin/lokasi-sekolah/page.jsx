@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import Loader from '../../components/loading';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
+import { createClient } from '@/utils/supabase/client';
 
 export default function LokasiSekolahPage() {
 	const [loading, setLoading] = useState(true);
@@ -20,7 +21,13 @@ export default function LokasiSekolahPage() {
 		radius: 200,
 		nama_lokasi: 'Area Sekolah',
 		berlaku_untuk: ['jurnal', 'absensi'],
+		exempted_teachers: [],
 	});
+
+	// State Guru & Whitelist Pengecualian
+	const [teachers, setTeachers] = useState([]);
+	const [teachersLoading, setTeachersLoading] = useState(true);
+	const [searchTeacher, setSearchTeacher] = useState('');
 
 	// State hasil pengujian lokasi saat ini
 	const [testResult, setTestResult] = useState(null);
@@ -47,13 +54,35 @@ export default function LokasiSekolahPage() {
 		return () => window.removeEventListener('message', handleMessage);
 	}, []);
 
-	// Fetch data pengaturan dari server
+	// Fetch data pengaturan dari server dan daftar guru
 	useEffect(() => {
-		const fetchSettings = async () => {
+		const fetchSettingsAndTeachers = async () => {
 			try {
-				const res = await fetch('/api/settings?key=geofence');
-				if (res.ok) {
-					const data = await res.json();
+				const [geoRes, teachersRes] = await Promise.all([
+					fetch('/api/settings?key=geofence'),
+					(async () => {
+						try {
+							const supabase = createClient();
+							const { data, error } = await supabase
+								.from('users')
+								.select('id_user, nama_lengkap, username, nip')
+								.eq('role', 'Guru')
+								.order('nama_lengkap', { ascending: true });
+							if (!error && Array.isArray(data)) return data;
+							const res = await fetch('/api/users?role=Guru');
+							if (res.ok) {
+								const d = await res.json();
+								if (Array.isArray(d)) return d;
+							}
+						} catch (e) {
+							console.warn('Gagal memuat guru:', e);
+						}
+						return [];
+					})(),
+				]);
+
+				if (geoRes.ok) {
+					const data = await geoRes.json();
 					if (data?.value) {
 						setSettings({
 							enabled: !!data.value.enabled,
@@ -62,21 +91,66 @@ export default function LokasiSekolahPage() {
 							radius: parseInt(data.value.radius) || 200,
 							nama_lokasi: data.value.nama_lokasi || 'Area Sekolah',
 							berlaku_untuk: Array.isArray(data.value.berlaku_untuk) ? data.value.berlaku_untuk : ['jurnal', 'absensi'],
+							exempted_teachers: Array.isArray(data.value.exempted_teachers) ? data.value.exempted_teachers : [],
 						});
 					}
 					if (data?._fallback) {
 						setMissingTable(true);
 					}
 				}
+
+				if (Array.isArray(teachersRes)) {
+					setTeachers(teachersRes);
+				}
 			} catch (err) {
 				console.error('Gagal mengambil pengaturan geofence:', err);
 			} finally {
 				setLoading(false);
+				setTeachersLoading(false);
 			}
 		};
 
-		fetchSettings();
+		fetchSettingsAndTeachers();
 	}, []);
+
+	// Filter guru berdasarkan nama, username, atau NIP
+	const filteredTeachers = useMemo(() => {
+		if (!searchTeacher.trim()) return teachers;
+		const q = searchTeacher.toLowerCase().trim();
+		return teachers.filter((t) =>
+			(t.nama_lengkap || '').toLowerCase().includes(q) ||
+			(t.username || '').toLowerCase().includes(q) ||
+			(t.nip || '').toLowerCase().includes(q)
+		);
+	}, [teachers, searchTeacher]);
+
+	// Toggle pengecualian seorang guru
+	const handleToggleTeacher = (teacherId) => {
+		setSettings((prev) => {
+			const current = Array.isArray(prev.exempted_teachers) ? prev.exempted_teachers : [];
+			const exists = current.some((id) => String(id) === String(teacherId));
+			const updated = exists
+				? current.filter((id) => String(id) !== String(teacherId))
+				: [...current, teacherId];
+			return { ...prev, exempted_teachers: updated };
+		});
+	};
+
+	// Pilih semua guru untuk dispensasi
+	const handleSelectAllTeachers = () => {
+		setSettings((prev) => ({
+			...prev,
+			exempted_teachers: teachers.map((t) => t.id_user),
+		}));
+	};
+
+	// Kosongkan semua pengecualian
+	const handleClearAllTeachers = () => {
+		setSettings((prev) => ({
+			...prev,
+			exempted_teachers: [],
+		}));
+	};
 
 	// Toggle modul yang terkena aturan geofencing
 	const handleToggleModule = (moduleKey) => {
@@ -670,6 +744,123 @@ export default function LokasiSekolahPage() {
 								: '🛰️ Mode Satelit: Tampilan foto citra satelit Google dari udara untuk melihat atap gedung sekolah.'}
 						</p>
 					</div>
+				</div>
+			</div>
+
+			{/* KARTU: Pengecualian Guru (Bypass Geofencing Whitelist) */}
+			<div className='bg-white border-2 border-black rounded-2xl p-6 shadow-[5px_5px_0px_0px_#0D0D0D] space-y-5'>
+				<div className='flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b-2 border-black/10 gap-3'>
+					<div>
+						<h2 className='text-base font-black text-black uppercase tracking-tight flex items-center gap-2'>
+							<span>🛡️</span> Pengecualian Guru (Bypass Geofencing)
+						</h2>
+						<p className='text-xs text-gray-600 font-medium mt-1'>
+							Pilih guru tertentu yang mengalami kendala teknis sensor GPS atau kerusakan perangkat HP agar tetap dapat mengisi presensi dan jurnal tanpa diblokir batas radius sekolah.
+						</p>
+					</div>
+					<div className='flex items-center gap-2 shrink-0'>
+						<span
+							className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] ${
+								(settings.exempted_teachers || []).length > 0
+									? 'bg-teal-300 text-teal-950'
+									: 'bg-gray-100 text-gray-700'
+							}`}>
+							{(settings.exempted_teachers || []).length} Guru Diberi Dispensasi
+						</span>
+					</div>
+				</div>
+
+				{/* Search & Bulk Action Bar */}
+				<div className='flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3'>
+					<div className='relative flex-1'>
+						<span className='absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400'>
+							🔍
+						</span>
+						<input
+							type='text'
+							value={searchTeacher}
+							onChange={(e) => setSearchTeacher(e.target.value)}
+							placeholder='Cari nama guru atau NIP...'
+							className='w-full pl-9 pr-4 py-2.5 bg-white border-2 border-black text-black text-xs font-bold rounded-xl shadow-[2px_2px_0px_0px_#0D0D0D] outline-none focus:shadow-[4px_4px_0px_0px_#0D0D0D]'
+						/>
+					</div>
+					<div className='flex items-center gap-2 shrink-0'>
+						<button
+							type='button'
+							onClick={handleSelectAllTeachers}
+							className='px-3 py-2 text-xs font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] bg-yellow-200 hover:bg-yellow-300 transition-all cursor-pointer'>
+							Pilih Semua
+						</button>
+						<button
+							type='button'
+							onClick={handleClearAllTeachers}
+							className='px-3 py-2 text-xs font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer'>
+							Kosongkan
+						</button>
+					</div>
+				</div>
+
+				{/* Teachers List Grid */}
+				{teachersLoading ? (
+					<div className='text-center py-8 text-xs font-bold text-gray-500'>
+						<span className='animate-spin inline-block mr-2'>⏳</span> Memuat daftar guru...
+					</div>
+				) : filteredTeachers.length === 0 ? (
+					<div className='text-center py-8 text-xs font-bold text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300'>
+						{searchTeacher ? 'Tidak ada guru yang cocok dengan kata kunci pencarian.' : 'Belum ada data guru terdaftar.'}
+					</div>
+				) : (
+					<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1'>
+						{filteredTeachers.map((guru) => {
+							const isExempted = (settings.exempted_teachers || []).some(
+								(id) => String(id) === String(guru.id_user)
+							);
+							return (
+								<div
+									key={guru.id_user}
+									onClick={() => handleToggleTeacher(guru.id_user)}
+									className={`p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#0D0D0D] cursor-pointer transition-all flex items-center justify-between gap-3 select-none ${
+										isExempted
+											? 'bg-teal-50 hover:bg-teal-100 border-teal-800'
+											: 'bg-white hover:bg-yellow-50'
+									}`}>
+									<div className='flex items-center gap-2.5 min-w-0'>
+										<input
+											type='checkbox'
+											checked={isExempted}
+											onChange={() => {}}
+											className='w-4 h-4 accent-teal-600 rounded border-2 border-black shrink-0 cursor-pointer'
+										/>
+										<div className='min-w-0'>
+											<p className='text-xs font-black text-black truncate uppercase'>
+												{guru.nama_lengkap || guru.username}
+											</p>
+											<p className='text-[10px] text-gray-500 font-mono truncate'>
+												{guru.nip ? `NIP: ${guru.nip}` : `@${guru.username}`}
+											</p>
+										</div>
+									</div>
+									<span
+										className={`px-2 py-0.5 rounded text-[10px] font-black uppercase shrink-0 border ${
+											isExempted
+												? 'bg-teal-300 text-teal-950 border-teal-800 shadow-[1px_1px_0px_0px_#0D0D0D]'
+												: 'bg-gray-100 text-gray-600 border-gray-300'
+										}`}>
+										{isExempted ? '🛡️ Bebas GPS' : 'Wajib GPS'}
+									</span>
+								</div>
+							);
+						})}
+					</div>
+				)}
+
+				<div className='p-3 bg-teal-50 border-2 border-black rounded-xl text-xs space-y-1 text-teal-950 shadow-[2px_2px_0px_0px_#0D0D0D]'>
+					<p className='font-black flex items-center gap-1.5'>
+						<span>💡</span> Catatan Dispensasi Geofencing:
+					</p>
+					<p className='text-[11px] leading-relaxed text-teal-900'>
+						Guru yang dicentang akan otomatis dibebaskan dari syarat radius GPS di modul <b>Presensi Siswa</b> dan <b>Jurnal KBM</b>. Guru yang tidak dicentang tetap diwajibkan berada di dalam radius toleransi sekolah (<b>{settings.radius} meter</b>). Jangan lupa klik tombol <b>&quot;Simpan Perubahan Lokasi&quot;</b> di bawah setelah memilih.
+					</p>
 				</div>
 			</div>
 

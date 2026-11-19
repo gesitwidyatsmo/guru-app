@@ -10,6 +10,7 @@ const DEFAULT_GEOFENCE = {
 	radius: 200,
 	nama_lokasi: 'Area Sekolah',
 	berlaku_untuk: ['jurnal', 'absensi'],
+	exempted_teachers: [],
 };
 
 async function getActiveKepsekInfo() {

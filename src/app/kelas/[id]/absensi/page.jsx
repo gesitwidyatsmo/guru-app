@@ -24,6 +24,7 @@ export default function AbsensiKelasPage() {
 	const [siswaList, setSiswaList] = useState([]);
 	const [tanggal, setTanggal] = useState(() => getTodayDateString());
 	const [userRole, setUserRole] = useState('');
+	const [currentUserId, setCurrentUserId] = useState('');
 
 	// Geolocation & Geofencing State
 	const { getPosition, loading: gpsLoading } = useGeolocation();
@@ -105,8 +106,11 @@ export default function AbsensiKelasPage() {
 
 				const { data: { user } } = await supabase.auth.getUser();
 				if (user) {
-					const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
-					if (profile) setUserRole(profile.role || '');
+					const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+					if (profile) {
+						setUserRole(profile.role || '');
+						setCurrentUserId(profile.id_user || '');
+					}
 				}
 
 				try {
@@ -299,9 +303,15 @@ export default function AbsensiKelasPage() {
 		setSaving(true);
 		swalProcess('Sedang Menyimpan...', 'Mohon tunggu, sedang memverifikasi lokasi & menyimpan data absensi...');
 
-		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
+		// Pengecekan Geofencing jika diaktifkan untuk absensi, bukan Admin, dan tidak memiliki dispensasi
 		let userCoords = null;
-		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin') {
+		const isExempted = Boolean(
+			currentUserId &&
+			Array.isArray(geofenceSettings?.exempted_teachers) &&
+			geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId))
+		);
+
+		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin' && !isExempted) {
 			try {
 				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
 					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng, accuracy: locationStatus.accuracy };
@@ -348,6 +358,16 @@ export default function AbsensiKelasPage() {
 				});
 				setSaving(false);
 				return;
+			}
+		} else if (isExempted) {
+			try {
+				if (locationStatus?.userLat) {
+					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng, accuracy: locationStatus.accuracy };
+				} else {
+					userCoords = await getPosition();
+				}
+			} catch {
+				// Abaikan jika GPS gagal karena guru memiliki dispensasi
 			}
 		}
 
@@ -604,6 +624,7 @@ export default function AbsensiKelasPage() {
 					geofenceSettings={geofenceSettings}
 					moduleName="absensi"
 					userRole={userRole}
+					isExempted={Boolean(currentUserId && Array.isArray(geofenceSettings?.exempted_teachers) && geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId)))}
 					locationStatus={locationStatus}
 					setLocationStatus={setLocationStatus}
 				/>
@@ -660,10 +681,17 @@ export default function AbsensiKelasPage() {
 
 					{geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && (
 						<div className='flex items-center justify-between gap-3 mx-3 mt-3 pt-3 border-t border-gray-100 text-xs'>
-							<div className='flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200'>
-								<span>📍</span>
-								<span>Geofence Aktif: {geofenceSettings.nama_lokasi || 'Area Sekolah'} (Radius: {geofenceSettings.radius}m)</span>
-							</div>
+							{currentUserId && Array.isArray(geofenceSettings?.exempted_teachers) && geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId)) ? (
+								<div className='flex items-center gap-1.5 font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200'>
+									<span>🛡️</span>
+									<span>Dispensasi GPS Aktif (Bebas Radius Geofence)</span>
+								</div>
+							) : (
+								<div className='flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200'>
+									<span>📍</span>
+									<span>Geofence Aktif: {geofenceSettings.nama_lokasi || 'Area Sekolah'} (Radius: {geofenceSettings.radius}m)</span>
+								</div>
+							)}
 						</div>
 					)}
 				</div>

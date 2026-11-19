@@ -135,6 +135,8 @@ export async function POST(req) {
 			return NextResponse.json({ error: 'Akses Ditolak: Kepala Sekolah hanya memiliki hak akses pantau (read-only).' }, { status: 403 });
 		}
 
+		const userId = req.headers.get('x-user-id');
+
 		// Verifikasi Geofence jika diaktifkan oleh Admin
 		const geoCheck = await verifyGeofence({
 			supabase,
@@ -143,13 +145,12 @@ export async function POST(req) {
 			userAccuracy: body.user_accuracy,
 			moduleName: 'absensi',
 			role,
+			userId,
 		});
 
 		if (!geoCheck.allowed) {
 			return NextResponse.json({ error: geoCheck.error }, { status: geoCheck.status || 403 });
 		}
-
-		const userId = req.headers.get('x-user-id');
 
 		if (role === 'Guru') {
 			const { data: kelasData } = await supabase.from('kelas').select('id_wali_kelas').eq('nama_kelas', kelas).single();

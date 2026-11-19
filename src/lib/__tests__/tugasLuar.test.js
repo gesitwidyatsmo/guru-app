@@ -189,5 +189,70 @@ describe('Unit Test: Penerapan Tugas Luar Guru', () => {
 			expect(result.allowed).toBe(true);
 			expect(result.isKegiatanSekolah).toBe(true);
 		});
+
+		it('harus meloloskan (allowed: true, isExempted: true) jika guru terdaftar dalam exempted_teachers (dispensasi GPS)', async () => {
+			const mockSupabase = {
+				from: () => ({
+					select: () => ({
+						eq: () => ({
+							maybeSingle: async () => ({
+								data: {
+									value: {
+										enabled: true,
+										lat: -7.5,
+										lng: 112.2,
+										radius: 200,
+										nama_lokasi: 'Sekolah',
+										berlaku_untuk: ['absensi', 'jurnal'],
+										exempted_teachers: ['guru-gps-rusak', 'guru-dispensasi'],
+									},
+								},
+								error: null,
+							}),
+						}),
+					}),
+				}),
+			};
+
+			// Kasus 1: Lokasi null / GPS bermasalah tapi terdaftar di whitelist
+			const resTanpaGPS = await verifyGeofence({
+				supabase: mockSupabase,
+				userLat: null,
+				userLng: null,
+				moduleName: 'absensi',
+				role: 'Guru',
+				userId: 'guru-gps-rusak',
+			});
+
+			expect(resTanpaGPS.allowed).toBe(true);
+			expect(resTanpaGPS.isExempted).toBe(true);
+
+			// Kasus 2: Berada jauh di luar radius tapi terdaftar di whitelist
+			const resLuarRadius = await verifyGeofence({
+				supabase: mockSupabase,
+				userLat: -6.2,
+				userLng: 106.8,
+				moduleName: 'jurnal',
+				role: 'Guru',
+				userId: 'guru-dispensasi',
+			});
+
+			expect(resLuarRadius.allowed).toBe(true);
+			expect(resLuarRadius.isExempted).toBe(true);
+
+			// Kasus 3: Guru lain yang TIDAK terdaftar di whitelist harus ditolak jika di luar radius
+			const resBukanWhitelist = await verifyGeofence({
+				supabase: mockSupabase,
+				userLat: -6.2,
+				userLng: 106.8,
+				moduleName: 'absensi',
+				role: 'Guru',
+				userId: 'guru-normal',
+			});
+
+			expect(resBukanWhitelist.allowed).toBe(false);
+			expect(resBukanWhitelist.status).toBe(403);
+			expect(resBukanWhitelist.error).toContain('Di Luar Radius');
+		});
 	});
 });

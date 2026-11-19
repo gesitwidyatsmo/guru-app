@@ -79,6 +79,7 @@ export async function POST(req) {
 			userAccuracy: body.user_accuracy,
 			moduleName: 'absensi',
 			role: userRole,
+			userId,
 		});
 
 		if (!geoCheck.allowed) {

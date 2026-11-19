@@ -12,6 +12,7 @@ export default function GeofenceStatusCard({
 	locationStatus,
 	setLocationStatus,
 	className = '',
+	isExempted = false,
 }) {
 	const { getPosition, loading: gpsLoading, isInAppBrowser } = useGeolocation();
 	const [internalStatus, setInternalStatus] = useState(null);
@@ -70,14 +71,15 @@ export default function GeofenceStatusCard({
 							<p class="text-xs text-gray-600 font-semibold mt-2">Jarak ke titik pusat: <b class="text-emerald-700">${formatDistance(check.distance)}</b> (Batas: ${geofenceSettings.radius}m)</p>
 							<p class="text-xs text-gray-500">Tingkat akurasi GPS: ±${Math.round(coords.accuracy || 0)} meter</p>
 							${bufferNote}
+							${isExempted ? '<p class="text-xs text-teal-800 bg-teal-50 p-2 rounded border border-teal-200 mt-2 font-bold">✨ Catatan: Akun Anda memiliki izin Dispensasi GPS Khusus dari Admin.</p>' : ''}
 						</div>
 					`,
 					confirmButtonColor: '#00A693',
 				});
 			} else {
 				Swal.fire({
-					icon: 'warning',
-					title: 'Di Luar Area Sekolah',
+					icon: isExempted ? 'info' : 'warning',
+					title: isExempted ? 'Dispensasi GPS Aktif' : 'Di Luar Area Sekolah',
 					html: `
 						<div class="text-left text-sm space-y-2">
 							<p>Sistem mendeteksi posisi Anda saat ini di luar radius <b>${geofenceSettings.nama_lokasi || 'Sekolah'}</b>.</p>
@@ -86,19 +88,24 @@ export default function GeofenceStatusCard({
 								<p>Radius maksimum izin: <b>${geofenceSettings.radius} meter</b></p>
 								<p class="text-gray-500 mt-1">Akurasi GPS perangkat: ±${Math.round(coords.accuracy || 0)} meter</p>
 							</div>
-							${isAdmin ? '<p class="text-xs font-bold text-amber-700 mt-2">ℹ️ Catatan: Karena Anda adalah Admin, Anda tetap dapat menyimpan data (Bypass Aktif).</p>' : '<p class="text-xs text-gray-600">Pastikan Anda berada di lingkungan sekolah sebelum menyimpan. Jika Anda sedang di dalam ruangan, coba dekati jendela atau buka aplikasi Google Maps sebentar agar GPS HP terkunci.</p>'}
+							${isExempted ? '<p class="text-xs font-bold text-teal-800 bg-teal-50 p-2 rounded border border-teal-200 mt-2">✨ Karena akun Anda memiliki Dispensasi GPS Khusus dari Admin, Anda tetap dapat menyimpan data tanpa kendala radius.</p>' : isAdmin ? '<p class="text-xs font-bold text-amber-700 mt-2">ℹ️ Catatan: Karena Anda adalah Admin, Anda tetap dapat menyimpan data (Bypass Aktif).</p>' : '<p class="text-xs text-gray-600">Pastikan Anda berada di lingkungan sekolah sebelum menyimpan. Jika Anda sedang di dalam ruangan, coba dekati jendela atau buka aplikasi Google Maps sebentar agar GPS HP terkunci.</p>'}
 						</div>
 					`,
-					confirmButtonColor: '#E8451A',
+					confirmButtonColor: isExempted ? '#00A693' : '#E8451A',
 				});
 			}
 		} catch (err) {
 			console.error('GPS Check error:', err);
 			Swal.fire({
-				icon: 'error',
-				title: 'Gagal Membaca GPS',
-				text: err.message || 'Pastikan GPS dan izin akses lokasi telah diaktifkan di browser perangkat Anda.',
-				confirmButtonColor: '#E8451A',
+				icon: isExempted ? 'info' : 'error',
+				title: isExempted ? 'GPS Tidak Terbaca (Dispensasi Aktif)' : 'Gagal Membaca GPS',
+				html: `
+					<div class="text-left text-sm space-y-2">
+						<p class="text-xs text-red-600 font-bold">${err.message || 'Pastikan GPS dan izin akses lokasi telah diaktifkan di browser perangkat Anda.'}</p>
+						${isExempted ? '<p class="text-xs font-bold text-teal-800 bg-teal-50 p-2 rounded border border-teal-200 mt-2">✨ Akun Anda memiliki izin dispensasi geofencing dari Admin, sehingga Anda tetap dapat menyimpan data tanpa gangguan.</p>' : '<p class="text-xs text-gray-600">Pastikan GPS aktif dan izin lokasi telah diberikan di browser perangkat Anda.</p>'}
+					</div>
+				`,
+				confirmButtonColor: isExempted ? '#00A693' : '#E8451A',
 			});
 		}
 	};
@@ -107,7 +114,11 @@ export default function GeofenceStatusCard({
 	let iconBg = 'bg-yellow-300 text-[#0D0D0D]';
 	let iconText = '📍';
 
-	if (isChecked) {
+	if (isExempted) {
+		bgClass = 'bg-teal-50 text-teal-950 border-[#0D0D0D]';
+		iconBg = 'bg-teal-300 text-teal-950';
+		iconText = '🛡️';
+	} else if (isChecked) {
 		if (isInside) {
 			bgClass = 'bg-emerald-100 text-emerald-950 border-[#0D0D0D]';
 			iconBg = 'bg-emerald-400 text-white';
@@ -128,13 +139,19 @@ export default function GeofenceStatusCard({
 				<div>
 					<div className='flex flex-wrap items-center gap-2'>
 						<p className='text-xs font-black uppercase tracking-wider'>
-							{!isChecked
+							{isExempted
+								? `Dispensasi Geofencing Aktif`
+								: !isChecked
 								? `Validasi Lokasi: ${geofenceSettings.nama_lokasi || 'Area Sekolah'}`
 								: isInside
 								? `Lokasi Terverifikasi (${formatDistance(status.distance)})`
 								: `Di Luar Area Sekolah (${formatDistance(status.distance || 0)})`}
 						</p>
-						{isAdmin && (
+						{isExempted ? (
+							<span className='px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-teal-300 text-teal-950 border border-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]'>
+								✨ Bebas Radius GPS
+							</span>
+						) : isAdmin && (
 							<span className='px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 border border-[#0D0D0D] shadow-[1px_1px_0px_0px_#0D0D0D]'>
 								👑 Mode Admin (Bypass)
 							</span>
@@ -153,7 +170,9 @@ export default function GeofenceStatusCard({
 						)}
 					</div>
 					<p className='text-[11px] font-medium opacity-90 mt-0.5'>
-						{!isChecked
+						{isExempted
+							? `Akun Anda memiliki izin dispensasi dari Admin. Anda dapat mengisi ${moduleName === 'absensi' ? 'absensi' : 'jurnal'} tanpa dibatasi radius jarak.`
+							: !isChecked
 							? `Radius wajib maksimal ${geofenceSettings.radius}m dari sekolah. Diperiksa otomatis saat menyimpan atau klik tombol di samping.`
 							: isInside
 							? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m). Absensi siap disimpan.`
@@ -181,7 +200,7 @@ export default function GeofenceStatusCard({
 					) : (
 						<>
 							<span>📡</span>
-							<span>{isChecked ? 'Cek Ulang GPS' : 'Cek Posisi GPS Sekarang'}</span>
+							<span>{isChecked ? 'Cek Ulang GPS' : isExempted ? 'Tes Sinyal GPS (Opsional)' : 'Cek Posisi GPS Sekarang'}</span>
 						</>
 					)}
 				</button>

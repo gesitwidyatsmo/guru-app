@@ -26,6 +26,7 @@ export default function KelasAbsensiMapelPage() {
 	const [statusList, setStatusList] = useState([]);
 	const [siswaList, setSiswaList] = useState([]);
 	const [userRole, setUserRole] = useState('');
+	const [currentUserId, setCurrentUserId] = useState('');
 
 	// Geolocation & Geofencing State
 	const { getPosition, loading: gpsLoading } = useGeolocation();
@@ -122,8 +123,11 @@ export default function KelasAbsensiMapelPage() {
 				const supabase = createClient();
 				const { data: { user } } = await supabase.auth.getUser();
 				if (user) {
-					const { data: profile } = await supabase.from('users').select('role').eq('auth_id', user.id).single();
-					if (profile) setUserRole(profile.role || '');
+					const { data: profile } = await supabase.from('users').select('id_user, role').eq('auth_id', user.id).single();
+					if (profile) {
+						setUserRole(profile.role || '');
+						setCurrentUserId(profile.id_user || '');
+					}
 				}
 
 				// Ambil konfigurasi geofence sekolah
@@ -482,9 +486,15 @@ export default function KelasAbsensiMapelPage() {
 		setSaving(true);
 		swalProcess('Sedang Menyimpan...', 'Mohon tunggu, sedang memverifikasi lokasi & menyimpan data absensi...');
 
-		// Pengecekan Geofencing jika diaktifkan untuk absensi dan bukan Admin
+		// Pengecekan Geofencing jika diaktifkan untuk absensi, bukan Admin, dan tidak memiliki dispensasi
 		let userCoords = null;
-		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin') {
+		const isExempted = Boolean(
+			currentUserId &&
+			Array.isArray(geofenceSettings?.exempted_teachers) &&
+			geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId))
+		);
+
+		if (geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && userRole !== 'Admin' && !isExempted) {
 			try {
 				if (locationStatus?.checked && locationStatus?.isInside && locationStatus?.userLat) {
 					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng, accuracy: locationStatus.accuracy };
@@ -531,6 +541,16 @@ export default function KelasAbsensiMapelPage() {
 				});
 				setSaving(false);
 				return;
+			}
+		} else if (isExempted) {
+			try {
+				if (locationStatus?.userLat) {
+					userCoords = { lat: locationStatus.userLat, lng: locationStatus.userLng, accuracy: locationStatus.accuracy };
+				} else {
+					userCoords = await getPosition();
+				}
+			} catch {
+				// Abaikan jika GPS gagal karena memiliki dispensasi
 			}
 		}
 
@@ -685,10 +705,17 @@ export default function KelasAbsensiMapelPage() {
 								)}
 
 								{geofenceSettings?.enabled && (geofenceSettings.berlaku_untuk || []).includes('absensi') && (
-									<span className='px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border-2 border-[#0D0D0D] bg-emerald-300 text-emerald-950 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1'>
-										<span>📍</span>
-										<span>Geofence Aktif ({geofenceSettings.radius}m)</span>
-									</span>
+									currentUserId && Array.isArray(geofenceSettings?.exempted_teachers) && geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId)) ? (
+										<span className='px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border-2 border-[#0D0D0D] bg-teal-300 text-teal-950 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1'>
+											<span>🛡️</span>
+											<span>Dispensasi GPS Aktif</span>
+										</span>
+									) : (
+										<span className='px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border-2 border-[#0D0D0D] bg-emerald-300 text-emerald-950 shadow-[2px_2px_0px_0px_#0D0D0D] flex items-center gap-1'>
+											<span>📍</span>
+											<span>Geofence Aktif ({geofenceSettings.radius}m)</span>
+										</span>
+									)
 								)}
 							</div>
 						</div>
@@ -699,6 +726,7 @@ export default function KelasAbsensiMapelPage() {
 						geofenceSettings={geofenceSettings}
 						moduleName="absensi"
 						userRole={userRole}
+						isExempted={Boolean(currentUserId && Array.isArray(geofenceSettings?.exempted_teachers) && geofenceSettings.exempted_teachers.some((id) => String(id) === String(currentUserId)))}
 						locationStatus={locationStatus}
 						setLocationStatus={setLocationStatus}
 						className="mb-4"

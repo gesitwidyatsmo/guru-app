@@ -13,9 +13,10 @@ import { haversine, formatDistance, isWithinGeofence } from '@/lib/haversine';
  * @param {string} [options.role] Peran pengguna (Admin dilewati dari validasi)
  * @param {boolean} [options.isTugasLuar=false] Apakah pengguna bertugas di luar sekolah
  * @param {boolean} [options.isKegiatanSekolah=false] Apakah kegiatan sekolah (Hari Santri, event, dll)
- * @returns {Promise<{ allowed: boolean, status?: number, error?: string, distance?: number, effectiveDistance?: number, accuracyBuffer?: number }>}
+ * @param {string|null} [options.userId=null] ID User pengirim (id_user) untuk pengecekan dispensasi/whitelist
+ * @returns {Promise<{ allowed: boolean, status?: number, error?: string, distance?: number, effectiveDistance?: number, accuracyBuffer?: number, isTugasLuar?: boolean, isKegiatanSekolah?: boolean, isExempted?: boolean }>}
  */
-export async function verifyGeofence({ supabase, userLat, userLng, userAccuracy = null, moduleName = 'absensi', role, isTugasLuar = false, isKegiatanSekolah = false }) {
+export async function verifyGeofence({ supabase, userLat, userLng, userAccuracy = null, moduleName = 'absensi', role, isTugasLuar = false, isKegiatanSekolah = false, userId = null }) {
 	// Administrator, Guru bertugas luar, atau Kegiatan Sekolah dikecualikan dari batasan geofencing
 	if (role === 'Admin' || isTugasLuar || isKegiatanSekolah) {
 		return { allowed: true, isTugasLuar: !!isTugasLuar, isKegiatanSekolah: !!isKegiatanSekolah };
@@ -44,6 +45,25 @@ export async function verifyGeofence({ supabase, userLat, userLng, userAccuracy 
 		// Jika geofence tidak diaktifkan untuk modul ini, loloskan
 		if (!berlakuUntuk.includes(moduleName)) {
 			return { allowed: true };
+		}
+
+		// Pengecualian Guru Tertentu (Dispensasi GPS / Whitelist)
+		const exemptedTeachers = Array.isArray(geofence.exempted_teachers) ? geofence.exempted_teachers : [];
+		if (userId && exemptedTeachers.some((id) => String(id) === String(userId))) {
+			return { allowed: true, isExempted: true };
+		}
+
+		// Fallback: jika userId tidak dikirim langsung, coba resolve dari sesi auth supabase jika ada
+		if (!userId && supabase?.auth) {
+			try {
+				const { data: { user } } = await supabase.auth.getUser();
+				if (user) {
+					const { data: u } = await supabase.from('users').select('id_user').eq('auth_id', user.id).maybeSingle();
+					if (u?.id_user && exemptedTeachers.some((id) => String(id) === String(u.id_user))) {
+						return { allowed: true, isExempted: true };
+					}
+				}
+			} catch {}
 		}
 
 		// Jika lokasi tidak dikirim

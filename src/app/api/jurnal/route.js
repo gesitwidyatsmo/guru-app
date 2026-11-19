@@ -154,7 +154,7 @@ export async function POST(req) {
 			String(body.kegiatan || '').toLowerCase().includes('[kegiatan sekolah') ||
 			String(body.materi || '').toLowerCase().includes('[kegiatan sekolah');
 
-		// Verifikasi Geofence jika diaktifkan oleh Admin (Kecualikan jika Guru Tugas Luar, Kegiatan Sekolah, atau Admin)
+		// Verifikasi Geofence jika diaktifkan oleh Admin (Kecualikan jika Guru Tugas Luar, Kegiatan Sekolah, Admin, atau Memiliki Dispensasi GPS)
 		const geoCheck = await verifyGeofence({
 			supabase,
 			userLat: user_lat,
@@ -164,6 +164,7 @@ export async function POST(req) {
 			role,
 			isTugasLuar,
 			isKegiatanSekolah,
+			userId,
 		});
 
 		if (!geoCheck.allowed) {

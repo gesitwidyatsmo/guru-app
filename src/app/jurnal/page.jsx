@@ -795,8 +795,14 @@ export default function JurnalPage() {
 				return;
 			}
 
-			// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin, user bukan Admin, dan BUKAN Tugas Luar / Kegiatan Sekolah)
-			if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah) {
+			// Pengecekan Geofencing (Hanya jika diaktifkan oleh admin, user bukan Admin, BUKAN Tugas Luar / Kegiatan Sekolah, dan BUKAN guru yang dikecualikan)
+			const isExempted = Boolean(
+				userId &&
+				Array.isArray(geofenceSettings?.exempted_teachers) &&
+				geofenceSettings.exempted_teachers.some((id) => String(id) === String(userId))
+			);
+
+			if (geofenceSettings?.enabled && userRole !== 'Admin' && !formData.is_tugas_luar && !formData.is_kegiatan_sekolah && !isExempted) {
 				try {
 					const coords = await getPosition();
 					const check = isWithinGeofence(coords.lat, coords.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, coords.accuracy);
@@ -839,15 +845,15 @@ export default function JurnalPage() {
 					});
 					return;
 				}
-			} else if (formData.is_tugas_luar || formData.is_kegiatan_sekolah) {
-				// Jika Tugas Luar atau Kegiatan Sekolah, rekam koordinat GPS aktual jika tersedia tanpa memblokir radius
+			} else if (formData.is_tugas_luar || formData.is_kegiatan_sekolah || isExempted) {
+				// Jika Tugas Luar, Kegiatan Sekolah, atau Dispensasi GPS: rekam koordinat GPS aktual jika tersedia tanpa memblokir radius
 				try {
 					const coords = await getPosition();
 					if (coords?.lat && coords?.lng) {
 						setUserLocationStatus({ isInside: true, distance: 0, checked: true, userLat: coords.lat, userLng: coords.lng, accuracy: coords.accuracy });
 					}
 				} catch {
-					// Jangan memblokir jika GPS gagal saat tugas luar
+					// Jangan memblokir jika GPS gagal saat tugas luar / dispensasi
 				}
 			}
 
@@ -2215,71 +2221,97 @@ export default function JurnalPage() {
 								</div>
 
 								{/* Geofence Status Badge */}
-								{geofenceSettings?.enabled && (
-									<div className={`p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
-										formData.is_kegiatan_sekolah
-											? 'bg-purple-100 text-purple-950 border-purple-600'
-											: formData.is_tugas_luar
-											? 'bg-blue-100 text-blue-950 border-blue-600'
-											: !userLocationStatus?.checked
-											? 'bg-yellow-100 text-[#0D0D0D]'
-											: userLocationStatus?.isInside
-											? 'bg-emerald-100 text-emerald-950'
-											: 'bg-rose-100 text-rose-950'
-									}`}>
-										<div className='flex items-center gap-3'>
-											<span className='text-2xl'>
-												{formData.is_kegiatan_sekolah ? '🎪' : formData.is_tugas_luar ? '✈️' : !userLocationStatus?.checked ? '📍' : userLocationStatus?.isInside ? '✅' : '🚫'}
-											</span>
-											<div>
-												<p className='text-xs font-black uppercase tracking-wider'>
+								{geofenceSettings?.enabled && (() => {
+									const isCurrentTeacherExempted = Boolean(
+										userId &&
+										Array.isArray(geofenceSettings?.exempted_teachers) &&
+										geofenceSettings.exempted_teachers.some((id) => String(id) === String(userId))
+									);
+
+									return (
+										<div className={`p-4 border-[3px] border-[#0D0D0D] shadow-[4px_4px_0px_0px_#0D0D0D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+											formData.is_kegiatan_sekolah
+												? 'bg-purple-100 text-purple-950 border-purple-600'
+												: formData.is_tugas_luar
+												? 'bg-blue-100 text-blue-950 border-blue-600'
+												: isCurrentTeacherExempted
+												? 'bg-teal-50 text-teal-950 border-teal-600'
+												: !userLocationStatus?.checked
+												? 'bg-yellow-100 text-[#0D0D0D]'
+												: userLocationStatus?.isInside
+												? 'bg-emerald-100 text-emerald-950'
+												: 'bg-rose-100 text-rose-950'
+										}`}>
+											<div className='flex items-center gap-3'>
+												<span className='text-2xl'>
 													{formData.is_kegiatan_sekolah
-														? 'Mode Kegiatan Sekolah: Batasan Radius Sekolah Dibebaskan'
+														? '🎪'
 														: formData.is_tugas_luar
-														? 'Mode Tugas Luar: Batasan Radius Sekolah Dibebaskan'
+														? '✈️'
+														: isCurrentTeacherExempted
+														? '🛡️'
 														: !userLocationStatus?.checked
-														? `Validasi Lokasi: ${geofenceSettings.nama_lokasi || 'Area Sekolah'}`
+														? '📍'
 														: userLocationStatus?.isInside
-														? `Lokasi Terverifikasi (${formatDistance(userLocationStatus.distance)})`
-														: `Di Luar Area Sekolah (${formatDistance(userLocationStatus.distance || 0)})`}
-												</p>
-												<p className='text-[11px] font-medium opacity-85'>
-													{formData.is_kegiatan_sekolah
-														? 'Anda sedang mengikuti agenda resmi kegiatan sekolah (Hari Santri / Pawai / Upacara / Event). Radius geofence dinonaktifkan.'
-														: formData.is_tugas_luar
-														? 'Anda sedang berdinas di luar sekolah. Koordinat posisi GPS Anda tetap dicatat untuk keperluan verifikasi laporan dinas.'
-														: !userLocationStatus?.checked
-														? `Wajib berada dalam radius ${geofenceSettings.radius}m dari sekolah. Lokasi diverifikasi saat menyimpan.`
-														: userLocationStatus?.isInside
-														? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m).`
-														: `Posisi Anda melebihi batas radius izin (${geofenceSettings.radius}m).`}
-												</p>
+														? '✅'
+														: '🚫'}
+												</span>
+												<div>
+													<p className='text-xs font-black uppercase tracking-wider'>
+														{formData.is_kegiatan_sekolah
+															? 'Mode Kegiatan Sekolah: Batasan Radius Sekolah Dibebaskan'
+															: formData.is_tugas_luar
+															? 'Mode Tugas Luar: Batasan Radius Sekolah Dibebaskan'
+															: isCurrentTeacherExempted
+															? 'Dispensasi GPS Aktif: Batasan Radius Sekolah Dibebaskan'
+															: !userLocationStatus?.checked
+															? `Validasi Lokasi: ${geofenceSettings.nama_lokasi || 'Area Sekolah'}`
+															: userLocationStatus?.isInside
+															? `Lokasi Terverifikasi (${formatDistance(userLocationStatus.distance)})`
+															: `Di Luar Area Sekolah (${formatDistance(userLocationStatus.distance || 0)})`}
+													</p>
+													<p className='text-[11px] font-medium opacity-85'>
+														{formData.is_kegiatan_sekolah
+															? 'Anda sedang mengikuti agenda resmi kegiatan sekolah (Hari Santri / Pawai / Upacara / Event). Radius geofence dinonaktifkan.'
+															: formData.is_tugas_luar
+															? 'Anda sedang berdinas di luar sekolah. Koordinat posisi GPS Anda tetap dicatat untuk keperluan verifikasi laporan dinas.'
+															: isCurrentTeacherExempted
+															? 'Akun Anda memiliki izin pengecualian geofencing dari Administrator. Anda dapat menyimpan jurnal tanpa dibatasi jarak radius sekolah.'
+															: !userLocationStatus?.checked
+															? `Wajib berada dalam radius ${geofenceSettings.radius}m dari sekolah. Lokasi diverifikasi saat menyimpan.`
+															: userLocationStatus?.isInside
+															? `Posisi Anda memenuhi batas radius izin (${geofenceSettings.radius}m).`
+															: `Posisi Anda melebihi batas radius izin (${geofenceSettings.radius}m).`}
+													</p>
+												</div>
 											</div>
+											{!formData.is_tugas_luar && !formData.is_kegiatan_sekolah && (!userLocationStatus?.isInside || isCurrentTeacherExempted) && (
+												<button
+													type='button'
+													onClick={async () => {
+														try {
+															const c = await getPosition();
+															const chk = isWithinGeofence(c.lat, c.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, c.accuracy);
+															setUserLocationStatus({ ...chk, checked: true, userLat: c.lat, userLng: c.lng, accuracy: c.accuracy });
+														} catch (e) {
+															Swal.fire({
+																icon: isCurrentTeacherExempted ? 'info' : 'warning',
+																title: isCurrentTeacherExempted ? 'GPS Tidak Terbaca (Dispensasi Aktif)' : 'GPS Gagal',
+																text: isCurrentTeacherExempted
+																	? 'Sinyal GPS tidak terbaca, namun jurnal tetap dapat disimpan karena akun Anda memiliki dispensasi.'
+																	: (e.message || 'Gagal membaca GPS perangkat Anda.'),
+																confirmButtonColor: isCurrentTeacherExempted ? '#00A693' : '#E8451A',
+															});
+														}
+													}}
+													disabled={gpsLoading}
+													className='px-3 py-1.5 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-yellow-300 transition-colors shrink-0'>
+													{gpsLoading ? 'Mengecek...' : userLocationStatus?.checked ? 'Cek Ulang GPS' : isCurrentTeacherExempted ? 'Tes Sinyal GPS (Opsional)' : 'Cek Posisi GPS'}
+												</button>
+											)}
 										</div>
-										{!formData.is_tugas_luar && !formData.is_kegiatan_sekolah && !userLocationStatus?.isInside && (
-											<button
-												type='button'
-												onClick={async () => {
-													try {
-														const c = await getPosition();
-														const chk = isWithinGeofence(c.lat, c.lng, geofenceSettings.lat, geofenceSettings.lng, geofenceSettings.radius, c.accuracy);
-														setUserLocationStatus({ ...chk, checked: true, userLat: c.lat, userLng: c.lng, accuracy: c.accuracy });
-													} catch (e) {
-														Swal.fire({
-															icon: 'warning',
-															title: 'GPS Gagal',
-															text: e.message || 'Gagal membaca GPS perangkat Anda.',
-															confirmButtonColor: '#E8451A',
-														});
-													}
-												}}
-												disabled={gpsLoading}
-												className='px-3 py-1.5 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0px_0px_#0D0D0D] hover:bg-yellow-300 transition-colors shrink-0'>
-												{gpsLoading ? 'Mengecek...' : 'Cek Posisi GPS'}
-											</button>
-										)}
-									</div>
-								)}
+									);
+								})()}
 							</div>
 
 							<div className='sticky bottom-0 bg-[#F5C518] px-4 sm:px-8 py-3.5 sm:py-4 border-t-[4px] border-[#0D0D0D] flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2.5 sm:gap-4'>
