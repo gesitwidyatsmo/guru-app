@@ -52,6 +52,14 @@ async function getAllJournals(filter = {}) {
 	let page = 0;
 	const pageSize = 1000;
 
+	// Optimasi Egress: Default ke 30 hari terakhir jika tidak ada filter rentang tanggal spesifik
+	let defaultStartDate = null;
+	if (!filter.tanggal && !filter.startDate && !filter.endDate && !filter.allHistory) {
+		const d = new Date();
+		d.setDate(d.getDate() - 30);
+		defaultStartDate = d.toISOString().split('T')[0];
+	}
+
 	while (true) {
 		let q = supabaseAdmin
 			.from('jurnal')
@@ -62,6 +70,7 @@ async function getAllJournals(filter = {}) {
 
 		if (filter.tanggal) q = q.eq('tanggal', filter.tanggal);
 		if (filter.startDate) q = q.gte('tanggal', filter.startDate);
+		else if (defaultStartDate) q = q.gte('tanggal', defaultStartDate);
 		if (filter.endDate) q = q.lte('tanggal', filter.endDate);
 		if (filter.kelas && filter.kelas !== 'all' && filter.kelas !== 'Semua') q = q.eq('kelas', filter.kelas);
 		if (filter.mapel && filter.mapel !== 'all' && filter.mapel !== 'Semua') q = q.eq('mapel', filter.mapel);
@@ -76,7 +85,7 @@ async function getAllJournals(filter = {}) {
 		allJournals.push(...data);
 		if (data.length < pageSize) break;
 		page++;
-		if (page >= 15) break; // safety ceiling (hingga 15.000 jurnal)
+		if (page >= 5) break; // safety ceiling (hingga 5.000 jurnal)
 	}
 
 	return allJournals;
@@ -89,6 +98,14 @@ async function getAllSessions(selectStr, filter = {}) {
 	let allSessions = [];
 	let page = 0;
 	const pageSize = 1000;
+
+	// Optimasi Egress: Default ke 30 hari terakhir jika tidak ada filter rentang tanggal spesifik
+	let defaultStartDate = null;
+	if (!filter.tanggal && !filter.startDate && !filter.endDate && !filter.allHistory) {
+		const d = new Date();
+		d.setDate(d.getDate() - 30);
+		defaultStartDate = d.toISOString().split('T')[0];
+	}
 
 	while (true) {
 		let q = supabaseAdmin
@@ -103,6 +120,7 @@ async function getAllSessions(selectStr, filter = {}) {
 		if (filter.guruId && filter.guruId !== 'all' && filter.guruId !== 'Semua') q = q.eq('guru_id', filter.guruId);
 		if (filter.tanggal) q = q.eq('tanggal', filter.tanggal);
 		if (filter.startDate) q = q.gte('tanggal', filter.startDate);
+		else if (defaultStartDate) q = q.gte('tanggal', defaultStartDate);
 		if (filter.endDate) q = q.lte('tanggal', filter.endDate);
 		if (filter.tahunAjar) q = q.eq('tahun_ajar', filter.tahunAjar);
 		if (filter.semester) q = q.eq('semester', parseInt(filter.semester, 10));
@@ -116,7 +134,7 @@ async function getAllSessions(selectStr, filter = {}) {
 		allSessions.push(...data);
 		if (data.length < pageSize) break;
 		page++;
-		if (page >= 15) break;
+		if (page >= 5) break; // safety ceiling (hingga 5.000 sesi)
 	}
 
 	return allSessions;
@@ -174,6 +192,7 @@ export async function GET(req) {
 		const tahunAjar = searchParams.get('tahun_ajar');
 		const semester = searchParams.get('semester');
 		const includeStudents = searchParams.get('include_students') === 'true';
+		const allHistory = searchParams.get('all_history') === 'true';
 
 		// 0. Ambil Pemetaan Penugasan Mengajar Guru (KBM, Jadwal, & Absensi)
 		if (loadAssignments) {
@@ -223,6 +242,7 @@ export async function GET(req) {
 			const radarFilter = {};
 			if (tanggal) radarFilter.tanggal = tanggal;
 			if (kelas && kelas !== 'all' && kelas !== 'Semua') radarFilter.kelas = kelas;
+			if (allHistory) radarFilter.allHistory = true;
 
 			const radarSelect = `
 				*,
@@ -346,12 +366,14 @@ export async function GET(req) {
 		if (endDate) sessionFilter.endDate = endDate;
 		if (tahunAjar) sessionFilter.tahunAjar = tahunAjar;
 		if (semester) sessionFilter.semester = semester;
+		if (allHistory) sessionFilter.allHistory = true;
 
 		const journalFilter = {};
 		if (tanggal) journalFilter.tanggal = tanggal;
 		if (startDate) journalFilter.startDate = startDate;
 		if (endDate) journalFilter.endDate = endDate;
 		if (kelas && kelas !== 'all' && kelas !== 'Semua') journalFilter.kelas = kelas;
+		if (allHistory) journalFilter.allHistory = true;
 
 		const [sessions, journals] = await Promise.all([
 			getAllSessions(selectStr, sessionFilter),

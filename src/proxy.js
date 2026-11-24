@@ -62,28 +62,49 @@ export async function proxy(request) {
 	];
 	const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-
 	let payload = null;
 
-	// Jika terautentikasi di Supabase, ambil detail role dan ID dari tabel public.users
-	if (user) {
-		const { data: userProfile, error } = await supabaseAdmin
-			.from('users')
-			.select('id_user, role, nama_lengkap')
-			.eq('auth_id', user.id)
-			.single();
+	// Optimasi Supabase Auth & Egress: Gunakan cookie sesi lokal jika masih aktif & valid
+	const cookieUserId = request.cookies.get('user_id')?.value;
+	const cookieUserRole = request.cookies.get('user_role')?.value;
+	const rawCookieName = request.cookies.get('user_name')?.value;
+	const hasValidSessionCookie = request.cookies.get('auth_session_valid')?.value === 'true';
 
-		if (error) console.error('Proxy Profile Fetch Error:', error.message);
+	// Cek apakah ada cookie token Supabase yang aktif
+	const hasSupabaseCookie = request.cookies.getAll().some(
+		(c) => c.name.startsWith('sb-') && Boolean(c.value)
+	);
 
-		if (userProfile) {
-			payload = {
-				id: userProfile.id_user,
-				role: userProfile.role,
-				nama_lengkap: userProfile.nama_lengkap,
-			};
+	if (cookieUserId && cookieUserRole && hasValidSessionCookie && hasSupabaseCookie) {
+		// Sesi aktif & valid dari cookie — hemat kuota dengan tidak memanggil network Supabase Auth
+		payload = {
+			id: cookieUserId,
+			role: decodeURIComponent(cookieUserRole).trim(),
+			nama_lengkap: rawCookieName ? decodeURIComponent(rawCookieName) : '',
+		};
+	} else if (!isPublicRoute || pathname === '/login') {
+		// Hanya panggil Supabase Auth jika cookie belum lengkap atau expired
+		const {
+			data: { user },
+		} = await supabase.auth.getUser();
+
+		// Jika terautentikasi di Supabase, ambil detail role dan ID dari tabel public.users
+		if (user) {
+			const { data: userProfile, error } = await supabaseAdmin
+				.from('users')
+				.select('id_user, role, nama_lengkap')
+				.eq('auth_id', user.id)
+				.single();
+
+			if (error) console.error('Proxy Profile Fetch Error:', error.message);
+
+			if (userProfile) {
+				payload = {
+					id: userProfile.id_user,
+					role: userProfile.role,
+					nama_lengkap: userProfile.nama_lengkap,
+				};
+			}
 		}
 	}
 

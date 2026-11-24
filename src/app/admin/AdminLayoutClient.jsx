@@ -322,7 +322,7 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 			.catch(() => {});
 	}, []);
 
-	// Counter Badges untuk Sidebar
+	// Counter Badges untuk Sidebar (Dioptimalkan menggunakan endpoint ringkas /api/admin/counts)
 	const [menuCounts, setMenuCounts] = useState({
 		pengguna: null,
 		kelas: null,
@@ -333,24 +333,20 @@ export default function AdminLayoutClient({ children, initialRole = null, initia
 	});
 
 	useEffect(() => {
-		Promise.all([
-			fetch('/api/users').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-			fetch('/api/kelas?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-			fetch('/api/siswa').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-			fetch('/api/mapel?all=true').then((r) => (r.ok ? r.json() : [])).catch(() => []),
-			fetch('/api/admin/absensi?radar=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { summary: {} })).catch(() => ({ summary: {} })),
-			fetch('/api/admin/jurnal?conflict_only=true', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { count: 0 })).catch(() => ({ count: 0 })),
-		]).then(([users, kelas, siswa, mapel, absensiRadar, conflictsRes]) => {
-			setMenuCounts({
-				pengguna: Array.isArray(users) ? users.length : null,
-				kelas: Array.isArray(kelas) ? kelas.length : null,
-				siswa: Array.isArray(siswa) ? siswa.filter((s) => s.status === 'Aktif').length : null,
-				mapel: Array.isArray(mapel) ? mapel.length : null,
-				absensi_bentrok: absensiRadar?.summary?.conflicts_count > 0 ? absensiRadar.summary.conflicts_count : null,
-				jurnal_bentrok: conflictsRes?.count > 0 ? conflictsRes.count : null,
-			});
-		});
-	}, [pathname]);
+		// Panggil endpoint counts yang super ringan (menggunakan Supabase HEAD count dengan 0 byte payload baris)
+		// Dimuat 1x saat layout admin di-mount, bukan di-fetch ulang tiap klik menu [pathname]
+		fetch('/api/admin/counts')
+			.then((r) => (r.ok ? r.json() : null))
+			.then((data) => {
+				if (data) {
+					setMenuCounts((prev) => ({
+						...prev,
+						...data,
+					}));
+				}
+			})
+			.catch(() => {});
+	}, []);
 
 	// Global Search / Command Palette (Ctrl + K)
 	const [isSearchOpen, setIsSearchOpen] = useState(false);
